@@ -33,11 +33,6 @@ public record FmlMappedPayload(Type<FmlMappedPayload> type, byte[] data) impleme
     }
 
     @Override
-    public Type<? extends CustomPacketPayload> type() {
-        return type;
-    }
-
-    @Override
     public byte[] data() {
         return Arrays.copyOf(data, data.length);
     }
