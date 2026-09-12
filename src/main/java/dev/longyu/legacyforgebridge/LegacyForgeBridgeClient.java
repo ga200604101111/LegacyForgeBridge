@@ -3,8 +3,10 @@ package dev.longyu.legacyforgebridge;
 import dev.longyu.legacyforgebridge.network.FmlConnectionTrace;
 import dev.longyu.legacyforgebridge.network.FmlHandshakeClient;
 import dev.longyu.legacyforgebridge.network.FmlMappedPayload;
+import dev.longyu.legacyforgebridge.network.FmlWireCodec;
 import dev.longyu.legacyforgebridge.protocol.LegacyPluginChannelMappings;
 import dev.longyu.legacyforgebridge.protocol.ViaFabricPlusBackend;
+import dev.longyu.legacyforgebridge.protocol.ViaLegacyFmlTransport;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientConfigurationConnectionEvents;
@@ -12,10 +14,13 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientConfigurationNetworkin
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
+import net.minecraft.network.Connection;
 
 /** Client networking entrypoint for the Forge/FML bridge. */
 public final class LegacyForgeBridgeClient implements ClientModInitializer {
     private final FmlHandshakeClient handshake = new FmlHandshakeClient();
+    private volatile Connection activeConnection;
+    private volatile boolean directRegistrationSent;
 
     @Override
     public void onInitializeClient() {
@@ -54,6 +59,7 @@ public final class LegacyForgeBridgeClient implements ClientModInitializer {
 
             byte[] data = payload.data();
             try {
+                ensureDirectClientRegistrationForServerHello(data, trace);
                 handshake.handle(data, bytes -> sendConfigurationHandshake(bytes, trace), trace);
             } catch (RuntimeException exception) {
                 trace.event("Forge/FML CONFIGURATION handshake processing failed: " + exception);
@@ -80,6 +86,8 @@ public final class LegacyForgeBridgeClient implements ClientModInitializer {
         });
 
         ClientConfigurationConnectionEvents.INIT.register((handler, client) -> {
+            activeConnection = handler.getConnection();
+            directRegistrationSent = false;
             if (!ViaFabricPlusBackend.INSTANCE.isMinecraft1710Target()) {
                 return;
             }
@@ -91,6 +99,7 @@ public final class LegacyForgeBridgeClient implements ClientModInitializer {
             trace.event("ViaVersion Forge channel mappings installed=" + LegacyPluginChannelMappings.installed());
             trace.event("configuration canSend(mapped FML|HS)="
                     + ClientConfigurationNetworking.canSend(FmlMappedPayload.FML_HS));
+            trace.event("captured Minecraft Connection for direct ViaVersion transport=true");
         });
 
         ClientConfigurationConnectionEvents.DISCONNECT.register((handler, client) -> {
@@ -99,6 +108,8 @@ public final class LegacyForgeBridgeClient implements ClientModInitializer {
                 trace.event("CONFIGURATION disconnected with handshakeState=" + handshake.state());
             }
             handshake.reset();
+            activeConnection = null;
+            directRegistrationSent = false;
             trace.endSession("configuration disconnected");
         });
     }
@@ -120,6 +131,7 @@ public final class LegacyForgeBridgeClient implements ClientModInitializer {
 
             byte[] data = payload.data();
             try {
+                ensureDirectClientRegistrationForServerHello(data, trace);
                 handshake.handle(data, bytes -> sendPlayHandshake(bytes, trace), trace);
             } catch (RuntimeException exception) {
                 trace.event("Forge/FML PLAY handshake processing failed: " + exception);
@@ -146,6 +158,7 @@ public final class LegacyForgeBridgeClient implements ClientModInitializer {
         });
 
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
+            activeConnection = handler.getConnection();
             if (ViaFabricPlusBackend.INSTANCE.isMinecraft1710Target()) {
                 FmlConnectionTrace trace = FmlConnectionTrace.INSTANCE;
                 trace.startIfNeeded(
@@ -163,8 +176,23 @@ public final class LegacyForgeBridgeClient implements ClientModInitializer {
                 trace.event("PLAY disconnected with handshakeState=" + handshake.state());
             }
             handshake.reset();
+            activeConnection = null;
+            directRegistrationSent = false;
             trace.endSession("play disconnected");
         });
+    }
+
+    private void ensureDirectClientRegistrationForServerHello(byte[] data, FmlConnectionTrace trace) {
+        if (directRegistrationSent || handshake.state() != FmlHandshakeClient.State.WAITING_SERVER_HELLO) {
+            return;
+        }
+        if (FmlWireCodec.discriminator(data) != FmlWireCodec.SERVER_HELLO) {
+            return;
+        }
+
+        boolean sent = ViaLegacyFmlTransport.INSTANCE.sendClientRegistration(activeConnection, trace);
+        directRegistrationSent = sent;
+        trace.event("Direct legacy client REGISTER scheduled=" + sent);
     }
 
     private void registerPayloadTypes() {
@@ -187,12 +215,18 @@ public final class LegacyForgeBridgeClient implements ClientModInitializer {
     }
 
     private void sendConfigurationHandshake(byte[] bytes, FmlConnectionTrace trace) {
+        if (ViaLegacyFmlTransport.INSTANCE.sendHandshake(activeConnection, bytes, trace)) {
+            trace.event("FML|HS sent using direct ViaVersion PLAY transport (source phase=CONFIGURATION)");
+            return;
+        }
+
+        trace.event("Direct ViaVersion transport unavailable; falling back to Fabric CONFIGURATION sender");
         boolean canSend = ClientConfigurationNetworking.canSend(FmlMappedPayload.FML_HS);
-        trace.event("send FML|HS during CONFIGURATION requested; canSend=" + canSend + " bytes=" + bytes.length);
+        trace.event("send FML|HS during CONFIGURATION fallback requested; canSend=" + canSend + " bytes=" + bytes.length);
 
         if (!canSend) {
             trace.event(
-                    "Cannot send mapped FML|HS during CONFIGURATION. Legacy REGISTER/channel translation has not marked this channel sendable."
+                    "Cannot send mapped FML|HS during CONFIGURATION fallback. Legacy REGISTER/channel translation has not marked this channel sendable."
             );
             return;
         }
@@ -200,18 +234,24 @@ public final class LegacyForgeBridgeClient implements ClientModInitializer {
         try {
             ClientConfigurationNetworking.send(new FmlMappedPayload(FmlMappedPayload.FML_HS, bytes));
         } catch (RuntimeException exception) {
-            trace.event("ClientConfigurationNetworking.send failed: " + exception);
+            trace.event("ClientConfigurationNetworking.send fallback failed: " + exception);
             throw exception;
         }
     }
 
     private void sendPlayHandshake(byte[] bytes, FmlConnectionTrace trace) {
+        if (ViaLegacyFmlTransport.INSTANCE.sendHandshake(activeConnection, bytes, trace)) {
+            trace.event("FML|HS sent using direct ViaVersion PLAY transport (source phase=PLAY)");
+            return;
+        }
+
+        trace.event("Direct ViaVersion transport unavailable; falling back to Fabric PLAY sender");
         boolean canSend = ClientPlayNetworking.canSend(FmlMappedPayload.FML_HS);
-        trace.event("send FML|HS during PLAY requested; canSend=" + canSend + " bytes=" + bytes.length);
+        trace.event("send FML|HS during PLAY fallback requested; canSend=" + canSend + " bytes=" + bytes.length);
 
         if (!canSend) {
             trace.event(
-                    "Cannot send mapped FML|HS during PLAY. Legacy REGISTER/channel translation has not marked this channel sendable."
+                    "Cannot send mapped FML|HS during PLAY fallback. Legacy REGISTER/channel translation has not marked this channel sendable."
             );
             return;
         }
@@ -219,7 +259,7 @@ public final class LegacyForgeBridgeClient implements ClientModInitializer {
         try {
             ClientPlayNetworking.send(new FmlMappedPayload(FmlMappedPayload.FML_HS, bytes));
         } catch (RuntimeException exception) {
-            trace.event("ClientPlayNetworking.send failed: " + exception);
+            trace.event("ClientPlayNetworking.send fallback failed: " + exception);
             throw exception;
         }
     }
