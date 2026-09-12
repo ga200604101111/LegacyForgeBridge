@@ -14,14 +14,10 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientConfigurationNetworkin
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
-import net.fabricmc.fabric.api.networking.v1.context.PacketContext;
-import net.fabricmc.fabric.api.networking.v1.context.PacketContextProvider;
-import net.minecraft.network.Connection;
 
 /** Client networking entrypoint for the Forge/FML bridge. */
 public final class LegacyForgeBridgeClient implements ClientModInitializer {
     private final FmlHandshakeClient handshake = new FmlHandshakeClient();
-    private volatile Connection activeConnection;
     private volatile boolean directRegistrationSent;
 
     @Override
@@ -49,10 +45,6 @@ public final class LegacyForgeBridgeClient implements ClientModInitializer {
             if (!ViaFabricPlusBackend.INSTANCE.isMinecraft1710Target()) {
                 return;
             }
-
-            // PacketContext.CONNECTION is present for the whole connection and avoids relying on
-            // version-specific vanilla accessor names during CONFIGURATION.
-            activeConnection = context.packetContext().orElseThrow(PacketContext.CONNECTION);
 
             FmlConnectionTrace trace = FmlConnectionTrace.INSTANCE;
             trace.startIfNeeded(
@@ -92,9 +84,6 @@ public final class LegacyForgeBridgeClient implements ClientModInitializer {
         });
 
         ClientConfigurationConnectionEvents.INIT.register((handler, client) -> {
-            activeConnection = ((PacketContextProvider) handler)
-                    .getPacketContext()
-                    .orElseThrow(PacketContext.CONNECTION);
             directRegistrationSent = false;
             if (!ViaFabricPlusBackend.INSTANCE.isMinecraft1710Target()) {
                 return;
@@ -107,7 +96,7 @@ public final class LegacyForgeBridgeClient implements ClientModInitializer {
             trace.event("ViaVersion Forge channel mappings installed=" + LegacyPluginChannelMappings.installed());
             trace.event("configuration canSend(mapped FML|HS)="
                     + ClientConfigurationNetworking.canSend(FmlMappedPayload.FML_HS));
-            trace.event("captured Minecraft Connection for direct ViaVersion transport=true");
+            trace.event("direct transport will resolve the active ViaVersion UserConnection lazily");
         });
 
         ClientConfigurationConnectionEvents.DISCONNECT.register((handler, client) -> {
@@ -116,7 +105,6 @@ public final class LegacyForgeBridgeClient implements ClientModInitializer {
                 trace.event("CONFIGURATION disconnected with handshakeState=" + handshake.state());
             }
             handshake.reset();
-            activeConnection = null;
             directRegistrationSent = false;
             trace.endSession("configuration disconnected");
         });
@@ -166,7 +154,6 @@ public final class LegacyForgeBridgeClient implements ClientModInitializer {
         });
 
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
-            activeConnection = handler.getConnection();
             if (ViaFabricPlusBackend.INSTANCE.isMinecraft1710Target()) {
                 FmlConnectionTrace trace = FmlConnectionTrace.INSTANCE;
                 trace.startIfNeeded(
@@ -184,7 +171,6 @@ public final class LegacyForgeBridgeClient implements ClientModInitializer {
                 trace.event("PLAY disconnected with handshakeState=" + handshake.state());
             }
             handshake.reset();
-            activeConnection = null;
             directRegistrationSent = false;
             trace.endSession("play disconnected");
         });
@@ -198,7 +184,7 @@ public final class LegacyForgeBridgeClient implements ClientModInitializer {
             return;
         }
 
-        boolean sent = ViaLegacyFmlTransport.INSTANCE.sendClientRegistration(activeConnection, trace);
+        boolean sent = ViaLegacyFmlTransport.INSTANCE.sendClientRegistration(trace);
         directRegistrationSent = sent;
         trace.event("Direct legacy client REGISTER scheduled=" + sent);
     }
@@ -223,7 +209,7 @@ public final class LegacyForgeBridgeClient implements ClientModInitializer {
     }
 
     private void sendConfigurationHandshake(byte[] bytes, FmlConnectionTrace trace) {
-        if (ViaLegacyFmlTransport.INSTANCE.sendHandshake(activeConnection, bytes, trace)) {
+        if (ViaLegacyFmlTransport.INSTANCE.sendHandshake(bytes, trace)) {
             trace.event("FML|HS sent using direct ViaVersion PLAY transport (source phase=CONFIGURATION)");
             return;
         }
@@ -248,7 +234,7 @@ public final class LegacyForgeBridgeClient implements ClientModInitializer {
     }
 
     private void sendPlayHandshake(byte[] bytes, FmlConnectionTrace trace) {
-        if (ViaLegacyFmlTransport.INSTANCE.sendHandshake(activeConnection, bytes, trace)) {
+        if (ViaLegacyFmlTransport.INSTANCE.sendHandshake(bytes, trace)) {
             trace.event("FML|HS sent using direct ViaVersion PLAY transport (source phase=PLAY)");
             return;
         }
