@@ -1,18 +1,12 @@
 # Version Virtualization / Legacy Session Profile
 
-A Minecraft 1.21.11 client contains registries, mechanics, UI surfaces, and protocol concepts that do not exist in Minecraft 1.7.10. LegacyForgeBridge must not globally downgrade or unregister modern content. Instead, it activates a reversible **Legacy Session Profile** while connected to a 1.7.10 server.
+A Minecraft 1.21.11 client contains content and mechanics that do not exist in Minecraft 1.7.10. LegacyForgeBridge must not globally downgrade or unregister modern registries. Instead, it activates a reversible **Legacy Session Profile** while connected to a 1.7.10 server.
 
 ## Core rule
 
-Modern-only content remains registered locally but is treated as unavailable to the legacy server.
+Keep the modern client experience intact. Do **not** turn the whole client into a 1.7.10-style UI.
 
-During a legacy session it may be:
-
-- hidden from legacy-facing UI;
-- filtered from suggestions/search surfaces controlled by the bridge;
-- rejected by outbound packet guards;
-- translated to a legacy equivalent where a safe mapping exists;
-- marked unsupported when no safe translation exists.
+The default user-visible restriction is limited to **items**, including `BlockItem` instances for modern-only blocks. Other modern interfaces may remain visible unless a specific protocol incompatibility proves that a targeted guard is required.
 
 Disconnecting must restore normal 1.21.11 behavior without restarting the client.
 
@@ -26,73 +20,114 @@ NORMAL_1_21_11
   -> NORMAL_1_21_11
 ```
 
-No legacy state may survive RESTORING.
+No legacy state may survive `RESTORING`.
 
-## Capability table
+## Item compatibility boundary
 
-All bridge subsystems must use one session-scoped capability model, conceptually containing:
+A modern-only item that has no safe 1.7.10 representation must not enter a server-bound legacy item stack.
+
+This includes modern-only block items. The underlying modern `Block` and `Item` registry entries stay registered locally; LegacyForgeBridge does not unregister them from Minecraft's global registries.
+
+Required behavior during a legacy session:
+
+1. Keep all modern registry entries intact.
+2. Maintain a session-local set/map of items that have a valid 1.7.10 representation.
+3. Prevent unsupported modern items or block items from being encoded into legacy inventory/action packets.
+4. Translate supported items through a dedicated legacy ID/metadata mapping rather than using modern raw registry IDs.
+5. Restore unrestricted modern item behavior after disconnecting.
+
+Conceptually:
 
 ```text
-targetMinecraftVersion
-forgeVersion
-protocolVersion
-fmlProtocolVersion
-serverMods
-serverRegistrySnapshot
-supportedBlocks
-supportedItems
-supportedEntities
-supportedEffects
-supportedEnchantments
-supportedChannels
-supportedInteractions
+1.21.11 ItemStack
+      |
+      v
+Legacy Item Compatibility Map
+      |
+      +-- supported -> legacy item ID / metadata / NBT -> 1.7.10 server
+      |
+      +-- unsupported -> cancel server-bound action + diagnostic
 ```
 
-Do not maintain separate hard-coded support lists in UI, packet, and conversion code.
+This is **session-scoped item compatibility**, not registry deletion.
 
-## Modern-only blocks/items
+## UI policy
 
-A 1.21.11 block or item that has no 1.7.10 meaning must not be sent to the server.
+Modern UI should remain modern by default.
 
-Required behavior:
+LegacyForgeBridge should **not** globally disable or replace:
 
-1. Keep the modern registry entry intact locally.
-2. Hide it from bridge-controlled legacy selection/search surfaces.
-3. Prevent pick-block or equivalent actions from creating a server-bound unsupported entry.
-4. Reject outbound inventory/block interaction that references unsupported content.
-5. Restore full visibility after leaving the legacy session.
+- HUD;
+- recipe book;
+- advancements UI;
+- modern inventory screens;
+- modern settings/screens;
+- tooltips;
+- rendering improvements;
+- other client-only quality-of-life interfaces.
 
-This is **session-scoped masking**, not registry deletion.
+If an interface can cause an unsupported item to be sent to the server, guard the resulting **item action**, not the entire interface.
 
-## Modern mechanics
+Examples:
 
-Each feature absent from 1.7.10 receives an explicit policy:
+- A modern recipe-book screen may remain visible; an unsupported resulting item must not be sent as a legacy stack.
+- A modern creative screen may remain structurally unchanged; unsupported item acquisition/use must be blocked or filtered at the item boundary where necessary.
+- Command UI/autocomplete does not need blanket replacement. Server-side command behavior remains authoritative; bridge-specific filtering is added only if a concrete incompatibility is observed.
+
+## `/give` and commands
+
+Do not reimplement all command interfaces just to look like 1.7.10.
+
+For a remote 1.7.10 server, the server remains authoritative for `/give` and other server commands. LegacyForgeBridge only needs additional command filtering when the modern client itself would otherwise create or transmit a modern-only item identity that cannot be represented by the legacy protocol.
+
+## Legacy item identity and numeric IDs
+
+Never equate a modern raw registry ID with a 1.7.10 numeric item ID.
+
+Example of what must **not** happen:
+
+```text
+1.21.11 raw item id 236
+        !=
+1.7.10 Forge item id 236
+```
+
+Instead use a session-local translation table:
+
+```text
+modern Identifier / converted mod identity
+        <-> semantic legacy identity
+        <-> Forge 1.7.10 numeric ID + metadata
+```
+
+The 1.7.10 side of this table must be populated from known vanilla mappings plus FML/Forge registry synchronization for modded content.
+
+## Blocks
+
+A modern-only block does not need to be globally hidden or unregistered merely because 1.7.10 lacks it.
+
+The important boundary is normally its **item representation** (`BlockItem`) and any server-bound block interaction. A 1.7.10 server cannot legitimately send a modern-only block state to the client through the legacy protocol, so modern-only blocks that exist only in the local 1.21.11 registry may remain untouched.
+
+If a future edge case exposes a modern-only block through a server-bound action, add a targeted translation/guard for that action rather than removing the block globally.
+
+## Other modern mechanics
+
+Modern mechanics are handled only where protocol or gameplay semantics require translation. They are not automatically hidden from the user.
+
+Available internal policies may include:
 
 ```text
 ALLOW_LOCAL_ONLY
 TRANSLATE
 EMULATE
-HIDE
 BLOCK_OUTBOUND
 REPLACE_WITH_LEGACY_EQUIVALENT
 UNSUPPORTED
 ```
 
-Examples requiring policy decisions include offhand behavior, modern combat timing, shields, swimming/crawling-era poses, recipe-book UI assumptions, modern inventory/data-component semantics, modern attributes/effects/enchantments, and newer interaction packets.
+Use the least invasive policy that preserves correct 1.7.10 server behavior.
 
-## Vanilla mapping
-
-For content existing in both versions:
-
-```text
-1.7.10 legacy identity / metadata
-  -> semantic vanilla identity
-  -> 1.21.11 registry identity / state
-```
-
-Mapping must be semantic rather than numeric-ID matching.
-
-## Modded 1.7.10 content
+## Modded 1.7.10 items
 
 Preferred path:
 
@@ -100,43 +135,26 @@ Preferred path:
 legacy server registry entry
   -> FML mod/registry identity
   -> LegacyForgeBridge conversion manifest
-  -> pre-registered converted 1.21.11 entry
+  -> converted 1.21.11 Item
+  -> session-local legacy ID / metadata mapping
 ```
 
-If required server-side client content is unknown or unconverted, default policy is strict failure with a compatibility report. Placeholder rendering may be added later as a diagnostic mode, but must not be presented as full gameplay compatibility.
-
-## Visibility surfaces
-
-The bridge must audit more than creative inventory.
-
-| Surface | Legacy policy |
-|---|---|
-| Creative / bridge selection UI | hide unsupported entries |
-| Pick block / item selection | reject unsupported result |
-| Recipe/search UI | hide unsupported bridge-controlled entries |
-| Command suggestions | filter unsupported bridge-provided identifiers |
-| Outbound inventory interaction | validate before encode |
-| Outbound block interaction | validate before encode |
-| Entity interaction/spawn request | validate capability |
-| Tooltips | may remain local; must not imply server support |
-| Assets/resource packs | may remain loaded |
-
-Third-party UI mods may not be safely rewriteable. LegacyForgeBridge should therefore expose a visibility/capability API for integrations.
+If a required modded item is unknown or unconverted, fail that item mapping explicitly and record a compatibility diagnostic. Do not guess a numeric ID or silently substitute an unrelated modern item.
 
 ## Packet guard
 
-Final safety path:
+The final safety boundary for items is:
 
 ```text
-modern client action
-  -> semantic action
-  -> LegacyCapabilityTable check
-  -> mapping / translation
+modern item action
+  -> ItemStack compatibility check
+  -> semantic mapping
+  -> legacy ID / metadata / NBT encoding
   -> 1.7.10-compatible packet
 ```
 
-If validation fails, cancel the outbound action locally and emit a diagnostic rule ID. Never rely on the legacy server to reject modern-only identifiers.
+If the item has no safe legacy representation, cancel only that server-bound item action and emit a diagnostic rule ID.
 
-## Non-goal
+## Non-goals
 
-LegacyForgeBridge does not attempt to make the entire 1.21.11 feature set usable on a 1.7.10 server. It preserves modern client stability while exposing only capabilities that can be represented safely to the target legacy session.
+LegacyForgeBridge does not attempt to visually recreate the complete Minecraft 1.7.10 client. Modern rendering, screens, HUD behavior and client-side quality-of-life features should remain available unless a specific compatibility bug requires a narrowly targeted adaptation.
