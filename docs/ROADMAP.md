@@ -95,9 +95,21 @@ Initial supported classes:
 
 Required pipeline:
 
-`old-mods/*.jar -> analyze -> map -> transform -> validate -> output converted JAR -> cache result`
+`old-mods/*.jar -> analyze -> dependency plan -> parallel transform -> validate -> output converted JAR -> cache result`
 
-Acceptance target: **at least 10 representative small Forge 1.7.10 mods with >= 90% automatic conversion and no manual source edits.**
+Performance/UX requirements:
+
+- independent mods may be scanned, analyzed, transformed and validated concurrently;
+- dependencies are scheduled through a DAG so dependents wait only for required manifests, not for every other mod;
+- worker count is configurable and `auto` mode reserves CPU capacity for Minecraft/OS startup;
+- single-worker deterministic mode is available for debugging;
+- parallel scheduling must not alter conversion output;
+- the conversion subsystem exposes phase/mod/worker/cache/failure progress;
+- once a usable Minecraft window/event loop exists, a lightweight early-window progress view keeps repaint/event processing alive so first-run conversion does not appear frozen;
+- heavy conversion work must run off the render/event thread;
+- completed conversion is staged for the next launch and never performs unsafe late registry registration.
+
+Acceptance target: **at least 10 representative small Forge 1.7.10 mods with >= 90% automatic conversion and no manual source edits. Parallel and single-worker runs must produce equivalent manifests/results.**
 
 ### v0.5 — Common Forge API Layer — target: 60%
 
@@ -171,7 +183,8 @@ Required:
 - deterministic conversion manifests;
 - conversion rollback;
 - richer diagnostics;
-- performance and memory profiling.
+- parallel conversion performance/memory profiling;
+- worker scheduling/back-pressure tuning for large modpacks.
 
 The 95% target refers to the **defined compatibility corpus**, not every 1.7.10 mod ever released.
 
@@ -183,11 +196,13 @@ Release criteria:
 - clean Forge 1.7.10 server interoperability is stable;
 - Legacy Session state is complete and reversible;
 - converted JAR cache/output lifecycle is stable;
+- dependency-aware parallel conversion is deterministic and recoverable;
+- first-run conversion remains visibly responsive through progress reporting;
 - a documented compatibility corpus reaches the declared target thresholds;
 - unsupported CoreMods fail explicitly before gameplay;
 - normal 1.21.11 Fabric use is unaffected when no legacy connection/conversion is active;
 - every compatibility rule has diagnostics and a stable rule ID;
-- automated CI regression tests cover transport, conversion, and compatibility rules.
+- automated CI regression tests cover transport, conversion, concurrency and compatibility rules.
 
 ## What 100% does NOT mean
 
@@ -217,4 +232,6 @@ Every release must record:
 - primary-gameplay success rate;
 - automatic-conversion rate;
 - manual-rule requirement rate;
-- unsupported reason distribution.
+- unsupported reason distribution;
+- conversion wall-clock time;
+- worker count and peak queue depth for multi-mod conversion runs.
