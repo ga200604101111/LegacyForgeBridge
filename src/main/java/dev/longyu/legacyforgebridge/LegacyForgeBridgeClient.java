@@ -14,6 +14,8 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientConfigurationNetworkin
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
+import net.fabricmc.fabric.api.networking.v1.context.PacketContext;
+import net.fabricmc.fabric.api.networking.v1.context.PacketContextProvider;
 import net.minecraft.network.Connection;
 
 /** Client networking entrypoint for the Forge/FML bridge. */
@@ -47,6 +49,10 @@ public final class LegacyForgeBridgeClient implements ClientModInitializer {
             if (!ViaFabricPlusBackend.INSTANCE.isMinecraft1710Target()) {
                 return;
             }
+
+            // PacketContext.CONNECTION is present for the whole connection and avoids relying on
+            // version-specific vanilla accessor names during CONFIGURATION.
+            activeConnection = context.packetContext().orElseThrow(PacketContext.CONNECTION);
 
             FmlConnectionTrace trace = FmlConnectionTrace.INSTANCE;
             trace.startIfNeeded(
@@ -86,7 +92,9 @@ public final class LegacyForgeBridgeClient implements ClientModInitializer {
         });
 
         ClientConfigurationConnectionEvents.INIT.register((handler, client) -> {
-            activeConnection = handler.getConnection();
+            activeConnection = ((PacketContextProvider) handler)
+                    .getPacketContext()
+                    .orElseThrow(PacketContext.CONNECTION);
             directRegistrationSent = false;
             if (!ViaFabricPlusBackend.INSTANCE.isMinecraft1710Target()) {
                 return;
