@@ -4,6 +4,8 @@ LegacyForgeBridge is developed in measurable compatibility stages. A version num
 
 Detailed connection acceptance is defined in [`CONNECTION-ACCEPTANCE.md`](CONNECTION-ACCEPTANCE.md). Reaching the PLAY state alone is never enough to claim 1.7.10 support.
 
+Detailed legacy dependency semantics are defined in [`DEPENDENCY-MODEL.md`](DEPENDENCY-MODEL.md).
+
 ## Definition of completion
 
 Project completion is tracked in four independent dimensions:
@@ -95,21 +97,34 @@ Initial supported classes:
 
 Required pipeline:
 
-`old-mods/*.jar -> analyze -> dependency plan -> parallel transform -> validate -> output converted JAR -> cache result`
+`old-mods/*.jar -> analyze -> dependency graph -> SCC/closure resolution -> parallel transform -> validate -> output converted JAR -> cache result`
+
+Dependency requirements:
+
+- resolve hard prerequisites recursively, including 3+ level chains;
+- preserve version constraints;
+- distinguish hard, optional, ordering, API-provider and bootstrap relationships;
+- support multiple logical mod IDs in one physical JAR;
+- convert library/API mods as first-class artifacts;
+- optional dependencies must remain optional when safely detectable;
+- valid dependency cycles are condensed into SCC conversion groups;
+- unsafe cycles fail deterministically with diagnostics;
+- failure of one hard prerequisite blocks only its dependent closure;
+- cache invalidation includes relevant dependency manifest hashes, not only the source JAR hash.
 
 Performance/UX requirements:
 
-- independent mods may be scanned, analyzed, transformed and validated concurrently;
-- dependencies are scheduled through a DAG so dependents wait only for required manifests, not for every other mod;
+- independent mods or dependency-ready groups may be scanned, analyzed, transformed and validated concurrently;
+- dependencies are scheduled through the SCC-condensed DAG so dependents wait only for required manifests, not for every other mod;
 - worker count is configurable and `auto` mode reserves CPU capacity for Minecraft/OS startup;
 - single-worker deterministic mode is available for debugging;
 - parallel scheduling must not alter conversion output;
-- the conversion subsystem exposes phase/mod/worker/cache/failure progress;
+- the conversion subsystem exposes phase/mod/worker/cache/failure/blocked-by-dependency progress;
 - once a usable Minecraft window/event loop exists, a lightweight early-window progress view keeps repaint/event processing alive so first-run conversion does not appear frozen;
 - heavy conversion work must run off the render/event thread;
 - completed conversion is staged for the next launch and never performs unsafe late registry registration.
 
-Acceptance target: **at least 10 representative small Forge 1.7.10 mods with >= 90% automatic conversion and no manual source edits. Parallel and single-worker runs must produce equivalent manifests/results.**
+Acceptance target: **at least 10 representative small Forge 1.7.10 mods with >= 90% automatic conversion and no manual source edits. The test pack must include a 3+ level dependency chain, shared libraries, optional dependencies, version constraints, and an independent branch that still converts when another dependency branch fails. Parallel and single-worker runs must produce equivalent manifests/results.**
 
 ### v0.5 — Common Forge API Layer — target: 60%
 
@@ -177,14 +192,15 @@ Focus on representative large content/technology/magic mods and dependency graph
 
 Required:
 
-- dependency ordering;
+- large transitive dependency graphs and shared-library fan-out;
 - namespace/registry collision handling;
 - cross-mod API adapters;
 - deterministic conversion manifests;
 - conversion rollback;
 - richer diagnostics;
 - parallel conversion performance/memory profiling;
-- worker scheduling/back-pressure tuning for large modpacks.
+- worker scheduling/back-pressure tuning for large modpacks;
+- incremental reconversion that invalidates only affected dependency closures.
 
 The 95% target refers to the **defined compatibility corpus**, not every 1.7.10 mod ever released.
 
@@ -196,13 +212,14 @@ Release criteria:
 - clean Forge 1.7.10 server interoperability is stable;
 - Legacy Session state is complete and reversible;
 - converted JAR cache/output lifecycle is stable;
+- transitive/optional/versioned legacy dependency resolution is deterministic;
 - dependency-aware parallel conversion is deterministic and recoverable;
 - first-run conversion remains visibly responsive through progress reporting;
 - a documented compatibility corpus reaches the declared target thresholds;
 - unsupported CoreMods fail explicitly before gameplay;
 - normal 1.21.11 Fabric use is unaffected when no legacy connection/conversion is active;
 - every compatibility rule has diagnostics and a stable rule ID;
-- automated CI regression tests cover transport, conversion, concurrency and compatibility rules.
+- automated CI regression tests cover transport, conversion, dependencies, concurrency and compatibility rules.
 
 ## What 100% does NOT mean
 
@@ -222,6 +239,9 @@ The test corpus should eventually contain categories rather than cherry-picked m
 - networking mods;
 - rendering-heavy mods;
 - API/dependency mods;
+- multi-level prerequisite chains;
+- shared libraries/API providers;
+- optional-dependency integration mods;
 - ASM/CoreMods;
 - large integrated mods.
 
@@ -233,5 +253,6 @@ Every release must record:
 - automatic-conversion rate;
 - manual-rule requirement rate;
 - unsupported reason distribution;
+- dependency-resolution failure distribution;
 - conversion wall-clock time;
 - worker count and peak queue depth for multi-mod conversion runs.
