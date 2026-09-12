@@ -23,6 +23,10 @@ dependencies {
     implementation 'org.ow2.asm:asm-tree:9.8'
     include 'org.ow2.asm:asm:9.8'
     include 'org.ow2.asm:asm-tree:9.8'
+
+    testImplementation platform('org.junit:junit-bom:5.11.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 processResources {
@@ -35,6 +39,14 @@ processResources {
 tasks.withType(JavaCompile).configureEach {
     options.release = 21
     options.encoding = 'UTF-8'
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+        exceptionFormat = 'full'
+    }
 }
 
 java {
