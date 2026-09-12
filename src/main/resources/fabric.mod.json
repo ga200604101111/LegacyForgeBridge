@@ -14,6 +14,9 @@
     "main": [
       "dev.longyu.legacyforgebridge.LegacyForgeBridge"
     ],
+    "client": [
+      "dev.longyu.legacyforgebridge.LegacyForgeBridgeClient"
+    ],
     "viafabricplus": [
       "dev.longyu.legacyforgebridge.protocol.ViaFabricPlusEntrypoint"
     ]
