@@ -1,9 +1,11 @@
 package dev.longyu.legacyforgebridge.protocol;
 
 import com.viaversion.viafabricplus.api.ViaFabricPlusBase;
+import com.viaversion.viaversion.api.connection.UserConnection;
 import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
 import dev.longyu.legacyforgebridge.LegacyForgeBridge;
 import dev.longyu.legacyforgebridge.session.LegacySessionController;
+import net.minecraft.network.Connection;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
@@ -91,6 +93,12 @@ public final class ViaFabricPlusBackend implements ProtocolBackend {
     public void selectMinecraft1710ForNextConnection() {
         requirePlatform().setTargetVersion(ProtocolVersion.v1_7_6, true);
         updateTarget(ProtocolVersion.v1_7_6);
+    }
+
+    /** Returns the ViaVersion connection attached by ViaFabricPlus to one Minecraft connection. */
+    public UserConnection userConnection(Connection connection) {
+        Objects.requireNonNull(connection, "connection");
+        return requirePlatform().getUserConnection(connection);
     }
 
     /**
