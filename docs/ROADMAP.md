@@ -2,6 +2,8 @@
 
 LegacyForgeBridge is developed in measurable compatibility stages. A version number does not mean universal 1.7.10 Forge compatibility; it means the acceptance criteria for that stage have been met.
 
+Detailed connection acceptance is defined in [`CONNECTION-ACCEPTANCE.md`](CONNECTION-ACCEPTANCE.md). Reaching the PLAY state alone is never enough to claim 1.7.10 support.
+
 ## Definition of completion
 
 Project completion is tracked in four independent dimensions:
@@ -30,37 +32,48 @@ Status target:
 
 Acceptance rule: the mod must start safely and must never emit converted JARs that were not validated by the conversion pipeline.
 
-### v0.2 — Clean Forge 1.7.10 Server — target: 20%
+### v0.2 — Minecraft 1.7.10 Connection Baseline — target: 20%
 
-Goal: a Fabric 1.21.11 client can join and play on a Forge 1.7.10 server with no third-party mods installed.
+Goal: a Fabric 1.21.11 client can **normally play**, not merely log in, on both a clean vanilla 1.7.10 server and a clean Forge 1.7.10 server with no third-party mods installed.
+
+#### Tier 0 — Vanilla 1.7.10
 
 Required:
 
-- protocol target automatically switches to 1.7.10 for a legacy connection;
+- protocol target switches to 1.7.10 for the legacy connection;
+- server-list status and login succeed;
+- connection reaches a stable PLAY state;
+- movement, chat, inventory, container interaction, block interaction, item pickup/drop, entity tracking, health/damage, death/respawn and world/dimension changes remain stable;
+- disconnect restores normal 1.21.11 behavior completely.
+
+#### Tier 1 — Clean Forge 1.7.10
+
+In addition to all Tier 0 requirements:
+
 - Forge/FML server detection;
 - FML marker/channel registration;
-- ClientHello / ModList / HandshakeAck flow;
-- clean connection reaches PLAY state;
-- movement, chat, inventory, block interaction, death/respawn and world changes remain stable;
-- disconnect restores normal 1.21.11 behavior completely;
-- Legacy Session Profile is enabled only for the active legacy connection.
+- ClientHello / ModList / registry synchronization / HandshakeAck flow;
+- server sees a valid Forge/FML-compatible client where required;
+- clean connection reaches and remains in PLAY state;
+- Legacy Session state is enabled only for the active legacy connection.
 
-Acceptance target: **100 successful connect/play/disconnect cycles without state leaking into a normal 1.21.11 session.**
+Acceptance target for both tiers: **100 successful connect -> play -> disconnect cycles without state leaking into a normal 1.21.11 session.**
 
-### v0.3 — Version Virtualization — target: 30%
+### v0.3 — Item/Registry Boundary Virtualization — target: 30%
 
-Goal: the modern client behaves like a valid 1.7.10-era client while connected to a legacy server without globally downgrading Minecraft.
+Goal: preserve the modern 1.21.11 client experience while preventing server-bound item state that cannot be represented safely to 1.7.10.
 
 Required:
 
-- modern-only blocks/items/entities are hidden from legacy-facing UI surfaces where they could be selected or sent;
-- outbound packet guard rejects unsupported modern registry content;
-- modern-only recipes, commands, suggestions and interaction affordances are filtered where relevant;
-- modern registries remain intact internally so normal 1.21.11 worlds/servers still work after disconnect;
-- unsupported received legacy/modded content has a defined placeholder/failure policy;
-- per-session capability table is available to all bridge subsystems.
+- modern registries remain intact internally;
+- unsupported modern `ItemStack` / `BlockItem` state is blocked before being encoded to the legacy server;
+- compatible vanilla items/blocks use semantic mappings rather than modern raw registry IDs;
+- legacy numeric ID / metadata mappings are session-local and cannot collide with modern raw IDs;
+- converted/modded legacy item identities have deterministic mappings;
+- modern HUD, menus, rendering and client UI do not need to be globally downgraded;
+- per-session item capability/mapping data is available to all packet/conversion subsystems.
 
-Acceptance target: **no known path can intentionally send a 1.21.11-only block/item/entity identifier to a 1.7.10 server.**
+Acceptance target: **no known path can intentionally send an unsupported 1.21.11-only item or BlockItem representation to a 1.7.10 server.**
 
 ### v0.4 — Basic Legacy Mod Conversion — target: 45%
 
@@ -166,8 +179,9 @@ The 95% target refers to the **defined compatibility corpus**, not every 1.7.10 
 
 Release criteria:
 
+- vanilla 1.7.10 server interoperability is stable;
 - clean Forge 1.7.10 server interoperability is stable;
-- Legacy Session Profile is complete and reversible;
+- Legacy Session state is complete and reversible;
 - converted JAR cache/output lifecycle is stable;
 - a documented compatibility corpus reaches the declared target thresholds;
 - unsupported CoreMods fail explicitly before gameplay;
