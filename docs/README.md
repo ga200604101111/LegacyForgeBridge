@@ -5,7 +5,9 @@ This directory is the project contract for LegacyForgeBridge. Code changes shoul
 ## Documents
 
 - [ROADMAP.md](ROADMAP.md) — version milestones, completion percentages, and acceptance criteria.
-- [VERSION-VIRTUALIZATION.md](VERSION-VIRTUALIZATION.md) — how a 1.21.11 client presents itself while connected to a 1.7.10 Forge server, including hiding modern-only content.
+- [CONNECTION-ACCEPTANCE.md](CONNECTION-ACCEPTANCE.md) — what counts as a real, playable 1.7.10 connection.
+- [VERSION-VIRTUALIZATION.md](VERSION-VIRTUALIZATION.md) — how modern item state is bounded safely while connected to a 1.7.10 server.
+- [DEPENDENCY-MODEL.md](DEPENDENCY-MODEL.md) — transitive prerequisites, optional dependencies, version constraints, cycles/SCC groups, cache invalidation, and dependency-aware parallel conversion.
 - [COMPATIBILITY-MATRIX.md](COMPATIBILITY-MATRIX.md) — support classes and how compatibility percentage is measured.
 - [ARCHITECTURE.md](ARCHITECTURE.md) — project boundaries, major subsystems, and design rules.
 
