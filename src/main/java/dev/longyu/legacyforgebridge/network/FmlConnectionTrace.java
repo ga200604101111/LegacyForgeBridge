@@ -14,58 +14,93 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
 
-/** Writes a focused Forge/FML trace for one legacy connection attempt. */
+/**
+ * Writes one focused Forge/FML trace file per Minecraft launch.
+ *
+ * <p>The file is truncated when LegacyForgeBridge starts. Multiple legacy connection attempts in
+ * the same Minecraft process are separated into numbered SESSION sections instead of creating
+ * many timestamped files.</p>
+ */
 public final class FmlConnectionTrace {
-    private static final DateTimeFormatter FILE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss_SSS");
     private static final DateTimeFormatter LINE_TIME = DateTimeFormatter.ofPattern("HH:mm:ss.SSS");
     private static final int RAW_HEX_LIMIT = 512;
 
     public static final FmlConnectionTrace INSTANCE = new FmlConnectionTrace();
 
     private BufferedWriter writer;
-    private Path activePath;
+    private Path logPath;
+    private int sessionCounter;
+    private boolean sessionActive;
 
     private FmlConnectionTrace() {
     }
 
-    public synchronized Path startIfNeeded(String reason) {
+    /**
+     * Opens the single launch log and clears any log left by the previous Minecraft launch.
+     */
+    public synchronized Path initializeForLaunch() {
         if (writer != null) {
-            return activePath;
+            return logPath;
         }
 
         try {
-            Path directory = FabricLoader.getInstance().getGameDir()
-                    .resolve("logs")
-                    .resolve("legacyforgebridge");
-            Files.createDirectories(directory);
+            Path logDirectory = FabricLoader.getInstance().getGameDir().resolve("logs");
+            Files.createDirectories(logDirectory);
 
-            activePath = directory.resolve("connection-" + FILE_TIME.format(LocalDateTime.now()) + ".log");
+            logPath = logDirectory.resolve("legacyforgebridge.log");
             writer = Files.newBufferedWriter(
-                    activePath,
+                    logPath,
                     StandardCharsets.UTF_8,
-                    StandardOpenOption.CREATE_NEW,
+                    StandardOpenOption.CREATE,
+                    StandardOpenOption.TRUNCATE_EXISTING,
                     StandardOpenOption.WRITE
             );
 
-            writeLine("=== LegacyForgeBridge Forge/FML connection trace ===");
+            sessionCounter = 0;
+            sessionActive = false;
+
+            writeLine("=== LegacyForgeBridge Forge/FML trace ===");
             writeLine("version=" + BuildInfo.VERSION);
-            writeLine("startedBecause=" + reason);
+            writeLine("launchTime=" + LocalDateTime.now());
+            writeLine("policy=one file per Minecraft launch; previous launch log was cleared");
             writeLine("scope=Forge/FML custom payloads only; chat/auth/chunk payloads are intentionally not logged");
             writeLine("");
             flushQuietly();
 
-            LegacyForgeBridge.LOGGER.info("Forge/FML connection trace: {}", activePath.toAbsolutePath());
-            return activePath;
+            LegacyForgeBridge.LOGGER.info("Forge/FML trace log: {}", logPath.toAbsolutePath());
+            return logPath;
         } catch (IOException exception) {
-            LegacyForgeBridge.LOGGER.error("Unable to open Forge/FML connection trace", exception);
+            LegacyForgeBridge.LOGGER.error("Unable to open Forge/FML trace log", exception);
             writer = null;
-            activePath = null;
+            logPath = null;
             return null;
         }
     }
 
+    /** Starts a new connection section only if one is not already active. */
+    public synchronized Path startIfNeeded(String reason) {
+        if (writer == null && initializeForLaunch() == null) {
+            return null;
+        }
+
+        if (!sessionActive) {
+            sessionCounter++;
+            sessionActive = true;
+            writeLine("================================================================================");
+            writeLine("[" + LINE_TIME.format(LocalDateTime.now()) + "] [SESSION #" + sessionCounter + " START] " + reason);
+            writeLine("================================================================================");
+            flushQuietly();
+        }
+
+        return logPath;
+    }
+
     public synchronized Path activePath() {
-        return activePath;
+        return logPath;
+    }
+
+    public synchronized boolean sessionActive() {
+        return sessionActive;
     }
 
     public synchronized void event(String message) {
@@ -127,20 +162,21 @@ public final class FmlConnectionTrace {
         flushQuietly();
     }
 
-    public synchronized void close(String reason) {
-        if (writer == null) {
+    /** Ends the current connection section but deliberately keeps the launch log open. */
+    public synchronized void endSession(String reason) {
+        if (writer == null || !sessionActive) {
             return;
         }
-        try {
-            writeLine("[" + LINE_TIME.format(LocalDateTime.now()) + "] [END] " + reason);
-            writer.flush();
-            writer.close();
-        } catch (IOException exception) {
-            LegacyForgeBridge.LOGGER.warn("Failed to close Forge/FML connection trace cleanly", exception);
-        } finally {
-            writer = null;
-            activePath = null;
-        }
+        writeLine("[" + LINE_TIME.format(LocalDateTime.now()) + "] [SESSION #" + sessionCounter + " END] " + reason);
+        writeLine("");
+        sessionActive = false;
+        flushQuietly();
+    }
+
+    /** Kept for source compatibility with alpha.3 callers; this no longer closes the launch file. */
+    @Deprecated
+    public synchronized void close(String reason) {
+        endSession(reason);
     }
 
     private String printableRegistryName(String raw) {
@@ -162,13 +198,12 @@ public final class FmlConnectionTrace {
             writer.write(line);
             writer.newLine();
         } catch (IOException exception) {
-            LegacyForgeBridge.LOGGER.error("Failed writing Forge/FML connection trace", exception);
+            LegacyForgeBridge.LOGGER.error("Failed writing Forge/FML trace log", exception);
             try {
                 writer.close();
             } catch (IOException ignored) {
             }
             writer = null;
-            activePath = null;
         }
     }
 
@@ -179,7 +214,7 @@ public final class FmlConnectionTrace {
         try {
             writer.flush();
         } catch (IOException exception) {
-            LegacyForgeBridge.LOGGER.warn("Failed flushing Forge/FML connection trace", exception);
+            LegacyForgeBridge.LOGGER.warn("Failed flushing Forge/FML trace log", exception);
         }
     }
 }

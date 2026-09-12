@@ -1,6 +1,7 @@
 package dev.longyu.legacyforgebridge;
 
 import dev.longyu.legacyforgebridge.convert.LegacyConversionManager;
+import dev.longyu.legacyforgebridge.network.FmlConnectionTrace;
 import net.fabricmc.api.ModInitializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,6 +13,10 @@ public final class LegacyForgeBridge implements ModInitializer {
     @Override
     public void onInitialize() {
         LOGGER.info("Initializing LegacyForgeBridge {}", BuildInfo.VERSION);
+
+        // One deterministic trace file per Minecraft launch. This is intentionally initialized
+        // before any connection attempt so the previous launch's trace is cleared immediately.
+        FmlConnectionTrace.INSTANCE.initializeForLaunch();
 
         try {
             LegacyConversionManager manager = new LegacyConversionManager();

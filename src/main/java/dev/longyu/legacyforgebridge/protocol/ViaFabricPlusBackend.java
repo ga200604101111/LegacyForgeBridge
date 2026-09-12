@@ -1,7 +1,6 @@
 package dev.longyu.legacyforgebridge.protocol;
 
 import com.viaversion.viafabricplus.api.ViaFabricPlusBase;
-import com.viaversion.viafabricplus.api.events.LoadingCycleCallback;
 import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
 import dev.longyu.legacyforgebridge.LegacyForgeBridge;
 import dev.longyu.legacyforgebridge.session.LegacySessionController;
@@ -38,13 +37,11 @@ public final class ViaFabricPlusBackend implements ProtocolBackend {
         this.platform = platform;
         updateTarget(platform.getTargetVersion());
         platform.registerOnChangeProtocolVersionCallback((oldVersion, newVersion) -> updateTarget(newVersion));
-        platform.registerLoadingCycleCallback(cycle -> {
-            if (cycle == LoadingCycleCallback.LoadingCycle.POST_VIAVERSION_LOAD
-                    || cycle == LoadingCycleCallback.LoadingCycle.FINAL_LOAD) {
-                LegacyPluginChannelMappings.install();
-            }
-        });
 
+        // Do not touch ViaVersion protocol implementation classes here. ViaFabricPlus invokes this
+        // entrypoint before its asynchronous ProtocolTranslator initialization has completed.
+        // LegacyForgeBridgeClient retries channel mapping installation only after ViaVersion reports
+        // that its protocol manager is initialized.
         LegacyForgeBridge.LOGGER.info(
                 "ViaFabricPlus backend ready: runtime={}, API={}, target={} ({})",
                 platform.getVersion(),
