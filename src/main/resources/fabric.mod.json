@@ -3,22 +3,26 @@
   "id": "legacyforgebridge",
   "version": "${version}",
   "name": "LegacyForgeBridge",
-  "description": "Experimental Fabric 1.21.11 compatibility and conversion layer for legacy Forge 1.7.10 mods.",
+  "description": "Fabric 1.21.11 compatibility and conversion layer for legacy Forge 1.7.10 mods.",
   "authors": ["YingHunag09"],
   "contact": {
     "sources": "https://github.com/ga200604101111/LegacyForgeBridge"
   },
   "license": "All-Rights-Reserved",
-  "environment": "*",
+  "environment": "client",
   "entrypoints": {
     "main": [
       "dev.longyu.legacyforgebridge.LegacyForgeBridge"
+    ],
+    "viafabricplus": [
+      "dev.longyu.legacyforgebridge.protocol.ViaFabricPlusEntrypoint"
     ]
   },
   "depends": {
     "fabricloader": ">=0.19.3",
     "minecraft": "1.21.11",
     "java": ">=21",
-    "fabric-api": "*"
+    "fabric-api": "*",
+    "viafabricplus": ">=4.4.15"
   }
 }
