@@ -1,13 +1,15 @@
 package dev.longyu.legacyforgebridge.protocol;
 
+import com.viaversion.viaversion.api.Via;
+import com.viaversion.viaversion.api.connection.ProtocolInfo;
 import com.viaversion.viaversion.api.connection.UserConnection;
 import com.viaversion.viaversion.api.protocol.Protocol;
 import com.viaversion.viaversion.api.protocol.packet.PacketType;
 import com.viaversion.viaversion.api.protocol.packet.PacketWrapper;
+import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
 import com.viaversion.viaversion.api.type.Types;
 import dev.longyu.legacyforgebridge.LegacyForgeBridge;
 import dev.longyu.legacyforgebridge.network.FmlConnectionTrace;
-import net.minecraft.network.Connection;
 
 import java.nio.charset.StandardCharsets;
 
@@ -44,40 +46,35 @@ public final class ViaLegacyFmlTransport {
     }
 
     /** Sends the Forge/FML client channel registration through the same legacy PLAY pipeline. */
-    public boolean sendClientRegistration(Connection connection, FmlConnectionTrace trace) {
+    public boolean sendClientRegistration(FmlConnectionTrace trace) {
         trace.packet(
                 "OUT-DIRECT",
                 "REGISTER",
                 CLIENT_CHANNEL_REGISTRATION,
                 "Client channel registration aliases: legacyforgebridge:fml_hs, legacyforgebridge:fml, legacyforgebridge:forge"
         );
-        return sendPluginMessage(connection, MODERN_REGISTER, CLIENT_CHANNEL_REGISTRATION, trace);
+        return sendPluginMessage(MODERN_REGISTER, CLIENT_CHANNEL_REGISTRATION, trace);
     }
 
     /** Sends one FML|HS payload directly through ViaVersion instead of modern configuration networking. */
-    public boolean sendHandshake(Connection connection, byte[] payload, FmlConnectionTrace trace) {
-        return sendPluginMessage(connection, MODERN_FML_HS, payload, trace);
+    public boolean sendHandshake(byte[] payload, FmlConnectionTrace trace) {
+        return sendPluginMessage(MODERN_FML_HS, payload, trace);
     }
 
     private boolean sendPluginMessage(
-            Connection connection,
             String modernChannel,
             byte[] payload,
             FmlConnectionTrace trace
     ) {
-        if (connection == null) {
-            trace.event("Direct ViaVersion transport unavailable: Minecraft Connection is null");
-            return false;
-        }
         if (!LegacyPluginChannelMappings.installed()) {
             trace.event("Direct ViaVersion transport unavailable: legacy channel aliases are not installed");
             return false;
         }
 
         try {
-            UserConnection user = ViaFabricPlusBackend.INSTANCE.userConnection(connection);
+            UserConnection user = findLegacyClientConnection(trace);
             if (user == null) {
-                trace.event("Direct ViaVersion transport unavailable: ViaFabricPlus UserConnection is null");
+                trace.event("Direct ViaVersion transport unavailable: no active 1.7.10 client UserConnection found");
                 return false;
             }
 
@@ -100,6 +97,50 @@ public final class ViaLegacyFmlTransport {
             LegacyForgeBridge.LOGGER.error("Direct ViaVersion Forge/FML transport failed", exception);
             return false;
         }
+    }
+
+    private UserConnection findLegacyClientConnection(FmlConnectionTrace trace) {
+        if (!Via.isLoaded()) {
+            return null;
+        }
+
+        UserConnection fallback = null;
+        int activeClientConnections = 0;
+
+        for (UserConnection connection : Via.getManager().getConnectionManager().getConnections()) {
+            if (!connection.isClientSide() || connection.getChannel() == null || !connection.getChannel().isActive()) {
+                continue;
+            }
+
+            activeClientConnections++;
+            if (fallback == null) {
+                fallback = connection;
+            }
+
+            ProtocolInfo info = connection.getProtocolInfo();
+            ProtocolVersion serverVersion = info != null ? info.serverProtocolVersion() : null;
+            if (serverVersion != null
+                    && LegacyProtocolVersions.isMinecraft1710(serverVersion.getVersion())) {
+                trace.event(
+                        "Direct ViaVersion transport selected active client UserConnection: serverProtocol="
+                                + serverVersion.getName() + " (" + serverVersion.getVersion() + ")"
+                );
+                return connection;
+            }
+        }
+
+        if (fallback != null) {
+            ProtocolInfo info = fallback.getProtocolInfo();
+            ProtocolVersion serverVersion = info != null ? info.serverProtocolVersion() : null;
+            trace.event(
+                    "Direct ViaVersion transport using sole/fallback active client UserConnection: activeClientConnections="
+                            + activeClientConnections
+                            + " serverProtocol=" + (serverVersion == null ? "unknown" : serverVersion.getName())
+            );
+        } else {
+            trace.event("Direct ViaVersion transport found activeClientConnections=0");
+        }
+        return fallback;
     }
 
     private Handles handles() throws ReflectiveOperationException {
