@@ -1,0 +1,11 @@
+.gradle/
+build/
+out/
+run/
+.idea/
+*.iml
+.DS_Store
+
+# Local test inputs / generated conversion cache
+old-mods/
+legacy-cache/
