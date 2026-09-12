@@ -4,7 +4,13 @@ on:
   workflow_dispatch:
   push:
     branches: [ main ]
+    paths-ignore:
+      - 'docs/**'
   pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -24,13 +30,13 @@ jobs:
         with:
           gradle-version: '9.5.1'
 
-      - name: Build
+      - name: Build and test
         run: gradle build --stacktrace
 
       - name: Upload JARs
-        if: always()
+        if: success()
         uses: actions/upload-artifact@v7
         with:
           name: LegacyForgeBridge-build
           path: build/libs/*.jar
-          if-no-files-found: warn
+          if-no-files-found: error
