@@ -30,6 +30,12 @@ LegacyForgeBridge
 │  ├─ old-mods discovery
 │  ├─ metadata detection
 │  └─ SHA-256 cache
+├─ dependency
+│  ├─ logical mod-id/artifact graph
+│  ├─ hard/optional/order/API/bootstrap edges
+│  ├─ transitive closure and version constraints
+│  ├─ SCC detection / condensation
+│  └─ dependency-ready scheduling groups
 ├─ analyzer
 │  ├─ ASM bytecode analysis
 │  ├─ Forge/Minecraft reference inventory
@@ -57,14 +63,19 @@ LegacyForgeBridge
    └─ compatibility corpus metrics
 ```
 
+Detailed dependency semantics are defined in [`DEPENDENCY-MODEL.md`](DEPENDENCY-MODEL.md).
+
 ## `old-mods` lifecycle
 
 ```text
 .minecraft/old-mods/*.jar
   -> fingerprint
+  -> metadata + mod-id discovery
   -> analyze
-  -> dependency/compatibility plan
-  -> transform
+  -> build dependency graph
+  -> resolve transitive closure / SCC groups
+  -> compatibility plan
+  -> transform dependency-ready groups
   -> validate
   -> write converted artifact
   -> .minecraft/mods/
@@ -75,7 +86,7 @@ A failed validation must not overwrite or emit a JAR that Fabric will try to loa
 
 ## Parallel conversion model
 
-Conversion should use multiple CPU cores when multiple legacy mods are ready to process. Parallelism is **per mod / per dependency-ready unit**, not uncontrolled concurrent mutation of shared state.
+Conversion should use multiple CPU cores when multiple legacy mods are ready to process. Parallelism is **per mod / per dependency-ready conversion group**, not uncontrolled concurrent mutation of shared state.
 
 ### Parallel-safe stages
 
@@ -91,21 +102,27 @@ The following stages are expected to run concurrently for independent mods:
 
 ### Dependency-aware scheduling
 
-Before transformation, the coordinator builds a dependency DAG from legacy mod metadata and discovered references.
+Before transformation, the coordinator builds a complete dependency graph from legacy mod metadata, ordering declarations, discovered API/library relationships, and classified bytecode references.
+
+The raw graph is **not assumed to be acyclic**. The resolver first detects strongly connected components (SCCs), classifies cycles, collapses valid SCCs into conversion groups, and then schedules the resulting DAG.
+
+Example after condensation:
 
 ```text
-A ──> B ──> D
-     
-C ───────> D
+Group[A] ──> Group[B] ──> Group[D]
+                       \
+Group[C] ───────────────> Group[D]
 
 ready set 1: A, C
 ready set 2: B
 ready set 3: D
 ```
 
-Mods in the same ready set may be converted concurrently. A dependent mod must not consume another mod's conversion manifest until that dependency has completed successfully.
+Mods/groups in the same ready set may be converted concurrently. A dependent conversion group must not consume another group's manifest until the required provider has completed successfully.
 
-Independent mods must continue converting even if an unrelated dependency chain is waiting.
+Independent branches must continue converting even if an unrelated dependency chain is waiting or blocked.
+
+Hard dependency failure propagates only through its dependent closure. Missing optional dependencies do not block the base mod.
 
 ### Worker-count policy
 
@@ -132,9 +149,26 @@ single      = diagnostic / deterministic fallback
 
 ### Determinism
 
-Parallel execution must not change conversion results. The same source JARs, rule database and configuration must produce the same manifests and output regardless of worker scheduling.
+Parallel execution must not change conversion results. The same source JARs, resolved dependency graph, rule database and configuration must produce the same manifests and output regardless of worker scheduling.
 
 A single-worker mode is mandatory for debugging concurrency or reproducibility problems.
+
+## Dependency-aware cache model
+
+A source JAR's own SHA-256 is necessary but not sufficient for cache validity.
+
+If a converted mod links against a converted library/API provider, changes to that provider may invalidate the dependent output even when the dependent source JAR itself is unchanged.
+
+Cache identity should therefore include at least:
+
+```text
+source JAR hash
+converter version
+mapping/rule versions
+resolved dependency manifest hashes
+```
+
+This prevents stale dependents from surviving an API/library reconversion.
 
 ## Early-window conversion progress
 
@@ -159,6 +193,7 @@ The progress model should expose:
 - current phase;
 - total discovered mods;
 - completed / active / queued counts;
+- blocked-by-dependency count;
 - active mod names;
 - worker count;
 - cache-hit count;
@@ -222,6 +257,8 @@ Direct legacy OpenGL is not a compatibility target by itself. Rendering operatio
 6. Disconnecting from a legacy server must restore all session-scoped state.
 7. Parallel conversion must be deterministic and isolate per-mod failures.
 8. Heavy conversion work must not intentionally freeze the Minecraft render/event thread.
+9. A hard prerequisite must be resolved and validated before a dependent artifact is committed.
+10. Missing optional prerequisites must not be promoted into hard failures.
 
 ## Version support policy
 
