@@ -6,6 +6,7 @@ import dev.longyu.legacyforgebridge.network.FmlMappedPayload;
 import dev.longyu.legacyforgebridge.protocol.LegacyPluginChannelMappings;
 import dev.longyu.legacyforgebridge.protocol.ViaFabricPlusBackend;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
@@ -17,6 +18,16 @@ public final class LegacyForgeBridgeClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         registerPayloadTypes();
+
+        // ViaFabricPlus initializes ViaVersion asynchronously. Never force-load the 1.12->1.13
+        // protocol class before ViaVersion reports that protocols are initialized. The first call
+        // is opportunistic; the tick callback retries quietly until it succeeds.
+        LegacyPluginChannelMappings.installIfReady();
+        ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            if (!LegacyPluginChannelMappings.installed()) {
+                LegacyPluginChannelMappings.installIfReady();
+            }
+        });
 
         ClientPlayNetworking.registerGlobalReceiver(FmlMappedPayload.FML_HS, (payload, context) -> {
             if (!ViaFabricPlusBackend.INSTANCE.isMinecraft1710Target()) {
@@ -35,6 +46,7 @@ public final class LegacyForgeBridgeClient implements ClientModInitializer {
             try {
                 handshake.handle(data, bytes -> sendHandshake(bytes, trace), trace);
             } catch (RuntimeException exception) {
+                trace.event("Forge/FML handshake processing failed: " + exception);
                 LegacyForgeBridge.LOGGER.error("Forge/FML handshake processing failed", exception);
             }
         });
@@ -45,7 +57,7 @@ public final class LegacyForgeBridgeClient implements ClientModInitializer {
             }
             FmlConnectionTrace trace = FmlConnectionTrace.INSTANCE;
             trace.startIfNeeded("received mapped FML runtime payload");
-            trace.packet("IN", "FML", payload.data(), "FML runtime payload (not handled in alpha.3)");
+            trace.packet("IN", "FML", payload.data(), "FML runtime payload (not handled in alpha.4)");
         });
 
         ClientPlayNetworking.registerGlobalReceiver(FmlMappedPayload.FORGE, (payload, context) -> {
@@ -54,7 +66,7 @@ public final class LegacyForgeBridgeClient implements ClientModInitializer {
             }
             FmlConnectionTrace trace = FmlConnectionTrace.INSTANCE;
             trace.startIfNeeded("received mapped FORGE runtime payload");
-            trace.packet("IN", "FORGE", payload.data(), "FORGE runtime payload (not handled in alpha.3)");
+            trace.packet("IN", "FORGE", payload.data(), "FORGE runtime payload (not handled in alpha.4)");
         });
 
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
@@ -64,17 +76,18 @@ public final class LegacyForgeBridgeClient implements ClientModInitializer {
                         "client play JOIN; target=" + ViaFabricPlusBackend.INSTANCE.currentProtocolName()
                 );
                 trace.event("ClientPlayConnectionEvents.JOIN fired");
+                trace.event("ViaVersion Forge channel mappings installed=" + LegacyPluginChannelMappings.installed());
                 trace.event("canSend(mapped FML|HS)=" + ClientPlayNetworking.canSend(FmlMappedPayload.FML_HS));
             }
         });
 
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             FmlConnectionTrace trace = FmlConnectionTrace.INSTANCE;
-            if (trace.activePath() != null) {
+            if (trace.sessionActive()) {
                 trace.event("Disconnected with handshakeState=" + handshake.state());
             }
             handshake.reset();
-            trace.close("client disconnected");
+            trace.endSession("client disconnected");
         });
 
         LegacyForgeBridge.LOGGER.info("Legacy Forge client networking initialized");
