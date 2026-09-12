@@ -32,10 +32,11 @@ dependencies {
     // API-v6 line is 4.4.14 and exposes the same methods used by LegacyForgeBridge.
     modCompileOnly "com.viaversion:viafabricplus-api:${project.viafabricplus_api_version}"
 
-    implementation 'org.ow2.asm:asm:9.8'
-    implementation 'org.ow2.asm:asm-tree:9.8'
-    include 'org.ow2.asm:asm:9.8'
-    include 'org.ow2.asm:asm-tree:9.8'
+    // Fabric Loader 0.19.3 already supplies ASM 9.10.1 from the application class loader.
+    // Never include/shade ASM inside this mod: doing so creates Knot/app ClassLoader conflicts
+    // with Mixin, MixinExtras and preLaunch mods such as AsyncLogger.
+    compileOnly 'org.ow2.asm:asm:9.10.1'
+    testImplementation 'org.ow2.asm:asm:9.10.1'
 
     testImplementation platform('org.junit:junit-bom:5.11.4')
     testImplementation 'org.junit.jupiter:junit-jupiter'
@@ -72,6 +73,32 @@ jar {
     from('LICENSE') {
         rename { "${it}_${project.name}" }
     }
+}
+
+// Regression guard for Fabric class-loader safety. ASM is supplied by Fabric Loader and must
+// never be nested or shaded into the final LegacyForgeBridge JAR.
+tasks.register('verifyNoBundledAsm') {
+    dependsOn tasks.named('remapJar')
+
+    doLast {
+        def outputJar = tasks.named('remapJar').get().archiveFile.get().asFile
+        def forbidden = zipTree(outputJar).matching {
+            include 'org/objectweb/asm/**'
+            include 'META-INF/jars/asm-*.jar'
+            include 'META-INF/jars/asm-tree-*.jar'
+            include 'META-INF/jars/asm-analysis-*.jar'
+            include 'META-INF/jars/asm-commons-*.jar'
+            include 'META-INF/jars/asm-util-*.jar'
+        }.files
+
+        if (!forbidden.isEmpty()) {
+            throw new GradleException("Final mod JAR must not bundle ASM; Fabric Loader provides it. Found: ${forbidden*.name}")
+        }
+    }
+}
+
+tasks.named('build') {
+    dependsOn tasks.named('verifyNoBundledAsm')
 }
 
 publishing {
