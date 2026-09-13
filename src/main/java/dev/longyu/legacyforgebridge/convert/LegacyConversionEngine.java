@@ -69,8 +69,10 @@ public final class LegacyConversionEngine {
 
         LegacyModMetadata metadata = LegacyModMetadata.read(sourceJar);
         LegacyModProfile profile = selectProfile(metadata, sourceHash);
-        String baseName = safeBaseName(metadata.sourceFileName());
-        Path candidateJar = convertedDir.resolve(baseName + "-" + metadata.fabricId() + "-lfb-candidate.jar");
+        String baseName = sourceBaseName(metadata.sourceFileName());
+        // The converted artifact deliberately keeps the source name visible. It is both easier to
+        // identify in mods/ and avoids leaking internal profile/fabric-id naming into user files.
+        Path candidateJar = convertedDir.resolve(baseName + "-lfb.jar");
         Path manifestFile = manifestsDir.resolve(baseName + ".manifest.json");
         Path stagingDir = Files.createTempDirectory(convertedDir, ".lfb-work-");
 
@@ -201,12 +203,12 @@ public final class LegacyConversionEngine {
                 .orElseThrow(() -> new IllegalStateException("No conversion profile accepted " + metadata.sourceFileName()));
     }
 
-    private static String safeBaseName(String fileName) {
-        String base = fileName.toLowerCase(Locale.ROOT).endsWith(".jar")
-                ? fileName.substring(0, fileName.length() - 4)
-                : fileName;
-        String safe = base.replaceAll("[^A-Za-z0-9._-]", "_");
-        return safe.isBlank() ? "legacy-mod" : safe;
+    static String sourceBaseName(String fileName) {
+        String name = Path.of(fileName).getFileName().toString();
+        String base = name.toLowerCase(Locale.ROOT).endsWith(".jar")
+                ? name.substring(0, name.length() - 4)
+                : name;
+        return base.isBlank() ? "legacy-mod" : base;
     }
 
     private static void deleteRecursively(Path root) {
