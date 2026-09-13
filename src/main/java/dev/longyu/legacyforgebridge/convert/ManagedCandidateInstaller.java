@@ -2,7 +2,6 @@ package dev.longyu.legacyforgebridge.convert;
 
 import dev.longyu.legacyforgebridge.LegacyForgeBridge;
 import dev.longyu.legacyforgebridge.convert.pass.GeneratedModEntrypointPass;
-import dev.longyu.legacyforgebridge.convert.runtime.ConvertedContentRuntime;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.metadata.ModOrigin;
 
@@ -47,12 +46,17 @@ public final class ManagedCandidateInstaller {
         return modsDir.resolve(MANAGED_PREFIX + safe + ".jar");
     }
 
+    /**
+     * Loader safety is about class-path safety, not feature completeness. A candidate may be a
+     * resource-only or partially semantic port and therefore have no converted-content manifest at
+     * all. It is safe to hand to Fabric when it has modern metadata, the generated LFB entrypoint
+     * marker/class, and no surviving source/Forge classes outside the generated namespace.
+     */
     public boolean isLoaderSafeCandidate(Path candidate) throws IOException {
         if (!Files.isRegularFile(candidate)) {
             return false;
         }
         boolean hasFabricMetadata = false;
-        boolean hasConvertedContent = false;
         boolean hasGeneratedMarker = false;
         boolean hasGeneratedClass = false;
         boolean hasUnexpectedClass = false;
@@ -67,8 +71,6 @@ public final class ManagedCandidateInstaller {
                 String name = entry.getName();
                 if (name.equals("fabric.mod.json")) {
                     hasFabricMetadata = true;
-                } else if (name.equals(ConvertedContentRuntime.MANIFEST_PATH)) {
-                    hasConvertedContent = true;
                 } else if (name.equals(GeneratedModEntrypointPass.MARKER_PATH)) {
                     hasGeneratedMarker = true;
                 } else if (name.endsWith(".class")) {
@@ -84,7 +86,6 @@ public final class ManagedCandidateInstaller {
         }
 
         return hasFabricMetadata
-                && hasConvertedContent
                 && hasGeneratedMarker
                 && hasGeneratedClass
                 && !hasUnexpectedClass;
@@ -92,8 +93,8 @@ public final class ManagedCandidateInstaller {
 
     /**
      * Stages a converted artifact under the exact source-derived candidate filename. The fabricId
-     * parameter remains for binary/source compatibility with the manager API but no longer controls
-     * the user's file name.
+     * parameter remains for source compatibility with the manager API but no longer controls the
+     * user's file name.
      */
     public StageResult stage(Path candidate, String fabricId, boolean currentlyLoaded) throws IOException {
         Files.createDirectories(modsDir);
