@@ -49,7 +49,8 @@ class LegacyConversionEngineTest {
             assertNotNull(jar.getJarEntry("fabric.mod.json"));
             assertNotNull(jar.getJarEntry("legacyforgebridge/conversion-manifest.json"));
             assertNotNull(jar.getJarEntry("example/LegacyMod.class"));
-            assertNotNull(jar.getJarEntry("assets/examplelegacy/lang/en_US.lang"));
+            assertTrue(jar.getJarEntry("assets/examplelegacy/lang/en_US.lang") == null,
+                    "Obsolete .lang inputs must not remain in modern candidates");
             assertNotNull(jar.getJarEntry("assets/examplelegacy/lang/en_us.json"));
             assertNotNull(jar.getJarEntry("assets/examplelegacy/textures/items/example.png"));
 
