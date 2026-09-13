@@ -146,28 +146,17 @@ public final class GeneratedSemanticCodePass implements ConversionPass {
     }
 
     private static void privateConstructor(ClassWriter writer) {
-        MethodVisitor constructor = writer.visitMethod(Opcodes.ACC_PRIVATE, "<init>", "()V", null, null);
-        constructor.visitCode(); constructor.visitVarInsn(Opcodes.ALOAD, 0);
-        constructor.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false);
-        constructor.visitInsn(Opcodes.RETURN); constructor.visitMaxs(1, 1); constructor.visitEnd();
+        MethodVisitor c = writer.visitMethod(Opcodes.ACC_PRIVATE, "<init>", "()V", null, null);
+        c.visitCode(); c.visitVarInsn(Opcodes.ALOAD, 0); c.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false); c.visitInsn(Opcodes.RETURN); c.visitMaxs(1, 1); c.visitEnd();
     }
-    private static void emitStringArray(MethodVisitor method, List<String> values) {
-        pushInt(method, values.size()); method.visitTypeInsn(Opcodes.ANEWARRAY, "java/lang/String");
-        for (int i = 0; i < values.size(); i++) { method.visitInsn(Opcodes.DUP); pushInt(method, i); method.visitLdcInsn(values.get(i)); method.visitInsn(Opcodes.AASTORE); }
-    }
-    private static void pushInt(MethodVisitor method, int value) {
-        if (value == -1) method.visitInsn(Opcodes.ICONST_M1);
-        else if (value >= 0 && value <= 5) method.visitInsn(Opcodes.ICONST_0 + value);
-        else if (value >= Byte.MIN_VALUE && value <= Byte.MAX_VALUE) method.visitIntInsn(Opcodes.BIPUSH, value);
-        else if (value >= Short.MIN_VALUE && value <= Short.MAX_VALUE) method.visitIntInsn(Opcodes.SIPUSH, value);
-        else method.visitLdcInsn(value);
-    }
-    private static List<String> primitiveStrings(JsonArray array) { List<String> result = new ArrayList<>(); for (JsonElement e : array) if (e.isJsonPrimitive()) result.add(e.getAsString()); return result; }
-    private static JsonObject read(Path path) throws IOException { try (Reader r = Files.newBufferedReader(path, StandardCharsets.UTF_8)) { return JsonParser.parseReader(r).getAsJsonObject(); } }
-    private static JsonObject object(JsonObject parent, String key) { JsonElement v = parent.get(key); return v != null && v.isJsonObject() ? v.getAsJsonObject() : null; }
-    private static String string(JsonObject object, String key, String fallback) { JsonElement v = object.get(key); return v != null && v.isJsonPrimitive() ? v.getAsString() : fallback; }
-    private static int integer(JsonObject object, String key, int fallback) { JsonElement v = object.get(key); return v != null && v.isJsonPrimitive() ? v.getAsInt() : fallback; }
-    private static float number(JsonObject object, String key, float fallback) { JsonElement v = object.get(key); return v != null && v.isJsonPrimitive() ? v.getAsFloat() : fallback; }
-    private static boolean bool(JsonObject object, String key, boolean fallback) { JsonElement v = object.get(key); return v != null && v.isJsonPrimitive() ? v.getAsBoolean() : fallback; }
-    private static final class GenerationStats { int items; int creativeTabs; int equipmentRenderers; }
+    private static void emitStringArray(MethodVisitor m, List<String> values) { pushInt(m, values.size()); m.visitTypeInsn(Opcodes.ANEWARRAY, "java/lang/String"); for (int i=0;i<values.size();i++){m.visitInsn(Opcodes.DUP);pushInt(m,i);m.visitLdcInsn(values.get(i));m.visitInsn(Opcodes.AASTORE);} }
+    private static void pushInt(MethodVisitor m, int v) { if(v==-1)m.visitInsn(Opcodes.ICONST_M1); else if(v>=0&&v<=5)m.visitInsn(Opcodes.ICONST_0+v); else if(v>=Byte.MIN_VALUE&&v<=Byte.MAX_VALUE)m.visitIntInsn(Opcodes.BIPUSH,v); else if(v>=Short.MIN_VALUE&&v<=Short.MAX_VALUE)m.visitIntInsn(Opcodes.SIPUSH,v); else m.visitLdcInsn(v); }
+    private static List<String> primitiveStrings(JsonArray a){List<String> r=new ArrayList<>();for(JsonElement e:a)if(e.isJsonPrimitive())r.add(e.getAsString());return r;}
+    private static JsonObject read(Path p)throws IOException{try(Reader r=Files.newBufferedReader(p,StandardCharsets.UTF_8)){return JsonParser.parseReader(r).getAsJsonObject();}}
+    private static JsonObject object(JsonObject p,String k){JsonElement v=p.get(k);return v!=null&&v.isJsonObject()?v.getAsJsonObject():null;}
+    private static String string(JsonObject o,String k,String f){JsonElement v=o.get(k);return v!=null&&v.isJsonPrimitive()?v.getAsString():f;}
+    private static int integer(JsonObject o,String k,int f){JsonElement v=o.get(k);return v!=null&&v.isJsonPrimitive()?v.getAsInt():f;}
+    private static float number(JsonObject o,String k,float f){JsonElement v=o.get(k);return v!=null&&v.isJsonPrimitive()?v.getAsFloat():f;}
+    private static boolean bool(JsonObject o,String k,boolean f){JsonElement v=o.get(k);return v!=null&&v.isJsonPrimitive()?v.getAsBoolean():f;}
+    private static final class GenerationStats{int items;int creativeTabs;int equipmentRenderers;}
 }
