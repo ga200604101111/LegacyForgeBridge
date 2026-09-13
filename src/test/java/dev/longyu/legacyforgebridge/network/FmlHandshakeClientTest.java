@@ -6,12 +6,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class FmlHandshakeClientTest {
     @Test
     void cleanRemoteForgeHandshakeReachesComplete() {
-        FmlHandshakeClient client = new FmlHandshakeClient();
+        FmlHandshakeClient client = new FmlHandshakeClient(Map::of);
         List<byte[]> outbound = new ArrayList<>();
         FmlConnectionTrace trace = FmlConnectionTrace.INSTANCE;
 
@@ -37,5 +38,21 @@ class FmlHandshakeClientTest {
         client.handle(new byte[]{(byte) 0xFF, 3}, outbound::add, trace);
         assertEquals(FmlHandshakeClient.State.COMPLETE, client.state());
         assertArrayEquals(new byte[]{(byte) 0xFF, 5}, outbound.get(5));
+    }
+
+    @Test
+    void convertedLegacyModIdentityIsAdvertisedToForgeServer() {
+        FmlHandshakeClient client = new FmlHandshakeClient(() -> Map.of("rpgtool1", "1.0"));
+        List<byte[]> outbound = new ArrayList<>();
+
+        client.handle(
+                new byte[]{0, 2, 0, 0, 0, 0},
+                outbound::add,
+                FmlConnectionTrace.INSTANCE
+        );
+
+        Map<String, String> advertised = FmlWireCodec.parseModList(outbound.get(1));
+        assertEquals("7.10.99.99", advertised.get("FML"));
+        assertEquals("1.0", advertised.get("rpgtool1"));
     }
 }
