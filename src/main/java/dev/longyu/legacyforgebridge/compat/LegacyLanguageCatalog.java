@@ -29,10 +29,14 @@ final class LegacyLanguageCatalog {
     }
 
     static String lookup(String key) {
-        String language = currentLanguage();
-        Map<String, String> selected = CACHE.computeIfAbsent(language, LegacyLanguageCatalog::loadLanguage);
+        return lookupForLanguage(currentLanguage(), key);
+    }
+
+    static String lookupForLanguage(String language, String key) {
+        String normalized = language == null ? "en_us" : language.toLowerCase(Locale.ROOT);
+        Map<String, String> selected = CACHE.computeIfAbsent(normalized, LegacyLanguageCatalog::loadLanguage);
         String value = selected.get(key);
-        if (value != null || "en_us".equals(language)) {
+        if (value != null || "en_us".equals(normalized)) {
             return value;
         }
         return CACHE.computeIfAbsent("en_us", LegacyLanguageCatalog::loadLanguage).get(key);
@@ -47,18 +51,13 @@ final class LegacyLanguageCatalog {
         if (minecraft == null || minecraft.options == null || minecraft.options.languageCode == null) {
             return "en_us";
         }
-        String code = minecraft.options.languageCode.toLowerCase(Locale.ROOT);
-        return switch (code) {
-            case "zh_tw" -> "zh_tw";
-            case "en_us" -> "en_us";
-            default -> code;
-        };
+        return minecraft.options.languageCode.toLowerCase(Locale.ROOT);
     }
 
     private static Map<String, String> loadLanguage(String language) {
         Map<String, String> output = new HashMap<>();
         loadParts(output, "lfb-minecraft", language, 4);
-        loadParts(output, "lfb-forge", language, "zh_tw".equals(language) ? 2 : 1);
+        loadParts(output, "lfb-forge", language, 1);
         return Map.copyOf(output);
     }
 
