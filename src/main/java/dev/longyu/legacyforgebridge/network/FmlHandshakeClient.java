@@ -1,15 +1,19 @@
 package dev.longyu.legacyforgebridge.network;
 
+import dev.longyu.legacyforgebridge.convert.runtime.ConvertedModCatalog;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /**
- * Minimal client-side Forge 1.7.10 handshake driver for clean Forge servers.
+ * Client-side Forge 1.7.10 handshake driver.
  *
- * <p>Mod conversion/compatibility is intentionally out of scope here. The client advertises only
- * the built-in FML network identity required by a clean 1.7.10 Forge server.</p>
+ * <p>The built-in FML network identity is always advertised. Loader-safe converted candidates may
+ * additionally expose their original 1.7.10 mod IDs/versions through {@link ConvertedModCatalog}
+ * so a modded Forge server does not reject the modern client as "missing" that converted mod.</p>
  */
 public final class FmlHandshakeClient {
     public enum State {
@@ -22,18 +26,19 @@ public final class FmlHandshakeClient {
         FAILED
     }
 
-    private static final Map<String, String> CLEAN_CLIENT_MOD_LIST;
-
-    static {
-        Map<String, String> mods = new LinkedHashMap<>();
-        mods.put("FML", "7.10.99.99");
-        CLEAN_CLIENT_MOD_LIST = Map.copyOf(mods);
-    }
-
+    private final Supplier<Map<String, String>> convertedModSupplier;
     private State state = State.WAITING_SERVER_HELLO;
     private FmlWireCodec.ServerHello serverHello;
     private Map<String, String> serverMods = Map.of();
     private FmlWireCodec.ModIdData registryData;
+
+    public FmlHandshakeClient() {
+        this(ConvertedModCatalog::legacyModVersions);
+    }
+
+    FmlHandshakeClient(Supplier<Map<String, String>> convertedModSupplier) {
+        this.convertedModSupplier = Objects.requireNonNull(convertedModSupplier, "convertedModSupplier");
+    }
 
     public State state() {
         return state;
@@ -109,10 +114,25 @@ public final class FmlHandshakeClient {
             trace.event("Server FML protocol differs from expected protocol 2; continuing for diagnostics");
         }
 
+        Map<String, String> clientMods = clientModList();
         send(sender, trace, FmlWireCodec.encodeClientHello(), "ClientHello protocol=" + FmlWireCodec.FML_PROTOCOL);
-        send(sender, trace, FmlWireCodec.encodeModList(CLEAN_CLIENT_MOD_LIST), "Client ModList " + CLEAN_CLIENT_MOD_LIST);
+        send(sender, trace, FmlWireCodec.encodeModList(clientMods), "Client ModList " + clientMods);
 
         transition(State.WAITING_SERVER_MOD_LIST, trace, "ServerHello handled");
+    }
+
+    private Map<String, String> clientModList() {
+        Map<String, String> mods = new LinkedHashMap<>();
+        mods.put("FML", "7.10.99.99");
+        Map<String, String> converted = convertedModSupplier.get();
+        if (converted != null) {
+            converted.forEach((modId, version) -> {
+                if (modId != null && !modId.isBlank() && version != null && !version.isBlank()) {
+                    mods.putIfAbsent(modId, version);
+                }
+            });
+        }
+        return Map.copyOf(mods);
     }
 
     private void onServerModList(byte[] payload, Consumer<byte[]> sender, FmlConnectionTrace trace) {
@@ -126,7 +146,7 @@ public final class FmlHandshakeClient {
         );
 
         send(sender, trace, FmlWireCodec.encodeAck(2), "HandshakeAck phase=2 WAITING_SERVER_DATA");
-        transition(State.WAITING_REGISTRY_DATA, trace, "Server ModList accepted for clean-server probe");
+        transition(State.WAITING_REGISTRY_DATA, trace, "Server ModList accepted");
     }
 
     private void onModIdData(byte[] payload, Consumer<byte[]> sender, FmlConnectionTrace trace) {
