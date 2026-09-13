@@ -67,7 +67,7 @@ assets/rpgtool1/textures/circle/buff2.obj
 assets/rpgtool1/textures/circle/buff3.obj
 ```
 
-The old client uses `IItemRenderer`, `AdvancedModelLoader` / `IModelCustom` and direct `GL11` transforms. The alpha.14 test slice replaces the **weapon** renderer with LFB's modern 1.21.11 `SpecialModelRenderer` + `SubmitNodeCollector.submitCustomGeometry` OBJ path. The mixed-case `items3D` directory is normalized to `items3d` because modern resource identifiers reject uppercase path characters.
+The old client uses `IItemRenderer`, `AdvancedModelLoader` / `IModelCustom` and direct `GL11` transforms. The alpha.14/alpha.15 test slice replaces the **weapon** renderer with LFB's modern 1.21.11 `SpecialModelRenderer` + `SubmitNodeCollector.submitCustomGeometry` OBJ path. The mixed-case `items3D` directory is normalized to `items3d` because modern resource identifiers reject uppercase path characters.
 
 ### Legacy gameplay behavior observed
 
@@ -81,9 +81,9 @@ The real classes also implement behavior which is intentionally tracked separate
 
 Those behaviors are not claimed complete merely because the content candidate loads.
 
-## alpha.14 semantic conversion slice
+## Semantic conversion slice
 
-For the exact SHA, `RpgTool1Profile` now contributes:
+For the exact SHA, `RpgTool1Profile` contributes:
 
 ```text
 common resource copy
@@ -99,11 +99,12 @@ common resource copy
    -> promote item translations to item.rpgtool1.<id>
    -> mirror source zh_CN item names into zh_cn + zh_tw for testing
    -> record item/translation identities in manifest
+-> legacy language cleanup
 -> final staged-bytecode audit
 -> Fabric candidate writer
 ```
 
-The candidate additionally embeds:
+The candidate embeds:
 
 ```text
 legacyforgebridge/converted-content.json
@@ -117,20 +118,55 @@ rpgtool1=1.0
 
 rather than being rejected as a missing client mod by a Forge 1.7.10 server.
 
-## Current acceptance boundary
+## alpha.15 managed activation
 
-alpha.14 is a **live-test candidate**, not a claim that every RPGTool gameplay feature is already ported.
+The first real alpha.14 `old-mods` live test confirmed that the exact RPGTool source is discovered, analyzed and converted to a `PARTIAL` loader-safe candidate, but also demonstrated the Fabric lifecycle boundary: a JAR generated during `ModInitializer` cannot become a new Fabric mod in that same launch.
 
-Expected testable surface:
+alpha.15 adds the missing managed activation layer:
 
 ```text
-Fabric Loader can load the converted candidate
+launch 1
+old-mods/RPGTool1-1.1-1.7.10.jar
+-> exact SHA/profile conversion
+-> legacy-cache/converted/...candidate.jar
+-> mods/legacyforgebridge-converted-rpgtool1.jar
+-> RESTART_REQUIRED
+
+launch 2
+Fabric Loader loads legacyforgebridge-converted-rpgtool1.jar
+-> ConvertedContentRuntime sees converted-content.json
+-> 71 modern item definitions become available to LFB runtime
+-> source SHA + converter version still match
+-> analysis/conversion skipped
+-> state becomes LOADED
+```
+
+If the source JAR is updated, even under the same filename, its SHA changes and the candidate is rebuilt. If the previous managed JAR is already loaded on Windows, LFB writes a pending replacement and a JDK-only helper swaps it after Minecraft exits instead of mutating the live JAR. Removed old-mod sources retire their managed converted JARs as well.
+
+Progress and update state are observable in:
+
+```text
+latest.log
+legacy-cache/conversion-state.json
+legacy-cache/RESTART_REQUIRED.txt   # only while restart is required
+```
+
+## Current acceptance boundary
+
+alpha.15 is a **managed live-test candidate**, not a claim that every RPGTool gameplay feature is already ported.
+
+Expected testable surface after the activation restart:
+
+```text
+Fabric Loader loads the managed converted candidate
 legacy Forge classes do not enter the modern class path
 71 RPGTool registry identities exist on the client
 item names/icons load
 weapon durability and base attack values are reconstructed
 20 weapon OBJ assets use the modern LFB OBJ renderer
 FML Client ModList can advertise rpgtool1=1.0
+unchanged source/converter skips repeated conversion
+updated source SHA forces deterministic rebuild and managed replacement
 ```
 
 Still expected to require follow-up semantic work:
