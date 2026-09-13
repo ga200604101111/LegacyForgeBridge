@@ -12,6 +12,7 @@ import dev.longyu.legacyforgebridge.convert.api.SupportLevel;
 import dev.longyu.legacyforgebridge.convert.manifest.ConversionManifestWriter;
 import dev.longyu.legacyforgebridge.convert.manifest.FabricMetadataWriter;
 import dev.longyu.legacyforgebridge.convert.pass.CopyLegacyJarPass;
+import dev.longyu.legacyforgebridge.convert.pass.GeneratedModEntrypointPass;
 import dev.longyu.legacyforgebridge.convert.pass.LegacyBytecodeAuditPass;
 import dev.longyu.legacyforgebridge.convert.pass.LegacyLanguageCleanupPass;
 import dev.longyu.legacyforgebridge.convert.pass.LegacyLanguagePass;
@@ -28,9 +29,9 @@ import java.util.Optional;
 import java.util.stream.Stream;
 
 /**
- * Internal conversion API. Profile passes may replace legacy bytecode with modern runtime-backed
- * content, after which obsolete source resources are cleaned and the final bytecode audit evaluates
- * what will actually enter Fabric.
+ * Internal conversion API. Profile passes replace or describe legacy semantics, then every
+ * non-blocked candidate receives a generated modern Fabric entrypoint so the converted JAR itself
+ * owns registration and client startup while LegacyForgeBridge acts as a compatibility runtime.
  */
 public final class LegacyConversionEngine {
     private final LegacyJarAnalyzer analyzer;
@@ -127,6 +128,7 @@ public final class LegacyConversionEngine {
             // converters can inspect exact legacy keys/paths before cleanup.
             profile.configure(builder);
             builder.add(new LegacyLanguageCleanupPass());
+            builder.add(new GeneratedModEntrypointPass());
             builder.add(new LegacyBytecodeAuditPass());
             ConversionPlan plan = builder.build();
 
