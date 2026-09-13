@@ -138,7 +138,16 @@ public final class RpgTool1PresentationPass implements ConversionPass {
 
             JsonObject tab = new JsonObject();
             tab.addProperty("id", tabId);
-            tab.addProperty("title", sourceTab.label());
+            if (sourceTab.label() != null && !sourceTab.label().isBlank()) {
+                // LegacyLanguagePass already converted itemGroup.<label> into a collision-free
+                // source-locale alias. Keep the original tab title instead of showing raw IDs.
+                tab.addProperty(
+                        "titleKey",
+                        LegacyLanguagePass.translationAlias(context, "itemGroup." + sourceTab.label())
+                );
+            } else {
+                tab.addProperty("title", sourceTab.fieldName());
+            }
             tab.addProperty(
                     "icon",
                     iconItem != null ? string(iconItem, "id") : tabItems.get(0).getAsString()
