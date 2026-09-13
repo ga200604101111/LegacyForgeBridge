@@ -26,11 +26,15 @@ class LegacyTranslationBridgeTest {
         assertFalse(LegacyTranslationBridge.shouldPreserveKey("entity.Zombie.name"));
         assertFalse(LegacyTranslationBridge.shouldPreserveKey("container.inventory"));
         assertFalse(LegacyTranslationBridge.shouldPreserveKey("options.language"));
+        assertFalse(LegacyTranslationBridge.shouldPreserveKey("forge.configgui.forgeConfigTitle"));
+        assertFalse(LegacyTranslationBridge.shouldPreserveKey("fml.configgui.gameRestartTitle"));
     }
 
     @Test
-    void preservesForgeAndFmlTranslationIdentity() {
-        assertTrue(LegacyTranslationBridge.shouldPreserveKey("forge.some.message"));
-        assertTrue(LegacyTranslationBridge.shouldPreserveKey("fml.some.message"));
+    void preservesOnlyForgeMessageKeys() {
+        assertTrue(LegacyTranslationBridge.shouldPreserveKey("commands.forge.usage"));
+        assertTrue(LegacyTranslationBridge.shouldPreserveKey("forge.update.newversion"));
+        assertTrue(LegacyTranslationBridge.shouldPreserveKey("forge.texture.preload.warning"));
+        assertTrue(LegacyTranslationBridge.shouldPreserveKey("forge.client.shutdown.internal"));
     }
 }
