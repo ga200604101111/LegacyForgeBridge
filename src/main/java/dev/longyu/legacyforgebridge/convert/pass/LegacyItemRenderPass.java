@@ -110,8 +110,12 @@ public final class LegacyItemRenderPass implements ConversionPass {
             for (Draw draw : context.draws()) {
                 JsonObject outer = template.deepCopy(); JsonObject special = outer.getAsJsonObject("model");
                 special.addProperty("model", canonical(draw.model())); special.addProperty("texture", canonical(draw.texture()));
-                special.addProperty("scale", 1.0F); special.addProperty("centered", true);
-                List<Operation> operations = helperOperations(legacyType, context);
+                special.addProperty("scale", 1.0F);
+                boolean nativeHandSpace = legacyType.startsWith("EQUIPPED")
+                        && !context.helpers().getOrDefault("EQUIPPED_BLOCK", false);
+                special.addProperty("centered", !nativeHandSpace);
+                special.addProperty("coordinateSpace", nativeHandSpace ? "native_item" : "legacy_centered");
+                List<Operation> operations = nativeHandSpace ? new ArrayList<>() : helperOperations(legacyType, context);
                 operations.addAll(draw.operations()); special.add("transforms", GSON.toJsonTree(operations)); models.add(outer);
             }
             if (models.size() == 1) entry.add("model", models.get(0));

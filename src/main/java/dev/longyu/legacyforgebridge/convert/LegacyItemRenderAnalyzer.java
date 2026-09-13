@@ -58,6 +58,126 @@ public final class LegacyItemRenderAnalyzer {
     public record Analysis(List<Binding> bindings, List<String> diagnostics) {
         public Analysis { bindings = List.copyOf(bindings); diagnostics = List.copyOf(diagnostics); }
     }
+    /** Pure numeric expression recovered from source; no original bytecode is executed at runtime. */
+    public record Expression(String op, float value, List<Expression> args) {
+        public Expression { args = List.copyOf(args); }
+        public static Expression constant(float n) { return new Expression("constant", n, List.of()); }
+        public static Expression input(int i) { return new Expression("input", i, List.of()); }
+        public static Expression of(String op, Object... values) {
+            List<Expression> args = new ArrayList<>();
+            for (Object v : values) {
+                if (v instanceof Expression e) args.add(e);
+                else if (v instanceof Number n && Float.isFinite(n.floatValue())) args.add(constant(n.floatValue()));
+                else throw new Unsupported("unresolved equipment expression");
+            }
+            Expression e = new Expression(op, 0, args);
+            if (e.nodes() > 256) throw new Unsupported("equipment expression budget exceeded");
+            return e;
+        }
+        private int nodes() { return 1 + args.stream().mapToInt(Expression::nodes).sum(); }
+        public float evaluate(float[] inputs) {
+            return switch (op) {
+                case "constant" -> value;
+                case "input" -> inputs[(int)value];
+                case "add" -> args.get(0).evaluate(inputs) + args.get(1).evaluate(inputs);
+                case "sub" -> args.get(0).evaluate(inputs) - args.get(1).evaluate(inputs);
+                case "mul" -> args.get(0).evaluate(inputs) * args.get(1).evaluate(inputs);
+                case "div" -> args.get(0).evaluate(inputs) / args.get(1).evaluate(inputs);
+                case "neg" -> -args.get(0).evaluate(inputs);
+                case "cos" -> (float)Math.cos(args.get(0).evaluate(inputs));
+                case "sin" -> (float)Math.sin(args.get(0).evaluate(inputs));
+                default -> throw new IllegalArgumentException("Unknown expression " + op);
+            };
+        }
+    }
+    public record AnimatedOperation(String op, List<Expression> values) {
+        public AnimatedOperation { values = List.copyOf(values); }
+    }
+    public record EquipmentDraw(String model, String texture, List<AnimatedOperation> operations,
+                                boolean lighting, boolean cull) {
+        public EquipmentDraw { operations = List.copyOf(operations); }
+    }
+    public record EquipmentBinding(String itemName, String itemClass, String rendererClass, int armorSlot,
+                                   List<EquipmentDraw> standing, List<EquipmentDraw> crouching) {
+        public EquipmentBinding { standing = List.copyOf(standing); crouching = List.copyOf(crouching); }
+    }
+    public record EquipmentAnalysis(List<EquipmentBinding> bindings, List<String> diagnostics) {
+        public EquipmentAnalysis { bindings = List.copyOf(bindings); diagnostics = List.copyOf(diagnostics); }
+    }
+    private record EntityState(boolean crouching) { }
+
+    /**
+     * Recover ItemArmor#getArmorModel allocations and render(Entity, FFFFFF) programs. The six
+     * float inputs keep the legacy method order: limb phase, amplitude, age, head yaw, pitch, scale.
+     * Only straight-line allocations and proven standing/crouching branches are admitted.
+     */
+    public EquipmentAnalysis analyzeEquipment(Path source) throws IOException {
+        loadSource(source);
+        Map<String, EquipmentBinding> found = new LinkedHashMap<>();
+        Set<String> conflicts = new LinkedHashSet<>();
+        for (ClassInfo info : classes.values()) for (Method method : info.methods.values()) {
+            for (int at = 0; at < method.code.size(); at++) {
+                Insn instruction = method.code.get(at);
+                if (instruction.op != Opcodes.NEW || !isSubclass((String)instruction.data, "net/minecraft/item/ItemArmor")) continue;
+                String type = (String)instruction.data;
+                String armorDesc = "(Lnet/minecraft/entity/EntityLivingBase;Lnet/minecraft/item/ItemStack;I)Lnet/minecraft/client/model/ModelBiped;";
+                Method chooseModel = find(type, "getArmorModel", armorDesc);
+                if (chooseModel == null) continue;
+                try {
+                    int end = at + 1;
+                    while (end < method.code.size()) {
+                        Insn next = method.code.get(end);
+                        if (next.op == Opcodes.INVOKESPECIAL && next.data instanceof Call c && c.owner.equals(type) && c.name.equals("<init>")) break;
+                        end++;
+                    }
+                    if (end == method.code.size() || end - at > 100) throw new Unsupported("unbounded armor allocation");
+                    Method allocation = new Method(Opcodes.ACC_STATIC, method.owner, "<allocation>", "()Ljava/lang/Object;");
+                    allocation.code.addAll(method.code.subList(at, end + 1));
+                    allocation.code.add(new Insn(Opcodes.ARETURN, null));
+                    Object value = run(allocation, null, new Object[0], null, 0);
+                    if (!(value instanceof Instance item) || item.itemName == null) throw new Unsupported("unproven armor item identity");
+                    List<List<EquipmentDraw>> poses = new ArrayList<>();
+                    String rendererType = null;
+                    for (boolean crouch : new boolean[]{false, true}) {
+                        Object model = run(chooseModel, item, new Object[]{new EntityState(crouch), UNKNOWN, item.armorSlot}, null, 0);
+                        if (!(model instanceof Instance renderer) || !isSubclass(renderer.type, "net/minecraft/client/model/ModelBiped"))
+                            throw new Unsupported("unresolved armor model result");
+                        if (rendererType != null && !rendererType.equals(renderer.type)) throw new Unsupported("posture changes renderer class");
+                        rendererType = renderer.type;
+                        String desc = "(Lnet/minecraft/entity/Entity;FFFFFF)V";
+                        Method render = find(renderer.type, "func_78088_a", desc);
+                        if (render == null) render = find(renderer.type, "render", desc);
+                        if (render == null) throw new Unsupported("missing armor render method");
+                        Object[] args = new Object[7]; args[0] = new EntityState(crouch);
+                        for (int i = 1; i < args.length; i++) args[i] = Expression.input(i - 1);
+                        Trace trace = new Trace(); trace.equipment = true;
+                        run(render, renderer, args, trace, 0);
+                        if (!trace.animatedStack.isEmpty()) throw new Unsupported("unbalanced armor matrix stack");
+                        if (trace.equipmentDraws.isEmpty()) throw new Unsupported("no proven equipment OBJ draw");
+                        poses.add(List.copyOf(trace.equipmentDraws));
+                    }
+                    EquipmentBinding binding = new EquipmentBinding(item.itemName, type, rendererType, item.armorSlot, poses.get(0), poses.get(1));
+                    EquipmentBinding old = found.putIfAbsent(item.itemName, binding);
+                    if (old != null && !old.equals(binding)) conflicts.add(item.itemName);
+                } catch (RuntimeException ex) {
+                    String diagnostic = type + " at " + method.owner + "." + method.name + ": " + ex.getMessage();
+                    if (!diagnostics.contains(diagnostic)) diagnostics.add(diagnostic);
+                }
+            }
+        }
+        for (String name : conflicts) { found.remove(name); diagnostics.add("Conflicting source armor identity " + name); }
+        return new EquipmentAnalysis(new ArrayList<>(found.values()), diagnostics);
+    }
+
+    private boolean isSubclass(String type, String target) {
+        for (int depth = 0; type != null && depth < 32; depth++) {
+            if (type.equals(target)) return true;
+            ClassInfo info = classes.get(type); if (info == null) return false;
+            type = info.parent;
+        }
+        return false;
+    }
+
     private record Field(String owner, String name, String desc) { }
     private record Call(String owner, String name, String desc) { }
     private record Insn(int op, Object data) { }
@@ -69,6 +189,8 @@ public final class LegacyItemRenderAnalyzer {
         final String type;
         final Map<Field, Object> fields = new LinkedHashMap<>();
         Object value = UNKNOWN;
+        String itemName;
+        int armorSlot = -1;
         Instance(String type) { this.type = type; }
     }
     private static final class Method {
@@ -91,12 +213,18 @@ public final class LegacyItemRenderAnalyzer {
         final List<List<Operation>> stack = new ArrayList<>();
         final List<Draw> draws = new ArrayList<>();
         String texture;
+        boolean equipment;
+        boolean lighting = true;
+        boolean cull = true;
+        final List<AnimatedOperation> animated = new ArrayList<>();
+        final List<List<AnimatedOperation>> animatedStack = new ArrayList<>();
+        final List<EquipmentDraw> equipmentDraws = new ArrayList<>();
     }
     private static final class Unsupported extends RuntimeException {
         Unsupported(String message) { super(message); }
     }
 
-    public Analysis analyze(Path source) throws IOException {
+    private void loadSource(Path source) throws IOException {
         classes.clear(); statics.clear(); initialized.clear(); registrations.clear(); diagnostics.clear();
         try (JarFile jar = new JarFile(source.toFile())) {
             var entries = jar.entries();
@@ -107,6 +235,10 @@ public final class LegacyItemRenderAnalyzer {
                 catch (RuntimeException ex) { diagnostics.add(entry.getName() + ": " + ex.getMessage()); }
             }
         }
+    }
+
+    public Analysis analyze(Path source) throws IOException {
+        loadSource(source);
         for (ClassInfo info : classes.values()) for (Method method : info.methods.values()) {
             boolean registers = method.code.stream().anyMatch(i -> i.data instanceof Call c
                     && c.owner.equals(REGISTER_OWNER) && c.name.equals("registerItemRenderer"));
@@ -210,7 +342,7 @@ public final class LegacyItemRenderAnalyzer {
         if (statics.containsKey(field)) return statics.get(field);
         if (field.owner.equals(RENDER_TYPE) || field.owner.equals(HELPER)) return field;
         // Only initialise source renderer classes; ordinary item fields remain symbolic bindings.
-        if (isRenderer(field.owner) && initialized.add(field.owner)) {
+        if ((isRenderer(field.owner) || isSubclass(field.owner, "net/minecraft/client/model/ModelBiped")) && initialized.add(field.owner)) {
             Method m = find(field.owner, "<clinit>", "()V");
             if (m != null) run(m, null, new Object[0], null, depth + 1);
         }
@@ -256,7 +388,7 @@ public final class LegacyItemRenderAnalyzer {
                     else stack.add(target instanceof Instance object ? object.fields.getOrDefault(field, UNKNOWN) : UNKNOWN);
                 }
                 case Opcodes.PUTFIELD -> {
-                    if (!method.name.equals("<init>")) throw new Unsupported("runtime instance-field mutation");
+                    if (!method.name.equals("<init>") && (trace == null || !trace.equipment)) throw new Unsupported("runtime instance-field mutation");
                     Object value = pop(stack), target = pop(stack);
                     if (!(target instanceof Instance object)) throw new Unsupported("unknown field receiver");
                     object.fields.put((Field) in.data, value);
@@ -272,7 +404,9 @@ public final class LegacyItemRenderAnalyzer {
                 case Opcodes.IADD, Opcodes.FADD, Opcodes.DADD, Opcodes.ISUB, Opcodes.FSUB, Opcodes.DSUB,
                         Opcodes.IMUL, Opcodes.FMUL, Opcodes.DMUL, Opcodes.IDIV, Opcodes.FDIV, Opcodes.DDIV -> {
                     Object b = pop(stack), a = pop(stack);
-                    if (!(a instanceof Number x) || !(b instanceof Number y)) stack.add(UNKNOWN);
+                    if ((a instanceof Expression || b instanceof Expression) && (op == Opcodes.FADD || op == Opcodes.FSUB || op == Opcodes.FMUL || op == Opcodes.FDIV)) {
+                        stack.add(Expression.of(switch(op) { case Opcodes.FADD -> "add"; case Opcodes.FSUB -> "sub"; case Opcodes.FMUL -> "mul"; default -> "div"; }, a, b));
+                    } else if (!(a instanceof Number x) || !(b instanceof Number y)) stack.add(UNKNOWN);
                     else {
                         Object value = switch (op) {
                             case Opcodes.IADD -> x.intValue() + y.intValue();
@@ -293,7 +427,8 @@ public final class LegacyItemRenderAnalyzer {
                 }
                 case Opcodes.INEG, Opcodes.FNEG, Opcodes.DNEG -> {
                     Object a = pop(stack);
-                    if (!(a instanceof Number n)) stack.add(UNKNOWN);
+                    if (a instanceof Expression && op == Opcodes.FNEG) stack.add(Expression.of("neg", a));
+                    else if (!(a instanceof Number n)) stack.add(UNKNOWN);
                     else { Object value = switch (op) {
                         case Opcodes.INEG -> -n.intValue();
                         case Opcodes.FNEG -> -n.floatValue();
@@ -339,6 +474,32 @@ public final class LegacyItemRenderAnalyzer {
         }
         if (owner.equals("org/lwjgl/opengl/GL11")) {
             if (trace == null) throw new Unsupported("OpenGL outside render method");
+            if (trace.equipment) {
+                switch (name) {
+                    case "glPushMatrix" -> trace.animatedStack.add(List.copyOf(trace.animated));
+                    case "glPopMatrix" -> {
+                        if (trace.animatedStack.isEmpty()) throw new Unsupported("armor matrix stack underflow");
+                        var saved = trace.animatedStack.removeLast(); trace.animated.clear(); trace.animated.addAll(saved);
+                    }
+                    case "glTranslatef", "glScalef", "glRotatef" -> {
+                        List<Expression> values = new ArrayList<>();
+                        for (Object arg : args) {
+                            if (arg instanceof Expression e) values.add(e);
+                            else if (arg instanceof Number n && Float.isFinite(n.floatValue())) values.add(Expression.constant(n.floatValue()));
+                            else throw new Unsupported("unproven armor transform " + name);
+                        }
+                        trace.animated.add(new AnimatedOperation(name.startsWith("glTranslate") ? "translate" : name.startsWith("glScale") ? "scale" : "rotate", values));
+                    }
+                    case "glEnable", "glDisable" -> {
+                        if (!(args[0] instanceof Number flag)) throw new Unsupported("dynamic GL state");
+                        if (flag.intValue() == 2896) trace.lighting = name.equals("glEnable");
+                        else if (flag.intValue() == 2884) trace.cull = name.equals("glEnable");
+                        else throw new Unsupported("unsupported GL flag " + flag);
+                    }
+                    default -> throw new Unsupported("unsupported equipment GL state " + name);
+                }
+                return null;
+            }
             switch (name) {
                 case "glPushMatrix" -> trace.stack.add(List.copyOf(trace.operations));
                 case "glPopMatrix" -> {
@@ -364,7 +525,9 @@ public final class LegacyItemRenderAnalyzer {
             if (trace == null || !name.equals("renderAll") || !(receiver instanceof Model model) || trace.texture == null) {
                 throw new Unsupported("unresolved OBJ draw/group selection");
             }
-            trace.draws.add(new Draw(model.path, trace.texture, trace.operations)); return null;
+            if (trace.equipment) trace.equipmentDraws.add(new EquipmentDraw(model.path, trace.texture, trace.animated, trace.lighting, trace.cull));
+            else trace.draws.add(new Draw(model.path, trace.texture, trace.operations));
+            return null;
         }
         if (owner.equals("net/minecraft/client/renderer/texture/TextureManager")
                 && (name.equals("bindTexture") || name.equals("func_110577_a"))) {
@@ -372,9 +535,25 @@ public final class LegacyItemRenderAnalyzer {
             trace.texture = resource(args[0]); if (trace.texture == null) throw new Unsupported("dynamic texture"); return null;
         }
         if (owner.equals("net/minecraft/client/Minecraft") && (name.equals("getMinecraft") || name.equals("func_71410_x"))) return new Instance(owner);
+        if (receiver instanceof EntityState entity && owner.startsWith("net/minecraft/entity/")
+                && (name.equals("isSneaking") || name.equals("func_70051_ag")) && call.desc.equals("()Z")) return entity.crouching ? 1 : 0;
+        if (trace != null && trace.equipment && owner.equals("net/minecraft/util/MathHelper") && call.desc.equals("(F)F")) {
+            if (name.equals("cos") || name.equals("func_76134_b")) return Expression.of("cos", args[0]);
+            if (name.equals("sin") || name.equals("func_76126_a")) return Expression.of("sin", args[0]);
+        }
+        if (trace == null && receiver instanceof Instance item && isSubclass(item.type, "net/minecraft/item/ItemArmor")) {
+            if ((name.equals("setUnlocalizedName") || name.equals("func_77655_b")) && args.length == 1 && args[0] instanceof String text) {
+                item.itemName = text; return item;
+            }
+            if (List.of("setCreativeTab", "func_77637_a", "setTextureName", "func_111206_d", "setMaxDamage", "func_77656_e").contains(name)) return item;
+        }
+        if (trace == null && owner.equals("java/util/List") && name.equals("add") && call.desc.equals("(Ljava/lang/Object;)Z")) return 1;
         if (name.equals("<init>")) {
             if (!(receiver instanceof Instance instance)) throw new Unsupported("unknown constructor receiver");
-            if (owner.equals("java/lang/Object")) return null;
+            if (owner.equals("java/lang/Object") || owner.equals("net/minecraft/client/model/ModelBiped") || owner.equals("net/minecraft/client/model/ModelBase")) return null;
+            if (owner.equals("net/minecraft/item/ItemArmor") && args.length == 3 && args[2] instanceof Number n) {
+                instance.armorSlot = n.intValue(); return null;
+            }
             if (owner.equals("java/lang/StringBuilder") || owner.equals("java/lang/StringBuffer")) { instance.value = args.length == 0 ? "" : args[0]; return null; }
             if (owner.equals("net/minecraft/util/ResourceLocation")) {
                 if (args.length == 1 && args[0] instanceof String text) instance.value = new Resource(text);

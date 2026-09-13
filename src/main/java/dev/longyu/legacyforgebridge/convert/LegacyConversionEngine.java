@@ -20,6 +20,7 @@ import dev.longyu.legacyforgebridge.convert.pass.LegacyLanguagePass;
 import dev.longyu.legacyforgebridge.convert.pass.LegacyObjPresentationPass;
 import dev.longyu.legacyforgebridge.convert.pass.LegacyItemRenderPass;
 import dev.longyu.legacyforgebridge.convert.pass.NativeItemTagsPass;
+import dev.longyu.legacyforgebridge.convert.pass.LegacyEquipmentRenderPass;
 import dev.longyu.legacyforgebridge.convert.profile.GenericLegacyModProfile;
 import dev.longyu.legacyforgebridge.convert.profile.RpgTool1Profile;
 
@@ -83,6 +84,7 @@ public final class LegacyConversionEngine {
             // sword-blocking path for converted custom swords.
             builder.add(new NativeItemTagsPass());
             builder.add(new LegacyLanguageCleanupPass());
+            builder.add(new LegacyEquipmentRenderPass());
             builder.add(new GeneratedSemanticCodePass());
             builder.add(new GeneratedModEntrypointPass());
             builder.add(new LegacyBytecodeAuditPass());
