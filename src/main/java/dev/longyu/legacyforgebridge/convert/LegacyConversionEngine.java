@@ -13,6 +13,7 @@ import dev.longyu.legacyforgebridge.convert.manifest.ConversionManifestWriter;
 import dev.longyu.legacyforgebridge.convert.manifest.FabricMetadataWriter;
 import dev.longyu.legacyforgebridge.convert.pass.CopyLegacyJarPass;
 import dev.longyu.legacyforgebridge.convert.pass.LegacyBytecodeAuditPass;
+import dev.longyu.legacyforgebridge.convert.pass.LegacyLanguageCleanupPass;
 import dev.longyu.legacyforgebridge.convert.pass.LegacyLanguagePass;
 import dev.longyu.legacyforgebridge.convert.profile.GenericLegacyModProfile;
 import dev.longyu.legacyforgebridge.convert.profile.RpgTool1Profile;
@@ -28,7 +29,8 @@ import java.util.stream.Stream;
 
 /**
  * Internal conversion API. Profile passes may replace legacy bytecode with modern runtime-backed
- * content, after which the final bytecode audit evaluates what will actually enter Fabric.
+ * content, after which obsolete source resources are cleaned and the final bytecode audit evaluates
+ * what will actually enter Fabric.
  */
 public final class LegacyConversionEngine {
     private final LegacyJarAnalyzer analyzer;
@@ -121,9 +123,10 @@ public final class LegacyConversionEngine {
                     .add(new CopyLegacyJarPass())
                     .add(new LegacyLanguagePass());
 
-            // Profiles run before the final audit so an exact semantic converter can remove or
-            // replace old Forge classes. The audit then judges staged output, not historical input.
+            // Profiles run while original resource inputs are still available so semantic
+            // converters can inspect exact legacy keys/paths before cleanup.
             profile.configure(builder);
+            builder.add(new LegacyLanguageCleanupPass());
             builder.add(new LegacyBytecodeAuditPass());
             ConversionPlan plan = builder.build();
 
