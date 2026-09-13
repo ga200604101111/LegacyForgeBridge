@@ -63,28 +63,28 @@ public final class LegacyLocalPlayerSkinBridge {
         boolean profileIdMatches = sessionProfile != null
                 && Objects.equals(sessionProfile.id(), authenticatedProfile.id());
 
-        // A fully populated matching modern PlayerInfo is already correct. Do not replace it.
-        if (profileIdMatches && sessionTextureCount > 0) {
-            if (!healthyProfileLogged) {
+        boolean useAuthenticatedProfile = LegacyLocalPlayerSkinPolicy.shouldUseAuthenticatedProfile(
+                profileIdMatches,
+                sessionTextureCount,
+                authenticatedTextureCount
+        );
+
+        if (!useAuthenticatedProfile) {
+            if (authenticatedTextureCount == 0) {
+                if (!fallbackLogged) {
+                    fallbackLogged = true;
+                    FmlConnectionTrace.INSTANCE.event(
+                            "Legacy local-player skin fallback unavailable: authenticated profile has no textures"
+                                    + " sessionTextures=" + sessionTextureCount
+                                    + " profileIdMatch=" + profileIdMatches
+                    );
+                }
+            } else if (!healthyProfileLogged) {
                 healthyProfileLogged = true;
                 FmlConnectionTrace.INSTANCE.event(
                         "Legacy local-player skin profile is complete; vanilla skin lookup retained"
                                 + " sessionTextures=" + sessionTextureCount
                                 + " authenticatedTextures=" + authenticatedTextureCount
-                                + " profileIdMatch=true"
-                );
-            }
-            return null;
-        }
-
-        // If Mojang did not return a packed texture either, replacing the vanilla lookup would
-        // merely trade one default skin for another. Keep vanilla behavior in that case.
-        if (authenticatedTextureCount == 0) {
-            if (!fallbackLogged) {
-                fallbackLogged = true;
-                FmlConnectionTrace.INSTANCE.event(
-                        "Legacy local-player skin fallback unavailable: authenticated profile has no textures"
-                                + " sessionTextures=" + sessionTextureCount
                                 + " profileIdMatch=" + profileIdMatches
                 );
             }
