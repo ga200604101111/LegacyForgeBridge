@@ -6,17 +6,14 @@ import net.minecraft.locale.Language;
 import java.util.Set;
 
 /**
- * Resolves preserved Minecraft/Forge 1.7.10 message keys from namespaced LFB language data.
+ * Resolves preserved Minecraft/Forge 1.7.10 server-message keys from LFB's private language
+ * catalogue.
  *
- * <p>The bundled JSON files use prefixed alias keys, so loading the mod never overwrites modern
- * Minecraft translations. During a 1.7.10 ViaFabricPlus session only message-oriented legacy keys
- * are resolved through the catalogue. Item, block, entity, container and other normal content
- * names continue through ViaVersion's normal key mappings and the 1.21.11 language table.</p>
+ * <p>Only message-oriented keys are preserved. Item, block, entity, container and ordinary UI
+ * translation keys continue through ViaVersion's normal mapping pipeline and Minecraft 1.21.11's
+ * language table.</p>
  */
 public final class LegacyTranslationBridge {
-    static final String MINECRAFT_PREFIX = "lfb.minecraft.";
-    static final String FORGE_PREFIX = "lfb.forge.";
-
     private static final String[] VANILLA_MESSAGE_PREFIXES = {
             "commands.",
             "chat.type.",
@@ -50,8 +47,8 @@ public final class LegacyTranslationBridge {
             return false;
         }
 
-        // Forge/FML keys do not collide with modern vanilla content keys and may be used by
-        // server/mod messages, so retain their legacy identity.
+        // Forge/FML do not collide with modern vanilla content identities. Keep them intact so
+        // converted Forge-side messages can use the supplied 1.7.10 catalogue.
         if (key.startsWith("forge.") || key.startsWith("fml.")) {
             return true;
         }
@@ -73,7 +70,7 @@ public final class LegacyTranslationBridge {
             return language.getOrDefault(key);
         }
 
-        String legacy = findLegacy(language, key);
+        String legacy = LegacyLanguageCatalog.lookup(key);
         return legacy != null ? legacy : language.getOrDefault(key);
     }
 
@@ -82,34 +79,7 @@ public final class LegacyTranslationBridge {
             return language.getOrDefault(key, fallback);
         }
 
-        String legacy = findLegacy(language, key);
+        String legacy = LegacyLanguageCatalog.lookup(key);
         return legacy != null ? legacy : language.getOrDefault(key, fallback);
-    }
-
-    static String minecraftAlias(String key) {
-        return MINECRAFT_PREFIX + key;
-    }
-
-    static String forgeAlias(String key) {
-        return FORGE_PREFIX + key;
-    }
-
-    private static String findLegacy(Language language, String key) {
-        // Avoid repeatedly prefixing keys produced internally by the bridge.
-        if (key.startsWith(MINECRAFT_PREFIX) || key.startsWith(FORGE_PREFIX)) {
-            return null;
-        }
-
-        String minecraftKey = minecraftAlias(key);
-        if (language.has(minecraftKey)) {
-            return language.getOrDefault(minecraftKey);
-        }
-
-        String forgeKey = forgeAlias(key);
-        if (language.has(forgeKey)) {
-            return language.getOrDefault(forgeKey);
-        }
-
-        return null;
     }
 }
