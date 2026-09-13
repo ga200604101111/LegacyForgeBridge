@@ -78,9 +78,13 @@ class RpgTool1ContentPassTest {
                 swordModel.getAsJsonObject("model").get("model").getAsString()
         );
 
-        JsonObject zhTw = readJson(staging.resolve("assets/rpgtool1/lang/zh_tw.json"));
-        assertEquals("暗黑之劍", zhTw.get("item.rpgtool1.dark_sword").getAsString());
-        assertEquals("一階羽翼", zhTw.get("item.rpgtool1.wing01").getAsString());
+        JsonObject zhCn = readJson(staging.resolve("assets/rpgtool1/lang/zh_cn.json"));
+        assertEquals("暗黑之劍", zhCn.get("item.rpgtool1.dark_sword").getAsString());
+        assertEquals("一階羽翼", zhCn.get("item.rpgtool1.wing01").getAsString());
+        assertFalse(
+                Files.exists(staging.resolve("assets/rpgtool1/lang/zh_tw.json")),
+                "The converter must not synthesize a locale absent from the source mod"
+        );
 
         assertEquals(
                 "rpgtool1:dark_sword",
