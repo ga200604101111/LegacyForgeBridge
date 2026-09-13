@@ -4,7 +4,9 @@
   "version": "${version}",
   "name": "LegacyForgeBridge",
   "description": "Fabric 1.21.11 compatibility and conversion layer for legacy Forge 1.7.10 mods.",
-  "authors": ["YingHunag09"],
+  "authors": [
+    "YingHunag09"
+  ],
   "contact": {
     "sources": "https://github.com/ga200604101111/LegacyForgeBridge"
   },
@@ -16,7 +18,8 @@
     ],
     "client": [
       "dev.longyu.legacyforgebridge.LegacyForgeBridgeClient",
-      "dev.longyu.legacyforgebridge.ConvertedRenderingClient"
+      "dev.longyu.legacyforgebridge.ConvertedRenderingClient",
+      "dev.longyu.legacyforgebridge.behavior.LegacyBehaviorClient"
     ],
     "viafabricplus": [
       "dev.longyu.legacyforgebridge.protocol.ViaFabricPlusEntrypoint"

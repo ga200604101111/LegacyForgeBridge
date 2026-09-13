@@ -169,10 +169,78 @@ public final class LegacyItemRenderAnalyzer {
         return new EquipmentAnalysis(new ArrayList<>(found.values()), diagnostics);
     }
 
+    public record ConstructorArgument(String descriptor, Object value) { }
+    public record ItemAllocation(String itemName, String itemClass, String constructorDescriptor,
+                                 List<ConstructorArgument> arguments, boolean inheritedSwordBlocking,
+                                 boolean full3D, boolean rotates) { }
+    public record ItemAnalysis(List<ItemAllocation> items, List<String> diagnostics) { }
+
+    /** Proven, bounded construction sites; names are read from setUnlocalizedName, not filenames. */
+    public ItemAnalysis analyzeItems(Path source) throws IOException {
+        loadSource(source);
+        Map<String,ItemAllocation> found=new LinkedHashMap<>();
+        Set<String> conflicting=new LinkedHashSet<>();
+        for (ClassInfo info:classes.values()) for (Method method:info.methods.values()) {
+            for (int at=0;at<method.code.size();at++) {
+                Insn in=method.code.get(at);
+                if(in.op!=Opcodes.NEW || !isSubclass((String)in.data,"net/minecraft/item/Item")) continue;
+                String type=(String)in.data;
+                try {
+                    int end=at+1;
+                    while(end<method.code.size()) {
+                        Insn next=method.code.get(end);
+                        if(next.op==Opcodes.INVOKESPECIAL && next.data instanceof Call call
+                                && call.owner.equals(type) && call.name.equals("<init>")) break;
+                        end++;
+                    }
+                    if(end==method.code.size()||end-at>100) throw new Unsupported("unbounded item construction");
+                    Method allocation=new Method(Opcodes.ACC_STATIC,method.owner,"<allocation>","()Ljava/lang/Object;");
+                    allocation.code.addAll(method.code.subList(at,end+1)); allocation.code.add(new Insn(Opcodes.ARETURN,null));
+                    Object object=run(allocation,null,new Object[0],null,0);
+                    if(!(object instanceof Instance item)||item.itemName==null||item.constructorArgs==null)
+                        throw new Unsupported("unresolved item constructor or unlocalized name");
+                    Type[] types=Type.getArgumentTypes(item.constructorDesc); List<ConstructorArgument> args=new ArrayList<>();
+                    for(int i=0;i<types.length;i++) {
+                        Object value=item.constructorArgs[i]; String desc=types[i].getDescriptor();
+                        if(value instanceof Field f && (f.desc.contains("ToolMaterial;")||f.desc.contains("ArmorMaterial;"))) value=null;
+                        if(value!=null&&!(value instanceof String)&&!(value instanceof Number))
+                            throw new Unsupported("nonconstant item constructor argument "+i);
+                        args.add(new ConstructorArgument(desc,value));
+                    }
+                    boolean sword=isSubclass(type,"net/minecraft/item/ItemSword");
+                    boolean inherited=sword;
+                    for(String owner=type;classes.containsKey(owner);owner=classes.get(owner).parent) {
+                        for(Method m:classes.get(owner).methods.values()) if(List.of("func_77659_a","onItemRightClick",
+                                "func_77661_b","getItemUseAction","func_77626_a","getMaxItemUseDuration").contains(m.name)) inherited=false;
+                    }
+                    boolean full=sword;
+                    Method fullMethod=find(type,"func_77662_d","()Z");
+                    if(fullMethod==null)fullMethod=find(type,"isFull3D","()Z");
+                    if(fullMethod!=null)full=((Number)run(fullMethod,item,new Object[0],null,0)).intValue()!=0;
+                    Method rotation=find(type,"func_77629_n_","()Z");
+                    if(rotation==null)rotation=find(type,"shouldRotateAroundWhenRendering","()Z");
+                    boolean rotate=rotation!=null&&((Number)run(rotation,item,new Object[0],null,0)).intValue()!=0;
+                    ItemAllocation binding=new ItemAllocation(item.itemName,type,item.constructorDesc,List.copyOf(args),inherited,full,rotate);
+                    ItemAllocation previous=found.putIfAbsent(item.itemName,binding);
+                    if(previous!=null&&!previous.equals(binding))conflicting.add(item.itemName);
+                } catch(RuntimeException ex) {
+                    String message=type+" in "+method.owner+"."+method.name+": "+ex.getMessage();
+                    if(!diagnostics.contains(message)) diagnostics.add(message);
+                }
+            }
+        }
+        for(String name:conflicting){found.remove(name);diagnostics.add("Ambiguous item construction "+name);}
+        return new ItemAnalysis(List.copyOf(found.values()),List.copyOf(diagnostics));
+    }
+
     private boolean isSubclass(String type, String target) {
         for (int depth = 0; type != null && depth < 32; depth++) {
             if (type.equals(target)) return true;
-            ClassInfo info = classes.get(type); if (info == null) return false;
+            ClassInfo info = classes.get(type);
+            if (info == null) return target.equals("net/minecraft/item/Item") && List.of(
+                    "net/minecraft/item/ItemSword","net/minecraft/item/ItemArmor","net/minecraft/item/ItemTool",
+                    "net/minecraft/item/ItemAxe","net/minecraft/item/ItemPickaxe","net/minecraft/item/ItemSpade",
+                    "net/minecraft/item/ItemHoe","net/minecraft/item/ItemBow").contains(type);
             type = info.parent;
         }
         return false;
@@ -190,6 +258,8 @@ public final class LegacyItemRenderAnalyzer {
         final Map<Field, Object> fields = new LinkedHashMap<>();
         Object value = UNKNOWN;
         String itemName;
+        String constructorDesc;
+        Object[] constructorArgs;
         int armorSlot = -1;
         Instance(String type) { this.type = type; }
     }
@@ -541,15 +611,20 @@ public final class LegacyItemRenderAnalyzer {
             if (name.equals("cos") || name.equals("func_76134_b")) return Expression.of("cos", args[0]);
             if (name.equals("sin") || name.equals("func_76126_a")) return Expression.of("sin", args[0]);
         }
-        if (trace == null && receiver instanceof Instance item && isSubclass(item.type, "net/minecraft/item/ItemArmor")) {
+        if (trace == null && receiver instanceof Instance item && isSubclass(item.type, "net/minecraft/item/Item")) {
             if ((name.equals("setUnlocalizedName") || name.equals("func_77655_b")) && args.length == 1 && args[0] instanceof String text) {
                 item.itemName = text; return item;
             }
-            if (List.of("setCreativeTab", "func_77637_a", "setTextureName", "func_111206_d", "setMaxDamage", "func_77656_e").contains(name)) return item;
+            if (List.of("setCreativeTab", "func_77637_a", "setTextureName", "func_111206_d", "setMaxDamage", "func_77656_e", "setMaxStackSize", "func_77625_d", "setFull3D", "func_77664_n").contains(name)) return item;
         }
         if (trace == null && owner.equals("java/util/List") && name.equals("add") && call.desc.equals("(Ljava/lang/Object;)Z")) return 1;
+        if (trace==null && owner.equals("java/util/HashMap") && name.equals("put")) return null;
         if (name.equals("<init>")) {
             if (!(receiver instanceof Instance instance)) throw new Unsupported("unknown constructor receiver");
+            if(owner.equals(instance.type)&&isSubclass(instance.type,"net/minecraft/item/Item")) {
+                instance.constructorDesc=call.desc; instance.constructorArgs=args.clone();
+            }
+            if(owner.equals("net/minecraft/item/Item")||owner.equals("net/minecraft/item/ItemSword")) return null;
             if (owner.equals("java/lang/Object") || owner.equals("net/minecraft/client/model/ModelBiped") || owner.equals("net/minecraft/client/model/ModelBase")) return null;
             if (owner.equals("net/minecraft/item/ItemArmor") && args.length == 3 && args[2] instanceof Number n) {
                 instance.armorSlot = n.intValue(); return null;

@@ -9,7 +9,9 @@
     "ViaLegacyGameModeMessageMixin",
     "ViaLegacyModItemBoundaryMixin",
     "ViaModernModItemBoundaryMixin",
-    "SpecialModelRenderersMixin"
+    "SpecialModelRenderersMixin",
+    "LegacyLivingBehaviorMixin",
+    "LegacyHurtBehaviorMixin"
   ],
   "injectors": {
     "defaultRequire": 1

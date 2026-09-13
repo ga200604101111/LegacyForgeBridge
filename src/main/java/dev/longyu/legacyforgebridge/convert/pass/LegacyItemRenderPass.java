@@ -7,6 +7,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import dev.longyu.legacyforgebridge.convert.LegacyItemRenderAnalyzer;
+import dev.longyu.legacyforgebridge.convert.LegacyHandSpace;
 import dev.longyu.legacyforgebridge.convert.LegacyItemRenderAnalyzer.Binding;
 import dev.longyu.legacyforgebridge.convert.LegacyItemRenderAnalyzer.Context;
 import dev.longyu.legacyforgebridge.convert.LegacyItemRenderAnalyzer.Draw;
@@ -30,6 +31,9 @@ public final class LegacyItemRenderPass implements ConversionPass {
 
     @Override public void apply(ConversionContext context) throws IOException {
         var analysis = new LegacyItemRenderAnalyzer().analyze(context.sourceJar());
+        var itemAnalysis = new LegacyItemRenderAnalyzer().analyzeItems(context.sourceJar());
+        var allocations = new java.util.LinkedHashMap<String,LegacyItemRenderAnalyzer.ItemAllocation>();
+        itemAnalysis.items().forEach(item -> allocations.put(item.itemName(),item));
         for (String message : analysis.diagnostics()) context.diagnostics().warning(
                 "LFB-CONVERT-ITEM-RENDER-0002", SupportLevel.MANUAL_REQUIRED, message);
         int replaced = 0;
@@ -71,8 +75,24 @@ public final class LegacyItemRenderPass implements ConversionPass {
                 JsonArray cases = new JsonArray();
                 addCase(cases, List.of("gui"), source.contexts().get("INVENTORY"), "INVENTORY", old, nativeIcon);
                 addCase(cases, List.of("ground", "fixed"), source.contexts().get("ENTITY"), "ENTITY", old, nativeIcon);
-                addCase(cases, List.of("firstperson_righthand", "firstperson_lefthand"), source.contexts().get("EQUIPPED_FIRST_PERSON"), "EQUIPPED_FIRST_PERSON", old, nativeIcon);
-                addCase(cases, List.of("thirdperson_righthand", "thirdperson_lefthand"), source.contexts().get("EQUIPPED"), "EQUIPPED", old, nativeIcon);
+                String sourceName = file.getFileName().toString().replaceFirst("\\.json$", "");
+                var item = allocations.get(sourceName);
+                if (item != null && !source.contexts().get("EQUIPPED").helpers().getOrDefault("EQUIPPED_BLOCK", false)
+                        && !source.contexts().get("EQUIPPED").helpers().getOrDefault("BLOCK_3D", false)) {
+                    String neutralBase = writeNeutralHandBase(context.stagingDir(), base);
+                    for (boolean left : List.of(false,true)) {
+                        addHandCase(cases, left?"firstperson_lefthand":"firstperson_righthand", source.contexts().get("EQUIPPED_FIRST_PERSON"),
+                                old,nativeIcon,neutralBase,LegacyHandSpace.firstPerson(left),null,left);
+                        addHandCase(cases, left?"thirdperson_lefthand":"thirdperson_righthand", source.contexts().get("EQUIPPED"),
+                                old,nativeIcon,neutralBase,LegacyHandSpace.thirdPerson(item.full3D(),item.rotates(),false,left),
+                                LegacyHandSpace.thirdPerson(item.full3D(),item.rotates(),true,left),left);
+                    }
+                } else {
+                    addCase(cases,List.of("firstperson_righthand","firstperson_lefthand"),source.contexts().get("EQUIPPED_FIRST_PERSON"),"EQUIPPED_FIRST_PERSON",old,nativeIcon);
+                    addCase(cases,List.of("thirdperson_righthand","thirdperson_lefthand"),source.contexts().get("EQUIPPED"),"EQUIPPED",old,nativeIcon);
+                    context.diagnostics().warning("LFB-CONVERT-ITEM-RENDER-0006",SupportLevel.MANUAL_REQUIRED,
+                            "Hand basis retained: no proven ordinary item allocation for " + sourceName);
+                }
                 select.add("cases", cases); select.add("fallback", nativeIcon.deepCopy()); root.add("model", select);
                 Files.writeString(file, GSON.toJson(root) + "\n", StandardCharsets.UTF_8); replaced++;
             }
@@ -122,6 +142,44 @@ public final class LegacyItemRenderPass implements ConversionPass {
             else { JsonObject composite = new JsonObject(); composite.addProperty("type", "minecraft:composite"); composite.add("models", models); entry.add("model", composite); }
         }
         cases.add(entry);
+    }
+
+    private static String writeNeutralHandBase(Path staging,String base) throws IOException {
+        int split=base.indexOf(':');String namespace=base.substring(0,split),path=base.substring(split+1)+"_lfb_hand";
+        JsonObject neutral=new JsonObject();neutral.addProperty("parent",base);
+        JsonObject display=new JsonObject();
+        for(String context:List.of("firstperson_righthand","firstperson_lefthand","thirdperson_righthand","thirdperson_lefthand"))
+            display.add(context,JsonParser.parseString("{\"rotation\":[0,0,0],\"translation\":[0,0,0],\"scale\":[1,1,1]}").getAsJsonObject());
+        neutral.add("display",display);
+        Path file=staging.resolve("assets").resolve(namespace).resolve("models").resolve(path+".json");
+        Files.createDirectories(file.getParent());Files.writeString(file,GSON.toJson(neutral)+"\n",StandardCharsets.UTF_8);
+        return namespace+":"+path;
+    }
+    private static void addHandCase(JsonArray cases,String name,Context context,JsonObject template,JsonObject icon,
+                                    String base,List<Operation> normal,List<Operation> blocking,boolean left) {
+        JsonObject entry=new JsonObject();entry.addProperty("when",name);
+        if(!context.custom()){entry.add("model",icon.deepCopy());cases.add(entry);return;}
+        JsonElement ordinary=handModel(context,template,base,normal,left);
+        if(blocking!=null){
+            JsonObject blockComponent=new JsonObject();blockComponent.addProperty("type","minecraft:condition");
+            blockComponent.addProperty("property","minecraft:has_component");blockComponent.addProperty("component","minecraft:blocks_attacks");
+            blockComponent.add("on_true",handModel(context,template,base,blocking,left));blockComponent.add("on_false",ordinary.deepCopy());
+            JsonObject using=new JsonObject();using.addProperty("type","minecraft:condition");using.addProperty("property","minecraft:using_item");
+            using.add("on_true",blockComponent);using.add("on_false",ordinary);entry.add("model",using);
+        }else entry.add("model",ordinary);
+        cases.add(entry);
+    }
+    private static JsonElement handModel(Context context,JsonObject template,String base,List<Operation> prefix,boolean left){
+        JsonArray models=new JsonArray();
+        for(Draw draw:context.draws()){
+            JsonObject outer=template.deepCopy();outer.addProperty("base",base);JsonObject special=outer.getAsJsonObject("model");
+            special.addProperty("model",canonical(draw.model()));special.addProperty("texture",canonical(draw.texture()));
+            special.addProperty("scale",1F);special.addProperty("centered",true);special.addProperty("coordinateSpace","legacy_hand_basis");
+            List<Operation> operations=new ArrayList<>(prefix);operations.addAll(left?LegacyHandSpace.mirror(draw.operations()):draw.operations());
+            special.add("transforms",GSON.toJsonTree(operations));models.add(outer);
+        }
+        if(models.size()==1)return models.get(0);
+        JsonObject composite=new JsonObject();composite.addProperty("type","minecraft:composite");composite.add("models",models);return composite;
     }
 
     /** Prefixes from Forge 1.7.10 ForgeHooksClient, not corpus-specific visual tuning. */
