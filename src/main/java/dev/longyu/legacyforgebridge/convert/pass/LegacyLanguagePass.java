@@ -27,7 +27,8 @@ import java.util.stream.Stream;
  * <p>Legacy translation keys are collision-prone because Minecraft merges language entries from
  * every resource namespace into one global translation table. Generated entries therefore use
  * collision-free LFB aliases and the old->new identity is recorded in the conversion manifest.
- * Later bytecode/content passes may retarget known content keys to their modern identities.</p>
+ * Later semantic passes may still inspect the original .lang source before the cleanup pass removes
+ * it from the final candidate.</p>
  */
 public final class LegacyLanguagePass implements ConversionPass {
     private static final Pattern NUMERIC_PLACEHOLDER = Pattern.compile("%(\\d+\\$)?[\\d.]*[df]");
@@ -56,8 +57,7 @@ public final class LegacyLanguagePass implements ConversionPass {
         context.diagnostics().info(
                 "LFB-CONVERT-LANG-0001",
                 SupportLevel.AUTO,
-                "Converted " + langFiles.size() + " legacy .lang files containing " + entries
-                        + " entries to modern JSON resources and removed the obsolete .lang inputs from the candidate."
+                "Converted " + langFiles.size() + " legacy .lang files containing " + entries + " entries to modern JSON resources."
         );
 
         if (entries > 0) {
@@ -69,7 +69,7 @@ public final class LegacyLanguagePass implements ConversionPass {
         }
     }
 
-    private static boolean isLegacyLanguagePath(Path stagingDir, Path file) {
+    static boolean isLegacyLanguagePath(Path stagingDir, Path file) {
         Path relative = stagingDir.relativize(file);
         if (relative.getNameCount() < 4) {
             return false;
@@ -116,7 +116,6 @@ public final class LegacyLanguagePass implements ConversionPass {
         }
 
         Files.writeString(output, GSON.toJson(translations) + "\n", StandardCharsets.UTF_8);
-        Files.deleteIfExists(source);
         return count;
     }
 
