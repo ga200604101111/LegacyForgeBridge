@@ -1,9 +1,0 @@
-commands.forge.usage=使用 /forge <subcommand>。subcommand 為 tps 和 track
-commands.forge.usage.tracking=使用 /forge track <type> <duration>。有效的 type 為 te (實體附加值)。duration 小於 60。 
-commands.forge.tps.summary=%s：平均一刻時間：%s ms。平均每秒刻數：%s
-commands.forge.tracking.te.enabled=已開啟實體附加值追蹤 %s 秒。
-forge.texture.preload.warning=警告：材質 %s 未被預載，可能會導致畫面異常！
-forge.client.shutdown.internal=正在停止內部伺服器…
-forge.update.newversion=已有新的Forge版本：%s
-forge.update.beta.1=%s警告：%sForge為Beta版
-forge.update.beta.2=可能會出現重要問題，請在報告前進行確認。
