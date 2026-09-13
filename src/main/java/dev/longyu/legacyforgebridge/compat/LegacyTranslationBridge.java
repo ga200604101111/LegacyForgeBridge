@@ -6,14 +6,17 @@ import net.minecraft.locale.Language;
 import java.util.Set;
 
 /**
- * Resolves preserved Minecraft/Forge 1.7.10 server-message keys from LFB's private language
- * catalogue.
+ * Resolves preserved Minecraft/Forge 1.7.10 server-message keys through collision-free aliases in
+ * the normal Minecraft language stack.
  *
  * <p>Only message-oriented keys are preserved. Item, block, entity, container and ordinary UI
  * translation keys continue through ViaVersion's normal mapping pipeline and Minecraft 1.21.11's
  * language table.</p>
  */
 public final class LegacyTranslationBridge {
+    static final String MINECRAFT_ALIAS_PREFIX = "lfb.minecraft.";
+    static final String FORGE_ALIAS_PREFIX = "lfb.forge.";
+
     private static final String[] VANILLA_MESSAGE_PREFIXES = {
             "commands.",
             "chat.type.",
@@ -74,12 +77,20 @@ public final class LegacyTranslationBridge {
         return false;
     }
 
+    static String minecraftAlias(String key) {
+        return MINECRAFT_ALIAS_PREFIX + key;
+    }
+
+    static String forgeAlias(String key) {
+        return FORGE_ALIAS_PREFIX + key;
+    }
+
     public static String getOrDefault(Language language, String key) {
         if (!ViaFabricPlusBackend.INSTANCE.isMinecraft1710Target() || !shouldPreserveKey(key)) {
             return language.getOrDefault(key);
         }
 
-        String legacy = LegacyLanguageCatalog.lookup(key);
+        String legacy = findLegacy(language, key);
         return legacy != null ? legacy : language.getOrDefault(key);
     }
 
@@ -88,7 +99,21 @@ public final class LegacyTranslationBridge {
             return language.getOrDefault(key, fallback);
         }
 
-        String legacy = LegacyLanguageCatalog.lookup(key);
+        String legacy = findLegacy(language, key);
         return legacy != null ? legacy : language.getOrDefault(key, fallback);
+    }
+
+    private static String findLegacy(Language language, String key) {
+        String minecraftAlias = minecraftAlias(key);
+        if (language.has(minecraftAlias)) {
+            return language.getOrDefault(minecraftAlias);
+        }
+
+        String forgeAlias = forgeAlias(key);
+        if (language.has(forgeAlias)) {
+            return language.getOrDefault(forgeAlias);
+        }
+
+        return null;
     }
 }
