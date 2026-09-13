@@ -21,7 +21,7 @@ class RpgTool1ProfileTest {
     Path tempDir;
 
     @Test
-    void exactCorpusBaselineIsAcceptedAndProfileAddsOneSemanticPass() throws Exception {
+    void exactCorpusBaselineIsAcceptedAndProfileAddsSemanticPasses() throws Exception {
         RpgTool1Profile profile = new RpgTool1Profile();
         LegacyModMetadata metadata = metadata();
         LegacyJarAnalyzer.Analysis analysis = baselineAnalysis(53);
@@ -33,10 +33,14 @@ class RpgTool1ProfileTest {
         ConversionPlan.Builder builder = ConversionPlan.builder(profile.id());
         profile.configure(builder);
         ConversionPlan plan = builder.build();
-        assertEquals(2, plan.passes().size(), "RPGTool contributes corpus guard + one semantic content pass");
+        assertEquals(
+                3,
+                plan.passes().size(),
+                "RPGTool contributes corpus guard + semantic content + modern resource normalization"
+        );
 
-        // This profile test only exercises the corpus guard. The semantic pass has a dedicated
-        // staging-tree test because it intentionally reads and rewrites real resources.
+        // This profile test only exercises the corpus guard. The semantic/resource passes have
+        // dedicated staging-tree tests because they intentionally read and rewrite resources.
         plan.passes().getFirst().apply(context);
         context.markPassApplied(plan.passes().getFirst().id());
 

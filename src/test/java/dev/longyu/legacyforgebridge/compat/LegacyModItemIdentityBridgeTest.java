@@ -13,28 +13,28 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 class LegacyModItemIdentityBridgeTest {
     @AfterEach
     void clear() {
-        LegacyModItemIdentityBridge.clear();
+        LegacyModItemRegistryMap.clear();
     }
 
     @Test
-    void fmlRegistrySyncBuildsOnlyNonVanillaItemMappings() {
+    void fmlRegistrySyncBuildsOnlyNonVanillaItemMappingsWithoutViaRuntime() {
         Map<String, Integer> ids = new LinkedHashMap<>();
         ids.put("\u0001rpgtool1:fake_block", 5000);
         ids.put("\u0002minecraft:stone", 1);
         ids.put("\u0002rpgtool1:dark_sword", 4169);
         ids.put("\u0002rpgtool1:water_sword", 4172);
 
-        assertEquals(2, LegacyModItemIdentityBridge.install(ids));
-        assertEquals(2, LegacyModItemIdentityBridge.mappedItemCount());
+        assertEquals(2, LegacyModItemRegistryMap.install(ids));
+        assertEquals(2, LegacyModItemRegistryMap.mappedItemCount());
         assertEquals(
                 Identifier.parse("rpgtool1:dark_sword"),
-                LegacyModItemIdentityBridge.legacyIdentity(4169)
+                LegacyModItemRegistryMap.legacyIdentity(4169)
         );
         assertEquals(
                 4172,
-                LegacyModItemIdentityBridge.legacyNumericId(Identifier.parse("rpgtool1:water_sword"))
+                LegacyModItemRegistryMap.legacyNumericId(Identifier.parse("rpgtool1:water_sword"))
         );
-        assertNull(LegacyModItemIdentityBridge.legacyIdentity(1));
-        assertNull(LegacyModItemIdentityBridge.legacyIdentity(5000));
+        assertNull(LegacyModItemRegistryMap.legacyIdentity(1));
+        assertNull(LegacyModItemRegistryMap.legacyIdentity(5000));
     }
 }

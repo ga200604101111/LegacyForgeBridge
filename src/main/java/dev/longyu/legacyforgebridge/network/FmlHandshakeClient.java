@@ -1,6 +1,6 @@
 package dev.longyu.legacyforgebridge.network;
 
-import dev.longyu.legacyforgebridge.compat.LegacyModItemIdentityBridge;
+import dev.longyu.legacyforgebridge.compat.LegacyModItemRegistryMap;
 import dev.longyu.legacyforgebridge.convert.runtime.ConvertedModCatalog;
 
 import java.util.LinkedHashMap;
@@ -62,7 +62,7 @@ public final class FmlHandshakeClient {
         serverHello = null;
         serverMods = Map.of();
         registryData = null;
-        LegacyModItemIdentityBridge.clear();
+        LegacyModItemRegistryMap.clear();
     }
 
     public void handle(byte[] payload, Consumer<byte[]> sender, FmlConnectionTrace trace) {
@@ -163,7 +163,7 @@ public final class FmlHandshakeClient {
                         + " itemSubstitutions=" + registryData.itemSubstitutions().size()
         );
         trace.registry(registryData);
-        int mappedItems = LegacyModItemIdentityBridge.install(registryData.ids());
+        int mappedItems = LegacyModItemRegistryMap.install(registryData.ids());
         trace.event("Legacy mod item identity bridge installed mappings=" + mappedItems);
 
         send(sender, trace, FmlWireCodec.encodeAck(3), "HandshakeAck phase=3 WAITING_SERVER_COMPLETE");
