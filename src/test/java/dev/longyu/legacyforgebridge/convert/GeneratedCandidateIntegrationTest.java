@@ -25,7 +25,7 @@ class GeneratedCandidateIntegrationTest {
     Path tempDir;
 
     @Test
-    void loaderSafeCandidateContainsItsOwnModernEntrypoints() throws Exception {
+    void loaderSafeCandidateContainsItsOwnModernEntrypointsAndSourceDerivedName() throws Exception {
         Path source = tempDir.resolve("StandaloneLegacy.jar");
         String metadata = """
                 [{"modid":"standalonelegacy","name":"Standalone Legacy","version":"1.0","mcversion":"1.7.10","dependencies":[]}]
@@ -45,6 +45,7 @@ class GeneratedCandidateIntegrationTest {
                 tempDir.resolve("manifests")
         );
         assertEquals(ConversionStatus.CONVERTED, result.status());
+        assertEquals("StandaloneLegacy-lfb.jar", result.candidateJar().orElseThrow().getFileName().toString());
 
         try (JarFile jar = new JarFile(result.candidateJar().orElseThrow().toFile())) {
             String generated = "dev/longyu/legacyforgebridge/generated/standalonelegacy/ConvertedModEntrypoint.class";
