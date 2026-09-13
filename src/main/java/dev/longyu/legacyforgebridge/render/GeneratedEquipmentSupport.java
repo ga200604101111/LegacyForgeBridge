@@ -31,6 +31,9 @@ public final class GeneratedEquipmentSupport {
 
     private GeneratedEquipmentSupport() { }
 
+    /** A resource pack can replace a texture or repair a previously missing texture. */
+    public static void clearResourceCache() { TEXTURE_CACHE.clear(); }
+
     public static void register(String itemValue, String anchor, boolean autoCenter, float fit, boolean translucent, String[] models, String[] textureSets) {
         Identifier itemId = Identifier.parse(itemValue);
         List<Part> parts = new ArrayList<>();
@@ -53,7 +56,7 @@ public final class GeneratedEquipmentSupport {
 
     public static void finishMod(String modId) {
         if (!FINISHED_MODS.add(modId)) return;
-        TEXTURE_CACHE.clear(); LegacyObjModel.clearCache();
+        clearResourceCache(); LegacyObjModel.clearCache();
         List<Item> items = MOD_ITEMS.getOrDefault(modId, List.of());
         if (!items.isEmpty()) ArmorRenderer.register(new GeneratedArmorRenderer(), items.toArray(Item[]::new));
         LegacyForgeBridge.LOGGER.info("Generated converted equipment presentation initialized: mod={}, definitions={}, items={}", modId,

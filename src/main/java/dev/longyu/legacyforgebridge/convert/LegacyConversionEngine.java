@@ -18,6 +18,7 @@ import dev.longyu.legacyforgebridge.convert.pass.LegacyBytecodeAuditPass;
 import dev.longyu.legacyforgebridge.convert.pass.LegacyLanguageCleanupPass;
 import dev.longyu.legacyforgebridge.convert.pass.LegacyLanguagePass;
 import dev.longyu.legacyforgebridge.convert.pass.LegacyObjPresentationPass;
+import dev.longyu.legacyforgebridge.convert.pass.LegacyItemRenderPass;
 import dev.longyu.legacyforgebridge.convert.profile.GenericLegacyModProfile;
 import dev.longyu.legacyforgebridge.convert.profile.RpgTool1Profile;
 
@@ -74,10 +75,8 @@ public final class LegacyConversionEngine {
                     .add(new LegacyLanguagePass());
             profile.configure(builder);
             builder.add(new LegacyObjPresentationPass());
+            builder.add(new LegacyItemRenderPass());
             builder.add(new LegacyLanguageCleanupPass());
-            // converted-content is an intermediate representation at conversion time. Compile it
-            // into mod-owned classes before writing the lifecycle entrypoint. Runtime startup of a
-            // new candidate no longer scans/interprets the JSON manifest.
             builder.add(new GeneratedSemanticCodePass());
             builder.add(new GeneratedModEntrypointPass());
             builder.add(new LegacyBytecodeAuditPass());

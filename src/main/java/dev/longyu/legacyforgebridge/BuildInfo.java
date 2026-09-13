@@ -1,8 +1,6 @@
 package dev.longyu.legacyforgebridge;
 
 public final class BuildInfo {
-    public static final String VERSION = "0.2.0-alpha.21";
-
-    private BuildInfo() {
-    }
+    public static final String VERSION = "0.2.0-alpha.22";
+    private BuildInfo() { }
 }

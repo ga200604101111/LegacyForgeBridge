@@ -1,12 +1,23 @@
 package dev.longyu.legacyforgebridge;
 
 import dev.longyu.legacyforgebridge.render.ConvertedEquipmentRenderRuntime;
+import dev.longyu.legacyforgebridge.render.GeneratedEquipmentSupport;
+import dev.longyu.legacyforgebridge.render.LegacyObjModel;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.resource.v1.ResourceLoader;
+import net.minecraft.resources.Identifier;
+import net.minecraft.server.packs.PackType;
+import net.minecraft.server.packs.resources.ResourceManagerReloadListener;
 
-/** Initializes client-only presentation bridges for converted legacy content. */
+/** Client-only resource lifecycle, separate from network/Via bootstrap. */
 public final class ConvertedRenderingClient implements ClientModInitializer {
-    @Override
-    public void onInitializeClient() {
+    @Override public void onInitializeClient() {
         ConvertedEquipmentRenderRuntime.initialize();
+        ResourceLoader.get(PackType.CLIENT_RESOURCES).registerReloader(
+                Identifier.fromNamespaceAndPath(LegacyForgeBridge.MOD_ID, "obj_cache"),
+                (ResourceManagerReloadListener) resources -> {
+                    LegacyObjModel.clearCache();
+                    GeneratedEquipmentSupport.clearResourceCache();
+                });
     }
 }
