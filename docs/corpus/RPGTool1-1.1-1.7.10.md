@@ -1,122 +1,148 @@
 # RPGTool1-1.1-1.7.10 corpus baseline
 
-This is a real-mod analyzer/conversion baseline recorded from an externally supplied test JAR. The third-party binary is intentionally not committed here by default.
+This is the first real LegacyForgeBridge conversion corpus. The third-party binary is used as an external test input and is **not committed to the repository**.
 
-## Identity
+## Exact identity
 
 ```text
 file: RPGTool1-1.1-1.7.10.jar
 size: 14,556,748 bytes
 SHA-256: b82cd54d2d2db576e82ba02ea4e55b4db92174c5814b45aa3ebbe1b44d98961d
+main class: mhzd.net.rpgtool1.Main
 modid: rpgtool1
-@Mod name: RPGTool1
-@Mod version: 1.0
-mcmod.info mcversion: 1.7.10
-mcmod.info dependencies: []
+embedded version: 1.0
+mcversion: 1.7.10
 ```
 
-Note: the filename says `1.1`, while the embedded `@Mod` / `mcmod.info` metadata reports version `1.0`. Compatibility logic must trust parsed metadata and preserve filename information separately rather than assuming they are identical.
+The filename says `1.1`, while `mcmod.info`/FML report `1.0`. Conversion identity trusts parsed metadata and preserves the source filename separately.
 
-## v0.1 LegacyJarAnalyzer baseline
+## Analyzer baseline
 
-Expected result for the exact SHA-256 above:
+The exact SHA must continue to produce:
 
 ```text
-classCount: 53
+classes: 53
 unreadableClasses: 0
 hasMcmodInfo: true
 hasManifest: true
-likelyForgeMod: true
 forgeReferenceCount: 29
 minecraftReferenceCount: 104
 coremodReferenceCount: 0
 openglReferenceCount: 1
-requiresManualCoremodReview: false
+OpenGL marker: org/lwjgl/opengl/GL11
 ```
 
-`openglReferenceCount` currently counts unique detected OpenGL marker identities, not the number of classes or call sites. The detected marker is:
+A changed result for the same SHA is treated as a converter/analyzer regression until explicitly reviewed.
+
+## Real binary inspection
+
+The September 2026 corpus inspection confirmed that `mhzd.net.rpgtool1.init.ModItem` constructs **71 registered items** and `RegistryHandler.registerItem()` registers them through Forge `GameRegistry` using the unlocalized item name (without the `item.` prefix) as the registry name.
+
+The 71 items are:
 
 ```text
-org/lwjgl/opengl/GL11
+20 weapons
+8 wings
+15 circle/aura armor items
+28 material / attack / lifesteal / defense / skill gem items
 ```
 
-## Important detected Forge/API families
+The exact weapon durability/custom attack values are extracted from the real bytecode rather than inferred from filenames.
 
-The sample contains references including:
+### Legacy rendering
 
-- `cpw.mods.fml.common.Mod` / FML lifecycle events;
-- `cpw.mods.fml.common.SidedProxy`;
-- `cpw.mods.fml.common.registry.GameRegistry`;
-- `MinecraftForge.EVENT_BUS`;
-- Forge living events;
-- `MinecraftForgeClient`;
-- `IItemRenderer`;
-- `AdvancedModelLoader` / `IModelCustom`;
-- `EnumHelper`;
-- direct `org.lwjgl.opengl.GL11` rendering.
-
-No `IFMLLoadingPlugin` or `IClassTransformer` marker was detected by the v0.1 analyzer.
-
-## Conversion API baseline
-
-`RpgTool1Profile` is the first real-mod profile for the internal conversion API.
-
-It does **not** implement a separate RPGTool converter. It contributes a corpus guard to the common `ConversionPlan`:
+The binary contains 20 weapon OBJ models under the legacy mixed-case path:
 
 ```text
-common converter
-  -> resource copy
-  -> .lang -> collision-free .json aliases
-  -> bytecode safety audit
-  -> RPGTool1 corpus guard
-  -> manifest / candidate writer
+assets/rpgtool1/textures/items3D/*.obj
 ```
 
-For the exact SHA above, the profile requires the analyzer counts in this document to remain unchanged unless an analyzer change is intentionally reviewed and this baseline is updated.
-
-Expected first-slice result for the real sample:
+It also contains paired wing OBJ models and three circle/aura OBJ meshes:
 
 ```text
-profile: rpgtool1-1.7.10
-resource/metadata conversion: AUTO
-legacy language parsing/JSON generation: AUTO
-legacy translation-reference retargeting: RUNTIME_BRIDGE / future semantic pass required
-CoreMod gate: PASS (no CoreMod markers)
-Forge bytecode: RUNTIME_BRIDGE / future semantic passes required
-legacy GL11 rendering: MANUAL_REQUIRED / future rendering migration required
-final status: PARTIAL
-installable: false
-candidate destination: legacy-cache/converted/
-manifest destination: legacy-cache/manifests/
+assets/rpgtool1/textures/wings/left_wing01..08.obj
+assets/rpgtool1/textures/wings/right_wing01..08.obj
+assets/rpgtool1/textures/circle/buff1.obj
+assets/rpgtool1/textures/circle/buff2.obj
+assets/rpgtool1/textures/circle/buff3.obj
 ```
 
-Old `.lang` keys are not inserted into Minecraft's global language table unchanged. They are emitted as collision-free `lfb.converted.rpgtool1.*` aliases and the manifest records the old-to-new translation identity mapping.
+The old client uses `IItemRenderer`, `AdvancedModelLoader` / `IModelCustom` and direct `GL11` transforms. The alpha.14 test slice replaces the **weapon** renderer with LFB's modern 1.21.11 `SpecialModelRenderer` + `SubmitNodeCollector.submitCustomGeometry` OBJ path. The mixed-case `items3D` directory is normalized to `items3d` because modern resource identifiers reject uppercase path characters.
 
-The exact third-party binary is not stored in GitHub CI. CI instead tests the common conversion engine end-to-end with generated legacy JAR fixtures and tests the RPGTool profile against this exact SHA/analyzer baseline contract. When the external real JAR is supplied to `old-mods`, the same profile and SHA guard run automatically.
+### Legacy gameplay behavior observed
 
-## Why this is useful
+The real classes also implement behavior which is intentionally tracked separately from registry/model conversion:
 
-This sample is intentionally more difficult than a trivial item-only mod. It combines ordinary content registration/event behavior with a substantial legacy custom-rendering surface. It is therefore useful for validating that LegacyForgeBridge distinguishes:
+- weapon attack/defense/lifesteal gem NBT;
+- skill gems such as night vision, underwater breathing, range attack and charged attacks;
+- wing jump boost and fall-damage cancellation;
+- equipped wing/circle rendering;
+- legacy recipes and event-bus hooks.
+
+Those behaviors are not claimed complete merely because the content candidate loads.
+
+## alpha.14 semantic conversion slice
+
+For the exact SHA, `RpgTool1Profile` now contributes:
 
 ```text
-basic Forge/content behavior
-from
-legacy rendering behavior that needs semantic migration
+common resource copy
+-> legacy .lang conversion
+-> exact corpus guard
+-> RPGTool1 semantic content pass
+   -> remove all 53 obsolete Forge class files from candidate
+   -> remove mcmod.info
+   -> normalize items3D -> items3d
+   -> emit 71 modern content definitions
+   -> emit modern item model definitions
+   -> map 20 weapon OBJ models to legacyforgebridge:obj
+   -> promote item translations to item.rpgtool1.<id>
+   -> mirror source zh_CN item names into zh_cn + zh_tw for testing
+   -> record item/translation identities in manifest
+-> final staged-bytecode audit
+-> Fabric candidate writer
 ```
 
-It must not be reported as fully convertible merely because analysis or resource conversion succeeds.
-
-## Current status
+The candidate additionally embeds:
 
 ```text
-analysis: PASS
-conversion API/profile: IMPLEMENTED
-metadata/resource/language candidate pipeline: IMPLEMENTED + CI TESTED
-exact real-binary candidate run: WAITING FOR EXTERNAL JAR TO BE PRESENT IN old-mods/test environment
-Forge bytecode migration: NOT IMPLEMENTED
-legacy translation-reference retargeting: NOT IMPLEMENTED
-legacy rendering migration: NOT IMPLEMENTED
-gameplay on 1.21.11: NOT VERIFIED
+legacyforgebridge/converted-content.json
 ```
 
-Any future analyzer change that alters the exact corpus values must either explain the intentional classification improvement or be treated as a regression candidate.
+LFB reads this at Fabric initialization and creates the modern registry items. The same manifest exposes original legacy mod IDs/versions so the FML handshake can advertise:
+
+```text
+rpgtool1=1.0
+```
+
+rather than being rejected as a missing client mod by a Forge 1.7.10 server.
+
+## Current acceptance boundary
+
+alpha.14 is a **live-test candidate**, not a claim that every RPGTool gameplay feature is already ported.
+
+Expected testable surface:
+
+```text
+Fabric Loader can load the converted candidate
+legacy Forge classes do not enter the modern class path
+71 RPGTool registry identities exist on the client
+item names/icons load
+weapon durability and base attack values are reconstructed
+20 weapon OBJ assets use the modern LFB OBJ renderer
+FML Client ModList can advertise rpgtool1=1.0
+```
+
+Still expected to require follow-up semantic work:
+
+```text
+gem socketing/effects
+skill combat behavior
+recipes
+wing movement/fall behavior
+equipped wing OBJ rendering
+equipped circle/aura OBJ rendering
+modded numeric registry packet remapping if Via exposes a gap during live server testing
+```
+
+The real server test is authoritative for those runtime boundaries.
