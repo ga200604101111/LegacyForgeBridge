@@ -45,6 +45,11 @@ class RpgTool1ContentPassTest {
                 StandardCharsets.UTF_8
         );
 
+        Path mixedCaseObj = staging.resolve("assets/rpgtool1/textures/items3D/dark_sword.obj");
+        Files.createDirectories(mixedCaseObj.getParent());
+        Files.writeString(mixedCaseObj, "v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n", StandardCharsets.UTF_8);
+        Files.write(mixedCaseObj.resolveSibling("dark_sword.png"), new byte[]{1, 2, 3});
+
         ConversionContext context = context(staging);
         RpgTool1ContentPass pass = new RpgTool1ContentPass();
         pass.apply(context);
@@ -52,6 +57,9 @@ class RpgTool1ContentPassTest {
 
         assertFalse(Files.exists(staging.resolve("mhzd/net/rpgtool1/Main.class")));
         assertFalse(Files.exists(staging.resolve("mcmod.info")));
+        assertFalse(Files.exists(staging.resolve("assets/rpgtool1/textures/items3D")));
+        assertTrue(Files.isRegularFile(staging.resolve("assets/rpgtool1/textures/items3d/dark_sword.obj")));
+        assertTrue(Files.isRegularFile(staging.resolve("assets/rpgtool1/textures/items3d/dark_sword.png")));
 
         JsonObject content = readJson(staging.resolve("legacyforgebridge/converted-content.json"));
         assertEquals(71, content.getAsJsonArray("items").size());
@@ -66,7 +74,7 @@ class RpgTool1ContentPassTest {
                 swordModel.getAsJsonObject("model").get("type").getAsString()
         );
         assertEquals(
-                "rpgtool1:textures/items3D/dark_sword.obj",
+                "rpgtool1:textures/items3d/dark_sword.obj",
                 swordModel.getAsJsonObject("model").get("model").getAsString()
         );
 
