@@ -24,6 +24,7 @@ class LegacyTranslationBridgeTest {
         assertTrue(LegacyTranslationBridge.shouldPreserveKey("stat.mineBlock"));
         assertTrue(LegacyTranslationBridge.shouldPreserveKey("tile.bed.noSleep"));
         assertTrue(LegacyTranslationBridge.shouldPreserveKey("gui.toMenu"));
+        assertTrue(LegacyTranslationBridge.shouldPreserveKey("gameMode.changed"));
     }
 
     @Test
@@ -83,6 +84,10 @@ class LegacyTranslationBridgeTest {
                 minecraftZh.get(LegacyTranslationBridge.minecraftAlias("gui.toMenu")).getAsString()
         );
         assertEquals(
+                "您的遊戲模式已更新",
+                minecraftZh.get(LegacyTranslationBridge.minecraftAlias("gameMode.changed")).getAsString()
+        );
+        assertEquals(
                 "警告：材質 %s 未被預載，可能會導致畫面異常！",
                 forgeZh.get(LegacyTranslationBridge.forgeAlias("forge.texture.preload.warning")).getAsString()
         );
@@ -94,7 +99,7 @@ class LegacyTranslationBridgeTest {
     }
 
     @Test
-    void generatedEnglishAliasesContainLegacyHelpFallback() throws Exception {
+    void generatedEnglishAliasesContainLegacyHelpAndGameModeFallbacks() throws Exception {
         JsonObject minecraftEn = loadJson("/assets/lfb-minecraft/lang/en_us.json");
         assertEquals(
                 "--- Showing help page %s of %s (/help <page>) ---",
@@ -103,6 +108,10 @@ class LegacyTranslationBridgeTest {
         assertEquals(
                 "Back to title screen",
                 minecraftEn.get(LegacyTranslationBridge.minecraftAlias("gui.toMenu")).getAsString()
+        );
+        assertEquals(
+                "Your game mode has been updated",
+                minecraftEn.get(LegacyTranslationBridge.minecraftAlias("gameMode.changed")).getAsString()
         );
     }
 

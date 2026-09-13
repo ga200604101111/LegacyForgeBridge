@@ -141,6 +141,28 @@ before later ViaVersion component rewriters run.
 
 Permanent rule: when an upstream translator destroys semantic identity early, intercept at the **earliest stable boundary before the lossy rewrite**. Do not reverse-match the resulting English sentence later.
 
+### alpha.12 synthetic-presentation incident
+
+The alpha.12 live test exposed a different class of translation loss: not every English legacy message begins as a `TranslationComponent` at all.
+
+ViaLegacy's `1.7.10 -> 1.8` GAME_EVENT handler handles reason `3` (game-mode change) by synthesizing a new clientbound `CHAT` packet and feeding literal English through `LEGACY_TO_JSON`:
+
+```text
+GAME_EVENT reason 3
+→ ViaLegacy creates CHAT
+→ literal English presentation text
+```
+
+The original 1.7.10 client instead localizes the semantic key:
+
+```text
+gameMode.changed
+```
+
+Permanent rule: when key-preservation hooks all miss a message, inspect the protocol handler for **translator-synthesized presentation packets**. Restore the original semantic key from packet/handler context. Do not identify the message by matching the English sentence after it has been produced.
+
+For the game-mode case LFB keys off the exact ViaLegacy transformer plus a clientbound `CHAT` packet context and emits the collision-free alias for `gameMode.changed`. A regression test forbids the English sentence from appearing in the Mixin bytecode.
+
 ## Merge policy for runtime-sensitive changes
 
 For ordinary pure-Java logic, green CI can be sufficient to merge.

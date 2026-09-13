@@ -6,6 +6,7 @@ import com.google.gson.JsonParser;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 class LegacyJsonTranslationAliaserTest {
     @Test
@@ -34,6 +35,20 @@ class LegacyJsonTranslationAliaserTest {
                 "{\"translate\":\"gui.toMenu\"}",
                 "lfb.minecraft.gui.toMenu"
         );
+        assertTranslateAlias(
+                "{\"translate\":\"gameMode.changed\"}",
+                "lfb.minecraft.gameMode.changed"
+        );
+    }
+
+    @Test
+    void buildsSemanticComponentForViaLegacySyntheticGameModeMessage() {
+        JsonObject output = JsonParser.parseString(
+                LegacyJsonTranslationAliaser.translationComponentForPreservedKey("gameMode.changed")
+        ).getAsJsonObject();
+
+        assertEquals("lfb.minecraft.gameMode.changed", output.get("translate").getAsString());
+        assertFalse(output.has("text"), "Synthetic game-mode message must stay translatable, not literal text");
     }
 
     @Test

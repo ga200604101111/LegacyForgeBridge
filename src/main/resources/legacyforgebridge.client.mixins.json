@@ -5,7 +5,8 @@
   "client": [
     "TranslatableContentsMixin",
     "ViaComponentTranslationMixin",
-    "ViaLegacyTextRewriterMixin"
+    "ViaLegacyTextRewriterMixin",
+    "ViaLegacyGameModeMessageMixin"
   ],
   "injectors": {
     "defaultRequire": 1

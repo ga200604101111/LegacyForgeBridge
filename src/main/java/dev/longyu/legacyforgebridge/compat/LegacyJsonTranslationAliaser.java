@@ -23,6 +23,17 @@ public final class LegacyJsonTranslationAliaser {
     private LegacyJsonTranslationAliaser() {
     }
 
+    /**
+     * Builds a JSON translatable component using LFB's collision-free alias for the supplied old
+     * key. This is used when ViaLegacy synthesizes a presentation packet that the original 1.7.10
+     * client would have localized from a known key.
+     */
+    public static String translationComponentForPreservedKey(String key) {
+        JsonObject component = new JsonObject();
+        component.addProperty("translate", LegacyTranslationBridge.aliasForPreservedKey(key));
+        return GSON.toJson(component);
+    }
+
     public static String aliasPreservedTranslations(String json) {
         if (json == null || json.isEmpty()) {
             return json;
