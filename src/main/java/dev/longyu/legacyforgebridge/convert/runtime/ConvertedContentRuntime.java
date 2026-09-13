@@ -5,6 +5,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import dev.longyu.legacyforgebridge.LegacyForgeBridge;
+import dev.longyu.legacyforgebridge.convert.pass.GeneratedModEntrypointPass;
 import net.fabricmc.fabric.api.itemgroup.v1.FabricItemGroup;
 import net.fabricmc.fabric.api.itemgroup.v1.ItemGroupEvents;
 import net.fabricmc.loader.api.FabricLoader;
@@ -35,71 +36,99 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /** Registers loader-safe content emitted by the legacy conversion engine. */
 public final class ConvertedContentRuntime {
     public static final String MANIFEST_PATH = "legacyforgebridge/converted-content.json";
+    private static final Set<String> INITIALIZED_MODS = ConcurrentHashMap.newKeySet();
 
     private ConvertedContentRuntime() {
     }
 
+    /**
+     * Backward-compatibility bootstrap for alpha.18-and-older converted resource containers.
+     * New candidates contain their own generated Fabric entrypoint and are intentionally skipped
+     * here so the converted mod, not LegacyForgeBridge, owns content registration.
+     */
     public static void initialize() {
+        for (ModContainer container : FabricLoader.getInstance().getAllMods()) {
+            if (container.findPath(MANIFEST_PATH).isEmpty()) {
+                continue;
+            }
+            if (container.findPath(GeneratedModEntrypointPass.MARKER_PATH).isPresent()) {
+                continue;
+            }
+            initializeContainer(container, "legacy-compat-scan");
+        }
+    }
+
+    /** Called by the generated entrypoint stored inside a converted mod JAR. */
+    public static void initializeMod(String modId) {
+        ModContainer container = FabricLoader.getInstance().getModContainer(modId).orElse(null);
+        if (container == null) {
+            LegacyForgeBridge.LOGGER.error("Converted mod bootstrap could not resolve its Fabric container: {}", modId);
+            return;
+        }
+        initializeContainer(container, "converted-mod-entrypoint");
+    }
+
+    private static void initializeContainer(ModContainer container, String source) {
+        String modId = container.getMetadata().getId();
+        if (!INITIALIZED_MODS.add(modId)) {
+            return;
+        }
+
+        var path = container.findPath(MANIFEST_PATH);
+        if (path.isEmpty()) {
+            LegacyForgeBridge.LOGGER.error("Converted mod {} has no {}", modId, MANIFEST_PATH);
+            return;
+        }
+
         List<Item> combat = new ArrayList<>();
         List<Item> ingredients = new ArrayList<>();
-        int manifests = 0;
         int items = 0;
         int creativeTabs = 0;
 
-        for (ModContainer container : FabricLoader.getInstance().getAllMods()) {
-            var path = container.findPath(MANIFEST_PATH);
-            if (path.isEmpty()) {
-                continue;
+        try {
+            JsonObject root = readJson(path.get());
+            JsonArray contentItems = root.getAsJsonArray("items");
+            if (contentItems == null) {
+                LegacyForgeBridge.LOGGER.warn("Converted mod {} has no item definitions", modId);
+                return;
             }
 
-            manifests++;
-            try {
-                JsonObject root = readJson(path.get());
-                JsonArray contentItems = root.getAsJsonArray("items");
-                if (contentItems == null) {
+            Map<Identifier, Item> manifestItems = new LinkedHashMap<>();
+            for (JsonElement element : contentItems) {
+                if (!element.isJsonObject()) {
                     continue;
                 }
-
-                Map<Identifier, Item> manifestItems = new LinkedHashMap<>();
-                for (JsonElement element : contentItems) {
-                    if (!element.isJsonObject()) {
-                        continue;
-                    }
-                    JsonObject definition = element.getAsJsonObject();
-                    Item registered = registerItem(definition);
-                    if (registered == null) {
-                        continue;
-                    }
-                    items++;
-                    Identifier itemId = Identifier.parse(requiredString(definition, "id"));
-                    manifestItems.put(itemId, registered);
-
-                    // A converted custom creative group owns the item exclusively. The old
-                    // combat/ingredients fields remain supported for manifests produced before
-                    // the generic creative-tab schema existed.
-                    if (definition.has("creativeTab")) {
-                        continue;
-                    }
-                    String tab = string(definition, "tab", "ingredients");
-                    if (tab.equals("combat")) {
-                        combat.add(registered);
-                    } else {
-                        ingredients.add(registered);
-                    }
+                JsonObject definition = element.getAsJsonObject();
+                Item registered = registerItem(definition);
+                if (registered == null) {
+                    continue;
                 }
+                items++;
+                Identifier itemId = Identifier.parse(requiredString(definition, "id"));
+                manifestItems.put(itemId, registered);
 
-                creativeTabs += registerCreativeTabs(root, manifestItems, container.getMetadata().getId());
-            } catch (Exception exception) {
-                LegacyForgeBridge.LOGGER.error(
-                        "Failed to register converted legacy content from {}",
-                        container.getMetadata().getId(),
-                        exception
-                );
+                if (definition.has("creativeTab")) {
+                    continue;
+                }
+                String tab = string(definition, "tab", "ingredients");
+                if (tab.equals("combat")) {
+                    combat.add(registered);
+                } else {
+                    ingredients.add(registered);
+                }
             }
+
+            creativeTabs = registerCreativeTabs(root, manifestItems, modId);
+        } catch (Exception exception) {
+            INITIALIZED_MODS.remove(modId);
+            LegacyForgeBridge.LOGGER.error("Failed to register converted legacy content from {}", modId, exception);
+            return;
         }
 
         if (!combat.isEmpty()) {
@@ -113,14 +142,14 @@ public final class ConvertedContentRuntime {
                     .register(entries -> snapshot.forEach(entries::accept));
         }
 
-        if (manifests > 0) {
-            LegacyForgeBridge.LOGGER.info(
-                    "Registered converted legacy content: manifests={}, items={}, creativeTabs={}",
-                    manifests,
-                    items,
-                    creativeTabs
-            );
-        }
+        LegacyForgeBridge.LOGGER.info(
+                "Converted mod initialized itself: mod={}, source={}, items={}, creativeTabs={}, vanillaFallbackItems={}",
+                modId,
+                source,
+                items,
+                creativeTabs,
+                combat.size() + ingredients.size()
+        );
     }
 
     private static int registerCreativeTabs(
