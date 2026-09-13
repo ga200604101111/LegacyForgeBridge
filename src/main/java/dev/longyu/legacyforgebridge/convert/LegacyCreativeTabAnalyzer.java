@@ -30,6 +30,7 @@ import java.util.jar.JarFile;
 public final class LegacyCreativeTabAnalyzer {
     private static final String CREATIVE_TABS = "net/minecraft/creativetab/CreativeTabs";
     private static final String ITEM = "net/minecraft/item/Item";
+    private static final String MINECRAFT_ITEM_PREFIX = "net/minecraft/item/Item";
 
     public Analysis analyze(Path jarPath) throws IOException {
         Map<String, String> superByClass = new LinkedHashMap<>();
@@ -186,11 +187,12 @@ public final class LegacyCreativeTabAnalyzer {
 
                     @Override
                     public void visitMethodInsn(int opcode, String owner, String methodName, String methodDescriptor, boolean isInterface) {
-                        if (methodName.equals("<init>")
-                                && isCreativeTabType(owner, superByClass)
-                                && methodDescriptor.contains("Ljava/lang/String;")
-                                && recentString != null) {
-                            pendingTabLabel = recentString;
+                        if (methodName.equals("<init>") && isCreativeTabType(owner, superByClass)) {
+                            // Anonymous/custom CreativeTabs sometimes expose a no-arg constructor
+                            // and hardcode the label inside it. Preserve the tab even when the
+                            // outer allocation site does not surface a String; fieldName is a safe
+                            // identity fallback and language-key discovery can still title it later.
+                            pendingTabLabel = recentString == null ? "" : recentString;
                             pendingTabImplementationClass = owner;
                             recentString = null;
                             return;
@@ -252,14 +254,19 @@ public final class LegacyCreativeTabAnalyzer {
     }
 
     private static boolean isCreativeTabType(String type, Map<String, String> superByClass) {
-        return isTypeOrSubclass(type, CREATIVE_TABS, superByClass);
+        return isTypeOrSubclass(type, CREATIVE_TABS, superByClass, false);
     }
 
     private static boolean isItemType(String type, Map<String, String> superByClass) {
-        return isTypeOrSubclass(type, ITEM, superByClass);
+        return isTypeOrSubclass(type, ITEM, superByClass, true);
     }
 
-    private static boolean isTypeOrSubclass(String type, String target, Map<String, String> superByClass) {
+    private static boolean isTypeOrSubclass(
+            String type,
+            String target,
+            Map<String, String> superByClass,
+            boolean acceptVanillaItemFamily
+    ) {
         if (type == null) {
             return false;
         }
@@ -267,6 +274,15 @@ public final class LegacyCreativeTabAnalyzer {
         Set<String> visited = new LinkedHashSet<>();
         while (current != null && visited.add(current)) {
             if (current.equals(target)) {
+                return true;
+            }
+            // The source JAR does not contain Minecraft's superclass bytecode. Once a custom item
+            // chain reaches ItemSword/ItemArmor/etc., recognise that external vanilla type as the
+            // Item family instead of stopping the inheritance walk one class too early.
+            if (acceptVanillaItemFamily
+                    && current.startsWith(MINECRAFT_ITEM_PREFIX)
+                    && !current.equals("net/minecraft/item/ItemStack")
+                    && !current.contains("$")) {
                 return true;
             }
             current = superByClass.get(current);
