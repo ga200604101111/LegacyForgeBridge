@@ -7,11 +7,9 @@ import dev.longyu.legacyforgebridge.convert.api.DiagnosticSeverity;
 import dev.longyu.legacyforgebridge.convert.api.LegacyModMetadata;
 import dev.longyu.legacyforgebridge.convert.api.LegacyModProfile;
 import dev.longyu.legacyforgebridge.convert.api.SupportLevel;
+import dev.longyu.legacyforgebridge.convert.pass.RpgTool1ContentPass;
 
-/**
- * First real-mod profile. It does not fork the converter; it only contributes corpus-specific
- * validation on top of the common conversion passes.
- */
+/** Corpus-backed RPGTool1 profile layered on the common conversion engine. */
 public final class RpgTool1Profile implements LegacyModProfile {
     public static final String CORPUS_SHA256 = "b82cd54d2d2db576e82ba02ea4e55b4db92174c5814b45aa3ebbe1b44d98961d";
 
@@ -30,6 +28,7 @@ public final class RpgTool1Profile implements LegacyModProfile {
     @Override
     public void configure(ConversionPlan.Builder plan) {
         plan.add(new CorpusGuardPass());
+        plan.add(new RpgTool1ContentPass());
     }
 
     private static final class CorpusGuardPass implements ConversionPass {
