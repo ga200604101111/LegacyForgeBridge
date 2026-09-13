@@ -10,6 +10,7 @@ This directory is the project contract for LegacyForgeBridge. Code changes shoul
 - [DEPENDENCY-MODEL.md](DEPENDENCY-MODEL.md) — transitive prerequisites, optional dependencies, version constraints, cycles/SCC groups, cache invalidation, and dependency-aware parallel conversion.
 - [COMPATIBILITY-MATRIX.md](COMPATIBILITY-MATRIX.md) — support classes and how compatibility percentage is measured.
 - [ARCHITECTURE.md](ARCHITECTURE.md) — project boundaries, major subsystems, and design rules.
+- [CONVERSION-API.md](CONVERSION-API.md) — internal conversion SPI, candidate/manifest safety model, and the first RPGTool1 corpus profile.
 - [TESTING.md](TESTING.md) — GitHub Actions regression tiers, synthetic fixtures, real-mod corpus policy, and client/server integration testing.
 - [`corpus/`](corpus/) — expected analyzer/conversion baselines for representative real 1.7.10 mods.
 

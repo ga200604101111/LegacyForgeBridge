@@ -1,6 +1,9 @@
 package dev.longyu.legacyforgebridge.convert;
 
+import dev.longyu.legacyforgebridge.BuildInfo;
 import dev.longyu.legacyforgebridge.LegacyForgeBridge;
+import dev.longyu.legacyforgebridge.convert.api.ConversionResult;
+import dev.longyu.legacyforgebridge.convert.api.ConversionStatus;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -18,12 +21,17 @@ public final class LegacyConversionManager {
     private final LegacyPaths paths = LegacyPaths.resolve();
     private final OldModScanner scanner = new OldModScanner();
     private final LegacyJarAnalyzer analyzer = new LegacyJarAnalyzer();
+    private final LegacyConversionEngine conversionEngine = new LegacyConversionEngine(analyzer);
 
     public void initialize() throws IOException {
         Files.createDirectories(paths.oldModsDir());
         Files.createDirectories(paths.cacheDir());
         Files.createDirectories(paths.reportsDir());
         Files.createDirectories(paths.modsDir());
+        Path convertedDir = paths.cacheDir().resolve("converted");
+        Path manifestsDir = paths.cacheDir().resolve("manifests");
+        Files.createDirectories(convertedDir);
+        Files.createDirectories(manifestsDir);
 
         Properties cache = loadCache();
         List<Path> jars = scanner.scan(paths.oldModsDir());
@@ -35,33 +43,72 @@ public final class LegacyConversionManager {
 
         int analyzed = 0;
         int unchanged = 0;
+        int converted = 0;
+        int partial = 0;
+        int blocked = 0;
+        int failed = 0;
+
         for (Path jar : jars) {
             String hash = Hashing.sha256(jar);
             String cacheKey = jar.getFileName().toString();
-            if (hash.equals(cache.getProperty(cacheKey))) {
+            String cacheFingerprint = BuildInfo.VERSION + ":" + hash;
+            if (cacheFingerprint.equals(cache.getProperty(cacheKey))) {
                 unchanged++;
-                LegacyForgeBridge.LOGGER.debug("Legacy mod unchanged, skipping analysis: {}", jar.getFileName());
+                LegacyForgeBridge.LOGGER.debug("Legacy mod unchanged for converter {}, skipping: {}", BuildInfo.VERSION, jar.getFileName());
                 continue;
             }
 
-            LegacyJarAnalyzer.Analysis result = analyzer.analyze(jar);
-            writeReport(result, hash);
-            cache.setProperty(cacheKey, hash);
+            LegacyJarAnalyzer.Analysis analysis = analyzer.analyze(jar);
+            writeReport(analysis, hash);
             analyzed++;
 
             LegacyForgeBridge.LOGGER.info(
                     "Analyzed legacy mod {}: classes={}, Forge refs={}, Minecraft refs={}, coremod refs={}, OpenGL refs={}",
-                    result.fileName(),
-                    result.classCount(),
-                    result.forgeReferenceCount(),
-                    result.minecraftReferenceCount(),
-                    result.coremodReferenceCount(),
-                    result.openglReferenceCount()
+                    analysis.fileName(),
+                    analysis.classCount(),
+                    analysis.forgeReferenceCount(),
+                    analysis.minecraftReferenceCount(),
+                    analysis.coremodReferenceCount(),
+                    analysis.openglReferenceCount()
             );
+
+            ConversionResult result = conversionEngine.convertAnalyzed(
+                    jar,
+                    hash,
+                    analysis,
+                    convertedDir,
+                    manifestsDir
+            );
+
+            switch (result.status()) {
+                case CONVERTED -> converted++;
+                case PARTIAL -> partial++;
+                case BLOCKED -> blocked++;
+                case FAILED -> failed++;
+            }
+
+            LegacyForgeBridge.LOGGER.info(
+                    "Conversion result for {}: status={}, profile={}, installable={}, candidate={}, manifest={}",
+                    jar.getFileName(),
+                    result.status(),
+                    result.profileId(),
+                    result.installable(),
+                    result.candidateJar().map(path -> path.getFileName().toString()).orElse("none"),
+                    result.manifestFile().getFileName()
+            );
+
+            // A failed engine run is retried next launch. Every other result is deterministic for
+            // this source hash + converter version, including explicit BLOCKED/PARTIAL outcomes.
+            if (result.status() != ConversionStatus.FAILED) {
+                cache.setProperty(cacheKey, cacheFingerprint);
+            }
         }
 
         storeCache(cache);
-        LegacyForgeBridge.LOGGER.info("Legacy scan complete: discovered={}, analyzed={}, unchanged={}", jars.size(), analyzed, unchanged);
+        LegacyForgeBridge.LOGGER.info(
+                "Legacy scan/conversion complete: discovered={}, analyzed={}, unchanged={}, converted={}, partial={}, blocked={}, failed={}",
+                jars.size(), analyzed, unchanged, converted, partial, blocked, failed
+        );
     }
 
     private Properties loadCache() throws IOException {
@@ -85,7 +132,7 @@ public final class LegacyConversionManager {
                 StandardOpenOption.TRUNCATE_EXISTING,
                 StandardOpenOption.WRITE
         )) {
-            properties.store(output, "LegacyForgeBridge source SHA-256 cache");
+            properties.store(output, "LegacyForgeBridge source SHA-256 + converter-version cache");
         }
     }
 

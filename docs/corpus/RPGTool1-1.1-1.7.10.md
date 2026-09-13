@@ -1,6 +1,6 @@
 # RPGTool1-1.1-1.7.10 corpus baseline
 
-This is a real-mod analyzer baseline recorded from an externally supplied test JAR. The third-party binary is intentionally not committed here by default.
+This is a real-mod analyzer/conversion baseline recorded from an externally supplied test JAR. The third-party binary is intentionally not committed here by default.
 
 ## Identity
 
@@ -57,6 +57,43 @@ The sample contains references including:
 
 No `IFMLLoadingPlugin` or `IClassTransformer` marker was detected by the v0.1 analyzer.
 
+## Conversion API baseline
+
+`RpgTool1Profile` is the first real-mod profile for the internal conversion API.
+
+It does **not** implement a separate RPGTool converter. It contributes a corpus guard to the common `ConversionPlan`:
+
+```text
+common converter
+  -> resource copy
+  -> .lang -> collision-free .json aliases
+  -> bytecode safety audit
+  -> RPGTool1 corpus guard
+  -> manifest / candidate writer
+```
+
+For the exact SHA above, the profile requires the analyzer counts in this document to remain unchanged unless an analyzer change is intentionally reviewed and this baseline is updated.
+
+Expected first-slice result for the real sample:
+
+```text
+profile: rpgtool1-1.7.10
+resource/metadata conversion: AUTO
+legacy language parsing/JSON generation: AUTO
+legacy translation-reference retargeting: RUNTIME_BRIDGE / future semantic pass required
+CoreMod gate: PASS (no CoreMod markers)
+Forge bytecode: RUNTIME_BRIDGE / future semantic passes required
+legacy GL11 rendering: MANUAL_REQUIRED / future rendering migration required
+final status: PARTIAL
+installable: false
+candidate destination: legacy-cache/converted/
+manifest destination: legacy-cache/manifests/
+```
+
+Old `.lang` keys are not inserted into Minecraft's global language table unchanged. They are emitted as collision-free `lfb.converted.rpgtool1.*` aliases and the manifest records the old-to-new translation identity mapping.
+
+The exact third-party binary is not stored in GitHub CI. CI instead tests the common conversion engine end-to-end with generated legacy JAR fixtures and tests the RPGTool profile against this exact SHA/analyzer baseline contract. When the external real JAR is supplied to `old-mods`, the same profile and SHA guard run automatically.
+
 ## Why this is useful
 
 This sample is intentionally more difficult than a trivial item-only mod. It combines ordinary content registration/event behavior with a substantial legacy custom-rendering surface. It is therefore useful for validating that LegacyForgeBridge distinguishes:
@@ -67,14 +104,19 @@ from
 legacy rendering behavior that needs semantic migration
 ```
 
-It must not be reported as fully convertible merely because analysis succeeds.
+It must not be reported as fully convertible merely because analysis or resource conversion succeeds.
 
 ## Current status
 
 ```text
 analysis: PASS
-conversion: NOT IMPLEMENTED / NOT YET VERIFIED
+conversion API/profile: IMPLEMENTED
+metadata/resource/language candidate pipeline: IMPLEMENTED + CI TESTED
+exact real-binary candidate run: WAITING FOR EXTERNAL JAR TO BE PRESENT IN old-mods/test environment
+Forge bytecode migration: NOT IMPLEMENTED
+legacy translation-reference retargeting: NOT IMPLEMENTED
+legacy rendering migration: NOT IMPLEMENTED
 gameplay on 1.21.11: NOT VERIFIED
 ```
 
-Any future analyzer change that alters these values must either explain the intentional classification improvement or be treated as a regression candidate.
+Any future analyzer change that alters the exact corpus values must either explain the intentional classification improvement or be treated as a regression candidate.
