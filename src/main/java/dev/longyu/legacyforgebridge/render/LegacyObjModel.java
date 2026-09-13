@@ -17,9 +17,12 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Shared Forge-1.7-style Wavefront mesh used by converted items and wearable renderers.
  *
- * <p>This is intentionally namespace/mod agnostic. Conversion profiles only emit model and
- * texture identifiers; all OBJ parsing, legacy V flipping, face normals and UV inset behavior live
- * here so every converted 1.7.10 mod uses the same renderer.</p>
+ * <p>This follows the rendering-relevant semantics of Forge 1.7.10's WavefrontObject/Face:
+ * texture V is flipped while parsing, one computed normal is used per face, and UVs are inset
+ * 0.0005 toward the face average. Legacy OpenGL texture bindings also repeated out-of-range UVs;
+ * modern render pipelines are not guaranteed to preserve that sampler state, so repetition is
+ * explicitly emulated before vertices are submitted. The real RPGTool corpus relies on this for
+ * models such as dark_sword whose source V coordinates are entirely negative.</p>
  */
 public final class LegacyObjModel {
     private static final float LEGACY_UV_OFFSET = 0.0005F;
@@ -93,7 +96,8 @@ public final class LegacyObjModel {
                     faces.add(new Face(List.copyOf(vertices)));
                 }
                 default -> {
-                    // g/o/s/mtllib/usemtl do not change geometry in the single-texture bridge.
+                    // Forge 1.7.10's WavefrontObject likewise does not bind OBJ mtllib/usemtl or
+                    // smoothing state; g/o only partition render groups and do not alter vertices.
                 }
             }
         }
@@ -178,7 +182,12 @@ public final class LegacyObjModel {
         float v = 1.0F - source[1];
         u += u > averageUv[0] ? -LEGACY_UV_OFFSET : LEGACY_UV_OFFSET;
         v += v > averageUv[1] ? -LEGACY_UV_OFFSET : LEGACY_UV_OFFSET;
-        return new float[]{u, v};
+        return new float[]{repeatUv(u), repeatUv(v)};
+    }
+
+    /** Equivalent to GL_REPEAT for normalized texture coordinates, including negative values. */
+    static float repeatUv(float value) {
+        return value - (float) Math.floor(value);
     }
 
     private float[] averageUv(Face face) {
