@@ -1,0 +1,9 @@
+commands.forge.usage=Use /forge <subcommand>. Subcommands are tps, track
+commands.forge.usage.tracking=Use /forge track <type> <duration>. Valid types are te (Tile Entities). Duration is < 60. 
+commands.forge.tps.summary=%s : Mean tick time: %s ms. Mean TPS: %s
+commands.forge.tracking.te.enabled=Tile Entity tracking enabled for %s seconds.
+forge.texture.preload.warning=Warning: Texture %s not preloaded, will cause render glitches!
+forge.client.shutdown.internal=Shutting down internal server...
+forge.update.newversion=New Forge version available: %s
+forge.update.beta.1=%sWARNING: %sForge Beta
+forge.update.beta.2=Major issues may arise, verify before reporting.
