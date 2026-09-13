@@ -28,11 +28,21 @@ public final class LegacyTranslationBridge {
             "gameMode."
     };
 
+    private static final String[] FORGE_MESSAGE_PREFIXES = {
+            "commands.forge.",
+            "forge.update."
+    };
+
     private static final Set<String> VANILLA_MESSAGE_KEYS = Set.of(
             "tile.bed.occupied",
             "tile.bed.noSleep",
             "tile.bed.notSafe",
             "tile.bed.notValid"
+    );
+
+    private static final Set<String> FORGE_MESSAGE_KEYS = Set.of(
+            "forge.texture.preload.warning",
+            "forge.client.shutdown.internal"
     );
 
     private LegacyTranslationBridge() {
@@ -47,17 +57,16 @@ public final class LegacyTranslationBridge {
             return false;
         }
 
-        // Forge/FML do not collide with modern vanilla content identities. Keep them intact so
-        // converted Forge-side messages can use the supplied 1.7.10 catalogue.
-        if (key.startsWith("forge.") || key.startsWith("fml.")) {
-            return true;
-        }
-
-        if (VANILLA_MESSAGE_KEYS.contains(key)) {
+        if (VANILLA_MESSAGE_KEYS.contains(key) || FORGE_MESSAGE_KEYS.contains(key)) {
             return true;
         }
 
         for (String prefix : VANILLA_MESSAGE_PREFIXES) {
+            if (key.startsWith(prefix)) {
+                return true;
+            }
+        }
+        for (String prefix : FORGE_MESSAGE_PREFIXES) {
             if (key.startsWith(prefix)) {
                 return true;
             }
