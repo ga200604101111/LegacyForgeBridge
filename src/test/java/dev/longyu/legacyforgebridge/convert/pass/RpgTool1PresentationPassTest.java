@@ -62,13 +62,19 @@ class RpgTool1PresentationPassTest {
 
         JsonObject weapons = tabs.get(0).getAsJsonObject();
         assertEquals("rpgtool1:weapons", weapons.get("id").getAsString());
-        assertEquals("weapons", weapons.get("title").getAsString());
+        assertEquals(
+                "lfb.converted.rpgtool1.itemGroup.weapons",
+                weapons.get("titleKey").getAsString()
+        );
         assertEquals("rpgtool1:dark_sword", weapons.get("icon").getAsString());
         assertEquals(1, weapons.getAsJsonArray("items").size());
 
         JsonObject gear = tabs.get(1).getAsJsonObject();
         assertEquals("rpgtool1:gear", gear.get("id").getAsString());
-        assertEquals("gear", gear.get("title").getAsString());
+        assertEquals(
+                "lfb.converted.rpgtool1.itemGroup.gear",
+                gear.get("titleKey").getAsString()
+        );
         assertEquals("rpgtool1:wing01", gear.get("icon").getAsString());
         assertEquals(2, gear.getAsJsonArray("items").size());
 
