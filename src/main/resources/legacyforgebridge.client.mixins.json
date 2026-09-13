@@ -4,7 +4,8 @@
   "compatibilityLevel": "JAVA_21",
   "client": [
     "TranslatableContentsMixin",
-    "ViaComponentTranslationMixin"
+    "ViaComponentTranslationMixin",
+    "ViaLegacyTextRewriterMixin"
   ],
   "injectors": {
     "defaultRequire": 1

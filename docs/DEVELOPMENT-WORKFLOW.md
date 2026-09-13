@@ -9,7 +9,7 @@ For a normal feature or fix, the expected validation count is:
 1. one pull-request build after the branch is ready for review;
 2. one `main` build after merge.
 
-Additional builds should happen only when the previous validation found a real defect that requires another code change.
+Additional builds should happen only when a previous validation or live test found a real defect that requires another code change.
 
 ## Required development sequence
 
@@ -23,6 +23,21 @@ Additional builds should happen only when the previous validation found a real d
 8. Wait for that build result before pushing more changes.
 9. If CI fails, diagnose the full failure first and batch the complete fix into one follow-up change instead of repeatedly pushing speculative edits.
 10. Merge only after CI is green and any required live/runtime smoke test has passed.
+
+## Live-validation retry rule
+
+Runtime-sensitive changes can pass CI and still fail on the real client. If a live test finds a real defect **after a PR build has already run**:
+
+1. close the PR before changing the branch again;
+2. collect the complete runtime feedback and inspect the upstream/runtime source first;
+3. batch all related corrections, tests, resources and docs into one branch update;
+4. move the branch ref once;
+5. reopen the PR only when the replacement build is ready;
+6. allow one replacement PR CI run.
+
+Do not leave an open PR synchronized while iterating through multiple runtime fixes. Closing the PR temporarily prevents every branch update from creating another `pull_request/synchronize` workflow.
+
+This rule was added after alpha.11 live testing exposed a second translation-layer issue after the first PR CI had already passed.
 
 ## Important GitHub Actions behavior
 
@@ -39,6 +54,16 @@ branch
   -> runtime validation if required
   -> merge
   -> main CI once
+```
+
+If runtime validation finds a real defect after that PR CI:
+
+```text
+close PR
+  -> inspect all related runtime paths
+  -> batch one complete correction
+  -> reopen PR
+  -> replacement PR CI once
 ```
 
 Avoid this pattern:
@@ -64,7 +89,7 @@ When adding many generated files or split resources:
 - create one tree containing every path;
 - create one commit from that tree;
 - update the branch ref once;
-- open the PR only afterward.
+- open or reopen the PR only afterward.
 
 Do not use many sequential `create_file` / `update_file` commits on an already-open pull request unless the task genuinely requires independent reviewable commits.
 
@@ -79,7 +104,7 @@ Before declaring a Mixin change complete:
 3. do not put a compile-time library type in a callback descriptor when the runtime may relocate that type;
 4. use `@Coerce Object` plus a narrow compatibility adapter when the target argument type is shaded/private but the object API is stable;
 5. add a regression test that checks the compiled callback descriptor does not reintroduce the wrong package;
-6. require at least one real client startup smoke test for new Mixins into ViaFabricPlus/ViaVersion internals.
+6. require at least one real client startup smoke test for new Mixins into ViaFabricPlus/ViaVersion/ViaLegacy internals.
 
 ### alpha.10 incident
 
@@ -99,13 +124,30 @@ A Mixin callback that declared `com.google.gson.JsonObject` therefore had a diff
 
 The permanent rule is: **never bind the Via component-preservation callback descriptor to either Gson package.** Keep the callback argument as `@Coerce Object` and access only the small stable JSON surface through the LFB adapter.
 
+### alpha.11 translation incident
+
+The first successful alpha.11 startup proved that a downstream ViaVersion component hook was too late for some 1.7.10 messages.
+
+ViaLegacy's first `1.7.10 -> 1.8` `TextRewriter` contains its own hard-coded English translation table and replaces keys such as:
+
+```text
+commands.achievement.usage
+commands.clear.usage
+commands.effect.usage
+disconnect.loginFailedInfo.serversUnavailable
+```
+
+before later ViaVersion component rewriters run.
+
+Permanent rule: when an upstream translator destroys semantic identity early, intercept at the **earliest stable boundary before the lossy rewrite**. Do not reverse-match the resulting English sentence later.
+
 ## Merge policy for runtime-sensitive changes
 
 For ordinary pure-Java logic, green CI can be sufficient to merge.
 
 For changes involving any of the following, green CI is necessary but not sufficient:
 
-- Mixin targets in ViaFabricPlus/ViaVersion;
+- Mixin targets in ViaFabricPlus/ViaVersion/ViaLegacy;
 - packet pipeline hooks;
 - class-loader behavior;
 - shaded/relocated runtime dependencies;
