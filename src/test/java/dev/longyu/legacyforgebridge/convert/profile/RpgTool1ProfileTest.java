@@ -34,13 +34,13 @@ class RpgTool1ProfileTest {
         profile.configure(builder);
         ConversionPlan plan = builder.build();
         assertEquals(
-                3,
+                4,
                 plan.passes().size(),
-                "RPGTool contributes corpus guard + semantic content + modern resource normalization"
+                "RPGTool contributes corpus guard + semantic content + resource normalization + presentation metadata"
         );
 
-        // This profile test only exercises the corpus guard. The semantic/resource passes have
-        // dedicated staging-tree tests because they intentionally read and rewrite resources.
+        // This profile test only exercises the corpus guard. The semantic/resource/presentation
+        // passes have dedicated staging-tree tests because they intentionally read/write resources.
         plan.passes().getFirst().apply(context);
         context.markPassApplied(plan.passes().getFirst().id());
 
