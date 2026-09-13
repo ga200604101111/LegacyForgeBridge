@@ -16,6 +16,7 @@ import dev.longyu.legacyforgebridge.convert.pass.GeneratedModEntrypointPass;
 import dev.longyu.legacyforgebridge.convert.pass.LegacyBytecodeAuditPass;
 import dev.longyu.legacyforgebridge.convert.pass.LegacyLanguageCleanupPass;
 import dev.longyu.legacyforgebridge.convert.pass.LegacyLanguagePass;
+import dev.longyu.legacyforgebridge.convert.pass.LegacyObjPresentationPass;
 import dev.longyu.legacyforgebridge.convert.profile.GenericLegacyModProfile;
 import dev.longyu.legacyforgebridge.convert.profile.RpgTool1Profile;
 
@@ -127,6 +128,9 @@ public final class LegacyConversionEngine {
             // Profiles run while original resource inputs are still available so semantic
             // converters can inspect exact legacy keys/paths before cleanup.
             profile.configure(builder);
+            // Cross-mod presentation normalization consumes whichever modern model definitions the
+            // selected semantic profile emitted; it contains no RPGTool-specific identities.
+            builder.add(new LegacyObjPresentationPass());
             builder.add(new LegacyLanguageCleanupPass());
             builder.add(new GeneratedModEntrypointPass());
             builder.add(new LegacyBytecodeAuditPass());
