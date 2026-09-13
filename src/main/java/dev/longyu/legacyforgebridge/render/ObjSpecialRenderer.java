@@ -14,23 +14,18 @@ import net.minecraft.world.item.ItemDisplayContext;
 
 import java.util.function.Consumer;
 
-/**
- * Generic special-model bridge for converted Forge 1.7 Wavefront item models.
- *
- * <p>Hand contexts retain the profile/extracted legacy scale. Contexts whose primary job is to
- * present an isolated item (GUI, ground and fixed displays) additionally use geometry bounds to
- * center and fit the mesh. This avoids requiring per-mod hardcoded inventory transforms while a
- * future bytecode pass can still emit exact IItemRenderer transforms when they are recoverable.</p>
- */
+/** Generic special-model bridge for converted Forge 1.7 Wavefront item models. */
 public final class ObjSpecialRenderer implements NoDataSpecialModelRenderer {
     private final LegacyObjModel mesh;
     private final Identifier texture;
     private final float scale;
+    private final boolean translucent;
 
-    private ObjSpecialRenderer(LegacyObjModel mesh, Identifier texture, float scale) {
+    private ObjSpecialRenderer(LegacyObjModel mesh, Identifier texture, float scale, boolean translucent) {
         this.mesh = mesh;
         this.texture = texture;
         this.scale = scale;
+        this.translucent = translucent;
     }
 
     @Override
@@ -65,7 +60,7 @@ public final class ObjSpecialRenderer implements NoDataSpecialModelRenderer {
         float finalScale = renderScale;
         submitNodeCollector.submitCustomGeometry(
                 poseStack,
-                RenderTypes.entityCutoutNoCull(texture),
+                translucent ? RenderTypes.entityTranslucent(texture) : RenderTypes.entityCutoutNoCull(texture),
                 (pose, buffer) -> mesh.render(
                         pose,
                         buffer,
@@ -85,17 +80,23 @@ public final class ObjSpecialRenderer implements NoDataSpecialModelRenderer {
         mesh.emitExtents(output, scale);
     }
 
-    public record Unbaked(Identifier model, Identifier texture, float scale) implements SpecialModelRenderer.Unbaked {
+    public record Unbaked(
+            Identifier model,
+            Identifier texture,
+            float scale,
+            boolean translucent
+    ) implements SpecialModelRenderer.Unbaked {
         public static final MapCodec<Unbaked> MAP_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
                 Identifier.CODEC.fieldOf("model").forGetter(Unbaked::model),
                 Identifier.CODEC.fieldOf("texture").forGetter(Unbaked::texture),
-                Codec.FLOAT.optionalFieldOf("scale", 1.0F).forGetter(Unbaked::scale)
+                Codec.FLOAT.optionalFieldOf("scale", 1.0F).forGetter(Unbaked::scale),
+                Codec.BOOL.optionalFieldOf("translucent", false).forGetter(Unbaked::translucent)
         ).apply(instance, Unbaked::new));
 
         @Override
         public SpecialModelRenderer bake(SpecialModelRenderer.BakingContext context) {
             try {
-                return new ObjSpecialRenderer(LegacyObjModel.load(model), texture, scale);
+                return new ObjSpecialRenderer(LegacyObjModel.load(model), texture, scale, translucent);
             } catch (Exception exception) {
                 LegacyForgeBridge.LOGGER.error("Failed to bake converted OBJ model {}", model, exception);
                 return null;
