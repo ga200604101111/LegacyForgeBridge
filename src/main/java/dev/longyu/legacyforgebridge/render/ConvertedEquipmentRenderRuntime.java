@@ -6,6 +6,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.mojang.blaze3d.vertex.PoseStack;
 import dev.longyu.legacyforgebridge.LegacyForgeBridge;
+import dev.longyu.legacyforgebridge.convert.pass.GeneratedModEntrypointPass;
 import dev.longyu.legacyforgebridge.convert.runtime.ConvertedContentRuntime;
 import net.fabricmc.fabric.api.client.rendering.v1.ArmorRenderer;
 import net.fabricmc.loader.api.FabricLoader;
@@ -28,93 +29,118 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Client runtime for manifest-driven legacy equipment rendering.
- *
- * <p>No legacy mod ID is referenced here. Any converted candidate can attach an
- * {@code equipmentRender} object to an item in {@code converted-content.json}; the same renderer
- * then resolves the declared OBJ parts, textures, anchor and bounds-based fit.</p>
- */
+/** Client runtime for manifest-driven legacy equipment rendering. */
 public final class ConvertedEquipmentRenderRuntime {
-    private static volatile Map<Identifier, Definition> definitions = Map.of();
+    private static final Map<Identifier, Definition> DEFINITIONS = new ConcurrentHashMap<>();
     private static final Map<String, Optional<Identifier>> TEXTURE_CACHE = new ConcurrentHashMap<>();
+    private static final Set<String> INITIALIZED_MODS = ConcurrentHashMap.newKeySet();
 
     private ConvertedEquipmentRenderRuntime() {
     }
 
+    /** Compatibility scan for alpha.18-and-older resource-only candidates. */
     public static void initialize() {
-        Map<Identifier, Definition> discovered = new LinkedHashMap<>();
-        List<Item> renderedItems = new ArrayList<>();
-
         for (ModContainer container : FabricLoader.getInstance().getAllMods()) {
-            var manifestPath = container.findPath(ConvertedContentRuntime.MANIFEST_PATH);
-            if (manifestPath.isEmpty()) {
+            if (container.findPath(ConvertedContentRuntime.MANIFEST_PATH).isEmpty()) {
                 continue;
             }
-            try {
-                JsonObject root = readJson(manifestPath.get());
-                JsonArray items = root.getAsJsonArray("items");
-                if (items == null) {
-                    continue;
-                }
-                for (JsonElement element : items) {
-                    if (!element.isJsonObject()) {
-                        continue;
-                    }
-                    JsonObject itemDefinition = element.getAsJsonObject();
-                    JsonObject render = object(itemDefinition, "equipmentRender");
-                    if (render == null) {
-                        continue;
-                    }
-                    Identifier itemId = Identifier.parse(requiredString(itemDefinition, "id"));
-                    Definition definition = parse(render);
-                    if (definition.parts().isEmpty()) {
-                        continue;
-                    }
-                    discovered.put(itemId, definition);
-                    if (BuiltInRegistries.ITEM.containsKey(itemId)) {
-                        renderedItems.add((Item) BuiltInRegistries.ITEM.getValue(itemId));
-                    }
-                }
-            } catch (Exception exception) {
-                LegacyForgeBridge.LOGGER.error(
-                        "Failed to read converted equipment render metadata from {}",
-                        container.getMetadata().getId(),
-                        exception
-                );
+            if (container.findPath(GeneratedModEntrypointPass.MARKER_PATH).isPresent()) {
+                continue;
             }
+            initializeContainer(container, "legacy-compat-scan");
+        }
+    }
+
+    /** Called by the generated client entrypoint contained by a converted mod JAR. */
+    public static void initializeMod(String modId) {
+        ModContainer container = FabricLoader.getInstance().getModContainer(modId).orElse(null);
+        if (container == null) {
+            LegacyForgeBridge.LOGGER.error("Converted client bootstrap could not resolve its Fabric container: {}", modId);
+            return;
+        }
+        initializeContainer(container, "converted-mod-entrypoint");
+    }
+
+    private static void initializeContainer(ModContainer container, String source) {
+        String modId = container.getMetadata().getId();
+        if (!INITIALIZED_MODS.add(modId)) {
+            return;
         }
 
-        definitions = Map.copyOf(discovered);
+        var manifestPath = container.findPath(ConvertedContentRuntime.MANIFEST_PATH);
+        if (manifestPath.isEmpty()) {
+            INITIALIZED_MODS.remove(modId);
+            return;
+        }
+
+        List<Item> renderedItems = new ArrayList<>();
+        int discoveredDefinitions = 0;
+        try {
+            JsonObject root = readJson(manifestPath.get());
+            JsonArray items = root.getAsJsonArray("items");
+            if (items == null) {
+                return;
+            }
+            for (JsonElement element : items) {
+                if (!element.isJsonObject()) {
+                    continue;
+                }
+                JsonObject itemDefinition = element.getAsJsonObject();
+                JsonObject render = object(itemDefinition, "equipmentRender");
+                if (render == null) {
+                    continue;
+                }
+                Identifier itemId = Identifier.parse(requiredString(itemDefinition, "id"));
+                Definition definition = parse(render);
+                if (definition.parts().isEmpty()) {
+                    continue;
+                }
+                DEFINITIONS.put(itemId, definition);
+                discoveredDefinitions++;
+                if (BuiltInRegistries.ITEM.containsKey(itemId)) {
+                    renderedItems.add((Item) BuiltInRegistries.ITEM.getValue(itemId));
+                }
+            }
+        } catch (Exception exception) {
+            INITIALIZED_MODS.remove(modId);
+            LegacyForgeBridge.LOGGER.error(
+                    "Failed to read converted equipment render metadata from {}",
+                    modId,
+                    exception
+            );
+            return;
+        }
+
         TEXTURE_CACHE.clear();
         LegacyObjModel.clearCache();
 
         if (!renderedItems.isEmpty()) {
             ArmorRenderer.register(new ManifestArmorRenderer(), renderedItems.toArray(Item[]::new));
         }
-        if (!definitions.isEmpty()) {
-            LegacyForgeBridge.LOGGER.info(
-                    "Registered generic converted equipment renderers: definitions={}, items={}",
-                    definitions.size(),
-                    renderedItems.size()
-            );
-        }
+        LegacyForgeBridge.LOGGER.info(
+                "Converted mod registered its equipment presentation: mod={}, source={}, definitions={}, items={}",
+                modId,
+                source,
+                discoveredDefinitions,
+                renderedItems.size()
+        );
     }
 
     static Definition definition(Identifier itemId) {
-        return definitions.get(itemId);
+        return DEFINITIONS.get(itemId);
     }
 
     private static Definition parse(JsonObject object) {
         String anchor = string(object, "anchor", "root");
         boolean autoCenter = bool(object, "autoCenter", true);
         float fit = number(object, "fit", 1.0F);
+        boolean translucent = bool(object, "translucent", false);
         List<Part> parts = new ArrayList<>();
         JsonArray partArray = object.getAsJsonArray("parts");
         if (partArray != null) {
@@ -139,7 +165,7 @@ public final class ConvertedEquipmentRenderRuntime {
                 parts.add(new Part(model, List.copyOf(textures)));
             }
         }
-        return new Definition(anchor, autoCenter, fit, List.copyOf(parts));
+        return new Definition(anchor, autoCenter, fit, translucent, List.copyOf(parts));
     }
 
     private static final class ManifestArmorRenderer implements ArmorRenderer {
@@ -154,7 +180,7 @@ public final class ConvertedEquipmentRenderRuntime {
                 HumanoidModel<HumanoidRenderState> contextModel
         ) {
             Identifier itemId = BuiltInRegistries.ITEM.getKey(stack.getItem());
-            Definition definition = definitions.get(itemId);
+            Definition definition = DEFINITIONS.get(itemId);
             if (definition == null) {
                 return;
             }
@@ -191,7 +217,9 @@ public final class ConvertedEquipmentRenderRuntime {
                 float finalScale = renderScale;
                 queue.submitCustomGeometry(
                         matrices,
-                        RenderTypes.entityCutoutNoCull(part.texture()),
+                        definition.translucent()
+                                ? RenderTypes.entityTranslucent(part.texture())
+                                : RenderTypes.entityCutoutNoCull(part.texture()),
                         (pose, buffer) -> part.model().render(
                                 pose,
                                 buffer,
@@ -221,7 +249,6 @@ public final class ConvertedEquipmentRenderRuntime {
             case "left_leg" -> model.leftLeg.translateAndRotate(matrices);
             case "right_leg" -> model.rightLeg.translateAndRotate(matrices);
             default -> {
-                // root/entity-local coordinates
             }
         }
     }
@@ -278,7 +305,7 @@ public final class ConvertedEquipmentRenderRuntime {
         return value != null && value.isJsonPrimitive() ? value.getAsFloat() : fallback;
     }
 
-    record Definition(String anchor, boolean autoCenter, float fit, List<Part> parts) {
+    record Definition(String anchor, boolean autoCenter, float fit, boolean translucent, List<Part> parts) {
     }
 
     record Part(Identifier model, List<Identifier> textures) {
