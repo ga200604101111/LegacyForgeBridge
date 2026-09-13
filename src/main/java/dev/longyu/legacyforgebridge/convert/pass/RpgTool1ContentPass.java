@@ -149,7 +149,7 @@ public final class RpgTool1ContentPass implements ConversionPass {
         context.diagnostics().info(
                 "LFB-RPGTOOL-LANG-0001",
                 SupportLevel.ADAPTED,
-                "Promoted " + promotedTranslations + " RPGTool legacy item-name translations to modern item.<namespace>.<path> keys for zh_cn and zh_tw."
+                "Promoted " + promotedTranslations + " RPGTool legacy item-name translations to modern item.<namespace>.<path> keys for source locale zh_cn only; no zh_tw fallback is synthesized."
         );
         context.diagnostics().warning(
                 "LFB-RPGTOOL-BEHAVIOR-0001",
@@ -333,12 +333,10 @@ public final class RpgTool1ContentPass implements ConversionPass {
             }
         }
 
-        for (String locale : List.of("zh_cn", "zh_tw")) {
-            Path output = context.stagingDir().resolve("assets/" + NAMESPACE + "/lang/" + locale + ".json");
-            JsonObject translations = readObject(output);
-            modern.forEach(translations::addProperty);
-            writeJson(output, translations);
-        }
+        Path output = context.stagingDir().resolve("assets/" + NAMESPACE + "/lang/zh_cn.json");
+        JsonObject translations = readObject(output);
+        modern.forEach(translations::addProperty);
+        writeJson(output, translations);
         return count;
     }
 
