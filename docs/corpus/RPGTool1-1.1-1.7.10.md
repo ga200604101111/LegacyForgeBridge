@@ -67,7 +67,7 @@ assets/rpgtool1/textures/circle/buff2.obj
 assets/rpgtool1/textures/circle/buff3.obj
 ```
 
-The old client uses `IItemRenderer`, `AdvancedModelLoader` / `IModelCustom` and direct `GL11` transforms. The alpha.14/alpha.15 test slice replaces the **weapon** renderer with LFB's modern 1.21.11 `SpecialModelRenderer` + `SubmitNodeCollector.submitCustomGeometry` OBJ path. The mixed-case `items3D` directory is normalized to `items3d` because modern resource identifiers reject uppercase path characters.
+The old client uses `IItemRenderer`, `AdvancedModelLoader` / `IModelCustom` and direct `GL11` transforms. Converted OBJ parsing/rendering is owned by the generic LegacyForgeBridge renderer; RPGTool only supplies corpus-known model identities until automatic renderer-bytecode extraction is complete.
 
 ### Legacy gameplay behavior observed
 
@@ -76,14 +76,13 @@ The real classes also implement behavior which is intentionally tracked separate
 - weapon attack/defense/lifesteal gem NBT;
 - skill gems such as night vision, underwater breathing, range attack and charged attacks;
 - wing jump boost and fall-damage cancellation;
-- equipped wing/circle rendering;
 - legacy recipes and event-bus hooks.
 
 Those behaviors are not claimed complete merely because the content candidate loads.
 
 ## Semantic conversion slice
 
-For the exact SHA, `RpgTool1Profile` contributes:
+For the exact SHA, `RpgTool1Profile` contributes corpus data to the common conversion engine:
 
 ```text
 common resource copy
@@ -97,12 +96,20 @@ common resource copy
    -> emit modern item model definitions
    -> map 20 weapon OBJ models to legacyforgebridge:obj
    -> promote item translations to item.rpgtool1.<id>
-   -> mirror source zh_CN item names into zh_cn + zh_tw for testing
+   -> preserve only source-provided locale zh_CN as modern zh_cn
    -> record item/translation identities in manifest
+-> modern resource path normalization
+-> corpus presentation metadata
+   -> emit the original mod-owned creative group through generic creativeTabs schema
+   -> emit wing/circle OBJ declarations through generic equipmentRender schema
 -> legacy language cleanup
 -> final staged-bytecode audit
 -> Fabric candidate writer
 ```
+
+The converter **does not synthesize `zh_tw`** when the source mod does not provide it. Locale migration preserves source locale availability rather than translating or copying another locale.
+
+The runtime presentation features are not RPGTool-specific. `ConvertedContentRuntime` creates any manifest-declared custom creative group, and `ConvertedEquipmentRenderRuntime` registers any manifest-declared wearable OBJ model. RPGTool is the first corpus supplying those definitions.
 
 The candidate embeds:
 
@@ -118,42 +125,17 @@ rpgtool1=1.0
 
 rather than being rejected as a missing client mod by a Forge 1.7.10 server.
 
-## alpha.15 managed activation
+## Managed activation
 
-The first real alpha.14 `old-mods` live test confirmed that the exact RPGTool source is discovered, analyzed and converted to a `PARTIAL` loader-safe candidate, but also demonstrated the Fabric lifecycle boundary: a JAR generated during `ModInitializer` cannot become a new Fabric mod in that same launch.
-
-alpha.15 adds the missing managed activation layer:
+Fabric Loader discovers mods before `LegacyForgeBridge.onInitialize()` runs. Generated candidates are therefore staged across launches under LFB management. Cache identity remains:
 
 ```text
-launch 1
-old-mods/RPGTool1-1.1-1.7.10.jar
--> exact SHA/profile conversion
--> legacy-cache/converted/...candidate.jar
--> mods/legacyforgebridge-converted-rpgtool1.jar
--> RESTART_REQUIRED
-
-launch 2
-Fabric Loader loads legacyforgebridge-converted-rpgtool1.jar
--> ConvertedContentRuntime sees converted-content.json
--> 71 modern item definitions become available to LFB runtime
--> source SHA + converter version still match
--> analysis/conversion skipped
--> state becomes LOADED
+converter version + source SHA-256
 ```
 
-If the source JAR is updated, even under the same filename, its SHA changes and the candidate is rebuilt. If the previous managed JAR is already loaded on Windows, LFB writes a pending replacement and a JDK-only helper swaps it after Minecraft exits instead of mutating the live JAR. Removed old-mod sources retire their managed converted JARs as well.
-
-Progress and update state are observable in:
-
-```text
-latest.log
-legacy-cache/conversion-state.json
-legacy-cache/RESTART_REQUIRED.txt   # only while restart is required
-```
+The alpha.17 converter version bump forces RPGTool to be regenerated so older candidates containing synthesized `zh_tw`, vanilla creative-tab placement, or missing wearable presentation metadata cannot remain silently cached.
 
 ## Current acceptance boundary
-
-alpha.15 is a **managed live-test candidate**, not a claim that every RPGTool gameplay feature is already ported.
 
 Expected testable surface after the activation restart:
 
@@ -161,12 +143,13 @@ Expected testable surface after the activation restart:
 Fabric Loader loads the managed converted candidate
 legacy Forge classes do not enter the modern class path
 71 RPGTool registry identities exist on the client
-item names/icons load
-weapon durability and base attack values are reconstructed
-20 weapon OBJ assets use the modern LFB OBJ renderer
+source zh_cn item names/icons load without an invented zh_tw locale
+the mod receives its own converted creative group instead of dumping all items into vanilla groups
+weapon OBJ assets use the generic bounds-aware special renderer for GUI/ground/fixed contexts
+wing/circle items register the generic manifest-driven worn OBJ renderer
 FML Client ModList can advertise rpgtool1=1.0
 unchanged source/converter skips repeated conversion
-updated source SHA forces deterministic rebuild and managed replacement
+updated source SHA or converter version forces deterministic rebuild and managed replacement
 ```
 
 Still expected to require follow-up semantic work:
@@ -176,9 +159,7 @@ gem socketing/effects
 skill combat behavior
 recipes
 wing movement/fall behavior
-equipped wing OBJ rendering
-equipped circle/aura OBJ rendering
-modded numeric registry packet remapping if Via exposes a gap during live server testing
+exact legacy IItemRenderer GL11 per-context transforms where bytecode extraction has not yet recovered them
 ```
 
-The real server test is authoritative for those runtime boundaries.
+The real server test remains authoritative for runtime positioning and texture-candidate validation.
