@@ -21,9 +21,6 @@
       "dev.longyu.legacyforgebridge.protocol.ViaFabricPlusEntrypoint"
     ]
   },
-  "mixins": [
-    "legacyforgebridge.client.mixins.json"
-  ],
   "depends": {
     "fabricloader": ">=0.19.3",
     "minecraft": "1.21.11",
