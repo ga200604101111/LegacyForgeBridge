@@ -1,6 +1,7 @@
 package dev.longyu.legacyforgebridge;
 
 import dev.longyu.legacyforgebridge.convert.LegacyConversionManager;
+import dev.longyu.legacyforgebridge.convert.runtime.ConvertedContentRuntime;
 import dev.longyu.legacyforgebridge.network.FmlConnectionTrace;
 import net.fabricmc.api.ModInitializer;
 import org.slf4j.Logger;
@@ -17,6 +18,15 @@ public final class LegacyForgeBridge implements ModInitializer {
         // One deterministic trace file per Minecraft launch. This is intentionally initialized
         // before any connection attempt so the previous launch's trace is cleared immediately.
         FmlConnectionTrace.INSTANCE.initializeForLaunch();
+
+        // Converted candidates are ordinary Fabric resource containers whose legacy classes were
+        // removed by the conversion engine. Register their modern runtime-backed content before
+        // networking starts so Forge registry identities have real client objects to target.
+        try {
+            ConvertedContentRuntime.initialize();
+        } catch (Exception exception) {
+            LOGGER.error("Converted legacy content registration failed for this launch.", exception);
+        }
 
         try {
             LegacyConversionManager manager = new LegacyConversionManager();
