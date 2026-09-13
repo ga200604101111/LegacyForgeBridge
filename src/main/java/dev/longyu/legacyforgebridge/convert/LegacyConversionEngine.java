@@ -27,8 +27,8 @@ import java.util.Optional;
 import java.util.stream.Stream;
 
 /**
- * Internal conversion API. The first slice intentionally produces staged candidates instead of
- * pretending that untouched Forge bytecode is already a runnable Fabric port.
+ * Internal conversion API. Profile passes may replace legacy bytecode with modern runtime-backed
+ * content, after which the final bytecode audit evaluates what will actually enter Fabric.
  */
 public final class LegacyConversionEngine {
     private final LegacyJarAnalyzer analyzer;
@@ -119,9 +119,12 @@ public final class LegacyConversionEngine {
             profile.inspect(context);
             ConversionPlan.Builder builder = ConversionPlan.builder(profile.id())
                     .add(new CopyLegacyJarPass())
-                    .add(new LegacyLanguagePass())
-                    .add(new LegacyBytecodeAuditPass());
+                    .add(new LegacyLanguagePass());
+
+            // Profiles run before the final audit so an exact semantic converter can remove or
+            // replace old Forge classes. The audit then judges staged output, not historical input.
             profile.configure(builder);
+            builder.add(new LegacyBytecodeAuditPass());
             ConversionPlan plan = builder.build();
 
             for (var pass : plan.passes()) {
