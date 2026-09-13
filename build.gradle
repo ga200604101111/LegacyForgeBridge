@@ -43,8 +43,79 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
+// The user supplied original 1.7.10 .lang files. Keep those filtered message sources in the
+// repository, but generate modern JSON using collision-free LFB alias keys. This lets Minecraft's
+// normal language stack select zh_tw/en_us while ensuring no 1.7.10 item/block/UI key can replace
+// a same-named 1.21.11 translation globally.
+def generatedLegacyLangDir = layout.buildDirectory.dir('generated/legacy-language-resources')
+
+tasks.register('generateLegacyLanguageAliases') {
+    inputs.files(fileTree('src/main/resources/assets/lfb-minecraft/legacy-lang') { include '**/*.lang' })
+    inputs.files(fileTree('src/main/resources/assets/lfb-forge/legacy-lang') { include '**/*.lang' })
+    outputs.dir(generatedLegacyLangDir)
+
+    doLast {
+        def parseParts = { File sourceDir, String aliasPrefix ->
+            def translations = new LinkedHashMap<String, String>()
+            if (!sourceDir.exists()) {
+                return translations
+            }
+
+            fileTree(sourceDir).matching { include '*.lang' }.files.sort { it.name }.each { File langFile ->
+                langFile.eachLine('UTF-8') { String line ->
+                    if (line.isEmpty() || line.startsWith('#')) {
+                        return
+                    }
+                    int separator = line.indexOf('=')
+                    if (separator <= 0) {
+                        return
+                    }
+
+                    String key = line.substring(0, separator)
+                    String value = line.substring(separator + 1)
+                    value = value.replaceAll(/%(\d+\$)?[\d.]*[df]/) { String whole, String index ->
+                        '%' + (index ?: '') + 's'
+                    }
+                    translations.put(aliasPrefix + key, value)
+                }
+            }
+            return translations
+        }
+
+        def writeLanguage = { String namespace, String language, String aliasPrefix ->
+            File sourceDir = file("src/main/resources/assets/${namespace}/legacy-lang/${language}")
+            def translations = parseParts(sourceDir, aliasPrefix)
+            if (translations.isEmpty()) {
+                return
+            }
+
+            File outputFile = generatedLegacyLangDir.get()
+                    .file("assets/${namespace}/lang/${language}.json")
+                    .asFile
+            outputFile.parentFile.mkdirs()
+            outputFile.setText(
+                    groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(translations)) + '\n',
+                    'UTF-8'
+            )
+        }
+
+        ['en_us', 'zh_tw'].each { String language ->
+            writeLanguage('lfb-minecraft', language, 'lfb.minecraft.')
+            writeLanguage('lfb-forge', language, 'lfb.forge.')
+        }
+    }
+}
+
 processResources {
+    dependsOn tasks.named('generateLegacyLanguageAliases')
     inputs.property 'version', project.version
+
+    // Source .lang files are build inputs only. Ship the generated JSON aliases, not duplicate
+    // runtime catalogues.
+    exclude 'assets/lfb-minecraft/legacy-lang/**'
+    exclude 'assets/lfb-forge/legacy-lang/**'
+    from(generatedLegacyLangDir)
+
     filesMatching('fabric.mod.json') {
         expand 'version': project.version
     }
