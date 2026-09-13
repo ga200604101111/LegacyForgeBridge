@@ -6,6 +6,7 @@ import com.viaversion.nbt.tag.CompoundTag;
 import com.viaversion.nbt.tag.StringTag;
 import com.viaversion.viaversion.api.connection.UserConnection;
 import com.viaversion.viaversion.rewriter.text.ComponentRewriterBase;
+import dev.longyu.legacyforgebridge.compat.LegacyTranslationBridge;
 import dev.longyu.legacyforgebridge.protocol.ViaFabricPlusBackend;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -16,14 +17,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import java.util.IdentityHashMap;
 
 /**
- * Keeps the original 1.7.10 translatable-component key while allowing ViaVersion to perform all
- * other component/protocol conversion work.
+ * Keeps selected 1.7.10 server-message translation keys intact while allowing ViaVersion to
+ * perform every other component/protocol conversion normally.
  *
- * <p>ViaVersion normally rewrites/removes translation keys as packets cross version boundaries;
- * some removed keys are replaced with an English fallback string. For a real 1.7.10 session LFB
- * owns the legacy language catalogue, so the key itself is the compatibility identity we need to
- * preserve. We therefore snapshot the key before each ViaVersion component rewriter and restore it
- * afterwards. Hover/click/NBT/component-format conversion is not bypassed.</p>
+ * <p>Item/block/entity/container translation keys are deliberately not captured, so ViaVersion
+ * can still map those to their modern identities and Minecraft 1.21.11 keeps rendering modern
+ * content names.</p>
  */
 @Mixin(value = ComponentRewriterBase.class, remap = false)
 public abstract class ViaComponentTranslationMixin {
@@ -45,8 +44,13 @@ public abstract class ViaComponentTranslationMixin {
         }
 
         JsonElement translate = object.get("translate");
-        if (translate != null && translate.isJsonPrimitive() && translate.getAsJsonPrimitive().isString()) {
-            LFB_JSON_KEYS.get().put(object, translate.getAsString());
+        if (translate == null || !translate.isJsonPrimitive() || !translate.getAsJsonPrimitive().isString()) {
+            return;
+        }
+
+        String key = translate.getAsString();
+        if (LegacyTranslationBridge.shouldPreserveKey(key)) {
+            LFB_JSON_KEYS.get().put(object, key);
         }
     }
 
@@ -77,7 +81,7 @@ public abstract class ViaComponentTranslationMixin {
         }
 
         StringTag translate = tag.getStringTag("translate");
-        if (translate != null) {
+        if (translate != null && LegacyTranslationBridge.shouldPreserveKey(translate.getValue())) {
             LFB_NBT_KEYS.get().put(tag, translate.getValue());
         }
     }
@@ -91,10 +95,7 @@ public abstract class ViaComponentTranslationMixin {
         IdentityHashMap<CompoundTag, String> keys = LFB_NBT_KEYS.get();
         String original = keys.remove(tag);
         if (original != null) {
-            StringTag translate = tag.getStringTag("translate");
-            if (translate != null) {
-                translate.setValue(original);
-            }
+            tag.putString("translate", original);
         }
         if (keys.isEmpty()) {
             LFB_NBT_KEYS.remove();
