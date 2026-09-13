@@ -1,5 +1,6 @@
 package dev.longyu.legacyforgebridge.convert;
 
+import dev.longyu.legacyforgebridge.convert.pass.GeneratedModEntrypointPass;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -14,22 +15,25 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ManagedCandidateInstallerTest {
+    private static final String OUTPUT_NAME = "RPGTool1-1.1-1.7.10-lfb.jar";
+
     @TempDir
     Path tempDir;
 
     @Test
-    void stagesOnceSkipsIdenticalAndReplacesChangedInactiveCandidate() throws Exception {
+    void stagesWithSourceDerivedNameSkipsIdenticalAndReplacesChangedInactiveCandidate() throws Exception {
         Path mods = tempDir.resolve("mods");
         Path cache = tempDir.resolve("legacy-cache");
         ManagedCandidateInstaller installer = new ManagedCandidateInstaller(mods, cache, false);
 
-        Path first = candidate(tempDir.resolve("first.jar"), "one", false);
+        Path first = candidate(tempDir.resolve("a").resolve(OUTPUT_NAME), "one", false);
         assertTrue(installer.isLoaderSafeCandidate(first));
 
         ManagedCandidateInstaller.StageResult initial = installer.stage(first, "rpgtool1", false);
         assertTrue(initial.changed());
         assertTrue(initial.restartRequired());
         assertFalse(initial.pendingSwap());
+        assertEquals(OUTPUT_NAME, initial.managedJar().getFileName().toString());
         assertTrue(Files.isRegularFile(initial.managedJar()));
         assertEquals(Hashing.sha256(first), Hashing.sha256(initial.managedJar()));
 
@@ -37,11 +41,29 @@ class ManagedCandidateInstallerTest {
         assertFalse(unchanged.changed());
         assertFalse(unchanged.restartRequired());
 
-        Path second = candidate(tempDir.resolve("second.jar"), "two", false);
+        Path second = candidate(tempDir.resolve("b").resolve(OUTPUT_NAME), "two", false);
         ManagedCandidateInstaller.StageResult replaced = installer.stage(second, "rpgtool1", false);
         assertTrue(replaced.changed());
         assertFalse(replaced.pendingSwap());
         assertEquals(Hashing.sha256(second), Hashing.sha256(replaced.managedJar()));
+    }
+
+    @Test
+    void deletedManagedModIsRestagedFromCachedCandidate() throws Exception {
+        Path mods = tempDir.resolve("mods");
+        Path cache = tempDir.resolve("legacy-cache");
+        ManagedCandidateInstaller installer = new ManagedCandidateInstaller(mods, cache, false);
+        Path candidate = candidate(tempDir.resolve("converted").resolve(OUTPUT_NAME), "one", false);
+
+        ManagedCandidateInstaller.StageResult initial = installer.stage(candidate, "rpgtool1", false);
+        Files.delete(initial.managedJar());
+        assertFalse(Files.exists(initial.managedJar()));
+
+        ManagedCandidateInstaller.StageResult repaired = installer.stage(candidate, "rpgtool1", false);
+        assertTrue(repaired.changed());
+        assertTrue(repaired.restartRequired());
+        assertEquals(OUTPUT_NAME, repaired.managedJar().getFileName().toString());
+        assertEquals(Hashing.sha256(candidate), Hashing.sha256(repaired.managedJar()));
     }
 
     @Test
@@ -50,8 +72,8 @@ class ManagedCandidateInstallerTest {
         Path cache = tempDir.resolve("legacy-cache");
         ManagedCandidateInstaller installer = new ManagedCandidateInstaller(mods, cache, false);
 
-        Path first = candidate(tempDir.resolve("first.jar"), "one", false);
-        Path second = candidate(tempDir.resolve("second.jar"), "two", false);
+        Path first = candidate(tempDir.resolve("a").resolve(OUTPUT_NAME), "one", false);
+        Path second = candidate(tempDir.resolve("b").resolve(OUTPUT_NAME), "two", false);
         ManagedCandidateInstaller.StageResult initial = installer.stage(first, "rpgtool1", false);
         String liveHash = Hashing.sha256(initial.managedJar());
 
@@ -66,23 +88,28 @@ class ManagedCandidateInstallerTest {
     }
 
     @Test
-    void legacyClassBearingJarIsNeverLoaderSafe() throws Exception {
+    void generatedModernWrapperIsAllowedButOriginalLegacyClassIsRejected() throws Exception {
         ManagedCandidateInstaller installer = new ManagedCandidateInstaller(
                 tempDir.resolve("mods"),
                 tempDir.resolve("legacy-cache"),
                 false
         );
-        Path unsafe = candidate(tempDir.resolve("unsafe.jar"), "unsafe", true);
+        Path safe = candidate(tempDir.resolve("safe").resolve(OUTPUT_NAME), "safe", false);
+        Path unsafe = candidate(tempDir.resolve("unsafe").resolve(OUTPUT_NAME), "unsafe", true);
+        assertTrue(installer.isLoaderSafeCandidate(safe));
         assertFalse(installer.isLoaderSafeCandidate(unsafe));
     }
 
-    private static Path candidate(Path path, String marker, boolean withClass) throws Exception {
+    private static Path candidate(Path path, String marker, boolean withLegacyClass) throws Exception {
+        Files.createDirectories(path.getParent());
         try (JarOutputStream output = new JarOutputStream(Files.newOutputStream(path))) {
             add(output, "fabric.mod.json", "{\"schemaVersion\":1,\"id\":\"rpgtool1\",\"version\":\"1.0\"}");
             add(output, "legacyforgebridge/converted-content.json", "{\"sourceSha256\":\"" + marker + "\",\"items\":[]}");
+            add(output, GeneratedModEntrypointPass.MARKER_PATH, "dev.longyu.legacyforgebridge.generated.rpgtool1.ConvertedModEntrypoint\n");
+            add(output, "dev/longyu/legacyforgebridge/generated/rpgtool1/ConvertedModEntrypoint.class", "generated-modern-bytecode");
             add(output, "assets/rpgtool1/test.txt", marker);
-            if (withClass) {
-                add(output, "legacy/Unsafe.class", "not-a-real-class");
+            if (withLegacyClass) {
+                add(output, "legacy/Unsafe.class", "legacy-bytecode");
             }
         }
         return path;
