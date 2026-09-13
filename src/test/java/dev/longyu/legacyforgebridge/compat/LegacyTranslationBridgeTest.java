@@ -2,7 +2,9 @@ package dev.longyu.legacyforgebridge.compat;
 
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LegacyTranslationBridgeTest {
@@ -36,5 +38,20 @@ class LegacyTranslationBridgeTest {
         assertTrue(LegacyTranslationBridge.shouldPreserveKey("forge.update.newversion"));
         assertTrue(LegacyTranslationBridge.shouldPreserveKey("forge.texture.preload.warning"));
         assertTrue(LegacyTranslationBridge.shouldPreserveKey("forge.client.shutdown.internal"));
+    }
+
+    @Test
+    void loadsSuppliedTraditionalChineseMessageDataWithoutItemNames() {
+        LegacyLanguageCatalog.clearCache();
+        assertEquals(
+                "--- 顯示說明第 %s/%s 頁 (/help <頁數>) ---",
+                LegacyLanguageCatalog.lookupForLanguage("zh_tw", "commands.help.header")
+        );
+        assertEquals(
+                "警告：材質 %s 未被預載，可能會導致畫面異常！",
+                LegacyLanguageCatalog.lookupForLanguage("zh_tw", "forge.texture.preload.warning")
+        );
+        assertNull(LegacyLanguageCatalog.lookupForLanguage("zh_tw", "item.swordIron.name"));
+        assertNull(LegacyLanguageCatalog.lookupForLanguage("zh_tw", "tile.stone.name"));
     }
 }
