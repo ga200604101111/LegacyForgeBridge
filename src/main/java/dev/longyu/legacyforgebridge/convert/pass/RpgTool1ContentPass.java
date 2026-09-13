@@ -16,6 +16,7 @@ import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -88,6 +89,7 @@ public final class RpgTool1ContentPass implements ConversionPass {
 
         int removedClasses = removeLegacyClasses(context.stagingDir());
         Files.deleteIfExists(context.stagingDir().resolve("mcmod.info"));
+        int normalizedObjResources = normalizeObjResourceDirectory(context.stagingDir());
 
         JsonObject content = new JsonObject();
         content.addProperty("schemaVersion", 1);
@@ -141,7 +143,8 @@ public final class RpgTool1ContentPass implements ConversionPass {
         context.diagnostics().info(
                 "LFB-RPGTOOL-OBJ-0001",
                 SupportLevel.ADAPTED,
-                "Mapped all 20 RPGTool weapon OBJ resources to the LegacyForgeBridge 1.21.11 special-model renderer."
+                "Mapped all 20 RPGTool weapon OBJ resources to the LegacyForgeBridge 1.21.11 special-model renderer; normalized "
+                        + normalizedObjResources + " legacy items3D resources to lowercase items3d identifiers."
         );
         context.diagnostics().info(
                 "LFB-RPGTOOL-LANG-0001",
@@ -197,6 +200,43 @@ public final class RpgTool1ContentPass implements ConversionPass {
         return classes.size();
     }
 
+    /**
+     * The original artifact uses the mixed-case directory {@code textures/items3D}. Modern
+     * resource identifiers reject uppercase characters, so normalize it before item-model JSON is
+     * emitted. The temporary two-step copy also works on case-insensitive Windows filesystems.
+     */
+    private static int normalizeObjResourceDirectory(Path stagingDir) throws IOException {
+        Path source = stagingDir.resolve("assets/" + NAMESPACE + "/textures/items3D");
+        if (!Files.isDirectory(source)) {
+            return 0;
+        }
+
+        Path temporary = stagingDir.resolve(".lfb-rpgtool-items3d");
+        deleteTree(temporary);
+        Files.createDirectories(temporary);
+        int copied = 0;
+        try (Stream<Path> stream = Files.walk(source)) {
+            for (Path path : stream.sorted().toList()) {
+                Path relative = source.relativize(path);
+                Path target = temporary.resolve(relative.toString());
+                if (Files.isDirectory(path)) {
+                    Files.createDirectories(target);
+                } else {
+                    Files.createDirectories(target.getParent());
+                    Files.copy(path, target, StandardCopyOption.REPLACE_EXISTING);
+                    copied++;
+                }
+            }
+        }
+
+        deleteTree(source);
+        Path target = stagingDir.resolve("assets/" + NAMESPACE + "/textures/items3d");
+        deleteTree(target);
+        Files.createDirectories(target.getParent());
+        Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
+        return copied;
+    }
+
     private static void pruneEmptyDirectories(Path root) throws IOException {
         try (Stream<Path> stream = Files.walk(root)) {
             for (Path path : stream.sorted(Comparator.reverseOrder()).toList()) {
@@ -208,6 +248,17 @@ public final class RpgTool1ContentPass implements ConversionPass {
                         Files.deleteIfExists(path);
                     }
                 }
+            }
+        }
+    }
+
+    private static void deleteTree(Path root) throws IOException {
+        if (!Files.exists(root)) {
+            return;
+        }
+        try (Stream<Path> stream = Files.walk(root)) {
+            for (Path path : stream.sorted(Comparator.reverseOrder()).toList()) {
+                Files.deleteIfExists(path);
             }
         }
     }
@@ -238,8 +289,8 @@ public final class RpgTool1ContentPass implements ConversionPass {
 
         JsonObject special = new JsonObject();
         special.addProperty("type", "legacyforgebridge:obj");
-        special.addProperty("model", NAMESPACE + ":textures/items3D/" + sword.objName() + ".obj");
-        special.addProperty("texture", NAMESPACE + ":textures/items3D/" + sword.objName() + ".png");
+        special.addProperty("model", NAMESPACE + ":textures/items3d/" + sword.objName() + ".obj");
+        special.addProperty("texture", NAMESPACE + ":textures/items3d/" + sword.objName() + ".png");
         special.addProperty("scale", sword.scale());
 
         JsonObject itemModel = new JsonObject();
