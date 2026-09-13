@@ -22,7 +22,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
-/** Lightweight OBJ renderer for converted 1.7.10 item models. */
+/**
+ * Lightweight OBJ renderer for converted 1.7.10 item models.
+ *
+ * <p>The geometry path intentionally follows the important Forge 1.7.10 Wavefront semantics:
+ * V coordinates are flipped, one face normal is used for the whole polygon, and UVs are nudged
+ * 0.0005 toward the face average to avoid atlas-edge bleeding. Polygon faces are kept intact until
+ * submission so triangulation does not create a different UV center on the diagonal.</p>
+ */
 public final class ObjSpecialRenderer implements NoDataSpecialModelRenderer {
     private final ObjMesh mesh;
     private final Identifier texture;
@@ -88,28 +95,30 @@ public final class ObjSpecialRenderer implements NoDataSpecialModelRenderer {
     }
 
     private static final class ObjMesh {
+        private static final float LEGACY_UV_OFFSET = 0.0005F;
+
         private final List<float[]> positions;
         private final List<float[]> texCoords;
         private final List<float[]> normals;
-        private final List<Triangle> triangles;
+        private final List<Face> faces;
 
         private ObjMesh(
                 List<float[]> positions,
                 List<float[]> texCoords,
                 List<float[]> normals,
-                List<Triangle> triangles
+                List<Face> faces
         ) {
             this.positions = positions;
             this.texCoords = texCoords;
             this.normals = normals;
-            this.triangles = triangles;
+            this.faces = faces;
         }
 
         static ObjMesh parse(List<String> lines) {
             List<float[]> positions = new ArrayList<>();
             List<float[]> texCoords = new ArrayList<>();
             List<float[]> normals = new ArrayList<>();
-            List<Triangle> triangles = new ArrayList<>();
+            List<Face> faces = new ArrayList<>();
 
             for (String raw : lines) {
                 String line = raw.trim();
@@ -125,72 +134,126 @@ public final class ObjSpecialRenderer implements NoDataSpecialModelRenderer {
                         if (parts.length < 4) {
                             continue;
                         }
-                        VertexRef first = ref(parts[1], positions.size(), texCoords.size(), normals.size());
-                        VertexRef previous = ref(parts[2], positions.size(), texCoords.size(), normals.size());
-                        for (int index = 3; index < parts.length; index++) {
-                            VertexRef current = ref(parts[index], positions.size(), texCoords.size(), normals.size());
-                            triangles.add(new Triangle(first, previous, current));
-                            previous = current;
+                        List<VertexRef> vertices = new ArrayList<>(parts.length - 1);
+                        for (int index = 1; index < parts.length; index++) {
+                            vertices.add(ref(parts[index], positions.size(), texCoords.size(), normals.size()));
                         }
+                        faces.add(new Face(List.copyOf(vertices)));
                     }
                     default -> {
+                        // o/g/s/mtllib/usemtl do not alter geometry for this single-texture bridge.
                     }
                 }
             }
-            return new ObjMesh(List.copyOf(positions), List.copyOf(texCoords), List.copyOf(normals), List.copyOf(triangles));
+            return new ObjMesh(
+                    List.copyOf(positions),
+                    List.copyOf(texCoords),
+                    List.copyOf(normals),
+                    List.copyOf(faces)
+            );
         }
 
         void render(PoseStack.Pose pose, VertexConsumer buffer, int light, int overlay, float scale) {
-            for (Triangle triangle : triangles) {
-                float[] faceNormal = computedNormal(triangle);
-                emit(triangle.a, faceNormal, pose, buffer, light, overlay, scale);
-                emit(triangle.b, faceNormal, pose, buffer, light, overlay, scale);
-                emit(triangle.c, faceNormal, pose, buffer, light, overlay, scale);
+            for (Face face : faces) {
+                if (face.vertices.size() < 3) {
+                    continue;
+                }
+                float[] faceNormal = computedNormal(face);
+                float[] averageUv = averageUv(face);
+                VertexRef first = face.vertices.get(0);
+                VertexRef previous = face.vertices.get(1);
+                for (int index = 2; index < face.vertices.size(); index++) {
+                    VertexRef current = face.vertices.get(index);
+                    emit(first, faceNormal, averageUv, pose, buffer, light, overlay, scale);
+                    emit(previous, faceNormal, averageUv, pose, buffer, light, overlay, scale);
+                    emit(current, faceNormal, averageUv, pose, buffer, light, overlay, scale);
+                    previous = current;
+                }
             }
         }
 
         private void emit(
                 VertexRef ref,
                 float[] faceNormal,
+                float[] averageUv,
                 PoseStack.Pose pose,
                 VertexConsumer buffer,
                 int light,
                 int overlay,
                 float scale
         ) {
-            float[] p = positions.get(ref.position);
-            float[] uv = ref.texCoord >= 0 && ref.texCoord < texCoords.size()
-                    ? texCoords.get(ref.texCoord)
-                    : new float[]{0.0F, 0.0F};
-            float[] n = ref.normal >= 0 && ref.normal < normals.size()
-                    ? normals.get(ref.normal)
-                    : faceNormal;
-            buffer.addVertex(pose, p[0] * scale, p[1] * scale, p[2] * scale)
+            if (ref.position < 0 || ref.position >= positions.size()) {
+                return;
+            }
+            float[] position = positions.get(ref.position);
+            float[] uv = legacyUv(ref, averageUv);
+            buffer.addVertex(pose, position[0] * scale, position[1] * scale, position[2] * scale)
                     .setColor(255, 255, 255, 255)
-                    .setUv(uv[0], 1.0F - uv[1])
+                    .setUv(uv[0], uv[1])
                     .setOverlay(overlay)
                     .setLight(light)
-                    .setNormal(pose, n[0], n[1], n[2]);
+                    .setNormal(pose, faceNormal[0], faceNormal[1], faceNormal[2]);
         }
 
-        private float[] computedNormal(Triangle triangle) {
-            float[] a = positions.get(triangle.a.position);
-            float[] b = positions.get(triangle.b.position);
-            float[] c = positions.get(triangle.c.position);
-            float ux = b[0] - a[0];
-            float uy = b[1] - a[1];
-            float uz = b[2] - a[2];
-            float vx = c[0] - a[0];
-            float vy = c[1] - a[1];
-            float vz = c[2] - a[2];
-            float nx = uy * vz - uz * vy;
-            float ny = uz * vx - ux * vz;
-            float nz = ux * vy - uy * vx;
-            float length = (float) Math.sqrt(nx * nx + ny * ny + nz * nz);
-            if (length <= 1.0E-6F) {
+        private float[] legacyUv(VertexRef ref, float[] averageUv) {
+            if (ref.texCoord < 0 || ref.texCoord >= texCoords.size()) {
+                return new float[]{0.0F, 0.0F};
+            }
+            float[] source = texCoords.get(ref.texCoord);
+            float u = source[0];
+            float v = 1.0F - source[1];
+            u += u > averageUv[0] ? -LEGACY_UV_OFFSET : LEGACY_UV_OFFSET;
+            v += v > averageUv[1] ? -LEGACY_UV_OFFSET : LEGACY_UV_OFFSET;
+            return new float[]{u, v};
+        }
+
+        private float[] averageUv(Face face) {
+            float u = 0.0F;
+            float v = 0.0F;
+            int count = 0;
+            for (VertexRef ref : face.vertices) {
+                if (ref.texCoord < 0 || ref.texCoord >= texCoords.size()) {
+                    continue;
+                }
+                float[] source = texCoords.get(ref.texCoord);
+                u += source[0];
+                v += 1.0F - source[1];
+                count++;
+            }
+            return count == 0 ? new float[]{0.0F, 0.0F} : new float[]{u / count, v / count};
+        }
+
+        private float[] computedNormal(Face face) {
+            VertexRef originRef = face.vertices.get(0);
+            if (originRef.position < 0 || originRef.position >= positions.size()) {
                 return new float[]{0.0F, 1.0F, 0.0F};
             }
-            return new float[]{nx / length, ny / length, nz / length};
+            float[] origin = positions.get(originRef.position);
+
+            for (int index = 1; index + 1 < face.vertices.size(); index++) {
+                VertexRef bRef = face.vertices.get(index);
+                VertexRef cRef = face.vertices.get(index + 1);
+                if (bRef.position < 0 || cRef.position < 0
+                        || bRef.position >= positions.size() || cRef.position >= positions.size()) {
+                    continue;
+                }
+                float[] b = positions.get(bRef.position);
+                float[] c = positions.get(cRef.position);
+                float ux = b[0] - origin[0];
+                float uy = b[1] - origin[1];
+                float uz = b[2] - origin[2];
+                float vx = c[0] - origin[0];
+                float vy = c[1] - origin[1];
+                float vz = c[2] - origin[2];
+                float nx = uy * vz - uz * vy;
+                float ny = uz * vx - ux * vz;
+                float nz = ux * vy - uy * vx;
+                float length = (float) Math.sqrt(nx * nx + ny * ny + nz * nz);
+                if (length > 1.0E-6F) {
+                    return new float[]{nx / length, ny / length, nz / length};
+                }
+            }
+            return new float[]{0.0F, 1.0F, 0.0F};
         }
 
         private static float f(String[] parts, int index) {
@@ -217,7 +280,7 @@ public final class ObjSpecialRenderer implements NoDataSpecialModelRenderer {
         private record VertexRef(int position, int texCoord, int normal) {
         }
 
-        private record Triangle(VertexRef a, VertexRef b, VertexRef c) {
+        private record Face(List<VertexRef> vertices) {
         }
     }
 }

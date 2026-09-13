@@ -7,6 +7,8 @@
     "ViaComponentTranslationMixin",
     "ViaLegacyTextRewriterMixin",
     "ViaLegacyGameModeMessageMixin",
+    "ViaLegacyModItemBoundaryMixin",
+    "ViaModernModItemBoundaryMixin",
     "SpecialModelRenderersMixin"
   ],
   "injectors": {
