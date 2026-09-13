@@ -1,6 +1,7 @@
 package dev.longyu.legacyforgebridge.convert;
 
 import dev.longyu.legacyforgebridge.LegacyForgeBridge;
+import dev.longyu.legacyforgebridge.convert.pass.GeneratedModEntrypointPass;
 import dev.longyu.legacyforgebridge.convert.runtime.ConvertedContentRuntime;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.metadata.ModOrigin;
@@ -16,7 +17,9 @@ import java.util.jar.JarFile;
 
 /** Owns LFB-generated JARs in mods/ and safely replaces loaded files across launches. */
 public final class ManagedCandidateInstaller {
+    /** Legacy alpha.19-and-earlier fallback for state records that did not persist a managed path. */
     public static final String MANAGED_PREFIX = "legacyforgebridge-converted-";
+    private static final String GENERATED_CLASS_PREFIX = "dev/longyu/legacyforgebridge/generated/";
 
     private final Path modsDir;
     private final Path cacheDir;
@@ -32,6 +35,10 @@ public final class ManagedCandidateInstaller {
         this.helperEnabled = helperEnabled;
     }
 
+    /**
+     * Resolves the historical managed name. New conversions use the candidate's source-derived
+     * filename directly (for example RPGTool1-1.1-1.7.10-lfb.jar).
+     */
     public Path managedJar(String fabricId) {
         String safe = fabricId.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_-]", "_");
         if (safe.isBlank()) {
@@ -46,7 +53,10 @@ public final class ManagedCandidateInstaller {
         }
         boolean hasFabricMetadata = false;
         boolean hasConvertedContent = false;
-        boolean hasClass = false;
+        boolean hasGeneratedMarker = false;
+        boolean hasGeneratedClass = false;
+        boolean hasUnexpectedClass = false;
+
         try (JarFile jar = new JarFile(candidate.toFile())) {
             var entries = jar.entries();
             while (entries.hasMoreElements()) {
@@ -59,25 +69,42 @@ public final class ManagedCandidateInstaller {
                     hasFabricMetadata = true;
                 } else if (name.equals(ConvertedContentRuntime.MANIFEST_PATH)) {
                     hasConvertedContent = true;
+                } else if (name.equals(GeneratedModEntrypointPass.MARKER_PATH)) {
+                    hasGeneratedMarker = true;
                 } else if (name.endsWith(".class")) {
-                    hasClass = true;
-                    break;
+                    if (name.startsWith(GENERATED_CLASS_PREFIX)) {
+                        hasGeneratedClass = true;
+                    } else {
+                        // Any class outside LFB's generated namespace is source bytecode that has
+                        // not yet been semantically migrated. Never put that on Fabric's classpath.
+                        hasUnexpectedClass = true;
+                    }
                 }
             }
         }
-        return hasFabricMetadata && hasConvertedContent && !hasClass;
+
+        return hasFabricMetadata
+                && hasConvertedContent
+                && hasGeneratedMarker
+                && hasGeneratedClass
+                && !hasUnexpectedClass;
     }
 
+    /**
+     * Stages a converted artifact under the exact source-derived candidate filename. The fabricId
+     * parameter remains for binary/source compatibility with the manager API but no longer controls
+     * the user's file name.
+     */
     public StageResult stage(Path candidate, String fabricId, boolean currentlyLoaded) throws IOException {
         Files.createDirectories(modsDir);
         Files.createDirectories(cacheDir.resolve("pending"));
 
-        Path target = managedJar(fabricId);
+        Path target = modsDir.resolve(candidate.getFileName().toString());
         String desiredHash = Hashing.sha256(candidate);
         String currentHash = Files.isRegularFile(target) ? Hashing.sha256(target) : "";
         if (desiredHash.equalsIgnoreCase(currentHash)) {
             return new StageResult(target, desiredHash, false, false, false, true,
-                    "Managed candidate already matches the desired conversion output.");
+                    "Managed converted mod already matches the desired output.");
         }
 
         if (currentlyLoaded && Files.exists(target)) {
@@ -95,8 +122,8 @@ public final class ManagedCandidateInstaller {
                     true,
                     helperScheduled,
                     helperScheduled
-                            ? "Updated candidate is pending an automatic post-exit swap."
-                            : "Updated candidate is pending; post-exit helper was unavailable and shutdown-hook fallback was registered."
+                            ? "Updated converted mod is pending an automatic post-exit swap."
+                            : "Updated converted mod is pending; post-exit helper was unavailable and shutdown-hook fallback was registered."
             );
         }
 
@@ -108,13 +135,13 @@ public final class ManagedCandidateInstaller {
                 false,
                 true,
                 true,
-                "Managed candidate was staged in mods/ for the next Minecraft launch."
+                "Converted mod was staged as " + target.getFileName() + " in mods/ for the next Minecraft launch."
         );
     }
 
     public RemovalResult remove(Path target, boolean currentlyLoaded) throws IOException {
         if (target == null || !Files.exists(target)) {
-            return new RemovalResult(false, false, false, "Managed candidate was already absent.");
+            return new RemovalResult(false, false, false, "Managed converted mod was already absent.");
         }
 
         if (currentlyLoaded) {
@@ -127,13 +154,13 @@ public final class ManagedCandidateInstaller {
                     true,
                     helperScheduled,
                     helperScheduled
-                            ? "Managed candidate will be removed automatically after Minecraft exits."
-                            : "Managed candidate removal is deferred until JVM exit."
+                            ? "Managed converted mod will be removed automatically after Minecraft exits."
+                            : "Managed converted mod removal is deferred until JVM exit."
             );
         }
 
         Files.deleteIfExists(target);
-        return new RemovalResult(true, false, true, "Managed candidate was removed immediately.");
+        return new RemovalResult(true, false, true, "Managed converted mod was removed immediately.");
     }
 
     private static void copyAtomically(Path source, Path target) throws IOException {
