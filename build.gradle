@@ -81,6 +81,13 @@ tasks.register('relocateTestJavaSources') {
     doLast { relocateJavaSources('src/test/java', relocatedTestJavaDir) }
 }
 
+java {
+    // Create sourcesJar before we attach relocation dependencies below.
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
 sourceSets {
     main.java.setSrcDirs([relocatedMainJavaDir])
     test.java.setSrcDirs([relocatedTestJavaDir])
@@ -192,12 +199,6 @@ tasks.withType(Test).configureEach {
         events 'passed', 'skipped', 'failed'
         exceptionFormat = 'full'
     }
-}
-
-java {
-    withSourcesJar()
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
 }
 
 jar {
