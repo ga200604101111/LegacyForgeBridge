@@ -8,6 +8,7 @@ import dev.longyu.legacyforgebridge.convert.api.LegacyModMetadata;
 import dev.longyu.legacyforgebridge.convert.api.LegacyModProfile;
 import dev.longyu.legacyforgebridge.convert.api.SupportLevel;
 import dev.longyu.legacyforgebridge.convert.pass.RpgTool1ContentPass;
+import dev.longyu.legacyforgebridge.convert.pass.RpgTool1PresentationPass;
 import dev.longyu.legacyforgebridge.convert.pass.RpgTool1ResourceFixPass;
 
 /** Corpus-backed RPGTool1 profile layered on the common conversion engine. */
@@ -31,6 +32,7 @@ public final class RpgTool1Profile implements LegacyModProfile {
         plan.add(new CorpusGuardPass());
         plan.add(new RpgTool1ContentPass());
         plan.add(new RpgTool1ResourceFixPass());
+        plan.add(new RpgTool1PresentationPass());
     }
 
     private static final class CorpusGuardPass implements ConversionPass {
