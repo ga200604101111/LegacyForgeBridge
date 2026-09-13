@@ -6,7 +6,8 @@
     "TranslatableContentsMixin",
     "ViaComponentTranslationMixin",
     "ViaLegacyTextRewriterMixin",
-    "ViaLegacyGameModeMessageMixin"
+    "ViaLegacyGameModeMessageMixin",
+    "SpecialModelRenderersMixin"
   ],
   "injectors": {
     "defaultRequire": 1
