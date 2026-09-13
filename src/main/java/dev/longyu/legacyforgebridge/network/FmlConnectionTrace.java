@@ -124,9 +124,16 @@ public final class FmlConnectionTrace {
             return;
         }
         int discriminator = payload != null && payload.length > 0 ? payload[0] & 0xFF : -1;
-        String discriminatorText = discriminator < 0
-                ? "<none>"
-                : "0x%02X %s".formatted(discriminator, FmlWireCodec.discriminatorName(discriminator));
+        String discriminatorText;
+        if (discriminator < 0) {
+            discriminatorText = "<none>";
+        } else {
+            String discriminatorName = discriminatorName(channel, discriminator);
+            discriminatorText = "0x%02X%s".formatted(
+                    discriminator,
+                    discriminatorName == null ? "" : " " + discriminatorName
+            );
+        }
 
         writeLine("[" + LINE_TIME.format(LocalDateTime.now()) + "] [" + direction + "] channel=" + channel
                 + " bytes=" + (payload == null ? 0 : payload.length)
@@ -177,6 +184,14 @@ public final class FmlConnectionTrace {
     @Deprecated
     public synchronized void close(String reason) {
         endSession(reason);
+    }
+
+    private String discriminatorName(String channel, int discriminator) {
+        return switch (channel) {
+            case "FML|HS" -> FmlWireCodec.discriminatorName(discriminator);
+            case "FML" -> FmlRuntimeCodec.discriminatorName(discriminator);
+            default -> null;
+        };
     }
 
     private String printableRegistryName(String raw) {
