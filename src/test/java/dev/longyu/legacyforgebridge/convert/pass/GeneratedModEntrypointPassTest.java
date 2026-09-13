@@ -1,0 +1,83 @@
+package dev.longyu.legacyforgebridge.convert.pass;
+
+import dev.longyu.legacyforgebridge.convert.LegacyJarAnalyzer;
+import dev.longyu.legacyforgebridge.convert.api.ConversionContext;
+import dev.longyu.legacyforgebridge.convert.api.DiagnosticCollector;
+import dev.longyu.legacyforgebridge.convert.api.LegacyModMetadata;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.ClassVisitor;
+import org.objectweb.asm.MethodVisitor;
+import org.objectweb.asm.Opcodes;
+
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class GeneratedModEntrypointPassTest {
+    @TempDir
+    Path tempDir;
+
+    @Test
+    void convertedCandidateGetsRealMainAndClientEntrypointClass() throws Exception {
+        Path staging = tempDir.resolve("staging");
+        Files.createDirectories(staging);
+        ConversionContext context = context(staging);
+
+        GeneratedModEntrypointPass pass = new GeneratedModEntrypointPass();
+        pass.apply(context);
+
+        String binary = GeneratedModEntrypointPass.entrypointClass(context.metadata());
+        Path classFile = staging.resolve(binary.replace('.', '/') + ".class");
+        assertTrue(Files.isRegularFile(classFile));
+        assertEquals(
+                binary,
+                Files.readString(staging.resolve(GeneratedModEntrypointPass.MARKER_PATH), StandardCharsets.UTF_8).trim()
+        );
+
+        Set<String> interfaces = new HashSet<>();
+        Set<String> methods = new HashSet<>();
+        new ClassReader(Files.readAllBytes(classFile)).accept(new ClassVisitor(Opcodes.ASM9) {
+            @Override
+            public void visit(int version, int access, String name, String signature, String superName, String[] implemented) {
+                if (implemented != null) {
+                    interfaces.addAll(List.of(implemented));
+                }
+            }
+
+            @Override
+            public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
+                methods.add(name + descriptor);
+                return null;
+            }
+        }, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+
+        assertTrue(interfaces.contains("net/fabricmc/api/ModInitializer"));
+        assertTrue(interfaces.contains("net/fabricmc/api/ClientModInitializer"));
+        assertTrue(methods.contains("onInitialize()V"));
+        assertTrue(methods.contains("onInitializeClient()V"));
+    }
+
+    private ConversionContext context(Path staging) {
+        LegacyModMetadata metadata = new LegacyModMetadata(
+                "ExampleLegacy.jar",
+                "mcmod.info",
+                List.of(new LegacyModMetadata.ModEntry("examplelegacy", "Example Legacy", "1.0", "1.7.10", List.of()))
+        );
+        LegacyJarAnalyzer.Analysis analysis = new LegacyJarAnalyzer.Analysis(
+                "ExampleLegacy.jar", 1, 0, true, true, 1, 1, 0, 0,
+                Set.of("cpw/mods/fml/common/Mod"), Set.of(), Set.of()
+        );
+        return new ConversionContext(
+                tempDir.resolve("ExampleLegacy.jar"), staging, tempDir.resolve("candidate.jar"),
+                "abc", 1L, metadata, analysis, new DiagnosticCollector(), "test"
+        );
+    }
+}
