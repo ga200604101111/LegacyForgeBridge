@@ -86,10 +86,7 @@ public final class GeneratedSemanticCodePass implements ConversionPass {
         }
         method.visitLdcInsn(modId);
         method.visitMethodInsn(Opcodes.INVOKESTATIC, "dev/longyu/legacyforgebridge/convert/runtime/GeneratedModSupport", "finishMod", "(Ljava/lang/String;)V", false);
-        method.visitInsn(Opcodes.RETURN);
-        method.visitMaxs(0, 0);
-        method.visitEnd();
-        writer.visitEnd();
+        method.visitInsn(Opcodes.RETURN); method.visitMaxs(0, 0); method.visitEnd(); writer.visitEnd();
         return writer.toByteArray();
     }
 
@@ -138,20 +135,14 @@ public final class GeneratedSemanticCodePass implements ConversionPass {
         }
         method.visitLdcInsn(modId);
         method.visitMethodInsn(Opcodes.INVOKESTATIC, "dev/longyu/legacyforgebridge/render/GeneratedEquipmentSupport", "finishMod", "(Ljava/lang/String;)V", false);
-        method.visitInsn(Opcodes.RETURN);
-        method.visitMaxs(0, 0);
-        method.visitEnd();
-        writer.visitEnd();
+        method.visitInsn(Opcodes.RETURN); method.visitMaxs(0, 0); method.visitEnd(); writer.visitEnd();
         return writer.toByteArray();
     }
 
-    private static void privateConstructor(ClassWriter writer) {
-        MethodVisitor c = writer.visitMethod(Opcodes.ACC_PRIVATE, "<init>", "()V", null, null);
-        c.visitCode(); c.visitVarInsn(Opcodes.ALOAD, 0); c.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false); c.visitInsn(Opcodes.RETURN); c.visitMaxs(1, 1); c.visitEnd();
-    }
-    private static void emitStringArray(MethodVisitor m, List<String> values) { pushInt(m, values.size()); m.visitTypeInsn(Opcodes.ANEWARRAY, "java/lang/String"); for (int i=0;i<values.size();i++){m.visitInsn(Opcodes.DUP);pushInt(m,i);m.visitLdcInsn(values.get(i));m.visitInsn(Opcodes.AASTORE);} }
-    private static void pushInt(MethodVisitor m, int v) { if(v==-1)m.visitInsn(Opcodes.ICONST_M1); else if(v>=0&&v<=5)m.visitInsn(Opcodes.ICONST_0+v); else if(v>=Byte.MIN_VALUE&&v<=Byte.MAX_VALUE)m.visitIntInsn(Opcodes.BIPUSH,v); else if(v>=Short.MIN_VALUE&&v<=Short.MAX_VALUE)m.visitIntInsn(Opcodes.SIPUSH,v); else m.visitLdcInsn(v); }
-    private static List<String> primitiveStrings(JsonArray a){List<String> r=new ArrayList<>();for(JsonElement e:a)if(e.isJsonPrimitive())r.add(e.getAsString());return r;}
+    private static void privateConstructor(ClassWriter w){MethodVisitor c=w.visitMethod(Opcodes.ACC_PRIVATE,"<init>","()V",null,null);c.visitCode();c.visitVarInsn(Opcodes.ALOAD,0);c.visitMethodInsn(Opcodes.INVOKESPECIAL,"java/lang/Object","<init>","()V",false);c.visitInsn(Opcodes.RETURN);c.visitMaxs(1,1);c.visitEnd();}
+    private static void emitStringArray(MethodVisitor m,List<String>v){pushInt(m,v.size());m.visitTypeInsn(Opcodes.ANEWARRAY,"java/lang/String");for(int i=0;i<v.size();i++){m.visitInsn(Opcodes.DUP);pushInt(m,i);m.visitLdcInsn(v.get(i));m.visitInsn(Opcodes.AASTORE);}}
+    private static void pushInt(MethodVisitor m,int v){if(v==-1)m.visitInsn(Opcodes.ICONST_M1);else if(v>=0&&v<=5)m.visitInsn(Opcodes.ICONST_0+v);else if(v>=Byte.MIN_VALUE&&v<=Byte.MAX_VALUE)m.visitIntInsn(Opcodes.BIPUSH,v);else if(v>=Short.MIN_VALUE&&v<=Short.MAX_VALUE)m.visitIntInsn(Opcodes.SIPUSH,v);else m.visitLdcInsn(v);}
+    private static List<String> primitiveStrings(JsonArray a){List<String>r=new ArrayList<>();for(JsonElement e:a)if(e.isJsonPrimitive())r.add(e.getAsString());return r;}
     private static JsonObject read(Path p)throws IOException{try(Reader r=Files.newBufferedReader(p,StandardCharsets.UTF_8)){return JsonParser.parseReader(r).getAsJsonObject();}}
     private static JsonObject object(JsonObject p,String k){JsonElement v=p.get(k);return v!=null&&v.isJsonObject()?v.getAsJsonObject():null;}
     private static String string(JsonObject o,String k,String f){JsonElement v=o.get(k);return v!=null&&v.isJsonPrimitive()?v.getAsString():f;}
