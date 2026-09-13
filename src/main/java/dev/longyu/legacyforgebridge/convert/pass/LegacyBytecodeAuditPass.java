@@ -11,6 +11,8 @@ import java.util.stream.Stream;
 
 /** Safety gate evaluated after semantic/profile conversion passes. */
 public final class LegacyBytecodeAuditPass implements ConversionPass {
+    private static final String GENERATED_PREFIX = "dev/longyu/legacyforgebridge/generated/";
+
     @Override
     public String id() {
         return "legacy-bytecode-audit";
@@ -18,22 +20,29 @@ public final class LegacyBytecodeAuditPass implements ConversionPass {
 
     @Override
     public void apply(ConversionContext context) throws IOException {
-        long remainingClasses;
+        long generatedClasses = 0;
+        long remainingLegacyClasses = 0;
         try (Stream<Path> stream = Files.walk(context.stagingDir())) {
-            remainingClasses = stream
-                    .filter(Files::isRegularFile)
-                    .filter(path -> path.getFileName().toString().endsWith(".class"))
-                    .count();
+            for (Path path : stream.filter(Files::isRegularFile)
+                    .filter(file -> file.getFileName().toString().endsWith(".class"))
+                    .toList()) {
+                String relative = context.stagingDir().relativize(path).toString().replace('\\', '/');
+                if (relative.startsWith(GENERATED_PREFIX)) {
+                    generatedClasses++;
+                } else {
+                    remainingLegacyClasses++;
+                }
+            }
         }
 
-        // Profile-specific semantic conversion may deliberately remove obsolete Forge classes
-        // after translating their content/identity. In that case analyzer references describe the
-        // input artifact, not bytecode that will be loaded by Fabric.
-        if (remainingClasses == 0) {
+        // Generated wrapper classes are modern bytecode produced by LFB itself and are expected to
+        // remain. The safety question is whether any original Forge 1.7.10 class survived.
+        if (remainingLegacyClasses == 0) {
             context.diagnostics().info(
                     "LFB-CONVERT-BYTECODE-0002",
                     SupportLevel.ADAPTED,
-                    "No legacy class files remain after semantic conversion; obsolete Forge/FML/OpenGL bytecode will not enter the modern Fabric class path."
+                    "No original legacy class files remain after semantic conversion; generated modern Fabric wrapper classes="
+                            + generatedClasses + "."
             );
             return;
         }
@@ -51,7 +60,7 @@ public final class LegacyBytecodeAuditPass implements ConversionPass {
             context.diagnostics().warning(
                     "LFB-CONVERT-RENDER-0001",
                     SupportLevel.MANUAL_REQUIRED,
-                    "Direct legacy OpenGL references remain in staged class files and require semantic rendering migration."
+                    "Direct legacy OpenGL references remain in staged source class files and require semantic rendering migration."
             );
         }
 
@@ -59,14 +68,15 @@ public final class LegacyBytecodeAuditPass implements ConversionPass {
             context.diagnostics().warning(
                     "LFB-CONVERT-FORGE-0001",
                     SupportLevel.RUNTIME_BRIDGE,
-                    "Forge/FML bytecode references remain in staged class files. A conversion pass or runtime adapter must replace them before installation."
+                    "Forge/FML bytecode references remain in staged source class files. A conversion pass or runtime adapter must replace them before installation."
             );
         }
 
         context.diagnostics().warning(
                 "LFB-CONVERT-BYTECODE-0001",
                 SupportLevel.MANUAL_REQUIRED,
-                "Legacy class files remain in the candidate (" + remainingClasses + "). The generated JAR is not yet a completed Fabric port."
+                "Original legacy class files remain in the candidate (" + remainingLegacyClasses
+                        + "; generated modern wrappers=" + generatedClasses + "). The generated JAR is not yet a completed Fabric port."
         );
     }
 }
