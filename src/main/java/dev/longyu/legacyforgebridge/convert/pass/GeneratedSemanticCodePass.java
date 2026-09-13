@@ -21,8 +21,7 @@ import java.util.List;
 
 /** Compiles neutral conversion semantics into classes owned by the converted mod. */
 public final class GeneratedSemanticCodePass implements ConversionPass {
-    @Override
-    public String id() { return "generated-semantic-mod-code"; }
+    @Override public String id() { return "generated-semantic-mod-code"; }
 
     @Override
     public void apply(ConversionContext context) throws IOException {
@@ -151,25 +150,14 @@ public final class GeneratedSemanticCodePass implements ConversionPass {
 
     private static void privateConstructor(ClassWriter writer) {
         MethodVisitor constructor = writer.visitMethod(Opcodes.ACC_PRIVATE, "<init>", "()V", null, null);
-        constructor.visitCode();
-        constructor.visitVarInsn(Opcodes.ALOAD, 0);
+        constructor.visitCode(); constructor.visitVarInsn(Opcodes.ALOAD, 0);
         constructor.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false);
-        constructor.visitInsn(Opcodes.RETURN);
-        constructor.visitMaxs(1, 1);
-        constructor.visitEnd();
+        constructor.visitInsn(Opcodes.RETURN); constructor.visitMaxs(1, 1); constructor.visitEnd();
     }
-
     private static void emitStringArray(MethodVisitor method, List<String> values) {
-        pushInt(method, values.size());
-        method.visitTypeInsn(Opcodes.ANEWARRAY, "java/lang/String");
-        for (int i = 0; i < values.size(); i++) {
-            method.visitInsn(Opcodes.DUP);
-            pushInt(method, i);
-            method.visitLdcInsn(values.get(i));
-            method.visitInsn(Opcodes.AASTORE);
-        }
+        pushInt(method, values.size()); method.visitTypeInsn(Opcodes.ANEWARRAY, "java/lang/String");
+        for (int i = 0; i < values.size(); i++) { method.visitInsn(Opcodes.DUP); pushInt(method, i); method.visitLdcInsn(values.get(i)); method.visitInsn(Opcodes.AASTORE); }
     }
-
     private static void pushInt(MethodVisitor method, int value) {
         if (value == -1) method.visitInsn(Opcodes.ICONST_M1);
         else if (value >= 0 && value <= 5) method.visitInsn(Opcodes.ICONST_0 + value);
@@ -177,18 +165,8 @@ public final class GeneratedSemanticCodePass implements ConversionPass {
         else if (value >= Short.MIN_VALUE && value <= Short.MAX_VALUE) method.visitIntInsn(Opcodes.SIPUSH, value);
         else method.visitLdcInsn(value);
     }
-
-    private static List<String> primitiveStrings(JsonArray array) {
-        List<String> result = new ArrayList<>();
-        for (JsonElement element : array) if (element.isJsonPrimitive()) result.add(element.getAsString());
-        return result;
-    }
-
-    private static JsonObject read(Path path) throws IOException {
-        try (Reader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
-            return JsonParser.parseReader(reader).getAsJsonObject();
-        }
-    }
+    private static List<String> primitiveStrings(JsonArray array) { List<String> result = new ArrayList<>(); for (JsonElement e : array) if (e.isJsonPrimitive()) result.add(e.getAsString()); return result; }
+    private static JsonObject read(Path path) throws IOException { try (Reader r = Files.newBufferedReader(path, StandardCharsets.UTF_8)) { return JsonParser.parseReader(r).getAsJsonObject(); } }
     private static JsonObject object(JsonObject parent, String key) { JsonElement v = parent.get(key); return v != null && v.isJsonObject() ? v.getAsJsonObject() : null; }
     private static String string(JsonObject object, String key, String fallback) { JsonElement v = object.get(key); return v != null && v.isJsonPrimitive() ? v.getAsString() : fallback; }
     private static int integer(JsonObject object, String key, int fallback) { JsonElement v = object.get(key); return v != null && v.isJsonPrimitive() ? v.getAsInt() : fallback; }
