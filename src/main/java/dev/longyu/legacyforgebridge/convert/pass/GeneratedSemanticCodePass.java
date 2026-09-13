@@ -19,7 +19,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Compiles neutral conversion semantics into classes owned by the converted mod. */
+/** Compiles neutral conversion semantics into classes owned and executed by the converted mod. */
 public final class GeneratedSemanticCodePass implements ConversionPass {
     @Override public String id() { return "generated-semantic-mod-code"; }
 
@@ -63,8 +63,7 @@ public final class GeneratedSemanticCodePass implements ConversionPass {
                 method.visitLdcInsn(number(item, "attackDamage", 0.0F));
                 method.visitLdcInsn(number(item, "attackSpeed", 0.0F));
                 method.visitLdcInsn(number(item, "armor", 0.0F));
-                method.visitMethodInsn(Opcodes.INVOKESTATIC, "dev/longyu/legacyforgebridge/convert/runtime/GeneratedModSupport", "registerItem",
-                        "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;IFFF)V", false);
+                method.visitMethodInsn(Opcodes.INVOKESTATIC, "dev/longyu/legacyforgebridge/convert/runtime/GeneratedModSupport", "registerItem", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;IFFF)V", false);
                 stats.items++;
             }
         }
@@ -81,8 +80,7 @@ public final class GeneratedSemanticCodePass implements ConversionPass {
                 method.visitLdcInsn(string(tab, "title", id));
                 method.visitLdcInsn(string(tab, "icon", itemIds.get(0).getAsString()));
                 emitStringArray(method, primitiveStrings(itemIds));
-                method.visitMethodInsn(Opcodes.INVOKESTATIC, "dev/longyu/legacyforgebridge/convert/runtime/GeneratedModSupport", "registerCreativeTab",
-                        "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;)V", false);
+                method.visitMethodInsn(Opcodes.INVOKESTATIC, "dev/longyu/legacyforgebridge/convert/runtime/GeneratedModSupport", "registerCreativeTab", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;)V", false);
                 stats.creativeTabs++;
             }
         }
@@ -134,8 +132,7 @@ public final class GeneratedSemanticCodePass implements ConversionPass {
                 method.visitInsn(bool(render, "translucent", false) ? Opcodes.ICONST_1 : Opcodes.ICONST_0);
                 emitStringArray(method, models);
                 emitStringArray(method, textureSets);
-                method.visitMethodInsn(Opcodes.INVOKESTATIC, "dev/longyu/legacyforgebridge/render/GeneratedEquipmentSupport", "register",
-                        "(Ljava/lang/String;Ljava/lang/String;ZFZ[Ljava/lang/String;[Ljava/lang/String;)V", false);
+                method.visitMethodInsn(Opcodes.INVOKESTATIC, "dev/longyu/legacyforgebridge/render/GeneratedEquipmentSupport", "register", "(Ljava/lang/String;Ljava/lang/String;ZFZ[Ljava/lang/String;[Ljava/lang/String;)V", false);
                 stats.equipmentRenderers++;
             }
         }
