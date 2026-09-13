@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "package": "dev.longyu.legacyforgebridge.mixin.client",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "MinecraftAccessor",
+    "AbstractClientPlayerMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
