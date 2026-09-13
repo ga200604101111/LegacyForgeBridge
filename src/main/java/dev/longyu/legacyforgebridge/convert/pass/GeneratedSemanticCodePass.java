@@ -23,60 +23,17 @@ import java.util.List;
 public final class GeneratedSemanticCodePass implements ConversionPass {
     @Override public String id() { return "generated-semantic-mod-code"; }
 
-    @Override
-    public void apply(ConversionContext context) throws IOException {
-        Path manifest = context.stagingDir().resolve("legacyforgebridge/converted-content.json");
-        JsonObject root = Files.isRegularFile(manifest) ? read(manifest) : new JsonObject();
-        String contentBinary = GeneratedModEntrypointPass.generatedContentClass(context.metadata());
-        String clientBinary = GeneratedModEntrypointPass.generatedClientClass(context.metadata());
-        Path contentPath = context.stagingDir().resolve(contentBinary.replace('.', '/') + ".class");
-        Path clientPath = context.stagingDir().resolve(clientBinary.replace('.', '/') + ".class");
-        Files.createDirectories(contentPath.getParent());
-        Files.createDirectories(clientPath.getParent());
-        GenerationStats stats = new GenerationStats();
-        Files.write(contentPath, generateContent(contentBinary.replace('.', '/'), context.metadata().fabricId(), root, stats));
-        Files.write(clientPath, generateClient(clientBinary.replace('.', '/'), context.metadata().fabricId(), root, stats));
-        context.diagnostics().info("LFB-CONVERT-CODEGEN-0001", SupportLevel.ADAPTED,
-                "Compiled neutral conversion semantics into mod-owned Java 21 bytecode: items=" + stats.items
-                        + ", creativeTabs=" + stats.creativeTabs + ", equipmentRenderers=" + stats.equipmentRenderers + ".");
+    @Override public void apply(ConversionContext context) throws IOException {
+        Path manifest=context.stagingDir().resolve("legacyforgebridge/converted-content.json"); JsonObject root=Files.isRegularFile(manifest)?read(manifest):new JsonObject();
+        String cb=GeneratedModEntrypointPass.generatedContentClass(context.metadata()), clb=GeneratedModEntrypointPass.generatedClientClass(context.metadata());
+        Path cp=context.stagingDir().resolve(cb.replace('.','/')+".class"), clp=context.stagingDir().resolve(clb.replace('.','/')+".class"); Files.createDirectories(cp.getParent()); Files.createDirectories(clp.getParent());
+        GenerationStats s=new GenerationStats(); Files.write(cp,generateContent(cb.replace('.','/'),context.metadata().fabricId(),root,s)); Files.write(clp,generateClient(clb.replace('.','/'),context.metadata().fabricId(),root,s));
+        context.diagnostics().info("LFB-CONVERT-CODEGEN-0001",SupportLevel.ADAPTED,"Compiled neutral conversion semantics into mod-owned Java 21 bytecode: items="+s.items+", creativeTabs="+s.creativeTabs+", equipmentRenderers="+s.equipmentRenderers+".");
     }
 
-    private static byte[] generateContent(String internalName, String modId, JsonObject root, GenerationStats stats) {
-        ClassWriter w = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
-        w.visit(Opcodes.V21, Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL | Opcodes.ACC_SUPER, internalName, null, "java/lang/Object", null);
-        privateConstructor(w);
-        MethodVisitor m = w.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, "initialize", "()V", null, null);
-        m.visitCode();
-        m.visitLdcInsn(modId);
-        m.visitMethodInsn(Opcodes.INVOKESTATIC, "dev/longyu/legacyforgebridge/convert/runtime/GeneratedModSupport", "beginMod", "(Ljava/lang/String;)V", false);
-        JsonArray items = root.getAsJsonArray("items");
-        if (items != null) for (JsonElement e : items) {
-            if (!e.isJsonObject()) continue;
-            JsonObject item = e.getAsJsonObject();
-            String id = string(item,"id",null); if(id==null) continue;
-            m.visitLdcInsn(id); m.visitLdcInsn(string(item,"kind","item"));
-            m.visitLdcInsn(string(item,"descriptionKey","item."+id.replace(':','.')));
-            pushInt(m,integer(item,"durability",0)); m.visitLdcInsn(number(item,"attackDamage",0F));
-            m.visitLdcInsn(number(item,"attackSpeed",0F)); m.visitLdcInsn(number(item,"armor",0F));
-            m.visitMethodInsn(Opcodes.INVOKESTATIC,"dev/longyu/legacyforgebridge/convert/runtime/GeneratedModSupport","registerItem","(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;IFFF)V",false);
-            stats.items++;
-        }
-        JsonArray tabs=root.getAsJsonArray("creativeTabs");
-        if(tabs!=null) for(JsonElement e:tabs){
-            if(!e.isJsonObject())continue; JsonObject tab=e.getAsJsonObject(); String id=string(tab,"id",null); JsonArray ids=tab.getAsJsonArray("items");
-            if(id==null||ids==null||ids.isEmpty())continue;
-            m.visitLdcInsn(id);m.visitLdcInsn(string(tab,"titleKey",""));m.visitLdcInsn(string(tab,"title",id));m.visitLdcInsn(string(tab,"icon",ids.get(0).getAsString()));emitStringArray(m,primitiveStrings(ids));
-            m.visitMethodInsn(Opcodes.INVOKESTATIC,"dev/longyu/legacyforgebridge/convert/runtime/GeneratedModSupport","registerCreativeTab","(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;)V",false);stats.creativeTabs++;
-        }
-        m.visitLdcInsn(modId);m.visitMethodInsn(Opcodes.INVOKESTATIC,"dev/longyu/legacyforgebridge/convert/runtime/GeneratedModSupport","finishMod","(Ljava/lang/String;)V",false);m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
-    }
+    private static byte[] generateContent(String n,String modId,JsonObject root,GenerationStats s){ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_FRAMES|ClassWriter.COMPUTE_MAXS);w.visit(Opcodes.V21,Opcodes.ACC_PUBLIC|Opcodes.ACC_FINAL|Opcodes.ACC_SUPER,n,null,"java/lang/Object",null);privateConstructor(w);MethodVisitor m=w.visitMethod(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"initialize","()V",null,null);m.visitCode();m.visitLdcInsn(modId);m.visitMethodInsn(Opcodes.INVOKESTATIC,"dev/longyu/legacyforgebridge/convert/runtime/GeneratedModSupport","beginMod","(Ljava/lang/String;)V",false);JsonArray items=root.getAsJsonArray("items");if(items!=null)for(JsonElement e:items){if(!e.isJsonObject())continue;JsonObject i=e.getAsJsonObject();String id=string(i,"id",null);if(id==null)continue;m.visitLdcInsn(id);m.visitLdcInsn(string(i,"kind","item"));m.visitLdcInsn(string(i,"descriptionKey","item."+id.replace(':','.')));pushInt(m,integer(i,"durability",0));m.visitLdcInsn(number(i,"attackDamage",0F));m.visitLdcInsn(number(i,"attackSpeed",0F));m.visitLdcInsn(number(i,"armor",0F));m.visitMethodInsn(Opcodes.INVOKESTATIC,"dev/longyu/legacyforgebridge/convert/runtime/GeneratedModSupport","registerItem","(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;IFFF)V",false);s.items++;}JsonArray tabs=root.getAsJsonArray("creativeTabs");if(tabs!=null)for(JsonElement e:tabs){if(!e.isJsonObject())continue;JsonObject t=e.getAsJsonObject();String id=string(t,"id",null);JsonArray ids=t.getAsJsonArray("items");if(id==null||ids==null||ids.isEmpty())continue;m.visitLdcInsn(id);m.visitLdcInsn(string(t,"titleKey",""));m.visitLdcInsn(string(t,"title",id));m.visitLdcInsn(string(t,"icon",ids.get(0).getAsString()));emitStringArray(m,primitiveStrings(ids));m.visitMethodInsn(Opcodes.INVOKESTATIC,"dev/longyu/legacyforgebridge/convert/runtime/GeneratedModSupport","registerCreativeTab","(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;)V",false);s.creativeTabs++;}m.visitLdcInsn(modId);m.visitMethodInsn(Opcodes.INVOKESTATIC,"dev/longyu/legacyforgebridge/convert/runtime/GeneratedModSupport","finishMod","(Ljava/lang/String;)V",false);m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();}
 
-    private static byte[] generateClient(String internalName,String modId,JsonObject root,GenerationStats stats){
-        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_FRAMES|ClassWriter.COMPUTE_MAXS);w.visit(Opcodes.V21,Opcodes.ACC_PUBLIC|Opcodes.ACC_FINAL|Opcodes.ACC_SUPER,internalName,null,"java/lang/Object",null);privateConstructor(w);
-        MethodVisitor m=w.visitMethod(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"initialize","()V",null,null);m.visitCode();JsonArray items=root.getAsJsonArray("items");
-        if(items!=null)for(JsonElement e:items){if(!e.isJsonObject())continue;JsonObject item=e.getAsJsonObject();JsonObject render=object(item,"equipmentRender");String itemId=string(item,"id",null);if(render==null||itemId==null)continue;JsonArray parts=render.getAsJsonArray("parts");if(parts==null||parts.isEmpty())continue;List<String>models=new ArrayList<>(),sets=new ArrayList<>();for(JsonElement pe:parts){if(!pe.isJsonObject())continue;JsonObject p=pe.getAsJsonObject();String model=string(p,"model",null);if(model==null)continue;models.add(model);List<String>textures=new ArrayList<>();JsonArray ta=p.getAsJsonArray("textures");if(ta!=null)textures.addAll(primitiveStrings(ta));String one=string(p,"texture",null);if(one!=null)textures.add(0,one);sets.add(String.join("\u001f",textures));}if(models.isEmpty())continue;m.visitLdcInsn(itemId);m.visitLdcInsn(string(render,"anchor","root"));m.visitInsn(bool(render,"autoCenter",true)?Opcodes.ICONST_1:Opcodes.ICONST_0);m.visitLdcInsn(number(render,"fit",1F));m.visitInsn(bool(render,"translucent",false)?Opcodes.ICONST_1:Opcodes.ICONST_0);emitStringArray(m,models);emitStringArray(m,sets);m.visitMethodInsn(Opcodes.INVOKESTATIC,"dev/longyu/legacyforgebridge/render/GeneratedEquipmentSupport","register","(Ljava/lang/String;Ljava/lang/String;ZFZ[Ljava/lang/String;[Ljava/lang/String;)V",false);stats.equipmentRenderers++;}
-        m.visitLdcInsn(modId);m.visitMethodInsn(Opcodes.INVOKESTATIC,"dev/longyu/legacyforgebridge/render/GeneratedEquipmentSupport","finishMod","(Ljava/lang/String;)V",false);m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
-    }
+    private static byte[] generateClient(String n,String modId,JsonObject root,GenerationStats s){ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_FRAMES|ClassWriter.COMPUTE_MAXS);w.visit(Opcodes.V21,Opcodes.ACC_PUBLIC|Opcodes.ACC_FINAL|Opcodes.ACC_SUPER,n,null,"java/lang/Object",null);privateConstructor(w);MethodVisitor m=w.visitMethod(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"initialize","()V",null,null);m.visitCode();JsonArray items=root.getAsJsonArray("items");if(items!=null)for(JsonElement e:items){if(!e.isJsonObject())continue;JsonObject i=e.getAsJsonObject(),r=object(i,"equipmentRender");String itemId=string(i,"id",null);if(r==null||itemId==null)continue;JsonArray parts=r.getAsJsonArray("parts");if(parts==null||parts.isEmpty())continue;List<String>models=new ArrayList<>(),sets=new ArrayList<>();for(JsonElement pe:parts){if(!pe.isJsonObject())continue;JsonObject p=pe.getAsJsonObject();String model=string(p,"model",null);if(model==null)continue;models.add(model);List<String>tx=new ArrayList<>();JsonArray ta=p.getAsJsonArray("textures");if(ta!=null)tx.addAll(primitiveStrings(ta));String one=string(p,"texture",null);if(one!=null)tx.add(0,one);sets.add(String.join("\u001f",tx));}if(models.isEmpty())continue;m.visitLdcInsn(itemId);m.visitLdcInsn(string(r,"anchor","root"));m.visitInsn(bool(r,"autoCenter",true)?Opcodes.ICONST_1:Opcodes.ICONST_0);m.visitLdcInsn(number(r,"fit",1F));m.visitInsn(bool(r,"translucent",false)?Opcodes.ICONST_1:Opcodes.ICONST_0);emitStringArray(m,models);emitStringArray(m,sets);m.visitMethodInsn(Opcodes.INVOKESTATIC,"dev/longyu/legacyforgebridge/render/GeneratedEquipmentSupport","register","(Ljava/lang/String;Ljava/lang/String;ZFZ[Ljava/lang/String;[Ljava/lang/String;)V",false);s.equipmentRenderers++;}m.visitLdcInsn(modId);m.visitMethodInsn(Opcodes.INVOKESTATIC,"dev/longyu/legacyforgebridge/render/GeneratedEquipmentSupport","finishMod","(Ljava/lang/String;)V",false);m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();}
 
     private static void privateConstructor(ClassWriter w){MethodVisitor c=w.visitMethod(Opcodes.ACC_PRIVATE,"<init>","()V",null,null);c.visitCode();c.visitVarInsn(Opcodes.ALOAD,0);c.visitMethodInsn(Opcodes.INVOKESPECIAL,"java/lang/Object","<init>","()V",false);c.visitInsn(Opcodes.RETURN);c.visitMaxs(1,1);c.visitEnd();}
     private static void emitStringArray(MethodVisitor m,List<String>v){pushInt(m,v.size());m.visitTypeInsn(Opcodes.ANEWARRAY,"java/lang/String");for(int i=0;i<v.size();i++){m.visitInsn(Opcodes.DUP);pushInt(m,i);m.visitLdcInsn(v.get(i));m.visitInsn(Opcodes.AASTORE);}}
