@@ -5,7 +5,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import dev.longyu.legacyforgebridge.LegacyForgeBridge;
-import net.fabricmc.fabric.api.creativetab.v1.CreativeModeTabEvents;
+import net.fabricmc.fabric.api.itemgroup.v1.ItemGroupEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
 import net.minecraft.core.Registry;
@@ -83,12 +83,12 @@ public final class ConvertedContentRuntime {
 
         if (!combat.isEmpty()) {
             List<Item> snapshot = List.copyOf(combat);
-            CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.COMBAT)
+            ItemGroupEvents.modifyEntriesEvent(CreativeModeTabs.COMBAT)
                     .register(entries -> snapshot.forEach(entries::accept));
         }
         if (!ingredients.isEmpty()) {
             List<Item> snapshot = List.copyOf(ingredients);
-            CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.INGREDIENTS)
+            ItemGroupEvents.modifyEntriesEvent(CreativeModeTabs.INGREDIENTS)
                     .register(entries -> snapshot.forEach(entries::accept));
         }
 
