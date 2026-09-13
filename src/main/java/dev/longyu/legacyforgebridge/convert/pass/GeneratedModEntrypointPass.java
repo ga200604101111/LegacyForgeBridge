@@ -15,12 +15,11 @@ import java.nio.file.Path;
 import java.util.Locale;
 
 /**
- * Emits a tiny modern Fabric entrypoint into every converted candidate.
+ * Emits the tiny Fabric lifecycle bridge for a converted mod.
  *
- * <p>The converted JAR is therefore the owner of its own lifecycle. It delegates generic
- * compatibility services to LegacyForgeBridge, but item/content and client presentation startup is
- * initiated by the converted mod's own generated class rather than by LFB scanning every resource
- * container globally.</p>
+ * <p>The entrypoint deliberately contains no mod-specific registration logic. It calls generated
+ * classes that live in the converted JAR itself. Shared LegacyForgeBridge code is therefore a
+ * compatibility library, not a manifest interpreter that owns the converted mod's semantics.</p>
  */
 public final class GeneratedModEntrypointPass implements ConversionPass {
     public static final String MARKER_PATH = "legacyforgebridge/generated-entrypoint.marker";
@@ -36,7 +35,7 @@ public final class GeneratedModEntrypointPass implements ConversionPass {
         String internalName = binaryName.replace('.', '/');
         Path output = context.stagingDir().resolve(internalName + ".class");
         Files.createDirectories(output.getParent());
-        Files.write(output, generate(internalName, context.metadata().fabricId()));
+        Files.write(output, generate(internalName, generatedBaseInternal(context.metadata())));
 
         Path marker = context.stagingDir().resolve(MARKER_PATH);
         Files.createDirectories(marker.getParent());
@@ -45,22 +44,38 @@ public final class GeneratedModEntrypointPass implements ConversionPass {
         context.diagnostics().info(
                 "LFB-CONVERT-ENTRYPOINT-0001",
                 SupportLevel.ADAPTED,
-                "Generated modern Fabric main/client entrypoint " + binaryName
-                        + " so the converted mod owns its lifecycle and delegates only compatibility services to LegacyForgeBridge."
+                "Generated Fabric lifecycle entrypoint " + binaryName
+                        + "; mod-specific registration is delegated to generated classes inside the converted JAR."
         );
     }
 
     public static String entrypointClass(LegacyModMetadata metadata) {
+        return generatedBaseBinary(metadata) + ".ConvertedModEntrypoint";
+    }
+
+    public static String generatedContentClass(LegacyModMetadata metadata) {
+        return generatedBaseBinary(metadata) + ".GeneratedContent";
+    }
+
+    public static String generatedClientClass(LegacyModMetadata metadata) {
+        return generatedBaseBinary(metadata) + ".GeneratedClient";
+    }
+
+    private static String generatedBaseBinary(LegacyModMetadata metadata) {
         String safe = metadata.fabricId().toLowerCase(Locale.ROOT)
                 .replaceAll("[^a-z0-9_]", "_")
                 .replaceAll("_+", "_");
         if (safe.isBlank()) {
             safe = "legacy_mod";
         }
-        return "dev.longyu.legacyforgebridge.generated." + safe + ".ConvertedModEntrypoint";
+        return "dev.longyu.legacyforgebridge.generated." + safe;
     }
 
-    private static byte[] generate(String internalName, String modId) {
+    private static String generatedBaseInternal(LegacyModMetadata metadata) {
+        return generatedBaseBinary(metadata).replace('.', '/');
+    }
+
+    private static byte[] generate(String internalName, String generatedBase) {
         ClassWriter writer = new ClassWriter(0);
         writer.visit(
                 Opcodes.V21,
@@ -81,30 +96,28 @@ public final class GeneratedModEntrypointPass implements ConversionPass {
 
         MethodVisitor main = writer.visitMethod(Opcodes.ACC_PUBLIC, "onInitialize", "()V", null, null);
         main.visitCode();
-        main.visitLdcInsn(modId);
         main.visitMethodInsn(
                 Opcodes.INVOKESTATIC,
-                "dev/longyu/legacyforgebridge/convert/runtime/ConvertedContentRuntime",
-                "initializeMod",
-                "(Ljava/lang/String;)V",
+                generatedBase + "/GeneratedContent",
+                "initialize",
+                "()V",
                 false
         );
         main.visitInsn(Opcodes.RETURN);
-        main.visitMaxs(1, 1);
+        main.visitMaxs(0, 1);
         main.visitEnd();
 
         MethodVisitor client = writer.visitMethod(Opcodes.ACC_PUBLIC, "onInitializeClient", "()V", null, null);
         client.visitCode();
-        client.visitLdcInsn(modId);
         client.visitMethodInsn(
                 Opcodes.INVOKESTATIC,
-                "dev/longyu/legacyforgebridge/render/ConvertedEquipmentRenderRuntime",
-                "initializeMod",
-                "(Ljava/lang/String;)V",
+                generatedBase + "/GeneratedClient",
+                "initialize",
+                "()V",
                 false
         );
         client.visitInsn(Opcodes.RETURN);
-        client.visitMaxs(1, 1);
+        client.visitMaxs(0, 1);
         client.visitEnd();
 
         writer.visitEnd();
