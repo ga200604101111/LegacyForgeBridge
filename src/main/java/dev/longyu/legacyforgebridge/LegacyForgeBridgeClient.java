@@ -3,6 +3,7 @@ package dev.longyu.legacyforgebridge;
 import dev.longyu.legacyforgebridge.network.FmlConnectionTrace;
 import dev.longyu.legacyforgebridge.network.FmlHandshakeClient;
 import dev.longyu.legacyforgebridge.network.FmlMappedPayload;
+import dev.longyu.legacyforgebridge.network.FmlRuntimeClient;
 import dev.longyu.legacyforgebridge.network.FmlWireCodec;
 import dev.longyu.legacyforgebridge.protocol.LegacyPluginChannelMappings;
 import dev.longyu.legacyforgebridge.protocol.ViaFabricPlusBackend;
@@ -18,6 +19,7 @@ import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 /** Client networking entrypoint for the Forge/FML bridge. */
 public final class LegacyForgeBridgeClient implements ClientModInitializer {
     private final FmlHandshakeClient handshake = new FmlHandshakeClient();
+    private final FmlRuntimeClient runtime = new FmlRuntimeClient();
     private volatile boolean directRegistrationSent;
 
     @Override
@@ -71,7 +73,7 @@ public final class LegacyForgeBridgeClient implements ClientModInitializer {
             }
             FmlConnectionTrace trace = FmlConnectionTrace.INSTANCE;
             trace.startIfNeeded("received mapped FML runtime payload during CONFIGURATION");
-            trace.packet("IN", "FML", payload.data(), "FML runtime payload during CONFIGURATION (not handled yet)");
+            runtime.handle(payload.data(), FmlRuntimeClient.Phase.CONFIGURATION, trace);
         });
 
         ClientConfigurationNetworking.registerGlobalReceiver(FmlMappedPayload.FORGE, (payload, context) -> {
@@ -141,7 +143,7 @@ public final class LegacyForgeBridgeClient implements ClientModInitializer {
             }
             FmlConnectionTrace trace = FmlConnectionTrace.INSTANCE;
             trace.startIfNeeded("received mapped FML runtime payload during PLAY");
-            trace.packet("IN", "FML", payload.data(), "FML runtime payload during PLAY (not handled yet)");
+            runtime.handle(payload.data(), FmlRuntimeClient.Phase.PLAY, trace);
         });
 
         ClientPlayNetworking.registerGlobalReceiver(FmlMappedPayload.FORGE, (payload, context) -> {
