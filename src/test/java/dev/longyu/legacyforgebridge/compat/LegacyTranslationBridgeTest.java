@@ -1,10 +1,16 @@
 package dev.longyu.legacyforgebridge.compat;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import org.junit.jupiter.api.Test;
+
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LegacyTranslationBridgeTest {
@@ -41,17 +47,38 @@ class LegacyTranslationBridgeTest {
     }
 
     @Test
-    void loadsSuppliedTraditionalChineseMessageDataWithoutItemNames() {
-        LegacyLanguageCatalog.clearCache();
+    void generatedTraditionalChineseAliasesContainMessagesButNoItemNames() throws Exception {
+        JsonObject minecraftZh = loadJson("/assets/lfb-minecraft/lang/zh_tw.json");
+        JsonObject forgeZh = loadJson("/assets/lfb-forge/lang/zh_tw.json");
+
         assertEquals(
                 "--- 顯示說明第 %s/%s 頁 (/help <頁數>) ---",
-                LegacyLanguageCatalog.lookupForLanguage("zh_tw", "commands.help.header")
+                minecraftZh.get(LegacyTranslationBridge.minecraftAlias("commands.help.header")).getAsString()
         );
         assertEquals(
                 "警告：材質 %s 未被預載，可能會導致畫面異常！",
-                LegacyLanguageCatalog.lookupForLanguage("zh_tw", "forge.texture.preload.warning")
+                forgeZh.get(LegacyTranslationBridge.forgeAlias("forge.texture.preload.warning")).getAsString()
         );
-        assertNull(LegacyLanguageCatalog.lookupForLanguage("zh_tw", "item.swordIron.name"));
-        assertNull(LegacyLanguageCatalog.lookupForLanguage("zh_tw", "tile.stone.name"));
+
+        assertFalse(minecraftZh.has(LegacyTranslationBridge.minecraftAlias("item.swordIron.name")));
+        assertFalse(minecraftZh.has(LegacyTranslationBridge.minecraftAlias("tile.stone.name")));
+        assertFalse(forgeZh.has(LegacyTranslationBridge.forgeAlias("forge.configgui.forgeConfigTitle")));
+        assertFalse(forgeZh.has(LegacyTranslationBridge.forgeAlias("fml.configgui.gameRestartTitle")));
+    }
+
+    @Test
+    void generatedEnglishAliasesContainLegacyHelpFallback() throws Exception {
+        JsonObject minecraftEn = loadJson("/assets/lfb-minecraft/lang/en_us.json");
+        assertEquals(
+                "--- Showing help page %s of %s (/help <page>) ---",
+                minecraftEn.get(LegacyTranslationBridge.minecraftAlias("commands.help.header")).getAsString()
+        );
+    }
+
+    private JsonObject loadJson(String path) throws Exception {
+        try (InputStream stream = LegacyTranslationBridgeTest.class.getResourceAsStream(path)) {
+            assertNotNull(stream, "Missing generated language resource: " + path);
+            return JsonParser.parseReader(new InputStreamReader(stream, StandardCharsets.UTF_8)).getAsJsonObject();
+        }
     }
 }
