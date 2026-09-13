@@ -43,6 +43,61 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
+// Public package namespace migration. Keep the repository history reviewable while compiling both
+// main and test sources under dev.yinghuang. The generated source trees also rewrite internal-name
+// string constants used by the conversion code generator, so converted candidates no longer emit
+// dev.longyu classes either.
+def relocatedMainJavaDir = layout.buildDirectory.dir('generated/relocated-main-java')
+def relocatedTestJavaDir = layout.buildDirectory.dir('generated/relocated-test-java')
+
+def relocateJavaSources = { sourcePath, outputProvider ->
+    File sourceRoot = file(sourcePath)
+    File outputRoot = outputProvider.get().asFile
+    delete outputRoot
+    if (!sourceRoot.exists()) {
+        return
+    }
+    fileTree(sourceRoot).matching { include '**/*.java' }.files.each { File source ->
+        String relative = sourceRoot.toPath().relativize(source.toPath()).toString().replace('\\', '/')
+        relative = relative.replace('dev/longyu', 'dev/yinghuang')
+        File target = new File(outputRoot, relative)
+        target.parentFile.mkdirs()
+        String text = source.getText('UTF-8')
+                .replace('dev.longyu', 'dev.yinghuang')
+                .replace('dev/longyu', 'dev/yinghuang')
+        target.setText(text, 'UTF-8')
+    }
+}
+
+tasks.register('relocateMainJavaSources') {
+    inputs.dir('src/main/java')
+    outputs.dir(relocatedMainJavaDir)
+    doLast { relocateJavaSources('src/main/java', relocatedMainJavaDir) }
+}
+
+tasks.register('relocateTestJavaSources') {
+    inputs.dir('src/test/java')
+    outputs.dir(relocatedTestJavaDir)
+    doLast { relocateJavaSources('src/test/java', relocatedTestJavaDir) }
+}
+
+sourceSets {
+    main.java.setSrcDirs([relocatedMainJavaDir])
+    test.java.setSrcDirs([relocatedTestJavaDir])
+}
+
+tasks.named('compileJava') {
+    dependsOn tasks.named('relocateMainJavaSources')
+}
+
+tasks.named('compileTestJava') {
+    dependsOn tasks.named('relocateTestJavaSources')
+}
+
+tasks.named('sourcesJar') {
+    dependsOn tasks.named('relocateMainJavaSources')
+}
+
 // The user supplied original 1.7.10 .lang files. Keep those filtered message sources in the
 // repository, but generate modern JSON using collision-free LFB alias keys. This lets Minecraft's
 // normal language stack select zh_tw/en_us while ensuring no 1.7.10 item/block/UI key can replace
@@ -116,6 +171,11 @@ processResources {
     exclude 'assets/lfb-forge/legacy-lang/**'
     from(generatedLegacyLangDir)
 
+    filesMatching(['fabric.mod.json', 'legacyforgebridge.client.mixins.json']) {
+        filter { String line -> line
+                .replace('dev.longyu', 'dev.yinghuang')
+                .replace('dev/longyu', 'dev/yinghuang') }
+    }
     filesMatching('fabric.mod.json') {
         expand 'version': project.version
     }
@@ -168,8 +228,41 @@ tasks.register('verifyNoBundledAsm') {
     }
 }
 
+// The shipped mod namespace is dev.yinghuang. Catch any stale package path or class/resource
+// constant before an artifact can be published.
+tasks.register('verifyNoLongyuNamespace') {
+    dependsOn tasks.named('remapJar')
+
+    doLast {
+        File outputJar = tasks.named('remapJar').get().archiveFile.get().asFile
+        def offenders = []
+        def zip = new java.util.zip.ZipFile(outputJar)
+        try {
+            zip.entries().each { entry ->
+                if (entry.name.contains('longyu')) {
+                    offenders.add(entry.name)
+                    return
+                }
+                if (!entry.directory) {
+                    byte[] bytes = zip.getInputStream(entry).bytes
+                    String raw = new String(bytes, java.nio.charset.StandardCharsets.ISO_8859_1)
+                    if (raw.contains('dev.longyu') || raw.contains('dev/longyu')) {
+                        offenders.add(entry.name)
+                    }
+                }
+            }
+        } finally {
+            zip.close()
+        }
+        if (!offenders.isEmpty()) {
+            throw new GradleException("Final mod JAR still contains the retired longyu namespace: ${offenders}")
+        }
+    }
+}
+
 tasks.named('build') {
     dependsOn tasks.named('verifyNoBundledAsm')
+    dependsOn tasks.named('verifyNoLongyuNamespace')
 }
 
 publishing {

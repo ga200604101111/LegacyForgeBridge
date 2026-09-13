@@ -19,6 +19,7 @@ import dev.longyu.legacyforgebridge.convert.pass.LegacyLanguageCleanupPass;
 import dev.longyu.legacyforgebridge.convert.pass.LegacyLanguagePass;
 import dev.longyu.legacyforgebridge.convert.pass.LegacyObjPresentationPass;
 import dev.longyu.legacyforgebridge.convert.pass.LegacyItemRenderPass;
+import dev.longyu.legacyforgebridge.convert.pass.NativeItemTagsPass;
 import dev.longyu.legacyforgebridge.convert.profile.GenericLegacyModProfile;
 import dev.longyu.legacyforgebridge.convert.profile.RpgTool1Profile;
 
@@ -76,6 +77,11 @@ public final class LegacyConversionEngine {
             profile.configure(builder);
             builder.add(new LegacyObjPresentationPass());
             builder.add(new LegacyItemRenderPass());
+            // Modern 1.21.11 no longer has a SwordItem class for vanilla swords. Ordinary Fabric
+            // mods classify custom tools with native item tags instead. Emitting those tags from
+            // neutral item archetypes also lets ViaFabricPlus reuse its already-correct legacy
+            // sword-blocking path for converted custom swords.
+            builder.add(new NativeItemTagsPass());
             builder.add(new LegacyLanguageCleanupPass());
             builder.add(new GeneratedSemanticCodePass());
             builder.add(new GeneratedModEntrypointPass());
