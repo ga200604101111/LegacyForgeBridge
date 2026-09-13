@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.jar.JarEntry;
@@ -22,10 +23,11 @@ import java.util.jar.JarFile;
 /**
  * Best-effort semantic extractor for Forge 1.7.10 creative tabs.
  *
- * <p>The extractor never loads legacy classes. It reads ordinary bytecode patterns used by
- * {@code CreativeTabs} construction, {@code Item#setUnlocalizedName}, and
- * {@code Item#setCreativeTab}. Only custom tabs created by the source JAR are returned; vanilla
- * tabs remain owned by the modern runtime/profile fallback.</p>
+ * <p>The extractor never loads legacy classes. It recognises both common registration styles:
+ * callers that invoke {@code Item#setCreativeTab} directly and custom Item subclasses whose
+ * constructors choose a tab internally. The latter is especially common in 1.7.10 mods, where a
+ * content holder simply instantiates {@code new CustomSword("id", ...)} and the CustomSword
+ * constructor assigns its tab.</p>
  */
 public final class LegacyCreativeTabAnalyzer {
     private static final String CREATIVE_TABS = "net/minecraft/creativetab/CreativeTabs";
@@ -33,24 +35,8 @@ public final class LegacyCreativeTabAnalyzer {
     private static final String MINECRAFT_ITEM_PREFIX = "net/minecraft/item/Item";
 
     public Analysis analyze(Path jarPath) throws IOException {
-        Map<String, String> superByClass = new LinkedHashMap<>();
-        try (JarFile jar = new JarFile(jarPath.toFile())) {
-            var entries = jar.entries();
-            while (entries.hasMoreElements()) {
-                JarEntry entry = entries.nextElement();
-                if (entry.isDirectory() || !entry.getName().endsWith(".class")) {
-                    continue;
-                }
-                try (InputStream input = jar.getInputStream(entry)) {
-                    new ClassReader(input).accept(new ClassVisitor(Opcodes.ASM9) {
-                        @Override
-                        public void visit(int version, int access, String name, String signature, String superName, String[] interfaces) {
-                            superByClass.put(name, superName);
-                        }
-                    }, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
-                }
-            }
-        }
+        Map<String, String> superByClass = readHierarchy(jarPath);
+        Map<String, FieldRef> defaultTabByItemClass = readConstructorDefaultTabs(jarPath, superByClass);
 
         Map<FieldRef, MutableTab> tabs = new LinkedHashMap<>();
         Map<FieldRef, MutableItem> items = new LinkedHashMap<>();
@@ -64,10 +50,17 @@ public final class LegacyCreativeTabAnalyzer {
                     continue;
                 }
                 try (InputStream input = jar.getInputStream(entry)) {
-                    inspectClass(new ClassReader(input), superByClass, tabs, items, tabIconFields);
+                    inspectClass(
+                            new ClassReader(input),
+                            superByClass,
+                            defaultTabByItemClass,
+                            tabs,
+                            items,
+                            tabIconFields
+                    );
                 } catch (RuntimeException ignored) {
-                    // Analyzer is intentionally best-effort. Unsupported bytecode in one class must
-                    // not prevent the rest of the source JAR from contributing presentation data.
+                    // Best-effort analysis: one unusual class must not discard recoverable
+                    // presentation semantics from the rest of the source JAR.
                 }
             }
         }
@@ -105,9 +98,102 @@ public final class LegacyCreativeTabAnalyzer {
         return new Analysis(List.copyOf(result));
     }
 
+    private static Map<String, String> readHierarchy(Path jarPath) throws IOException {
+        Map<String, String> superByClass = new LinkedHashMap<>();
+        try (JarFile jar = new JarFile(jarPath.toFile())) {
+            var entries = jar.entries();
+            while (entries.hasMoreElements()) {
+                JarEntry entry = entries.nextElement();
+                if (entry.isDirectory() || !entry.getName().endsWith(".class")) {
+                    continue;
+                }
+                try (InputStream input = jar.getInputStream(entry)) {
+                    new ClassReader(input).accept(new ClassVisitor(Opcodes.ASM9) {
+                        @Override
+                        public void visit(int version, int access, String name, String signature, String superName, String[] interfaces) {
+                            superByClass.put(name, superName);
+                        }
+                    }, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+                }
+            }
+        }
+        return superByClass;
+    }
+
+    /**
+     * Extracts constant tab choices made by custom Item constructors. If one class has constructors
+     * that select different tabs, that class is intentionally treated as ambiguous rather than
+     * guessed; direct allocation-site assignments can still be recovered later.
+     */
+    private static Map<String, FieldRef> readConstructorDefaultTabs(
+            Path jarPath,
+            Map<String, String> superByClass
+    ) throws IOException {
+        Map<String, FieldRef> defaults = new LinkedHashMap<>();
+        Set<String> ambiguous = new LinkedHashSet<>();
+
+        try (JarFile jar = new JarFile(jarPath.toFile())) {
+            var entries = jar.entries();
+            while (entries.hasMoreElements()) {
+                JarEntry entry = entries.nextElement();
+                if (entry.isDirectory() || !entry.getName().endsWith(".class")) {
+                    continue;
+                }
+                try (InputStream input = jar.getInputStream(entry)) {
+                    new ClassReader(input).accept(new ClassVisitor(Opcodes.ASM9) {
+                        private String className;
+
+                        @Override
+                        public void visit(int version, int access, String name, String signature, String superName, String[] interfaces) {
+                            className = name;
+                        }
+
+                        @Override
+                        public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
+                            if (!"<init>".equals(name) || !isItemType(className, superByClass)) {
+                                return null;
+                            }
+                            return new MethodVisitor(Opcodes.ASM9) {
+                                private FieldRef recentCreativeTabField;
+
+                                @Override
+                                public void visitFieldInsn(int opcode, String owner, String fieldName, String fieldDescriptor) {
+                                    if (opcode != Opcodes.GETSTATIC) {
+                                        return;
+                                    }
+                                    String type = objectType(fieldDescriptor);
+                                    if (isCreativeTabType(type, superByClass)) {
+                                        recentCreativeTabField = new FieldRef(owner, fieldName, fieldDescriptor);
+                                    }
+                                }
+
+                                @Override
+                                public void visitMethodInsn(int opcode, String owner, String methodName, String methodDescriptor, boolean isInterface) {
+                                    if (isSetCreativeTab(methodName, methodDescriptor) && recentCreativeTabField != null) {
+                                        FieldRef existing = defaults.get(className);
+                                        if (existing == null && !ambiguous.contains(className)) {
+                                            defaults.put(className, recentCreativeTabField);
+                                        } else if (existing != null && !existing.equals(recentCreativeTabField)) {
+                                            defaults.remove(className);
+                                            ambiguous.add(className);
+                                        }
+                                        recentCreativeTabField = null;
+                                    }
+                                }
+                            };
+                        }
+                    }, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+                } catch (RuntimeException ignored) {
+                }
+            }
+        }
+        return Map.copyOf(defaults);
+    }
+
     private static void inspectClass(
             ClassReader reader,
             Map<String, String> superByClass,
+            Map<String, FieldRef> defaultTabByItemClass,
             Map<FieldRef, MutableTab> tabs,
             Map<FieldRef, MutableItem> items,
             Map<String, FieldRef> tabIconFields
@@ -133,12 +219,21 @@ public final class LegacyCreativeTabAnalyzer {
 
                 return new MethodVisitor(Opcodes.ASM9) {
                     private String recentString;
+                    private String recentNewType;
                     private FieldRef recentCreativeTabField;
                     private FieldRef recentItemField;
                     private String pendingItemName;
+                    private String pendingItemImplementationClass;
                     private FieldRef pendingCreativeTab;
                     private String pendingTabLabel;
                     private String pendingTabImplementationClass;
+
+                    @Override
+                    public void visitTypeInsn(int opcode, String type) {
+                        if (opcode == Opcodes.NEW) {
+                            recentNewType = type;
+                        }
+                    }
 
                     @Override
                     public void visitLdcInsn(Object value) {
@@ -165,41 +260,63 @@ public final class LegacyCreativeTabAnalyzer {
                             return;
                         }
 
-                        if (isCreativeTabType(type, superByClass) && pendingTabLabel != null) {
-                            tabs.put(field, new MutableTab(pendingTabLabel, pendingTabImplementationClass));
+                        if (isCreativeTabType(type, superByClass) && pendingTabImplementationClass != null) {
+                            String label = pendingTabLabel == null || pendingTabLabel.isBlank()
+                                    ? field.name
+                                    : pendingTabLabel;
+                            tabs.put(field, new MutableTab(label, pendingTabImplementationClass));
                             pendingTabLabel = null;
                             pendingTabImplementationClass = null;
                         }
 
                         if (isItemType(type, superByClass)) {
                             MutableItem item = items.computeIfAbsent(field, ignored -> new MutableItem());
-                            if (pendingItemName != null) {
+                            if (pendingItemName != null && !pendingItemName.isBlank()) {
                                 item.unlocalizedName = pendingItemName;
                             }
-                            if (pendingCreativeTab != null) {
-                                item.creativeTab = pendingCreativeTab;
+                            FieldRef effectiveTab = pendingCreativeTab;
+                            if (effectiveTab == null && pendingItemImplementationClass != null) {
+                                effectiveTab = resolveDefaultTab(
+                                        pendingItemImplementationClass,
+                                        defaultTabByItemClass,
+                                        superByClass
+                                );
+                            }
+                            if (effectiveTab != null) {
+                                item.creativeTab = effectiveTab;
                             }
                             pendingItemName = null;
+                            pendingItemImplementationClass = null;
                             pendingCreativeTab = null;
                             recentItemField = null;
+                            recentNewType = null;
                         }
                     }
 
                     @Override
                     public void visitMethodInsn(int opcode, String owner, String methodName, String methodDescriptor, boolean isInterface) {
                         if (methodName.equals("<init>") && isCreativeTabType(owner, superByClass)) {
-                            // Anonymous/custom CreativeTabs sometimes expose a no-arg constructor
-                            // and hardcode the label inside it. Preserve the tab even when the
-                            // outer allocation site does not surface a String; fieldName is a safe
-                            // identity fallback and language-key discovery can still title it later.
                             pendingTabLabel = recentString == null ? "" : recentString;
                             pendingTabImplementationClass = owner;
                             recentString = null;
+                            recentNewType = null;
                             return;
                         }
 
-                        if ((methodName.equals("setUnlocalizedName") || methodName.equals("func_77655_b"))
-                                && methodDescriptor.startsWith("(Ljava/lang/String;)")) {
+                        if (methodName.equals("<init>")
+                                && recentNewType != null
+                                && recentNewType.equals(owner)
+                                && isItemType(owner, superByClass)) {
+                            pendingItemImplementationClass = owner;
+                            if (methodDescriptor.startsWith("(Ljava/lang/String;") && recentString != null) {
+                                pendingItemName = recentString;
+                            }
+                            recentString = null;
+                            recentNewType = null;
+                            return;
+                        }
+
+                        if (isSetUnlocalizedName(methodName, methodDescriptor)) {
                             if (recentString != null) {
                                 pendingItemName = recentString;
                             }
@@ -207,8 +324,7 @@ public final class LegacyCreativeTabAnalyzer {
                             return;
                         }
 
-                        if ((methodName.equals("setCreativeTab") || methodName.equals("func_77637_a"))
-                                && methodDescriptor.startsWith("(L" + CREATIVE_TABS + ";)")) {
+                        if (isSetCreativeTab(methodName, methodDescriptor)) {
                             if (recentCreativeTabField != null) {
                                 if (recentItemField != null) {
                                     items.computeIfAbsent(recentItemField, ignored -> new MutableItem()).creativeTab = recentCreativeTabField;
@@ -230,6 +346,7 @@ public final class LegacyCreativeTabAnalyzer {
                             recentCreativeTabField = null;
                             recentItemField = null;
                             recentString = null;
+                            recentNewType = null;
                         }
                     }
                 };
@@ -237,11 +354,38 @@ public final class LegacyCreativeTabAnalyzer {
         }, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
     }
 
+    private static FieldRef resolveDefaultTab(
+            String itemClass,
+            Map<String, FieldRef> defaultTabByItemClass,
+            Map<String, String> superByClass
+    ) {
+        String current = itemClass;
+        Set<String> visited = new LinkedHashSet<>();
+        while (current != null && visited.add(current)) {
+            FieldRef direct = defaultTabByItemClass.get(current);
+            if (direct != null) {
+                return direct;
+            }
+            current = superByClass.get(current);
+        }
+        return null;
+    }
+
+    private static boolean isSetUnlocalizedName(String methodName, String descriptor) {
+        return (methodName.equals("setUnlocalizedName") || methodName.equals("func_77655_b"))
+                && descriptor.startsWith("(Ljava/lang/String;)");
+    }
+
+    private static boolean isSetCreativeTab(String methodName, String descriptor) {
+        return (methodName.equals("setCreativeTab") || methodName.equals("func_77637_a"))
+                && descriptor.startsWith("(L" + CREATIVE_TABS + ";)");
+    }
+
     private static String itemName(FieldRef field, MutableItem item) {
         if (item != null && item.unlocalizedName != null && !item.unlocalizedName.isBlank()) {
             return stripLegacyItemPrefix(item.unlocalizedName);
         }
-        return stripLegacyItemPrefix(field.name);
+        return stripLegacyItemPrefix(field.name).toLowerCase(Locale.ROOT);
     }
 
     private static String stripLegacyItemPrefix(String value) {
@@ -276,9 +420,6 @@ public final class LegacyCreativeTabAnalyzer {
             if (current.equals(target)) {
                 return true;
             }
-            // The source JAR does not contain Minecraft's superclass bytecode. Once a custom item
-            // chain reaches ItemSword/ItemArmor/etc., recognise that external vanilla type as the
-            // Item family instead of stopping the inheritance walk one class too early.
             if (acceptVanillaItemFamily
                     && current.startsWith(MINECRAFT_ITEM_PREFIX)
                     && !current.equals("net/minecraft/item/ItemStack")
