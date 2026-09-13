@@ -21,12 +21,29 @@ class LegacyCreativeTabAnalyzerTest {
     Path tempDir;
 
     @Test
-    void customItemSubclassThatEndsAtExternalItemSwordStillKeepsCreativeTabMembership() throws Exception {
-        Path jarPath = tempDir.resolve("legacy.jar");
+    void customItemSubclassThatEndsAtExternalItemSwordStillKeepsDirectCreativeTabMembership() throws Exception {
+        Path jarPath = tempDir.resolve("direct.jar");
         try (JarOutputStream jar = new JarOutputStream(Files.newOutputStream(jarPath))) {
             write(jar, "example/WeaponTab", tabClass());
-            write(jar, "example/RpgSword", customSwordClass());
-            write(jar, "example/Content", contentClass());
+            write(jar, "example/RpgSword", bareCustomSwordClass());
+            write(jar, "example/Content", directContentClass());
+        }
+
+        LegacyCreativeTabAnalyzer.Analysis analysis = new LegacyCreativeTabAnalyzer().analyze(jarPath);
+        assertEquals(1, analysis.tabs().size());
+        LegacyCreativeTabAnalyzer.Tab tab = analysis.tabs().getFirst();
+        assertEquals("rpgtool1_weapon", tab.label());
+        assertEquals(1, tab.itemNames().size());
+        assertEquals("dark_sword", tab.itemNames().getFirst());
+    }
+
+    @Test
+    void itemConstructorOwnedCreativeTabIsInheritedByAllocationSite() throws Exception {
+        Path jarPath = tempDir.resolve("constructor-owned.jar");
+        try (JarOutputStream jar = new JarOutputStream(Files.newOutputStream(jarPath))) {
+            write(jar, "example/WeaponTab", tabClass());
+            write(jar, "example/RpgSword", constructorOwnedCustomSwordClass());
+            write(jar, "example/Content", constructorOwnedContentClass());
         }
 
         LegacyCreativeTabAnalyzer.Analysis analysis = new LegacyCreativeTabAnalyzer().analyze(jarPath);
@@ -52,26 +69,47 @@ class LegacyCreativeTabAnalyzerTest {
         return writer.toByteArray();
     }
 
-    private static byte[] customSwordClass() {
+    private static byte[] bareCustomSwordClass() {
         ClassWriter writer = new ClassWriter(0);
         writer.visit(Opcodes.V1_7, Opcodes.ACC_PUBLIC, "example/RpgSword", null, "net/minecraft/item/ItemSword", null);
         writer.visitEnd();
         return writer.toByteArray();
     }
 
-    private static byte[] contentClass() {
+    private static byte[] constructorOwnedCustomSwordClass() {
         ClassWriter writer = new ClassWriter(0);
-        writer.visit(Opcodes.V1_7, Opcodes.ACC_PUBLIC, "example/Content", null, "java/lang/Object", null);
-        writer.visitField(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, "weaponTab", "L" + TABS + ";", null, null).visitEnd();
-        writer.visitField(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, "dark_sword", "Lexample/RpgSword;", null, null).visitEnd();
+        writer.visit(Opcodes.V1_7, Opcodes.ACC_PUBLIC, "example/RpgSword", null, "net/minecraft/item/ItemSword", null);
+        MethodVisitor init = writer.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "(Ljava/lang/String;)V", null, null);
+        init.visitCode();
+        init.visitVarInsn(Opcodes.ALOAD, 0);
+        init.visitInsn(Opcodes.ACONST_NULL);
+        init.visitMethodInsn(
+                Opcodes.INVOKESPECIAL,
+                "net/minecraft/item/ItemSword",
+                "<init>",
+                "(Lnet/minecraft/item/Item$ToolMaterial;)V",
+                false
+        );
+        init.visitVarInsn(Opcodes.ALOAD, 0);
+        init.visitVarInsn(Opcodes.ALOAD, 1);
+        init.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "example/RpgSword", "func_77655_b", "(Ljava/lang/String;)L" + ITEM + ";", false);
+        init.visitInsn(Opcodes.POP);
+        init.visitVarInsn(Opcodes.ALOAD, 0);
+        init.visitFieldInsn(Opcodes.GETSTATIC, "example/Content", "weaponTab", "L" + TABS + ";");
+        init.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "example/RpgSword", "func_77637_a", "(L" + TABS + ";)L" + ITEM + ";", false);
+        init.visitInsn(Opcodes.POP);
+        init.visitInsn(Opcodes.RETURN);
+        init.visitMaxs(2, 2);
+        init.visitEnd();
+        writer.visitEnd();
+        return writer.toByteArray();
+    }
 
+    private static byte[] directContentClass() {
+        ClassWriter writer = contentSkeleton();
         MethodVisitor method = writer.visitMethod(Opcodes.ACC_STATIC, "<clinit>", "()V", null, null);
         method.visitCode();
-        method.visitTypeInsn(Opcodes.NEW, "example/WeaponTab");
-        method.visitInsn(Opcodes.DUP);
-        method.visitLdcInsn("rpgtool1_weapon");
-        method.visitMethodInsn(Opcodes.INVOKESPECIAL, "example/WeaponTab", "<init>", "(Ljava/lang/String;)V", false);
-        method.visitFieldInsn(Opcodes.PUTSTATIC, "example/Content", "weaponTab", "L" + TABS + ";");
+        createTab(method);
 
         method.visitTypeInsn(Opcodes.NEW, "example/RpgSword");
         method.visitInsn(Opcodes.DUP);
@@ -86,6 +124,40 @@ class LegacyCreativeTabAnalyzerTest {
         method.visitEnd();
         writer.visitEnd();
         return writer.toByteArray();
+    }
+
+    private static byte[] constructorOwnedContentClass() {
+        ClassWriter writer = contentSkeleton();
+        MethodVisitor method = writer.visitMethod(Opcodes.ACC_STATIC, "<clinit>", "()V", null, null);
+        method.visitCode();
+        createTab(method);
+
+        method.visitTypeInsn(Opcodes.NEW, "example/RpgSword");
+        method.visitInsn(Opcodes.DUP);
+        method.visitLdcInsn("dark_sword");
+        method.visitMethodInsn(Opcodes.INVOKESPECIAL, "example/RpgSword", "<init>", "(Ljava/lang/String;)V", false);
+        method.visitFieldInsn(Opcodes.PUTSTATIC, "example/Content", "dark_sword", "Lexample/RpgSword;");
+        method.visitInsn(Opcodes.RETURN);
+        method.visitMaxs(3, 0);
+        method.visitEnd();
+        writer.visitEnd();
+        return writer.toByteArray();
+    }
+
+    private static ClassWriter contentSkeleton() {
+        ClassWriter writer = new ClassWriter(0);
+        writer.visit(Opcodes.V1_7, Opcodes.ACC_PUBLIC, "example/Content", null, "java/lang/Object", null);
+        writer.visitField(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, "weaponTab", "L" + TABS + ";", null, null).visitEnd();
+        writer.visitField(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, "dark_sword", "Lexample/RpgSword;", null, null).visitEnd();
+        return writer;
+    }
+
+    private static void createTab(MethodVisitor method) {
+        method.visitTypeInsn(Opcodes.NEW, "example/WeaponTab");
+        method.visitInsn(Opcodes.DUP);
+        method.visitLdcInsn("rpgtool1_weapon");
+        method.visitMethodInsn(Opcodes.INVOKESPECIAL, "example/WeaponTab", "<init>", "(Ljava/lang/String;)V", false);
+        method.visitFieldInsn(Opcodes.PUTSTATIC, "example/Content", "weaponTab", "L" + TABS + ";");
     }
 
     private static void write(JarOutputStream jar, String name, byte[] bytes) throws Exception {
