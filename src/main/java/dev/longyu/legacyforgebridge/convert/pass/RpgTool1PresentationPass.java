@@ -6,6 +6,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import dev.longyu.legacyforgebridge.convert.LegacyCreativeTabAnalyzer;
 import dev.longyu.legacyforgebridge.convert.api.ConversionContext;
 import dev.longyu.legacyforgebridge.convert.api.ConversionPass;
 import dev.longyu.legacyforgebridge.convert.api.SupportLevel;
@@ -16,18 +17,24 @@ import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 
 /**
- * Supplies corpus-known presentation semantics using the common converted-content schema.
+ * Supplies corpus-backed presentation semantics using the common converted-content schema.
  *
- * <p>The runtime consuming {@code creativeTabs} and {@code equipmentRender} is mod-agnostic. This
- * pass only fills information that the generic bytecode extractor cannot yet recover from the
- * verified RPGTool1 corpus.</p>
+ * <p>Creative group membership is not hardcoded to RPGTool categories. The verified source JAR is
+ * inspected through {@link LegacyCreativeTabAnalyzer}; every recovered legacy custom tab becomes a
+ * distinct modern group and only the items that actually called {@code setCreativeTab(...)} for
+ * that tab are assigned to it. The wearable model paths remain corpus-known data until generic
+ * renderer-bytecode extraction can recover them too.</p>
  */
 public final class RpgTool1PresentationPass implements ConversionPass {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final String NAMESPACE = "rpgtool1";
-    private static final String CREATIVE_TAB_ID = NAMESPACE + ":main";
 
     @Override
     public String id() {
@@ -55,10 +62,8 @@ public final class RpgTool1PresentationPass implements ConversionPass {
             return;
         }
 
-        JsonArray tabItems = new JsonArray();
-        String icon = null;
+        Map<String, JsonObject> itemByPath = new LinkedHashMap<>();
         int equipmentDefinitions = 0;
-
         for (JsonElement element : items) {
             if (!element.isJsonObject()) {
                 continue;
@@ -68,12 +73,7 @@ public final class RpgTool1PresentationPass implements ConversionPass {
             if (itemId == null) {
                 continue;
             }
-
-            item.addProperty("creativeTab", CREATIVE_TAB_ID);
-            tabItems.add(itemId);
-            if (icon == null && "sword".equals(string(item, "kind"))) {
-                icon = itemId;
-            }
+            itemByPath.put(itemPath(itemId), item);
 
             String kind = string(item, "kind");
             if ("wing".equals(kind)) {
@@ -85,27 +85,117 @@ public final class RpgTool1PresentationPass implements ConversionPass {
             }
         }
 
-        if (icon == null && !tabItems.isEmpty()) {
-            icon = tabItems.get(0).getAsString();
-        }
-
-        JsonObject tab = new JsonObject();
-        tab.addProperty("id", CREATIVE_TAB_ID);
-        tab.addProperty("title", context.metadata().primary().name());
-        tab.addProperty("icon", icon);
-        tab.add("items", tabItems);
-        JsonArray tabs = new JsonArray();
-        tabs.add(tab);
-        root.add("creativeTabs", tabs);
-
+        int creativeTabCount = emitExtractedCreativeTabs(context, root, itemByPath);
         Files.writeString(manifestPath, GSON.toJson(root) + "\n", StandardCharsets.UTF_8);
+
+        if (creativeTabCount == 0) {
+            context.diagnostics().warning(
+                    "LFB-RPGTOOL-PRESENTATION-0002",
+                    SupportLevel.MANUAL_REQUIRED,
+                    "No source-defined custom CreativeTabs could be recovered from the legacy bytecode. Items were left in their existing fallback groups instead of being incorrectly forced into one synthetic mod tab."
+            );
+        }
 
         context.diagnostics().info(
                 "LFB-RPGTOOL-PRESENTATION-0001",
                 SupportLevel.ADAPTED,
-                "Emitted the source mod's dedicated creative group plus " + equipmentDefinitions
-                        + " wearable OBJ definitions into the generic converted-content presentation schema."
+                "Recovered " + creativeTabCount + " source-defined creative group(s) and emitted "
+                        + equipmentDefinitions + " wearable OBJ definitions through the generic presentation schema."
         );
+    }
+
+    private static int emitExtractedCreativeTabs(
+            ConversionContext context,
+            JsonObject root,
+            Map<String, JsonObject> itemByPath
+    ) throws IOException {
+        LegacyCreativeTabAnalyzer.Analysis analysis = new LegacyCreativeTabAnalyzer().analyze(context.sourceJar());
+        JsonArray tabs = new JsonArray();
+        Set<String> usedTabIds = new LinkedHashSet<>();
+
+        for (LegacyCreativeTabAnalyzer.Tab sourceTab : analysis.tabs()) {
+            JsonArray tabItems = new JsonArray();
+            JsonObject iconItem = null;
+            String tabId = uniqueTabId(sourceTab, usedTabIds);
+
+            for (String legacyItemName : sourceTab.itemNames()) {
+                JsonObject item = itemByPath.get(normalizeItemName(legacyItemName));
+                if (item == null) {
+                    continue;
+                }
+                String itemId = string(item, "id");
+                item.addProperty("creativeTab", tabId);
+                tabItems.add(itemId);
+                if (sourceTab.iconItemName() != null
+                        && normalizeItemName(sourceTab.iconItemName()).equals(itemPath(itemId))) {
+                    iconItem = item;
+                }
+            }
+
+            if (tabItems.isEmpty()) {
+                continue;
+            }
+
+            JsonObject tab = new JsonObject();
+            tab.addProperty("id", tabId);
+            tab.addProperty("title", sourceTab.label());
+            tab.addProperty(
+                    "icon",
+                    iconItem != null ? string(iconItem, "id") : tabItems.get(0).getAsString()
+            );
+            tab.add("items", tabItems);
+            tabs.add(tab);
+        }
+
+        if (!tabs.isEmpty()) {
+            root.add("creativeTabs", tabs);
+        } else {
+            root.remove("creativeTabs");
+        }
+        return tabs.size();
+    }
+
+    private static String uniqueTabId(LegacyCreativeTabAnalyzer.Tab sourceTab, Set<String> used) {
+        String path = sanitizePath(sourceTab.label());
+        if (path.isBlank()) {
+            path = sanitizePath(sourceTab.fieldName());
+        }
+        if (path.isBlank()) {
+            path = "legacy_tab";
+        }
+        String candidate = NAMESPACE + ":" + path;
+        int suffix = 2;
+        while (!used.add(candidate)) {
+            candidate = NAMESPACE + ":" + path + "_" + suffix++;
+        }
+        return candidate;
+    }
+
+    private static String sanitizePath(String value) {
+        if (value == null) {
+            return "";
+        }
+        String normalized = value.toLowerCase(Locale.ROOT)
+                .replaceAll("[^a-z0-9/._-]", "_")
+                .replaceAll("_+", "_");
+        while (normalized.startsWith("_") || normalized.startsWith("/")) {
+            normalized = normalized.substring(1);
+        }
+        while (normalized.endsWith("_") || normalized.endsWith("/")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        return normalized;
+    }
+
+    private static String normalizeItemName(String value) {
+        if (value == null) {
+            return "";
+        }
+        String result = value;
+        if (result.startsWith("item.")) {
+            result = result.substring("item.".length());
+        }
+        return itemPath(result);
     }
 
     private static JsonObject wingRenderer(String itemId) {
