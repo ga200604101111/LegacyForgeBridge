@@ -14,12 +14,12 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Exact, source-proven OreDictionary view for one converted legacy mod.
+ * Exact source-proven OreDictionary entries plus Forge 1.7.10 platform conventions.
  *
- * <p>Metadata-specific registrations cannot safely be represented by a plain modern item tag. The
- * index therefore preserves every proven registered stack as an Ingredient and combines multiple
- * entries with Fabric's {@code fabric:any}. Cross-mod/global OreDictionary interoperability is a
- * separate layer; an unproven ore name is intentionally left unresolved here.</p>
+ * <p>Metadata-specific mod registrations cannot safely be represented by a plain item tag, so each
+ * proven stack remains an exact Ingredient. Forge's own built-in names are independently bridged by
+ * {@link LegacyOreDictionaryConventions1710}; both sources are unioned with Fabric's
+ * {@code fabric:any}. Unknown non-platform names remain unresolved rather than guessed.</p>
  */
 public final class LegacyOreDictionaryIndex {
     private final Map<String, List<JsonElement>> entries;
@@ -61,18 +61,24 @@ public final class LegacyOreDictionaryIndex {
     }
 
     public Optional<JsonElement> ingredient(String oreName) {
-        List<JsonElement> values = entries.get(oreName);
-        if (values == null || values.isEmpty()) return Optional.empty();
-        if (values.size() == 1) return Optional.of(values.getFirst().deepCopy());
+        LinkedHashMap<String, JsonElement> union = new LinkedHashMap<>();
+        LegacyOreDictionaryConventions1710.ingredient(oreName)
+                .ifPresent(value -> union.put(value.toString(), value.deepCopy()));
+        for (JsonElement value : entries.getOrDefault(oreName, List.of())) {
+            union.putIfAbsent(value.toString(), value.deepCopy());
+        }
+        if (union.isEmpty()) return Optional.empty();
+        if (union.size() == 1) return Optional.of(union.values().iterator().next().deepCopy());
 
         JsonObject any = new JsonObject();
         any.addProperty("fabric:type", "fabric:any");
         JsonArray ingredients = new JsonArray();
-        values.forEach(value -> ingredients.add(value.deepCopy()));
+        union.values().forEach(value -> ingredients.add(value.deepCopy()));
         any.add("ingredients", ingredients);
         return Optional.of(any);
     }
 
+    /** Names proven by this source JAR; platform conventions are intentionally reported separately. */
     public Set<String> names() {
         return new LinkedHashSet<>(entries.keySet());
     }
