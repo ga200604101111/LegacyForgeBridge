@@ -2,6 +2,7 @@ package dev.longyu.legacyforgebridge.convert.pass;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import dev.longyu.legacyforgebridge.compat.LegacyStackComponents;
 import dev.longyu.legacyforgebridge.convert.LegacyJarAnalyzer;
 import dev.longyu.legacyforgebridge.convert.LegacyRecipeAnalyzer;
 import dev.longyu.legacyforgebridge.convert.LegacyRegistryAnalyzer;
@@ -52,7 +53,11 @@ class LegacyRecipeMaterializationPassTest {
         assertTrue(Files.isRegularFile(emitted));
         JsonObject json = JsonParser.parseString(Files.readString(emitted, StandardCharsets.UTF_8)).getAsJsonObject();
         assertEquals("minecraft:crafting_shapeless", json.get("type").getAsString());
-        assertEquals("fixture:rice", json.getAsJsonArray("ingredients").get(0).getAsString());
+        JsonObject rice = json.getAsJsonArray("ingredients").get(0).getAsJsonObject();
+        assertEquals("fabric:components", rice.get("fabric:type").getAsString());
+        assertEquals("fixture:rice", rice.get("base").getAsString());
+        assertEquals(0, rice.getAsJsonObject("components")
+                .get(LegacyStackComponents.LEGACY_META_ID.toString()).getAsInt());
         assertFalse(Files.exists(tempDir.resolve("staging/data/fixture/recipe/legacy_shapeless_0001.json")));
 
         JsonObject report = JsonParser.parseString(Files.readString(
