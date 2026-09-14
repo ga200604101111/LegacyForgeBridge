@@ -79,17 +79,22 @@ Checkpoint B/C 經 checksum-verified recovery、完整 Gradle build、全部測�
 
 ## P0 checkpoint D — generic Forge/FML event provenance + authority
 
-狀態：IN PROGRESS；source slice 已提交，完整 CI 驗證中。
+狀態：核心 provenance / authority / safe-target slice CI GREEN；presentation callback adapter 仍持續實作。
 
-已新增：
+已完成：
 
 - `LegacyEventAnalyzer`：非執行式解析 `@SubscribeEvent` 與實際 `EventBus.register(Object)` 資料流。
 - 同時辨識 Forge `MinecraftForge.EVENT_BUS` 與 FML `FMLCommonHandler.bus()`。
 - 支援 `register(new Handler())` 與 constructor 內 `register(this)` 來源證明，不用類名清單。
 - 保留 event type、handler method/descriptor、bus、`@SideOnly`、priority、`receiveCanceled`、registration source site。
 - unrelated namespace synthetic fixture 同時覆蓋 direct-new、self-register、未註冊 annotated listener 排除。
-- `LegacyEventPolicy`：在 codegen 前先標註 client presentation / server authoritative / contextual / unsupported，禁止 client 重複執行 legacy server authoritative gameplay event。
-- `legacyforgebridge/event-analysis.json` 已接入 common conversion pipeline，並寫出 `executionPolicy`。
+- `LegacyEventPolicy`：在 codegen 前標註 client presentation / server authoritative / contextual / unsupported，禁止 client 重複執行 legacy server authoritative gameplay event。
+- `legacyforgebridge/event-analysis.json` 已接入 common conversion pipeline，並寫出 `executionPolicy` 與 constructor/registration provenance。
+- existing jump/fall/hurt compiler 已改用上述 registration provenance，不再依賴鄰近 instruction 猜測 listener。
+- `LegacyEventHandlerConstructionAnalyzer`：對 minimal self-register listener 僅允許精確 parent-constructor reconstruction；混有其他初始化時 fail closed。
+- `LegacySelfRegistrationStripper`：只對 analyzer 已證明的 constructor，精確移除 Forge/FML `EventBus.register(this)` 指令序列，保留 constructor 其餘初始化。
+- source Item 若以相同 constructor 自行註冊 event，event adapter 會透過 bootstrap transaction 重用已建立的同一 Item instance，不再第二次呼叫 legacy constructor。
+- `LegacyBehaviorItemEventTargetTest` 已驗證：constructor 狀態保留、generated class 無 MinecraftForge/EventBus、bootstrap 對 source Item 只 `NEW` 一次、event target 由 `bootstrapItem()` 取得同一 instance。
 
 目前 generic policy 已明確分類：
 
@@ -97,7 +102,17 @@ Checkpoint B/C 經 checksum-verified recovery、完整 Gradle build、全部測�
 - server authoritative：LivingDrops、LivingDeath、AttackEntity、ItemCrafted、ArrowNock、ArrowLoose。
 - contextual：PlayerTick、NameFormat，以及既有 jump/fall/hurt bridge。
 
-下一步仍不是把所有 source handler 無條件執行，而是先證明 handler instance 可以安全重建：Bamboo 多個 listener 會在 constructor 自行註冊舊 Forge bus；轉換器必須移除該 registration side effect，或對 Item handler 綁定已生成的現代 Item instance，不能直接搬運 legacy constructor。
+CI 證據：
+
+- tested compiler source commit：`8c18dbb6b3b2d9717dfd25bf4a7dd496f69c61a2`。
+- run `34819845295`：完整 Gradle build / tests / remap / artifact 成功後才落成上述 compiler commit。
+- run `34820068364`：移除一次性 staging 後，以正常 read-only workflow 再次完整成功，包含 item-target regression。
+
+仍未完成：
+
+- ItemTooltip / PlaySoundAtEntity / RenderLiving Specials 的現代 runtime callback adapter。
+- Bamboo `ItemVillagerBlock` 是真實 PlaySound client-presentation corpus，但它透過 `registerBlock(..., ItemBlockClass, ...)` 建立，constructor 需要 source Block instance；下一步必須由 generic registry evidence 將 generated Block identity 綁回 source ItemBlock constructor，不能用 Bamboo 類名特例。
+- server-authoritative event 只保留分析/遷移資訊，不會在 legacy-server client runtime 重複執行。
 
 ## 目前 Bamboo candidate 狀態
 
@@ -110,14 +125,14 @@ Checkpoint B/C 經 checksum-verified recovery、完整 Gradle build、全部測�
 - OreDictionary：24
 - fuel：1
 - compiled source item behaviors：27
-- event provenance/authority IR：已進入 P0.3 實作，尚未宣告完整 callback runtime。
+- event provenance/authority/safe target：CI GREEN；presentation runtime adapter 尚未完成。
 - original legacy classes 仍有 341 個；因此尚未達到 loader-safe 完整 port 的 Definition of Done。
 
 ## 下一段
 
-1. 將 generic event provenance / authority slice 完整 CI 跑綠。
-2. 讓 existing jump/fall/hurt compiler 改用新的 registration provenance，並安全處理 self-register constructor。
-3. 依 client/server authority 分層擴充 ItemTooltip / PlaySound / RenderLiving 與 Crafted / LivingDrops / AttackEntity 等事件；server-authoritative callback 不在 client duplicated execution。
+1. 建立 generic registered Block → source ItemBlock allocation identity，讓 self-register ItemBlock listener 可安全重用 generated content identity。
+2. 完成第一個 client presentation event adapter；優先用 Bamboo `PlaySoundAtEntityEvent` 作真實 corpus，同時處理 1.7.10 → modern sound identity，不硬編 Bamboo 聲音字串。
+3. 再擴充 ItemTooltip / RenderLiving Specials；Tooltip 的 NBTTagList / source static enchantment table 另做明確 API 支援。
 4. 建立通用 Minecraft 1.7.10 vanilla registry SRG mapping，讓 recipe ingredient/output 可完整現代化。
 5. 真正輸出 shaped/shapeless/smelting recipe JSON、OreDictionary tags、fuel adapter。
 6. 進入 P1：Block behavior、BlockEntity/Inventory/NBT、EntityType/DataWatcher、Menu/GUI。
