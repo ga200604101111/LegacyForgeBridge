@@ -42,7 +42,13 @@ public final class GeneratedModSupport {
             if(count>=1&&count<=99)properties.stacksTo(count);
             if(source.item().durability>0)durability=source.item().durability;
         }
-        if("sword".equals(kind))properties.sword(ToolMaterial.DIAMOND,attackDamage-ToolMaterial.DIAMOND.attackDamageBonus(),attackSpeed);
+        if("sword".equals(kind)){
+            properties.sword(ToolMaterial.DIAMOND,attackDamage-ToolMaterial.DIAMOND.attackDamageBonus(),attackSpeed);
+            // Minecraft 1.7.10 has no player-visible attack-speed stat. Preserve the modern
+            // attribute internally for client/protocol mechanics, but never expose that newer
+            // stat as a tooltip row on a converted legacy weapon.
+            properties.attributes(legacyWeaponAttributes(attackDamage,attackSpeed));
+        }
         // The admitted source hit callback includes its own inherited sword wear.
         // Native postHurtEnemy must not apply a second durability charge.
         if(source!=null && source.hooks().contains("hit"))properties.component(DataComponents.WEAPON,new Weapon(0));
@@ -59,6 +65,16 @@ public final class GeneratedModSupport {
         Item item=new ConvertedBehaviorItem(properties);
         Registry.register(BuiltInRegistries.ITEM,key,item);ITEMS.put(id,item);
         int[] counts=COUNTS.get(id.getNamespace());if(counts!=null)counts[0]++;
+    }
+    static ItemAttributeModifiers legacyWeaponAttributes(float attackDamage,float attackSpeed){
+        return ItemAttributeModifiers.builder()
+                .add(Attributes.ATTACK_DAMAGE,
+                        new AttributeModifier(Item.BASE_ATTACK_DAMAGE_ID,attackDamage,AttributeModifier.Operation.ADD_VALUE),
+                        EquipmentSlotGroup.MAINHAND)
+                .add(Attributes.ATTACK_SPEED,
+                        new AttributeModifier(Item.BASE_ATTACK_SPEED_ID,attackSpeed,AttributeModifier.Operation.ADD_VALUE),
+                        EquipmentSlotGroup.MAINHAND,ItemAttributeModifiers.Display.hidden())
+                .build();
     }
     public static void registerCreativeTab(String idValue,String titleKey,String literalTitle,String iconValue,String[] itemValues){
         Identifier id=Identifier.parse(idValue);if(BuiltInRegistries.CREATIVE_MODE_TAB.containsKey(id))return;
