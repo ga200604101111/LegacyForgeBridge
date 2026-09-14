@@ -2,13 +2,16 @@
 """Recover the interrupted Corpus #2 P0 source checkpoint safely.
 
 The three corpus2-bc parts are a base64-wrapped zlib stream containing one
-unified Git patch.  The payload is pinned by two SHA-256 checksums before it is
-allowed anywhere near the working tree.  We also reject path traversal and any
+unified Git patch. The payload is pinned by two SHA-256 checksums before it is
+allowed anywhere near the working tree. We also reject path traversal and any
 patch target outside the deliberately narrow source/document/build allowlist.
 
-The workflow runs this script before the full Gradle build.  ``git apply
---index`` stages the recovered files as well as applying them to the working
-tree, so the workflow can commit exactly the source snapshot that passed CI.
+The workflow runs this script before the full Gradle build. On the historical
+checkpoint commit, ``git apply --index`` stages the recovered files as well as
+applying them to the working tree, so CI can commit exactly the source snapshot
+that passed. On descendants where that snapshot is already present, a reverse
+apply check proves the patch is already incorporated and the script becomes a
+safe no-op. This keeps the recovery workflow reusable for later P0 commits.
 """
 
 from __future__ import annotations
@@ -51,8 +54,8 @@ def safe_path(raw: bytes) -> str:
     return value
 
 
-def run_git_apply(*args: str, payload: bytes) -> None:
-    completed = subprocess.run(
+def git_apply_result(*args: str, payload: bytes) -> subprocess.CompletedProcess[bytes]:
+    return subprocess.run(
         ["git", "apply", *args, "-"],
         cwd=ROOT,
         input=payload,
@@ -60,9 +63,17 @@ def run_git_apply(*args: str, payload: bytes) -> None:
         stderr=subprocess.STDOUT,
         check=False,
     )
+
+
+def emit_result(completed: subprocess.CompletedProcess[bytes]) -> None:
     output = completed.stdout.decode("utf-8", errors="replace")
     if output:
         print(output, end="" if output.endswith("\n") else "\n")
+
+
+def run_git_apply(*args: str, payload: bytes) -> None:
+    completed = git_apply_result(*args, payload=payload)
+    emit_result(completed)
     if completed.returncode != 0:
         raise SystemExit(f"git apply {' '.join(args)} failed with exit code {completed.returncode}")
 
@@ -121,10 +132,26 @@ def main() -> None:
     for path in paths:
         print(f"patch_target={path}")
 
-    # First prove the complete patch applies atomically.  Only then mutate/stage.
-    run_git_apply("--check", "--whitespace=error-all", payload=payload)
-    run_git_apply("--index", "--whitespace=error-all", payload=payload)
-    print("checkpoint recovery applied and staged successfully")
+    forward = git_apply_result("--check", "--whitespace=error-all", payload=payload)
+    if forward.returncode == 0:
+        run_git_apply("--index", "--whitespace=error-all", payload=payload)
+        print("checkpoint recovery applied and staged successfully")
+        return
+
+    # A descendant of the tested recovery snapshot should fail forward apply
+    # while succeeding as a reverse check. This proves every hunk is already
+    # present without mutating or staging the current working tree.
+    reverse = git_apply_result("--reverse", "--check", "--whitespace=error-all", payload=payload)
+    if reverse.returncode == 0:
+        print("checkpoint recovery already incorporated; no source changes required")
+        return
+
+    print("checkpoint is neither cleanly applicable nor already incorporated")
+    print("forward apply diagnostics:")
+    emit_result(forward)
+    print("reverse apply diagnostics:")
+    emit_result(reverse)
+    raise SystemExit("checkpoint source diverged from both the pre-recovery and recovered states")
 
 
 if __name__ == "__main__":
