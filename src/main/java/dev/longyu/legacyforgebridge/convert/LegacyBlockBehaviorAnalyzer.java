@@ -30,6 +30,7 @@ import java.util.jar.JarFile;
 public final class LegacyBlockBehaviorAnalyzer {
     public enum CallbackKind {
         ACTIVATE,
+        PLACED,
         PLACED_BY,
         NEIGHBOR_CHANGED,
         UPDATE_TICK,
@@ -71,6 +72,9 @@ public final class LegacyBlockBehaviorAnalyzer {
             spec(CallbackKind.ACTIVATE,
                     "(Lnet/minecraft/world/World;IIILnet/minecraft/entity/player/EntityPlayer;IFFF)Z",
                     "onBlockActivated", "func_149727_a"),
+            spec(CallbackKind.PLACED,
+                    "(Lnet/minecraft/world/World;IIIIFFFI)I",
+                    "onBlockPlaced", "func_149660_a"),
             spec(CallbackKind.PLACED_BY,
                     "(Lnet/minecraft/world/World;IIILnet/minecraft/entity/EntityLivingBase;Lnet/minecraft/item/ItemStack;)V",
                     "onBlockPlacedBy", "func_149689_a"),
