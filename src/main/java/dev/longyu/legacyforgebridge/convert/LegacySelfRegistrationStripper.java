@@ -42,22 +42,23 @@ public final class LegacySelfRegistrationStripper {
     private static int stripConstructor(MethodNode method) {
         int stripped = 0;
         for (AbstractInsnNode cursor = firstOpcode(method.instructions.getFirst()); cursor != null;) {
-            AbstractInsnNode next = nextOpcode(cursor);
             List<AbstractInsnNode> forge = forgePattern(cursor);
             if (forge != null) {
+                AbstractInsnNode after = nextOpcode(forge.getLast());
                 forge.forEach(method.instructions::remove);
                 stripped++;
-                cursor = nextExisting(method.instructions, next);
+                cursor = after;
                 continue;
             }
             List<AbstractInsnNode> fml = fmlPattern(cursor);
             if (fml != null) {
+                AbstractInsnNode after = nextOpcode(fml.getLast());
                 fml.forEach(method.instructions::remove);
                 stripped++;
-                cursor = nextExisting(method.instructions, next);
+                cursor = after;
                 continue;
             }
-            cursor = next;
+            cursor = nextOpcode(cursor);
         }
         return stripped;
     }
@@ -115,13 +116,5 @@ public final class LegacySelfRegistrationStripper {
     private static AbstractInsnNode nextOpcode(AbstractInsnNode instruction) {
         if (instruction == null) return null;
         return firstOpcode(instruction.getNext());
-    }
-
-    private static AbstractInsnNode nextExisting(InsnList instructions, AbstractInsnNode candidate) {
-        if (candidate == null) return null;
-        for (AbstractInsnNode current = instructions.getFirst(); current != null; current = current.getNext()) {
-            if (current == candidate) return firstOpcode(current);
-        }
-        return firstOpcode(instructions.getFirst());
     }
 }
