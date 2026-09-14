@@ -47,11 +47,17 @@ public final class LegacyFuelRegistry {
     public static Integer burnDuration(ItemStack stack) {
         if (stack == null || stack.isEmpty()) return null;
         Identifier id = BuiltInRegistries.ITEM.getKey(stack.getItem());
-        List<Rule> rules = RULES.get(id);
-        if (rules == null || rules.isEmpty()) return null;
         int legacyMeta = LegacyStackComponents.get(stack);
         Integer damageComponent = stack.get(DataComponents.DAMAGE);
         int damage = damageComponent == null ? 0 : damageComponent;
+        return burnDuration(id, legacyMeta, damage);
+    }
+
+    /** Pure ordered matcher kept separate from ItemStack decoding so matching semantics are testable without mutating frozen registries. */
+    static Integer burnDuration(Identifier id, int legacyMeta, int damage) {
+        if (id == null) return null;
+        List<Rule> rules = RULES.get(id);
+        if (rules == null || rules.isEmpty()) return null;
         for (Rule rule : rules) {
             if (rule.legacyMeta() != ANY && rule.legacyMeta() != legacyMeta) continue;
             if (rule.damage() != ANY && rule.damage() != damage) continue;
