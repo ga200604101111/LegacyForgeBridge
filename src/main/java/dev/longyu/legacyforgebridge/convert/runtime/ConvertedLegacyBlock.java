@@ -38,9 +38,14 @@ public final class ConvertedLegacyBlock extends Block {
         if (state == null || !state.hasProperty(LEGACY_META)) {
             throw new IllegalArgumentException("BlockState does not carry legacy metadata");
         }
+        return state.setValue(LEGACY_META, validateLegacyMeta(meta));
+    }
+
+    /** Pure 1.7 metadata-domain validation kept independent from the frozen modern block registry. */
+    static int validateLegacyMeta(int meta) {
         if (meta < 0 || meta > 15) {
             throw new IllegalArgumentException("Legacy block metadata outside 1.7 range: " + meta);
         }
-        return state.setValue(LEGACY_META, meta);
+        return meta;
     }
 }
