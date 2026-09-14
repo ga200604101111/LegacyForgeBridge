@@ -8,6 +8,7 @@ import org.objectweb.asm.tree.IntInsnNode;
 import org.objectweb.asm.tree.JumpInsnNode;
 import org.objectweb.asm.tree.LabelNode;
 import org.objectweb.asm.tree.LookupSwitchInsnNode;
+import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.TableSwitchInsnNode;
 import org.objectweb.asm.tree.VarInsnNode;
@@ -26,22 +27,25 @@ import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
 /**
- * Compiles the source-independent subset of Minecraft 1.7 {@code Block#onBlockActivated}.
+ * Compiles a bounded source-independent subset of Minecraft 1.7 {@code Block#onBlockActivated}.
  *
- * <p>The first admitted slice is deliberately small: a callback may make a bounded boolean
- * decision from the clicked legacy side and integer temporaries/constants. It may not touch the
- * source Block instance, World, coordinates, player, hit-vector floats, fields, methods,
- * allocations, or loops. This is enough to preserve pure "does this face consume the click?"
- * behavior without defining or executing a legacy class. World/player/state mutations are added
- * only by later adapters that can prove an equivalent modern operation.</p>
+ * <p>The admitted slice may make a boolean decision from the clicked legacy side, integer
+ * temporaries/constants and the raw metadata of the block being activated. Metadata is admitted
+ * only for the exact bytecode sequence {@code world.getBlockMetadata(x, y, z)} using the callback's
+ * own World/x/y/z arguments, so neighboring-world reads cannot be mistaken for local block state.
+ * Source Block instance state, player state, hit-vector floats, arbitrary fields/methods,
+ * allocations, world mutation and loops remain fail-closed.</p>
  */
 public final class LegacyBlockActivationCompiler {
     private static final int MAX_INSTRUCTIONS = 96;
     private static final int MAX_STEPS = 256;
+    private static final String WORLD = "net/minecraft/world/World";
+    private static final String METADATA_DESCRIPTOR = "(III)I";
 
     public enum Op {
         NOP,
         LOAD_INT,
+        LOAD_META,
         STORE_INT,
         CONST_INT,
         IADD,
@@ -92,10 +96,21 @@ public final class LegacyBlockActivationCompiler {
     ) {
         public Program { instructions = List.copyOf(instructions); }
 
-        /** Pure evaluator shared by tests and the modern runtime adapter. */
+        /** Convenience evaluator for programs that provably do not depend on block metadata. */
         public boolean evaluate(int side) {
+            if (instructions.stream().anyMatch(instruction -> instruction.op() == Op.LOAD_META)) {
+                throw new IllegalStateException("Activation program requires legacy block metadata");
+            }
+            return evaluate(side, 0);
+        }
+
+        /** Pure evaluator shared by tests and the modern runtime adapter. */
+        public boolean evaluate(int side, int metadata) {
             if (side < 0 || side > 5) {
                 throw new IllegalArgumentException("Legacy side outside 0..5: " + side);
+            }
+            if (metadata < 0 || metadata > 15) {
+                throw new IllegalArgumentException("Legacy metadata outside 0..15: " + metadata);
             }
             Map<Integer, Integer> locals = new HashMap<>();
             locals.put(6, side);
@@ -114,6 +129,7 @@ public final class LegacyBlockActivationCompiler {
                         if (value == null) throw new IllegalStateException("Uninitialized activation local " + instruction.operand());
                         stack.push(value);
                     }
+                    case LOAD_META -> stack.push(metadata);
                     case STORE_INT -> locals.put(instruction.operand(), stack.pop());
                     case CONST_INT -> stack.push(instruction.operand());
                     case IADD -> stack.push(binary(stack, (left, right) -> left + right));
@@ -222,6 +238,19 @@ public final class LegacyBlockActivationCompiler {
         List<Instruction> output = new ArrayList<>();
         boolean returned = false;
         for (int i = 0; i < real.size(); i++) {
+            if (matchesCurrentMetadataRead(real, i)) {
+                // Preserve one output slot per source instruction so all proven forward jump targets
+                // retain their indices while the legacy object/coordinate stack sequence becomes a
+                // single typed modern input.
+                output.add(simple(Op.NOP, 0));
+                output.add(simple(Op.NOP, 0));
+                output.add(simple(Op.NOP, 0));
+                output.add(simple(Op.NOP, 0));
+                output.add(simple(Op.LOAD_META, 0));
+                i += 4;
+                continue;
+            }
+
             AbstractInsnNode instruction = real.get(i);
             int opcode = instruction.getOpcode();
             Instruction encoded;
@@ -274,6 +303,25 @@ public final class LegacyBlockActivationCompiler {
             output.add(encoded);
         }
         return returned ? new CompileResult(List.copyOf(output), null) : CompileResult.error("no boolean return");
+    }
+
+    private static boolean matchesCurrentMetadataRead(List<AbstractInsnNode> instructions, int index) {
+        if (index + 4 >= instructions.size()) return false;
+        return isVar(instructions.get(index), Opcodes.ALOAD, 1)
+                && isVar(instructions.get(index + 1), Opcodes.ILOAD, 2)
+                && isVar(instructions.get(index + 2), Opcodes.ILOAD, 3)
+                && isVar(instructions.get(index + 3), Opcodes.ILOAD, 4)
+                && instructions.get(index + 4) instanceof MethodInsnNode call
+                && call.getOpcode() == Opcodes.INVOKEVIRTUAL
+                && WORLD.equals(call.owner)
+                && ("getBlockMetadata".equals(call.name) || "func_72805_g".equals(call.name))
+                && METADATA_DESCRIPTOR.equals(call.desc);
+    }
+
+    private static boolean isVar(AbstractInsnNode instruction, int opcode, int local) {
+        return instruction instanceof VarInsnNode variable
+                && variable.getOpcode() == opcode
+                && variable.var == local;
     }
 
     private static Instruction encodeSimpleOpcode(int opcode) {
