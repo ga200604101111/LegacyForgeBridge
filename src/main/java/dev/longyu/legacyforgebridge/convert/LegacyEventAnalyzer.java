@@ -190,7 +190,7 @@ public final class LegacyEventAnalyzer {
                     SourceValue receiver = frame.getStack(frame.getStackSize() - 2);
                     SourceValue argument = frame.getStack(frame.getStackSize() - 1);
                     Bus bus = bus(receiver);
-                    Set<String> handlers = handlerTypes(argument, owner.name, method);
+                    Set<String> handlers = handlerTypes(argument, owner.name, method, instruction);
                     handlers.removeIf(handler -> !subscribedClasses.contains(handler));
                     if (handlers.isEmpty()) {
                         diagnostics.add("Unresolved subscribed handler passed to EventBus.register at " + owner.name + "."
@@ -219,7 +219,8 @@ public final class LegacyEventAnalyzer {
                 && call.desc.equals("(Ljava/lang/Object;)V");
     }
 
-    private Set<String> handlerTypes(SourceValue value, String currentOwner, MethodNode method) {
+    private Set<String> handlerTypes(SourceValue value, String currentOwner, MethodNode method,
+                                     AbstractInsnNode registerInstruction) {
         LinkedHashSet<String> result = new LinkedHashSet<>();
         for (AbstractInsnNode producer : value.insns) {
             if (producer instanceof TypeInsnNode type && type.getOpcode() == Opcodes.NEW) {
@@ -234,7 +235,29 @@ public final class LegacyEventAnalyzer {
                 addObjectType(result, Type.getReturnType(call.desc).getDescriptor());
             }
         }
+
+        // ASM SourceInterpreter intentionally replaces some copied source sets while
+        // evaluating NEW/DUP/<init>.  javac's direct register(new Handler(...)) shape
+        // leaves the constructor invocation immediately before EventBus.register and
+        // the duplicate initialized reference on the operand stack.  Accept only that
+        // exact adjacency as a fallback; any intervening instruction remains unresolved.
+        if (result.isEmpty()) {
+            AbstractInsnNode previous = previousOpcode(registerInstruction);
+            if (previous instanceof MethodInsnNode constructor
+                    && constructor.getOpcode() == Opcodes.INVOKESPECIAL
+                    && constructor.name.equals("<init>")
+                    && Type.getReturnType(constructor.desc).getSort() == Type.VOID) {
+                result.add(constructor.owner);
+            }
+        }
         return result;
+    }
+
+    private static AbstractInsnNode previousOpcode(AbstractInsnNode instruction) {
+        for (AbstractInsnNode previous = instruction.getPrevious(); previous != null; previous = previous.getPrevious()) {
+            if (previous.getOpcode() >= 0) return previous;
+        }
+        return null;
     }
 
     private static void addObjectType(Set<String> output, String descriptor) {
