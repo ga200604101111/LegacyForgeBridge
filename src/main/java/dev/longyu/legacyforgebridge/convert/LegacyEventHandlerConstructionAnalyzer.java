@@ -135,10 +135,10 @@ public final class LegacyEventHandlerConstructionAnalyzer {
             if (registerIndex < 3 || !isAload0(instructions.get(registerIndex - 1))) {
                 return unsupported(node, constructorDescriptor, "FML self-registration argument flow is not exact");
             }
-            if (!(instructions.get(registerIndex - 2) instanceof MethodInsnNode bus)
-                    || !bus.owner.equals(FML_COMMON_HANDLER)
-                    || !bus.name.equals("bus")
-                    || !bus.desc.equals("()L" + EVENT_BUS + ";")) {
+            if (!(instructions.get(registerIndex - 2) instanceof MethodInsnNode busCall)
+                    || !busCall.owner.equals(FML_COMMON_HANDLER)
+                    || !busCall.name.equals("bus")
+                    || !busCall.desc.equals("()L" + EVENT_BUS + ";")) {
                 return unsupported(node, constructorDescriptor, "FML event bus receiver is not exact");
             }
             if (!(instructions.get(registerIndex - 3) instanceof MethodInsnNode instance)
