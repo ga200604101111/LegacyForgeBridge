@@ -39,6 +39,7 @@ public final class LegacyBlockBehaviorAnalyzer {
         BREAK_BLOCK,
         ITEM_DROPPED,
         QUANTITY_DROPPED,
+        QUANTITY_DROPPED_WITH_BONUS,
         DAMAGE_DROPPED
     }
 
@@ -99,6 +100,9 @@ public final class LegacyBlockBehaviorAnalyzer {
             spec(CallbackKind.QUANTITY_DROPPED,
                     "(Ljava/util/Random;)I",
                     "quantityDropped", "func_149745_a"),
+            spec(CallbackKind.QUANTITY_DROPPED_WITH_BONUS,
+                    "(ILjava/util/Random;)I",
+                    "quantityDroppedWithBonus", "func_149679_a"),
             spec(CallbackKind.DAMAGE_DROPPED,
                     "(I)I",
                     "damageDropped", "func_149692_a")
