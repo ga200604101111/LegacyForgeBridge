@@ -3,6 +3,7 @@ package dev.longyu.legacyforgebridge.convert.runtime;
 import dev.longyu.legacyforgebridge.LegacyForgeBridge;
 import dev.longyu.legacyforgebridge.behavior.ConvertedBehaviorItem;
 import dev.longyu.legacyforgebridge.behavior.LegacyBehaviorRegistry;
+import dev.longyu.legacyforgebridge.compat.LegacyStackComponents;
 import net.fabricmc.fabric.api.itemgroup.v1.FabricItemGroup;
 import net.minecraft.core.Registry;
 import net.minecraft.core.component.DataComponents;
@@ -34,7 +35,7 @@ public final class GeneratedModSupport {
     private static final Set<String> ACTIVE_MODS=ConcurrentHashMap.newKeySet();
     private static final Map<String,int[]> COUNTS=new ConcurrentHashMap<>();
     private GeneratedModSupport() { }
-    public static void beginMod(String modId){if(ACTIVE_MODS.add(modId))COUNTS.put(modId,new int[3]);}
+    public static void beginMod(String modId){LegacyStackComponents.bootstrap();if(ACTIVE_MODS.add(modId))COUNTS.put(modId,new int[3]);}
     public static void registerBlock(String idValue,String descriptionKey){
         Identifier id=Identifier.parse(idValue);
         if(BuiltInRegistries.BLOCK.containsKey(id)){BLOCKS.put(id,BuiltInRegistries.BLOCK.getValue(id));return;}
@@ -45,7 +46,8 @@ public final class GeneratedModSupport {
 
         if(!BuiltInRegistries.ITEM.containsKey(id)){
             ResourceKey<Item> itemKey=ResourceKey.create(Registries.ITEM,id);
-            Item.Properties itemProperties=new Item.Properties().setId(itemKey).overrideDescription(descriptionKey);
+            Item.Properties itemProperties=new Item.Properties().setId(itemKey).overrideDescription(descriptionKey)
+                    .component(LegacyStackComponents.legacyMeta(),0);
             BlockItem blockItem=new BlockItem(block,itemProperties);
             Registry.register(BuiltInRegistries.ITEM,itemKey,blockItem);
             blockItem.registerBlocks(Item.BY_BLOCK,blockItem);
@@ -58,7 +60,8 @@ public final class GeneratedModSupport {
         Identifier id=Identifier.parse(idValue);
         if(BuiltInRegistries.ITEM.containsKey(id)){ITEMS.put(id,BuiltInRegistries.ITEM.getValue(id));return;}
         ResourceKey<Item> key=ResourceKey.create(Registries.ITEM,id);
-        Item.Properties properties=new Item.Properties().setId(key).overrideDescription(descriptionKey);
+        Item.Properties properties=new Item.Properties().setId(key).overrideDescription(descriptionKey)
+                .component(LegacyStackComponents.legacyMeta(),0);
         var source=LegacyBehaviorRegistry.item(idValue);
         if(source!=null&&source.presentationOnly())source=null;
         if(source!=null){
