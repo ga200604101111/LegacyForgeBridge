@@ -46,7 +46,7 @@ public final class LegacyBehaviorCompiler {
             Map.entry("getMaxItemUseDuration","func_77626_a"),Map.entry("onPlayerStoppedUsing","func_77615_a"),Map.entry("hitEntity","func_77644_a"));
     private final Map<String,Clazz> classes=new LinkedHashMap<>();
     private final Set<Ref> selected=new LinkedHashSet<>(),fields=new LinkedHashSet<>();
-    private final Set<String> included=new LinkedHashSet<>();
+    private final Set<String> included=new LinkedHashSet<>(),syntheticParentConstructors=new LinkedHashSet<>();
     private final List<String> diagnostics=new ArrayList<>();
     private String prefix;
     public record ItemBinding(String id,String sourceClass,Set<String> hooks,LegacyItemRenderAnalyzer.ItemAllocation allocation) {
@@ -67,7 +67,7 @@ public final class LegacyBehaviorCompiler {
         return compile(source,mod,bootstrap,itemIds,List.of());
     }
     public Result compile(Path source,String mod,String bootstrap,Map<String,String> itemIds,List<LegacyItemRenderAnalyzer.ItemAllocation> provenAllocations) throws IOException {
-        classes.clear();selected.clear();fields.clear();included.clear();diagnostics.clear();
+        classes.clear();selected.clear();fields.clear();included.clear();syntheticParentConstructors.clear();diagnostics.clear();
         prefix=bootstrap+"Source/";
         try(JarFile jar=new JarFile(source.toFile())) {
             var entries=jar.entries();while(entries.hasMoreElements()) {var e=entries.nextElement();
@@ -98,28 +98,51 @@ public final class LegacyBehaviorCompiler {
             if(hooks.isEmpty())hooks.add("identity");
             items.add(new ItemBinding(id,a.itemClass(),Set.copyOf(hooks),a));
         }
-        Set<String> registered=new LinkedHashSet<>();
-        for(var c:classes.values())for(var m:c.methods.values()) {
-            if(m.calls.stream().noneMatch(r->r.owner.endsWith("/EventBus")&&r.name.equals("register")))continue;
-            // Prove the registration argument: a directly preceding source handler constructor.
-            for(int i=1;i<m.ops.size();i++) if(m.ops.get(i) instanceof Ref call && call.owner.endsWith("/EventBus")
-                    && call.name.equals("register") && m.ops.get(i-1) instanceof Ref ctor && ctor.name.equals("<init>")
-                    && classes.containsKey(ctor.owner) && classes.get(ctor.owner).methods.values().stream().anyMatch(x->x.subscribe))
-                registered.add(ctor.owner);
-        }
+
         List<EventBinding> events=new ArrayList<>();
-        for(String type:registered)for(var e:classes.get(type).methods.entrySet()) {
-            Ref r=e.getKey();MethodInfo m=e.getValue();if(!m.subscribe)continue;
-            String kind=switch(r.desc) {
-                case "(Lnet/minecraftforge/event/entity/living/LivingEvent$LivingJumpEvent;)V"->"jump";
-                case "(Lnet/minecraftforge/event/entity/living/LivingFallEvent;)V"->"fall";
-                case "(Lnet/minecraftforge/event/entity/living/LivingHurtEvent;)V"->"hurt";
+        Set<String> eventKeys=new LinkedHashSet<>();
+        LegacyEventAnalyzer.Analysis eventAnalysis=new LegacyEventAnalyzer().analyze(source);
+        diagnostics.addAll(eventAnalysis.diagnostics());
+        LegacyEventHandlerConstructionAnalyzer constructionAnalyzer=new LegacyEventHandlerConstructionAnalyzer();
+        for(LegacyEventAnalyzer.Binding binding:eventAnalysis.bindings()) {
+            String type=binding.handlerClass();
+            if(!classes.containsKey(type))continue;
+            Ref r=new Ref(type,binding.method(),binding.descriptor());
+            MethodInfo m=classes.get(type).methods.get(r);if(m==null)continue;
+            String kind=switch(binding.eventType()) {
+                case "net/minecraftforge/event/entity/living/LivingEvent$LivingJumpEvent"->"jump";
+                case "net/minecraftforge/event/entity/living/LivingFallEvent"->"fall";
+                case "net/minecraftforge/event/entity/living/LivingHurtEvent"->"hurt";
                 default->null;
             };
-            if(kind==null){diagnostics.add("Unsupported event "+r);continue;}
-            if(m.unsupportedAnnotation){diagnostics.add("Unsupported event annotation settings "+r);continue;}
-            if((m.access&Opcodes.ACC_STATIC)==0&&!admit(new Ref(type,"<init>","()V"),"event constructor"))continue;
-            if(admit(r,"event "+kind))events.add(new EventBinding(type,r.name,r.desc,kind));
+            if(kind==null){
+                diagnostics.add("Event "+binding.eventType()+" on "+type+"."+binding.method()+binding.descriptor()
+                        +" is source-proven as "+LegacyEventPolicy.execution(binding.eventType())+" but has no callback runtime adapter yet");
+                continue;
+            }
+            if(!"NORMAL".equals(binding.priority())||binding.receiveCanceled()){
+                diagnostics.add("Unsupported event annotation settings "+r+" priority="+binding.priority()+" receiveCanceled="+binding.receiveCanceled());
+                continue;
+            }
+            String eventKey=type+'\u0000'+binding.method()+'\u0000'+binding.descriptor()+'\u0000'+kind;
+            if(!eventKeys.add(eventKey))continue;
+
+            LegacyEventHandlerConstructionAnalyzer.Strategy construction=null;
+            if((m.access&Opcodes.ACC_STATIC)==0){
+                var plan=constructionAnalyzer.analyze(source,type,"()V");construction=plan.strategy();
+                if(construction==LegacyEventHandlerConstructionAnalyzer.Strategy.SOURCE_CONSTRUCTOR){
+                    if(!admit(new Ref(type,"<init>","()V"),"event constructor"))continue;
+                }else if(construction==LegacyEventHandlerConstructionAnalyzer.Strategy.SYNTHESIZE_PARENT_ONLY){
+                    Clazz handler=classes.get(type);
+                    if(handler.parent==null||!admit(new Ref(handler.parent,"<init>","()V"),"event parent constructor"))continue;
+                }else{
+                    diagnostics.add("event constructor "+type+": "+plan.diagnostic());continue;
+                }
+            }
+            if(admit(r,"event "+kind)){
+                if(construction==LegacyEventHandlerConstructionAnalyzer.Strategy.SYNTHESIZE_PARENT_ONLY)syntheticParentConstructors.add(type);
+                events.add(new EventBinding(type,r.name,r.desc,kind));
+            }
         }
         Map<String,byte[]> output=new LinkedHashMap<>();
         for(String type:included)output.put(mapped(type)+".class",emit(type));
@@ -287,6 +310,11 @@ public final class LegacyBehaviorCompiler {
             MethodVisitor m=w.visitMethod(Opcodes.ACC_STATIC,"<clinit>","()V",null,null);m.visitCode();
             for(Ref f:staticCollections){String init=collectionInitializer(f);m.visitTypeInsn(Opcodes.NEW,init);m.visitInsn(Opcodes.DUP);m.visitMethodInsn(Opcodes.INVOKESPECIAL,init,"<init>","()V",false);m.visitFieldInsn(Opcodes.PUTSTATIC,mapped(type),f.name,descriptor(f.desc));}
             m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();
+        }
+        if(syntheticParentConstructors.contains(type)){
+            MethodVisitor constructor=w.visitMethod(Opcodes.ACC_PUBLIC,"<init>","()V",null,null);constructor.visitCode();
+            constructor.visitVarInsn(Opcodes.ALOAD,0);constructor.visitMethodInsn(Opcodes.INVOKESPECIAL,mapped(c.parent),"<init>","()V",false);
+            constructor.visitInsn(Opcodes.RETURN);constructor.visitMaxs(0,0);constructor.visitEnd();
         }
         new ClassReader(c.bytes).accept(new ClassVisitor(Opcodes.ASM9){
             @Override public MethodVisitor visitMethod(int a,String n,String d,String sig,String[]exceptions){
