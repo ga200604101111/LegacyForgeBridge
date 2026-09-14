@@ -38,6 +38,8 @@ class LegacyRegistryAnalyzerTest {
         var block=analysis.blocks().getFirst();
         assertEquals("stone_lamp",block.registryName());
         assertEquals("other/sample/StoneLamp",block.implementationClass());
+        // This fixture does not store helper return values into static fields, so no field binding is expected.
+        assertTrue(analysis.fieldBindings().isEmpty());
     }
 
     private static byte[] simpleSubclass(String name,String parent){

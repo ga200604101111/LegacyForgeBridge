@@ -68,9 +68,13 @@ public final class LegacyRegistryAnalyzer {
 
     public record ConstructorArgument(String descriptor, Object value) { }
 
-    public record Analysis(List<Registration> registrations, List<String> diagnostics) {
+    public record FieldBinding(String owner, String name, String descriptor, Kind kind, String registryName,
+                               String legacyNamespace, String implementationClass) { }
+
+    public record Analysis(List<Registration> registrations, List<FieldBinding> fieldBindings, List<String> diagnostics) {
         public Analysis {
             registrations = List.copyOf(registrations);
+            fieldBindings = List.copyOf(fieldBindings);
             diagnostics = List.copyOf(diagnostics);
         }
 
@@ -133,8 +137,49 @@ public final class LegacyRegistryAnalyzer {
             }
         }
 
+        LinkedHashSet<FieldBinding> fieldBindings = recoverFieldBindings();
         if (output.isEmpty()) diagnostics.add("No concrete GameRegistry item/block registrations were proven from reachable lifecycle roots.");
-        return new Analysis(List.copyOf(output), List.copyOf(new LinkedHashSet<>(diagnostics)));
+        return new Analysis(List.copyOf(output), List.copyOf(fieldBindings), List.copyOf(new LinkedHashSet<>(diagnostics)));
+    }
+
+    private LinkedHashSet<FieldBinding> recoverFieldBindings() {
+        LinkedHashSet<FieldBinding> output = new LinkedHashSet<>();
+        for (var entry : methods.entrySet()) {
+            MethodContext context = entry.getValue();
+            for (int i = 0; i < context.method().instructions.size(); i++) {
+                AbstractInsnNode instruction = context.method().instructions.get(i);
+                if (!(instruction instanceof FieldInsnNode field) || field.getOpcode() != Opcodes.PUTSTATIC) continue;
+                Frame<SourceValue> frame = context.frames()[i];
+                if (frame == null || frame.getStackSize() < 1) continue;
+                SourceValue source = frame.getStack(frame.getStackSize() - 1);
+                if (source == null || source.insns == null || source.insns.size() != 1) continue;
+                AbstractInsnNode producer = source.insns.iterator().next();
+                if (!(producer instanceof MethodInsnNode call)) continue;
+                MethodKey callee = new MethodKey(call.owner, call.name, call.desc);
+                LinkedHashSet<Template> possible = templates.get(callee);
+                MethodContext calleeContext = methods.get(callee);
+                Integer callIndex = context.indices().get(call);
+                if (possible == null || possible.isEmpty() || calleeContext == null || callIndex == null) continue;
+                Frame<SourceValue> callFrame = context.frames()[callIndex];
+                if (callFrame == null) continue;
+                List<Symbol> actual = invocationValuesIncludingReceiver(context, callIndex, call, callFrame);
+                if (actual == null) continue;
+                Map<Integer, Symbol> substitution = parameterSubstitution(calleeContext.method(), actual);
+                LinkedHashSet<Registration> resolved = new LinkedHashSet<>();
+                for (Template template : possible) {
+                    Template instantiated = new Template(template.kind(), substitute(template.object(), substitution),
+                            substitute(template.name(), substitution), substitute(template.namespace(), substitution),
+                            substitute(template.itemBlock(), substitution), template.directSource());
+                    Registration registration = materialize(instantiated);
+                    if (registration != null) resolved.add(registration);
+                }
+                if (resolved.size() != 1) continue;
+                Registration registration = resolved.getFirst();
+                output.add(new FieldBinding(field.owner, field.name, field.desc, registration.kind(),
+                        registration.registryName(), registration.legacyNamespace(), registration.implementationClass()));
+            }
+        }
+        return output;
     }
 
     public String classifyItem(String implementationClass) {

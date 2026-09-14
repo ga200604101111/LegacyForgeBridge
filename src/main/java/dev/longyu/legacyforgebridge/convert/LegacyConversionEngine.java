@@ -16,6 +16,8 @@ import dev.longyu.legacyforgebridge.convert.pass.GeneratedModEntrypointPass;
 import dev.longyu.legacyforgebridge.convert.pass.GeneratedSemanticCodePass;
 import dev.longyu.legacyforgebridge.convert.pass.LegacyBytecodeAuditPass;
 import dev.longyu.legacyforgebridge.convert.pass.LegacyLanguageCleanupPass;
+import dev.longyu.legacyforgebridge.convert.pass.LegacyLifecycleAnalysisPass;
+import dev.longyu.legacyforgebridge.convert.pass.LegacyRecipeAnalysisPass;
 import dev.longyu.legacyforgebridge.convert.pass.LegacyLanguagePass;
 import dev.longyu.legacyforgebridge.convert.pass.LegacyObjPresentationPass;
 import dev.longyu.legacyforgebridge.convert.pass.LegacyItemRenderPass;
@@ -81,6 +83,8 @@ public final class LegacyConversionEngine {
             builder.add(new LegacyItemRenderPass());
             // Native tags classify tools; source use callbacks and Via component restoration handle blocking.
             builder.add(new NativeItemTagsPass());
+            builder.add(new LegacyLifecycleAnalysisPass());
+            builder.add(new LegacyRecipeAnalysisPass());
             builder.add(new LegacyLanguageCleanupPass());
             builder.add(new LegacyEquipmentRenderPass());
             builder.add(new LegacyBehaviorPass());
