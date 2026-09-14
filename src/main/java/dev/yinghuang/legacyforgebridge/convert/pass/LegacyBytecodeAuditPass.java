@@ -4,10 +4,7 @@ import dev.yinghuang.legacyforgebridge.convert.api.ConversionContext;
 import dev.yinghuang.legacyforgebridge.convert.api.ConversionPass;
 import dev.yinghuang.legacyforgebridge.convert.api.SupportLevel;
 
-/**
- * Safety gate for the first conversion slice. It deliberately refuses to claim that untouched
- * Forge bytecode is runnable on Fabric just because resources and metadata were converted.
- */
+/** Safety gate: narrow bytecode/resource adaptations do not prove a runnable Fabric port. */
 public final class LegacyBytecodeAuditPass implements ConversionPass {
     @Override
     public String id() {
@@ -46,7 +43,7 @@ public final class LegacyBytecodeAuditPass implements ConversionPass {
             context.diagnostics().warning(
                     "LFB-CONVERT-BYTECODE-0001",
                     SupportLevel.MANUAL_REQUIRED,
-                    "Legacy class files are retained unchanged in this first conversion slice. The generated JAR is a non-installable conversion candidate, not a completed Fabric port."
+                    "Legacy class files still require complete API/semantic migration and validation. Narrow translation-call rewrites do not make this candidate an installable Fabric port."
             );
         }
     }

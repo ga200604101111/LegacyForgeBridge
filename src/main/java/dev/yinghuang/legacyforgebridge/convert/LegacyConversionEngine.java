@@ -14,6 +14,7 @@ import dev.yinghuang.legacyforgebridge.convert.manifest.FabricMetadataWriter;
 import dev.yinghuang.legacyforgebridge.convert.pass.CopyLegacyJarPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyBytecodeAuditPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyLanguagePass;
+import dev.yinghuang.legacyforgebridge.convert.pass.LegacyTranslationReferencePass;
 import dev.yinghuang.legacyforgebridge.convert.profile.GenericLegacyModProfile;
 import dev.yinghuang.legacyforgebridge.convert.profile.RpgTool1Profile;
 
@@ -120,6 +121,7 @@ public final class LegacyConversionEngine {
             ConversionPlan.Builder builder = ConversionPlan.builder(profile.id())
                     .add(new CopyLegacyJarPass())
                     .add(new LegacyLanguagePass())
+                    .add(new LegacyTranslationReferencePass())
                     .add(new LegacyBytecodeAuditPass());
             profile.configure(builder);
             ConversionPlan plan = builder.build();

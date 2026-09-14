@@ -24,6 +24,7 @@ public final class LegacyForgeBridgeClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
+        runtime.initializeAdapters();
         registerPayloadTypes();
 
         // ViaFabricPlus initializes ViaVersion asynchronously. Never force-load the 1.12->1.13
@@ -82,14 +83,16 @@ public final class LegacyForgeBridgeClient implements ClientModInitializer {
             }
             FmlConnectionTrace trace = FmlConnectionTrace.INSTANCE;
             trace.startIfNeeded("received mapped FORGE runtime payload during CONFIGURATION");
-            trace.packet("IN", "FORGE", payload.data(), "FORGE runtime payload during CONFIGURATION (not handled yet)");
+            runtime.handleForge(payload.data(), FmlRuntimeClient.Phase.CONFIGURATION, trace);
         });
 
         ClientConfigurationConnectionEvents.INIT.register((handler, client) -> {
             directRegistrationSent = false;
+            runtime.reset();
             if (!ViaFabricPlusBackend.INSTANCE.isMinecraft1710Target()) {
                 return;
             }
+            runtime.beginSession();
             FmlConnectionTrace trace = FmlConnectionTrace.INSTANCE;
             trace.startIfNeeded(
                     "client CONFIGURATION INIT; target=" + ViaFabricPlusBackend.INSTANCE.currentProtocolName()
@@ -107,6 +110,7 @@ public final class LegacyForgeBridgeClient implements ClientModInitializer {
                 trace.event("CONFIGURATION disconnected with handshakeState=" + handshake.state());
             }
             handshake.reset();
+            runtime.reset();
             directRegistrationSent = false;
             trace.endSession("configuration disconnected");
         });
@@ -152,7 +156,7 @@ public final class LegacyForgeBridgeClient implements ClientModInitializer {
             }
             FmlConnectionTrace trace = FmlConnectionTrace.INSTANCE;
             trace.startIfNeeded("received mapped FORGE runtime payload during PLAY");
-            trace.packet("IN", "FORGE", payload.data(), "FORGE runtime payload during PLAY (not handled yet)");
+            runtime.handleForge(payload.data(), FmlRuntimeClient.Phase.PLAY, trace);
         });
 
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
@@ -164,6 +168,7 @@ public final class LegacyForgeBridgeClient implements ClientModInitializer {
                 trace.event("ClientPlayConnectionEvents.JOIN fired");
                 trace.event("ViaVersion Forge channel mappings installed=" + LegacyPluginChannelMappings.installed());
                 trace.event("play canSend(mapped FML|HS)=" + ClientPlayNetworking.canSend(FmlMappedPayload.FML_HS));
+                runtime.onPlay(trace);
             }
         });
 
@@ -173,6 +178,7 @@ public final class LegacyForgeBridgeClient implements ClientModInitializer {
                 trace.event("PLAY disconnected with handshakeState=" + handshake.state());
             }
             handshake.reset();
+            runtime.reset();
             directRegistrationSent = false;
             trace.endSession("play disconnected");
         });
