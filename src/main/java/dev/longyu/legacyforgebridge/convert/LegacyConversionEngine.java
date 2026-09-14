@@ -19,6 +19,7 @@ import dev.longyu.legacyforgebridge.convert.pass.LegacyEventAnalysisPass;
 import dev.longyu.legacyforgebridge.convert.pass.LegacyLanguageCleanupPass;
 import dev.longyu.legacyforgebridge.convert.pass.LegacyLifecycleAnalysisPass;
 import dev.longyu.legacyforgebridge.convert.pass.LegacyRecipeAnalysisPass;
+import dev.longyu.legacyforgebridge.convert.pass.LegacyRecipeMaterializationPass;
 import dev.longyu.legacyforgebridge.convert.pass.LegacyLanguagePass;
 import dev.longyu.legacyforgebridge.convert.pass.LegacyObjPresentationPass;
 import dev.longyu.legacyforgebridge.convert.pass.LegacyItemRenderPass;
@@ -86,6 +87,7 @@ public final class LegacyConversionEngine {
             builder.add(new NativeItemTagsPass());
             builder.add(new LegacyLifecycleAnalysisPass());
             builder.add(new LegacyRecipeAnalysisPass());
+            builder.add(new LegacyRecipeMaterializationPass());
             builder.add(new LegacyEventAnalysisPass());
             builder.add(new LegacyLanguageCleanupPass());
             builder.add(new LegacyEquipmentRenderPass());
