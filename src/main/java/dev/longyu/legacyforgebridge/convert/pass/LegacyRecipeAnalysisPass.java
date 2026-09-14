@@ -2,6 +2,7 @@ package dev.longyu.legacyforgebridge.convert.pass;
 
 import com.google.gson.*;
 import dev.longyu.legacyforgebridge.convert.LegacyRecipeAnalyzer;
+import dev.longyu.legacyforgebridge.convert.LegacyRecipeValueResolver;
 import dev.longyu.legacyforgebridge.convert.api.*;
 
 import java.nio.charset.StandardCharsets;
@@ -11,7 +12,7 @@ import java.nio.file.*;
 public final class LegacyRecipeAnalysisPass implements ConversionPass {
     @Override public String id(){return "legacy-recipe-analysis";}
     @Override public void apply(ConversionContext context)throws Exception{
-        var result=new LegacyRecipeAnalyzer().analyze(context.sourceJar());
+        var result=new LegacyRecipeValueResolver().resolve(new LegacyRecipeAnalyzer().analyze(context.sourceJar()));
         if(result.registrations().isEmpty())return;
         JsonObject root=new JsonObject();root.addProperty("schemaVersion",1);JsonArray registrations=new JsonArray();
         for(var r:result.registrations()){
