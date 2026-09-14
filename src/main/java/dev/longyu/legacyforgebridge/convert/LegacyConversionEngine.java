@@ -17,6 +17,7 @@ import dev.longyu.legacyforgebridge.convert.pass.GeneratedSemanticCodePass;
 import dev.longyu.legacyforgebridge.convert.pass.LegacyBehaviorPass;
 import dev.longyu.legacyforgebridge.convert.pass.LegacyBlockActivationPass;
 import dev.longyu.legacyforgebridge.convert.pass.LegacyBlockBehaviorAnalysisPass;
+import dev.longyu.legacyforgebridge.convert.pass.LegacyBlockDropAnalysisPass;
 import dev.longyu.legacyforgebridge.convert.pass.LegacyBlockPlacementPass;
 import dev.longyu.legacyforgebridge.convert.pass.LegacyBytecodeAuditPass;
 import dev.longyu.legacyforgebridge.convert.pass.LegacyEquipmentRenderPass;
@@ -90,6 +91,7 @@ public final class LegacyConversionEngine {
             builder.add(new NativeItemTagsPass());
             builder.add(new LegacyLifecycleAnalysisPass());
             builder.add(new LegacyBlockBehaviorAnalysisPass());
+            builder.add(new LegacyBlockDropAnalysisPass());
             builder.add(new LegacyBlockPlacementPass());
             builder.add(new LegacyBlockActivationPass());
             builder.add(new LegacyRecipeAnalysisPass());
