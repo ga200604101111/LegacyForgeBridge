@@ -18,11 +18,33 @@ class LegacyVanillaStackDataFixTest {
         assertEquals("minecraft:spruce_planks", upgrade(5, 1).getStringOr("id", ""));
     }
 
+    @Test void minecraftDataFixerAlsoFlattensResolved1710StringRegistryNames() {
+        assertEquals("minecraft:blue_wool", upgrade("minecraft:wool", 11).getStringOr("id", ""));
+        assertEquals("minecraft:charcoal", upgrade("minecraft:coal", 1).getStringOr("id", ""));
+        assertEquals("minecraft:birch_log", upgrade("minecraft:log", 2).getStringOr("id", ""));
+        assertEquals("minecraft:spruce_planks", upgrade("minecraft:planks", 1).getStringOr("id", ""));
+    }
+
     private static CompoundTag upgrade(int numericId, int damage) {
-        CompoundTag legacy = new CompoundTag();
+        CompoundTag legacy = legacy(damage);
         legacy.putShort("id", (short) numericId);
+        return upgrade(legacy);
+    }
+
+    private static CompoundTag upgrade(String legacyId, int damage) {
+        CompoundTag legacy = legacy(damage);
+        legacy.putString("id", legacyId);
+        return upgrade(legacy);
+    }
+
+    private static CompoundTag legacy(int damage) {
+        CompoundTag legacy = new CompoundTag();
         legacy.putByte("Count", (byte) 1);
         legacy.putShort("Damage", (short) damage);
+        return legacy;
+    }
+
+    private static CompoundTag upgrade(CompoundTag legacy) {
         return (CompoundTag) DataFixers.getDataFixer().update(
                 References.ITEM_STACK,
                 new Dynamic<>(NbtOps.INSTANCE, legacy),
