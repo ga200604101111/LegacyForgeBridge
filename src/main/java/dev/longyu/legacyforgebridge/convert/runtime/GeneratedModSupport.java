@@ -42,7 +42,7 @@ public final class GeneratedModSupport {
         if(BuiltInRegistries.BLOCK.containsKey(id)){BLOCKS.put(id,BuiltInRegistries.BLOCK.getValue(id));return;}
         ResourceKey<Block> blockKey=ResourceKey.create(Registries.BLOCK,id);
         BlockBehaviour.Properties blockProperties=BlockBehaviour.Properties.of().setId(blockKey).overrideDescription(descriptionKey);
-        Block block=new Block(blockProperties);
+        Block block=new ConvertedLegacyBlock(blockProperties);
         Registry.register(BuiltInRegistries.BLOCK,blockKey,block);BLOCKS.put(id,block);
 
         if(!BuiltInRegistries.ITEM.containsKey(id)){
