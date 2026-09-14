@@ -93,6 +93,42 @@ public final class LegacyBehaviorRuntime {
             return true;
         },false);
     }
+    /** Client-presentation Forge ItemTooltipEvent bridge. The snapshot is intentionally never committed. */
+    public static boolean tooltipEvent(ItemStack stack,List<String> lines) {
+        if(stack==null||stack.isEmpty()||lines==null)return false;
+        String id=BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+        Snapshot snapshot=new Snapshot(null);
+        LegacyBehaviorApi.Stack source=snapshot.stack(stack);
+        return source!=null&&tooltipPrograms(id,source,lines);
+    }
+    static boolean tooltipPrograms(String itemId,LegacyBehaviorApi.Stack sourceStack,List<String> lines) {
+        if(itemId==null||sourceStack==null||lines==null||!validTooltip(lines))return false;
+        boolean matched=false;
+        BoundedTooltipList bounded=new BoundedTooltipList(lines);
+        for(var program:LegacyBehaviorRegistry.events("tooltipEvent")) {
+            if(program.targetItemId()!=null&&!program.targetItemId().equals(itemId))continue;
+            matched=true;
+            var event=new LegacyBehaviorApi.Event();event.itemStack=sourceStack;event.toolTip=bounded;
+            boolean completed=invoke(program.mod(),"event/tooltip/"+itemId,()->{program.program().run(event);return true;},false);
+            if(!completed||event.itemStack!=sourceStack||event.toolTip!=bounded||!validTooltip(bounded))return false;
+        }
+        return matched;
+    }
+    private static boolean validTooltip(List<String> lines) {
+        if(lines.size()>256)return false;
+        for(String line:lines)if(line==null||line.length()>4096)return false;
+        return true;
+    }
+    private static final class BoundedTooltipList extends AbstractList<String> {
+        private final List<String> delegate;
+        BoundedTooltipList(List<String> delegate){this.delegate=Objects.requireNonNull(delegate);}
+        @Override public String get(int index){return delegate.get(index);}
+        @Override public int size(){return delegate.size();}
+        @Override public String set(int index,String value){check(value);return delegate.set(index,value);}
+        @Override public void add(int index,String value){check(value);if(delegate.size()>=256)throw new IllegalStateException("Source tooltip line budget exceeded");delegate.add(index,value);}
+        @Override public String remove(int index){return delegate.remove(index);}
+        private static void check(String value){if(value==null||value.length()>4096)throw new IllegalArgumentException("Invalid source tooltip line");}
+    }
     public record UseOutcome(boolean handled, boolean sustained) { }
 
     public static UseOutcome use(ItemStack stack, Player player, InteractionHand hand) {

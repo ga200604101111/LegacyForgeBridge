@@ -52,6 +52,7 @@ class LegacyBehaviorTooltipEventCompilerTest {
             var definition=LegacyBehaviorRegistry.item("tooltip_fixture:unsafe");
             assertNotNull(definition);assertTrue(definition.presentationOnly());assertTrue(definition.hooks().isEmpty());
             var program=LegacyBehaviorRegistry.events("tooltipEvent").stream().filter(e->e.mod().equals("tooltip_fixture")).findFirst().orElseThrow();
+            assertEquals("tooltip_fixture:unsafe",program.targetItemId());
             var root=new LegacyBehaviorApi.Tag();root.setInteger("toolLevel",3);
             var enchant=new LegacyBehaviorApi.Tag();enchant.setInteger("id",4);enchant.setInteger("lvl",2);
             root.values.put("spench",new LegacyBehaviorApi.TagList(List.of(enchant)));

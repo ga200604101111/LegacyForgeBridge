@@ -495,12 +495,12 @@ public final class LegacyBehaviorCompiler {
             if(e.targetItemId()==null&&!locals.containsKey(e.owner)){
                 int local=locals.size();locals.put(e.owner,local);boolean stat=events.stream().filter(x->x.owner.equals(e.owner)&&x.targetItemId()==null).allMatch(x->(classes.get(x.owner).methods.get(new Ref(x.owner,x.method,x.descriptor)).access&Opcodes.ACC_STATIC)!=0);
                 if(stat)m.visitInsn(Opcodes.ACONST_NULL);else{m.visitTypeInsn(Opcodes.NEW,receiver);m.visitInsn(Opcodes.DUP);m.visitMethodInsn(Opcodes.INVOKESPECIAL,receiver,"<init>","()V",false);}m.visitVarInsn(Opcodes.ASTORE,local);}
-            m.visitLdcInsn(mod);m.visitLdcInsn(e.kind);m.visitTypeInsn(Opcodes.NEW,name+"Event"+i);m.visitInsn(Opcodes.DUP);
+            m.visitLdcInsn(mod);m.visitLdcInsn(e.kind);if(e.targetItemId()==null)m.visitInsn(Opcodes.ACONST_NULL);else m.visitLdcInsn(e.targetItemId());m.visitTypeInsn(Opcodes.NEW,name+"Event"+i);m.visitInsn(Opcodes.DUP);
             if(e.targetItemId()!=null){
                 m.visitLdcInsn(e.targetItemId());m.visitMethodInsn(Opcodes.INVOKESTATIC,REG,"bootstrapItem","(Ljava/lang/String;)L"+REG+"$ItemDefinition;",false);
                 m.visitMethodInsn(Opcodes.INVOKEVIRTUAL,REG+"$ItemDefinition","item","()L"+API+"$Item;",false);m.visitTypeInsn(Opcodes.CHECKCAST,receiver);
             }else m.visitVarInsn(Opcodes.ALOAD,locals.get(e.owner));
-            m.visitMethodInsn(Opcodes.INVOKESPECIAL,name+"Event"+i,"<init>","(L"+receiver+";)V",false);m.visitMethodInsn(Opcodes.INVOKESTATIC,REG,"registerEvent","(Ljava/lang/String;Ljava/lang/String;L"+API+"$EventProgram;)V",false);
+            m.visitMethodInsn(Opcodes.INVOKESPECIAL,name+"Event"+i,"<init>","(L"+receiver+";)V",false);m.visitMethodInsn(Opcodes.INVOKESTATIC,REG,"registerEvent","(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;L"+API+"$EventProgram;)V",false);
         }
         m.visitMethodInsn(Opcodes.INVOKESTATIC,REG,"finish","()V",false);m.visitLabel(end);
         m.visitJumpInsn(Opcodes.GOTO,done);m.visitLabel(failed);

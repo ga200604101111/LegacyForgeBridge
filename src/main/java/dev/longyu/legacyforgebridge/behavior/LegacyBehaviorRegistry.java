@@ -9,7 +9,9 @@ public final class LegacyBehaviorRegistry {
         public ItemDefinition { hooks = Set.copyOf(hooks); Objects.requireNonNull(item); }
         public ItemDefinition(String mod, LegacyBehaviorApi.Item item, Set<String> hooks) { this(mod,item,hooks,false); }
     }
-    public record EventDefinition(String mod, String kind, LegacyBehaviorApi.EventProgram program) { }
+    public record EventDefinition(String mod, String kind, String targetItemId, LegacyBehaviorApi.EventProgram program) {
+        public EventDefinition(String mod, String kind, LegacyBehaviorApi.EventProgram program) { this(mod,kind,null,program); }
+    }
     private record Pending(String mod, Map<String, ItemDefinition> items, List<EventDefinition> events) { }
     private static final Map<String,ItemDefinition> ITEMS = new ConcurrentHashMap<>();
     private static final List<EventDefinition> EVENTS = new java.util.concurrent.CopyOnWriteArrayList<>();
@@ -76,9 +78,16 @@ public final class LegacyBehaviorRegistry {
         return definition;
     }
     public static void registerEvent(String mod, String kind, LegacyBehaviorApi.EventProgram program) {
+        registerEvent(mod,kind,null,program);
+    }
+    public static void registerEvent(String mod, String kind, String targetItemId, LegacyBehaviorApi.EventProgram program) {
         Pending pending = pending();
         if (!pending.mod().equals(mod)) throw new IllegalArgumentException("Behavior event owner mismatch");
-        pending.events().add(new EventDefinition(mod, kind, Objects.requireNonNull(program)));
+        if (targetItemId != null) {
+            if (!targetItemId.startsWith(pending.mod() + ':')) throw new IllegalArgumentException("Behavior event target owner mismatch");
+            if (!pending.items().containsKey(targetItemId)) throw new IllegalArgumentException("Behavior event target not registered yet: " + targetItemId);
+        }
+        pending.events().add(new EventDefinition(mod, kind, targetItemId, Objects.requireNonNull(program)));
     }
     public static synchronized ItemDefinition item(String id) { return ITEMS.get(id); }
     public static synchronized Optional<String> identity(LegacyBehaviorApi.Item item) {
