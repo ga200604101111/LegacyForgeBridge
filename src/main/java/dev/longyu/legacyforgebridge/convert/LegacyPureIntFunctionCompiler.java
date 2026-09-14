@@ -46,7 +46,7 @@ public final class LegacyPureIntFunctionCompiler {
 
         public static Program constant(int value) {
             return new Program(1, List.of(
-                    constant(value),
+                    LegacyPureIntFunctionCompiler.constantInstruction(value),
                     noOperand(Op.IRETURN)));
         }
 
@@ -158,10 +158,10 @@ public final class LegacyPureIntFunctionCompiler {
                 encoded = new Instruction(Op.IINC, increment.var, increment.incr, -1, List.of(), List.of());
             } else if (instruction instanceof IntInsnNode value) {
                 if (opcode != Opcodes.BIPUSH && opcode != Opcodes.SIPUSH) return Result.error("int opcode " + opcode);
-                encoded = constant(value.operand);
+                encoded = constantInstruction(value.operand);
             } else if (instruction instanceof LdcInsnNode ldc) {
                 if (!(ldc.cst instanceof Integer value)) return Result.error("non-int LDC " + ldc.cst);
-                encoded = constant(value);
+                encoded = constantInstruction(value);
             } else if (instruction instanceof JumpInsnNode jump) {
                 int target = targetIndex(jump.label, indices);
                 if (target <= i) return Result.error("backward/invalid jump target " + target);
@@ -208,13 +208,13 @@ public final class LegacyPureIntFunctionCompiler {
     private static Instruction simpleOpcode(int opcode) {
         return switch (opcode) {
             case Opcodes.NOP -> noOperand(Op.NOP);
-            case Opcodes.ICONST_M1 -> constant(-1);
-            case Opcodes.ICONST_0 -> constant(0);
-            case Opcodes.ICONST_1 -> constant(1);
-            case Opcodes.ICONST_2 -> constant(2);
-            case Opcodes.ICONST_3 -> constant(3);
-            case Opcodes.ICONST_4 -> constant(4);
-            case Opcodes.ICONST_5 -> constant(5);
+            case Opcodes.ICONST_M1 -> constantInstruction(-1);
+            case Opcodes.ICONST_0 -> constantInstruction(0);
+            case Opcodes.ICONST_1 -> constantInstruction(1);
+            case Opcodes.ICONST_2 -> constantInstruction(2);
+            case Opcodes.ICONST_3 -> constantInstruction(3);
+            case Opcodes.ICONST_4 -> constantInstruction(4);
+            case Opcodes.ICONST_5 -> constantInstruction(5);
             case Opcodes.IADD -> noOperand(Op.IADD);
             case Opcodes.ISUB -> noOperand(Op.ISUB);
             case Opcodes.IMUL -> noOperand(Op.IMUL);
@@ -273,7 +273,7 @@ public final class LegacyPureIntFunctionCompiler {
         return new Instruction(op, operand, 0, -1, List.of(), List.of());
     }
 
-    private static Instruction constant(int value) {
+    private static Instruction constantInstruction(int value) {
         return new Instruction(Op.CONST, 0, value, -1, List.of(), List.of());
     }
 
