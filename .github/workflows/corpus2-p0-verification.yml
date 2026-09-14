@@ -19,6 +19,7 @@ jobs:
       - name: Apply generic Block to ItemBlock behavior bridge
         run: |
           python tools/apply-corpus2-p0d-itemblock.py
+          python tools/fix-corpus2-p0d-itemblock-test.py
           git diff --check
       - uses: actions/setup-java@v5
         with:
