@@ -56,7 +56,7 @@ class LegacyBlockPlacementCompilerTest {
         }
         var analysis = new LegacyBlockPlacementCompiler().compile(jar);
         assertTrue(analysis.programs().isEmpty());
-        assertTrue(analysis.diagnostics().stream().anyMatch(value -> value.contains("field access")),
+        assertTrue(analysis.diagnostics().stream().anyMatch(value -> value.contains("Unsupported pure placement callback")),
                 String.join("\n", analysis.diagnostics()));
     }
 
