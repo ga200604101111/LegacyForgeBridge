@@ -55,7 +55,7 @@ public final class ConvertedLegacyBlock extends Block {
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player,
                                                 BlockHitResult hitResult) {
         Boolean handled = LegacyBlockActivationRegistry.handled(
-                convertedId, legacyMeta(state), level.isClientSide(), hitResult);
+                convertedId, legacyMeta(state), level.isClientSide(), player.isShiftKeyDown(), hitResult);
         if (handled == null) return super.useWithoutItem(state, level, pos, player, hitResult);
         return handled ? InteractionResult.SUCCESS : InteractionResult.PASS;
     }
