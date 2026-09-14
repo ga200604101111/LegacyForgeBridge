@@ -19,6 +19,7 @@ jobs:
       - name: Apply generic RenderLiving Specials presentation bridge
         run: |
           python tools/apply-corpus2-render-specials.py
+          python tools/fix-corpus2-render-specials-validation.py
           git diff --check
       - uses: actions/setup-java@v5
         with:
