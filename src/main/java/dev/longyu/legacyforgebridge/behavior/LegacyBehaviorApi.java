@@ -34,6 +34,10 @@ public final class LegacyBehaviorApi {
     public enum UseAction { none, eat, drink, block, bow }
     public static class Material { }
     public static class CreativeTab { }
+    public static class Block {
+        public final String id;
+        public Block(String id) { this.id=Objects.requireNonNull(id); }
+    }
     public static class Item {
         private String name="";
         public int maximumStackSize=64, durability=0, armorSlot=-1;
@@ -71,6 +75,10 @@ public final class LegacyBehaviorApi {
         public int func_77626_a(Stack stack) { return 0; }
         public void func_77615_a(Stack stack,World world,Player player,int remaining) { }
 
+    }
+    public static class ItemBlock extends Item {
+        public final Block field_150939_a;
+        public ItemBlock(Block block) { field_150939_a=Objects.requireNonNull(block); }
     }
     public static class Sword extends Item {
         public Sword(Material material) { maximumStackSize=1; }

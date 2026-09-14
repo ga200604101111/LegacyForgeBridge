@@ -18,10 +18,10 @@ public final class LegacyBehaviorPass implements ConversionPass {
         Path manifest=c.stagingDir().resolve("legacyforgebridge/converted-content.json");
         if(!Files.isRegularFile(manifest))return;
         JsonObject root=JsonParser.parseString(Files.readString(manifest)).getAsJsonObject();
-        JsonArray items=root.getAsJsonArray("items");if(items==null||items.isEmpty())return;
+        JsonArray items=root.getAsJsonArray("items"),blocks=root.getAsJsonArray("blocks");if((items==null||items.isEmpty())&&(blocks==null||blocks.isEmpty()))return;
         Map<String,String> ids=new LinkedHashMap<>();Set<String> ambiguous=new HashSet<>();
         List<LegacyItemRenderAnalyzer.ItemAllocation> proven=new ArrayList<>();
-        for(JsonElement e:items){
+        if(items!=null)for(JsonElement e:items){
             JsonObject item=e.getAsJsonObject();String id=item.get("id").getAsString();String path=id.substring(id.indexOf(':')+1);
             if(ids.putIfAbsent(path,id)!=null)ambiguous.add(path);ids.put(id,id);
             if(item.has("legacyRegistryName"))ids.putIfAbsent(item.get("legacyRegistryName").getAsString(),id);
@@ -34,6 +34,15 @@ public final class LegacyBehaviorPass implements ConversionPass {
                     args.add(new LegacyItemRenderAnalyzer.ConstructorArgument(types[i].getDescriptor(),value));}
                 boolean sword="sword".equals(item.has("kind")?item.get("kind").getAsString():"");
                 proven.add(new LegacyItemRenderAnalyzer.ItemAllocation(item.has("legacyRegistryName")?item.get("legacyRegistryName").getAsString():path,sourceClass,ctor,args,sword,false,false));
+            }
+        }
+        if(blocks!=null)for(JsonElement e:blocks){
+            JsonObject block=e.getAsJsonObject();String id=block.get("id").getAsString();String path=id.substring(id.indexOf(':')+1);
+            String old=ids.putIfAbsent(path,id);if(old!=null&&!old.equals(id))ambiguous.add(path);ids.put(id,id);
+            String legacy=block.has("legacyRegistryName")?block.get("legacyRegistryName").getAsString():path;ids.putIfAbsent(legacy,id);
+            if(block.has("sourceItemBlockClass")){
+                proven.add(new LegacyItemRenderAnalyzer.ItemAllocation(legacy,block.get("sourceItemBlockClass").getAsString(),"(Lnet/minecraft/block/Block;)V",
+                        List.of(new LegacyItemRenderAnalyzer.ConstructorArgument("Lnet/minecraft/block/Block;",id)),false,false,false));
             }
         }
         ambiguous.forEach(ids::remove);

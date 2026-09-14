@@ -20,6 +20,7 @@ public final class LegacyBehaviorCompiler {
             Map.entry("net/minecraft/item/ItemArmor","Armor"),Map.entry("net/minecraft/item/ItemBow","Bow"),
             Map.entry("net/minecraft/item/ItemTool","Tool"),Map.entry("net/minecraft/item/ItemPickaxe","Pickaxe"),
             Map.entry("net/minecraft/item/ItemAxe","Axe"),Map.entry("net/minecraft/item/ItemSpade","Spade"),Map.entry("net/minecraft/item/ItemHoe","Hoe"),
+            Map.entry("net/minecraft/item/ItemBlock","ItemBlock"),Map.entry("net/minecraft/block/Block","Block"),
             Map.entry("net/minecraft/item/ItemStack","Stack"),
             Map.entry("net/minecraft/item/Item$ToolMaterial","Material"),Map.entry("net/minecraft/item/ItemArmor$ArmorMaterial","Material"),
             Map.entry("net/minecraft/creativetab/CreativeTabs","CreativeTab"),Map.entry("net/minecraft/nbt/NBTTagCompound","Tag"),
@@ -380,7 +381,7 @@ public final class LegacyBehaviorCompiler {
         MethodVisitor m=w.visitMethod(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"initialize","()V",null,null);m.visitCode();m.visitLdcInsn(mod);m.visitMethodInsn(Opcodes.INVOKESTATIC,REG,"begin","(Ljava/lang/String;)Z",false);Label done=new Label();m.visitJumpInsn(Opcodes.IFEQ,done);
         Label start=new Label(),end=new Label(),failed=new Label();
         m.visitTryCatchBlock(start,end,failed,"java/lang/Throwable");m.visitLabel(start);
-        for(ItemBinding item:items){var a=item.allocation;m.visitLdcInsn(item.id);m.visitTypeInsn(Opcodes.NEW,mapped(a.itemClass()));m.visitInsn(Opcodes.DUP);for(var arg:a.arguments()){if(arg.value()==null)m.visitInsn(Opcodes.ACONST_NULL);else m.visitLdcInsn(arg.value());}m.visitMethodInsn(Opcodes.INVOKESPECIAL,mapped(a.itemClass()),"<init>",descriptor(a.constructorDescriptor()),false);m.visitLdcInsn(String.join(",",new TreeSet<>(item.hooks)));m.visitMethodInsn(Opcodes.INVOKESTATIC,REG,"registerItem","(Ljava/lang/String;L"+API+"$Item;Ljava/lang/String;)V",false);}
+        for(ItemBinding item:items){var a=item.allocation;m.visitLdcInsn(item.id);m.visitTypeInsn(Opcodes.NEW,mapped(a.itemClass()));m.visitInsn(Opcodes.DUP);for(var arg:a.arguments()){if("Lnet/minecraft/block/Block;".equals(arg.descriptor())&&arg.value() instanceof String blockId){m.visitTypeInsn(Opcodes.NEW,API+"$Block");m.visitInsn(Opcodes.DUP);m.visitLdcInsn(blockId);m.visitMethodInsn(Opcodes.INVOKESPECIAL,API+"$Block","<init>","(Ljava/lang/String;)V",false);}else if(arg.value()==null)m.visitInsn(Opcodes.ACONST_NULL);else m.visitLdcInsn(arg.value());}m.visitMethodInsn(Opcodes.INVOKESPECIAL,mapped(a.itemClass()),"<init>",descriptor(a.constructorDescriptor()),false);m.visitLdcInsn(String.join(",",new TreeSet<>(item.hooks)));m.visitMethodInsn(Opcodes.INVOKESTATIC,REG,"registerItem","(Ljava/lang/String;L"+API+"$Item;Ljava/lang/String;)V",false);}
         Map<String,Integer> locals=new LinkedHashMap<>();
         for(int i=0;i<events.size();i++){EventBinding e=events.get(i);String receiver=mapped(e.owner);
             if(e.targetItemId()==null&&!locals.containsKey(e.owner)){
