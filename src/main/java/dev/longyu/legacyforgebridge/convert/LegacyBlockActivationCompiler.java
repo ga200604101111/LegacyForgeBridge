@@ -2,225 +2,86 @@ package dev.longyu.legacyforgebridge.convert;
 
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.Opcodes;
-import org.objectweb.asm.tree.AbstractInsnNode;
-import org.objectweb.asm.tree.ClassNode;
-import org.objectweb.asm.tree.FieldInsnNode;
-import org.objectweb.asm.tree.IntInsnNode;
-import org.objectweb.asm.tree.JumpInsnNode;
-import org.objectweb.asm.tree.LabelNode;
-import org.objectweb.asm.tree.LookupSwitchInsnNode;
-import org.objectweb.asm.tree.MethodInsnNode;
-import org.objectweb.asm.tree.MethodNode;
-import org.objectweb.asm.tree.TableSwitchInsnNode;
-import org.objectweb.asm.tree.VarInsnNode;
+import org.objectweb.asm.tree.*;
+import org.objectweb.asm.tree.analysis.Analyzer;
+import org.objectweb.asm.tree.analysis.AnalyzerException;
+import org.objectweb.asm.tree.analysis.BasicVerifier;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Path;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
 /**
- * Compiles a bounded source-independent subset of Minecraft 1.7 {@code Block#onBlockActivated}.
- *
- * <p>The admitted slice may make a boolean decision from the clicked legacy side, integer
- * temporaries/constants, the raw metadata of the block being activated, the legacy world's
- * client/server-side flag, and the activating player's sneaking flag. Metadata is admitted only
- * for the exact bytecode sequence {@code world.getBlockMetadata(x, y, z)} using the callback's own
- * World/x/y/z arguments. The client-side flag is admitted only for the exact {@code world.isRemote}
- * field read from that same callback World. Sneaking is admitted only for an exact
- * {@code player.isSneaking()} call on the callback Player argument. Neighbor reads, source Block
- * instance state, other player state, hit-vector floats, arbitrary fields/methods, allocations,
- * world mutation and loops remain fail-closed.</p>
+ * Source-independent, read-only compiler for Minecraft 1.7 Block#onBlockActivated.
+ * Only clicked side, current-position metadata, World.isRemote and Player.isSneaking
+ * are admitted as typed inputs. Source classes are never defined or initialized.
+ * Unsupported effects reject the entire callback, including apparently safe prefixes.
  */
 public final class LegacyBlockActivationCompiler {
     private static final int MAX_INSTRUCTIONS = 96;
     private static final int MAX_STEPS = 256;
+    private static final int MAX_LOCALS = 256;
     private static final String WORLD = "net/minecraft/world/World";
     private static final String ENTITY = "net/minecraft/entity/Entity";
-    private static final String ENTITY_PLAYER = "net/minecraft/entity/player/EntityPlayer";
-    private static final String METADATA_DESCRIPTOR = "(III)I";
+    private static final String PLAYER = "net/minecraft/entity/player/EntityPlayer";
+    private static final String DESCRIPTOR = "(Lnet/minecraft/world/World;IIILnet/minecraft/entity/player/EntityPlayer;IFFF)Z";
 
     public enum Op {
-        NOP,
-        LOAD_INT,
-        LOAD_META,
-        LOAD_CLIENT_SIDE,
-        LOAD_SNEAKING,
-        STORE_INT,
-        CONST_INT,
-        IADD,
-        ISUB,
-        IMUL,
-        IDIV,
-        IREM,
-        INEG,
-        ISHL,
-        ISHR,
-        IUSHR,
-        IAND,
-        IOR,
-        IXOR,
-        IFEQ,
-        IFNE,
-        IFLT,
-        IFGE,
-        IFGT,
-        IFLE,
-        IF_ICMPEQ,
-        IF_ICMPNE,
-        IF_ICMPLT,
-        IF_ICMPGE,
-        IF_ICMPGT,
-        IF_ICMPLE,
-        GOTO,
-        TABLE_SWITCH,
-        LOOKUP_SWITCH,
-        IRETURN
+        NOP, LOAD_INT, LOAD_META, LOAD_CLIENT_SIDE, LOAD_SNEAKING, STORE_INT, CONST_INT,
+        IADD, ISUB, IMUL, IDIV, IREM, INEG, ISHL, ISHR, IUSHR, IAND, IOR, IXOR,
+        IFEQ, IFNE, IFLT, IFGE, IFGT, IFLE,
+        IF_ICMPEQ, IF_ICMPNE, IF_ICMPLT, IF_ICMPGE, IF_ICMPGT, IF_ICMPLE,
+        GOTO, TABLE_SWITCH, LOOKUP_SWITCH, IRETURN
     }
 
     public record Instruction(Op op, int operand, int target, List<Integer> keys, List<Integer> targets) {
         public Instruction {
+            Objects.requireNonNull(op, "activation opcode");
             keys = keys == null ? List.of() : List.copyOf(keys);
             targets = targets == null ? List.of() : List.copyOf(targets);
         }
     }
 
-    public record Program(
-            String registryName,
-            String legacyNamespace,
-            String implementationClass,
-            String sourceOwner,
-            String sourceMethod,
-            String sourceDescriptor,
-            List<Instruction> instructions
-    ) {
-        public Program { instructions = List.copyOf(instructions); }
+    public record Program(String registryName, String legacyNamespace, String implementationClass,
+                          String sourceOwner, String sourceMethod, String sourceDescriptor,
+                          List<Instruction> instructions) {
+        public Program {
+            instructions = List.copyOf(instructions);
+            // Also protects programs reconstructed by the runtime sidecar loader.
+            validateProgram(instructions);
+        }
 
-        /** Convenience evaluator for programs that depend only on clicked side and integer locals. */
         public boolean evaluate(int side) {
-            if (requires(Op.LOAD_META)) {
-                throw new IllegalStateException("Activation program requires legacy block metadata");
-            }
-            if (requires(Op.LOAD_CLIENT_SIDE)) {
-                throw new IllegalStateException("Activation program requires client/server side");
-            }
-            if (requires(Op.LOAD_SNEAKING)) {
-                throw new IllegalStateException("Activation program requires player sneaking state");
-            }
+            requireAbsent(Op.LOAD_META, "legacy block metadata");
+            requireAbsent(Op.LOAD_CLIENT_SIDE, "client/server side");
+            requireAbsent(Op.LOAD_SNEAKING, "player sneaking state");
             return evaluate(side, 0, false, false);
         }
 
-        /** Convenience evaluator for programs that do not depend on client/server or player state. */
         public boolean evaluate(int side, int metadata) {
-            if (requires(Op.LOAD_CLIENT_SIDE)) {
-                throw new IllegalStateException("Activation program requires client/server side");
-            }
-            if (requires(Op.LOAD_SNEAKING)) {
-                throw new IllegalStateException("Activation program requires player sneaking state");
-            }
+            requireAbsent(Op.LOAD_CLIENT_SIDE, "client/server side");
+            requireAbsent(Op.LOAD_SNEAKING, "player sneaking state");
             return evaluate(side, metadata, false, false);
         }
 
-        /** Convenience evaluator for programs that do not depend on player state. */
         public boolean evaluate(int side, int metadata, boolean clientSide) {
-            if (requires(Op.LOAD_SNEAKING)) {
-                throw new IllegalStateException("Activation program requires player sneaking state");
-            }
+            requireAbsent(Op.LOAD_SNEAKING, "player sneaking state");
             return evaluate(side, metadata, clientSide, false);
         }
 
-        /** Pure evaluator shared by tests and the modern runtime adapter. */
         public boolean evaluate(int side, int metadata, boolean clientSide, boolean sneaking) {
-            if (side < 0 || side > 5) {
-                throw new IllegalArgumentException("Legacy side outside 0..5: " + side);
-            }
-            if (metadata < 0 || metadata > 15) {
-                throw new IllegalArgumentException("Legacy metadata outside 0..15: " + metadata);
-            }
-            Map<Integer, Integer> locals = new HashMap<>();
-            locals.put(6, side);
-            ArrayDeque<Integer> stack = new ArrayDeque<>();
-            int pc = 0;
-            int steps = 0;
-            while (pc >= 0 && pc < instructions.size()) {
-                if (++steps > MAX_STEPS) {
-                    throw new IllegalStateException("Activation program exceeded step budget");
-                }
-                Instruction instruction = instructions.get(pc);
-                switch (instruction.op()) {
-                    case NOP -> { }
-                    case LOAD_INT -> {
-                        Integer value = locals.get(instruction.operand());
-                        if (value == null) throw new IllegalStateException("Uninitialized activation local " + instruction.operand());
-                        stack.push(value);
-                    }
-                    case LOAD_META -> stack.push(metadata);
-                    case LOAD_CLIENT_SIDE -> stack.push(clientSide ? 1 : 0);
-                    case LOAD_SNEAKING -> stack.push(sneaking ? 1 : 0);
-                    case STORE_INT -> locals.put(instruction.operand(), stack.pop());
-                    case CONST_INT -> stack.push(instruction.operand());
-                    case IADD -> stack.push(binary(stack, (left, right) -> left + right));
-                    case ISUB -> stack.push(binary(stack, (left, right) -> left - right));
-                    case IMUL -> stack.push(binary(stack, (left, right) -> left * right));
-                    case IDIV -> stack.push(binary(stack, (left, right) -> left / right));
-                    case IREM -> stack.push(binary(stack, (left, right) -> left % right));
-                    case INEG -> stack.push(-stack.pop());
-                    case ISHL -> stack.push(binary(stack, (left, right) -> left << right));
-                    case ISHR -> stack.push(binary(stack, (left, right) -> left >> right));
-                    case IUSHR -> stack.push(binary(stack, (left, right) -> left >>> right));
-                    case IAND -> stack.push(binary(stack, (left, right) -> left & right));
-                    case IOR -> stack.push(binary(stack, (left, right) -> left | right));
-                    case IXOR -> stack.push(binary(stack, (left, right) -> left ^ right));
-                    case IFEQ -> { if (stack.pop() == 0) { pc = instruction.target(); continue; } }
-                    case IFNE -> { if (stack.pop() != 0) { pc = instruction.target(); continue; } }
-                    case IFLT -> { if (stack.pop() < 0) { pc = instruction.target(); continue; } }
-                    case IFGE -> { if (stack.pop() >= 0) { pc = instruction.target(); continue; } }
-                    case IFGT -> { if (stack.pop() > 0) { pc = instruction.target(); continue; } }
-                    case IFLE -> { if (stack.pop() <= 0) { pc = instruction.target(); continue; } }
-                    case IF_ICMPEQ, IF_ICMPNE, IF_ICMPLT, IF_ICMPGE, IF_ICMPGT, IF_ICMPLE -> {
-                        int right = stack.pop();
-                        int left = stack.pop();
-                        boolean take = switch (instruction.op()) {
-                            case IF_ICMPEQ -> left == right;
-                            case IF_ICMPNE -> left != right;
-                            case IF_ICMPLT -> left < right;
-                            case IF_ICMPGE -> left >= right;
-                            case IF_ICMPGT -> left > right;
-                            case IF_ICMPLE -> left <= right;
-                            default -> false;
-                        };
-                        if (take) { pc = instruction.target(); continue; }
-                    }
-                    case GOTO -> { pc = instruction.target(); continue; }
-                    case TABLE_SWITCH, LOOKUP_SWITCH -> {
-                        int key = stack.pop();
-                        int next = instruction.target();
-                        for (int i = 0; i < instruction.keys().size(); i++) {
-                            if (instruction.keys().get(i) == key) {
-                                next = instruction.targets().get(i);
-                                break;
-                            }
-                        }
-                        pc = next;
-                        continue;
-                    }
-                    case IRETURN -> { return stack.pop() != 0; }
-                }
-                pc++;
-            }
-            throw new IllegalStateException("Activation program terminated without IRETURN");
+            if (side < 0 || side > 5) throw new IllegalArgumentException("Legacy side outside 0..5: " + side);
+            if (metadata < 0 || metadata > 15) throw new IllegalArgumentException("Legacy metadata outside 0..15: " + metadata);
+            return execute(instructions, side, metadata, clientSide, sneaking);
         }
 
-        private boolean requires(Op op) {
-            return instructions.stream().anyMatch(instruction -> instruction.op() == op);
+        private void requireAbsent(Op op, String input) {
+            if (instructions.stream().anyMatch(value -> value.op() == op)) {
+                throw new IllegalStateException("Activation program requires " + input);
+            }
         }
     }
 
@@ -232,18 +93,17 @@ public final class LegacyBlockActivationCompiler {
     }
 
     public Analysis compile(Path jarPath) throws IOException {
-        LegacyBlockBehaviorAnalyzer.Analysis behavior = new LegacyBlockBehaviorAnalyzer().analyze(jarPath);
+        var behavior = new LegacyBlockBehaviorAnalyzer().analyze(jarPath);
         Map<String, ClassNode> classes = loadClasses(jarPath);
         List<Program> programs = new ArrayList<>();
         List<String> diagnostics = new ArrayList<>(behavior.diagnostics());
-        int activationCallbacks = 0;
-
-        for (LegacyBlockBehaviorAnalyzer.BlockBehavior block : behavior.blocks()) {
-            LegacyBlockBehaviorAnalyzer.Callback callback = block.callbacks().stream()
+        int callbacks = 0;
+        for (var block : behavior.blocks()) {
+            var callback = block.callbacks().stream()
                     .filter(value -> value.kind() == LegacyBlockBehaviorAnalyzer.CallbackKind.ACTIVATE)
                     .findFirst().orElse(null);
             if (callback == null) continue;
-            activationCallbacks++;
+            callbacks++;
             ClassNode owner = classes.get(callback.owner());
             MethodNode method = owner == null ? null : owner.methods.stream()
                     .filter(value -> value.name.equals(callback.method()) && value.desc.equals(callback.descriptor()))
@@ -252,174 +112,299 @@ public final class LegacyBlockActivationCompiler {
                 diagnostics.add("Activation callback disappeared from source class " + callback.owner() + ".");
                 continue;
             }
-            CompileResult compiled = compileMethod(method);
-            if (compiled.error() != null) {
+            try {
+                programs.add(new Program(block.registryName(), block.legacyNamespace(), block.implementationClass(),
+                        callback.owner(), callback.method(), callback.descriptor(), compileMethod(method)));
+            } catch (IllegalArgumentException exception) {
                 diagnostics.add("Unsupported pure activation callback " + callback.owner() + "." + callback.method()
-                        + callback.descriptor() + ": " + compiled.error());
-                continue;
+                        + callback.descriptor() + ": " + exception.getMessage());
             }
-            programs.add(new Program(block.registryName(), block.legacyNamespace(), block.implementationClass(),
-                    callback.owner(), callback.method(), callback.descriptor(), compiled.instructions()));
         }
-        return new Analysis(programs, List.copyOf(new LinkedHashSet<>(diagnostics)), activationCallbacks);
+        return new Analysis(programs, List.copyOf(new LinkedHashSet<>(diagnostics)), callbacks);
     }
 
-    private static CompileResult compileMethod(MethodNode method) {
+    /** Package-visible for adversarial bytecode tests; a Program must still validate the result. */
+    static List<Instruction> compileMethod(MethodNode method) {
+        int forbidden = Opcodes.ACC_STATIC | Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE | Opcodes.ACC_SYNCHRONIZED;
+        if (!DESCRIPTOR.equals(method.desc) || (method.access & forbidden) != 0
+                || (method.access & Opcodes.ACC_PUBLIC) == 0) {
+            throw invalid("callback must be a public, non-synchronized concrete instance method with the exact descriptor");
+        }
+        if (method.tryCatchBlocks != null && !method.tryCatchBlocks.isEmpty()) {
+            throw invalid("exception handlers are not supported");
+        }
+        if (method.maxLocals < 10 || method.maxLocals > MAX_LOCALS
+                || method.maxStack < 1 || method.maxStack > MAX_INSTRUCTIONS) {
+            throw invalid("source frame budget exceeded or invalid");
+        }
         List<AbstractInsnNode> real = new ArrayList<>();
-        Map<AbstractInsnNode, Integer> indices = new LinkedHashMap<>();
+        Map<AbstractInsnNode, Integer> indices = new IdentityHashMap<>();
         for (AbstractInsnNode instruction : method.instructions) {
             if (instruction.getOpcode() < 0) continue;
-            if (real.size() >= MAX_INSTRUCTIONS) return CompileResult.error("instruction budget exceeded");
+            if (real.size() >= MAX_INSTRUCTIONS) throw invalid("instruction budget exceeded");
             indices.put(instruction, real.size());
             real.add(instruction);
         }
+        if (real.isEmpty()) throw invalid("empty activation callback");
+
+        // Check branch shape BEFORE ASM analysis, including overflow-prone switch ranges.
+        Set<Integer> entries = new HashSet<>();
+        for (int i = 0; i < real.size(); i++) {
+            AbstractInsnNode value = real.get(i);
+            if (value instanceof JumpInsnNode jump) {
+                if (jumpOp(value.getOpcode()) == null) throw invalid("unsupported jump opcode " + value.getOpcode());
+                entries.add(sourceTarget(jump.label, indices, i, real.size()));
+            } else if (value instanceof TableSwitchInsnNode table) {
+                long width = (long) table.max - table.min + 1L;
+                if (width <= 0 || width > MAX_INSTRUCTIONS || width != table.labels.size()) {
+                    throw invalid("invalid or over-budget tableswitch range");
+                }
+                entries.add(sourceTarget(table.dflt, indices, i, real.size()));
+                for (LabelNode label : table.labels) entries.add(sourceTarget(label, indices, i, real.size()));
+            } else if (value instanceof LookupSwitchInsnNode lookup) {
+                validateKeys(lookup.keys, lookup.labels.size(), false);
+                entries.add(sourceTarget(lookup.dflt, indices, i, real.size()));
+                for (LabelNode label : lookup.labels) entries.add(sourceTarget(label, indices, i, real.size()));
+            }
+        }
+        for (int i = 0; i < real.size(); i++) {
+            int length = metadataRead(real, i) ? 5 : (clientSideRead(real, i) || sneakingRead(real, i)) ? 2 : 0;
+            for (int j = 1; j < length; j++) {
+                if (entries.contains(i + j)) throw invalid("branch enters typed-input sequence at " + (i + j));
+            }
+        }
+        try {
+            // BasicVerifier checks stack/local types without resolving or loading source classes.
+            new Analyzer<>(new BasicVerifier()).analyze("lfb/SourceActivation", method);
+        } catch (AnalyzerException | RuntimeException exception) {
+            throw invalid("invalid source stack/local dataflow: " + exception.getMessage());
+        }
 
         List<Instruction> output = new ArrayList<>();
-        boolean returned = false;
         for (int i = 0; i < real.size(); i++) {
-            if (matchesCurrentMetadataRead(real, i)) {
-                // Preserve one output slot per source instruction so all proven forward jump targets
-                // retain their indices while the legacy object/coordinate stack sequence becomes a
-                // single typed modern input.
-                output.add(simple(Op.NOP, 0));
-                output.add(simple(Op.NOP, 0));
-                output.add(simple(Op.NOP, 0));
-                output.add(simple(Op.NOP, 0));
-                output.add(simple(Op.LOAD_META, 0));
-                i += 4;
+            Op input = null;
+            int length = 0;
+            if (metadataRead(real, i)) { input = Op.LOAD_META; length = 5; }
+            else if (clientSideRead(real, i)) { input = Op.LOAD_CLIENT_SIDE; length = 2; }
+            else if (sneakingRead(real, i)) { input = Op.LOAD_SNEAKING; length = 2; }
+            if (input != null) {
+                // Preserving indices is insufficient if control flow enters a collapsed sequence.
+                for (int j = 1; j < length; j++) {
+                    if (entries.contains(i + j)) throw invalid("branch enters typed-input sequence at " + (i + j));
+                    output.add(simple(Op.NOP, 0));
+                }
+                output.add(simple(input, 0));
+                i += length - 1;
                 continue;
             }
-            if (matchesClientSideRead(real, i)) {
-                output.add(simple(Op.NOP, 0));
-                output.add(simple(Op.LOAD_CLIENT_SIDE, 0));
-                i += 1;
-                continue;
-            }
-            if (matchesSneakingRead(real, i)) {
-                output.add(simple(Op.NOP, 0));
-                output.add(simple(Op.LOAD_SNEAKING, 0));
-                i += 1;
-                continue;
-            }
-
             AbstractInsnNode instruction = real.get(i);
             int opcode = instruction.getOpcode();
-            Instruction encoded;
             if (instruction instanceof VarInsnNode variable) {
                 if (opcode == Opcodes.ILOAD && (variable.var == 6 || variable.var >= 10)) {
-                    encoded = simple(Op.LOAD_INT, variable.var);
+                    output.add(simple(Op.LOAD_INT, variable.var));
                 } else if (opcode == Opcodes.ISTORE && variable.var >= 10) {
-                    encoded = simple(Op.STORE_INT, variable.var);
+                    output.add(simple(Op.STORE_INT, variable.var));
                 } else {
-                    return CompileResult.error("object/world/player/hit-vector/local access opcode " + opcode + " local=" + variable.var);
+                    throw invalid("object/world/player/hit-vector/local access opcode " + opcode + " local=" + variable.var);
                 }
             } else if (instruction instanceof IntInsnNode value) {
-                if (opcode != Opcodes.BIPUSH && opcode != Opcodes.SIPUSH) {
-                    return CompileResult.error("int opcode " + opcode);
-                }
-                encoded = simple(Op.CONST_INT, value.operand);
+                if (opcode != Opcodes.BIPUSH && opcode != Opcodes.SIPUSH) throw invalid("int opcode " + opcode);
+                output.add(simple(Op.CONST_INT, value.operand));
+            } else if (instruction instanceof LdcInsnNode value) {
+                if (!(value.cst instanceof Integer integer)) throw invalid("non-integer LDC constant");
+                output.add(simple(Op.CONST_INT, integer));
             } else if (instruction instanceof JumpInsnNode jump) {
-                int target = targetIndex(jump.label, indices);
-                if (target <= i) return CompileResult.error("backward/invalid jump target " + target);
-                Op op = jumpOp(opcode);
-                if (op == null) return CompileResult.error("jump opcode " + opcode);
-                encoded = jump(op, target);
+                output.add(new Instruction(jumpOp(opcode), 0, sourceTarget(jump.label, indices, i, real.size()), null, null));
             } else if (instruction instanceof TableSwitchInsnNode table) {
-                int defaultTarget = targetIndex(table.dflt, indices);
-                if (defaultTarget <= i) return CompileResult.error("backward/invalid tableswitch default");
                 List<Integer> keys = new ArrayList<>();
                 List<Integer> targets = new ArrayList<>();
-                for (int key = table.min; key <= table.max; key++) keys.add(key);
-                for (LabelNode label : table.labels) {
-                    int target = targetIndex(label, indices);
-                    if (target <= i) return CompileResult.error("backward/invalid tableswitch target");
-                    targets.add(target);
+                // Iterate by bounded count, not key <= max: max may be Integer.MAX_VALUE.
+                for (int j = 0; j < table.labels.size(); j++) {
+                    keys.add(table.min + j);
+                    targets.add(sourceTarget(table.labels.get(j), indices, i, real.size()));
                 }
-                encoded = new Instruction(Op.TABLE_SWITCH, 0, defaultTarget, keys, targets);
+                output.add(new Instruction(Op.TABLE_SWITCH, 0, sourceTarget(table.dflt, indices, i, real.size()), keys, targets));
             } else if (instruction instanceof LookupSwitchInsnNode lookup) {
-                int defaultTarget = targetIndex(lookup.dflt, indices);
-                if (defaultTarget <= i) return CompileResult.error("backward/invalid lookupswitch default");
                 List<Integer> targets = new ArrayList<>();
-                for (LabelNode label : lookup.labels) {
-                    int target = targetIndex(label, indices);
-                    if (target <= i) return CompileResult.error("backward/invalid lookupswitch target");
-                    targets.add(target);
-                }
-                encoded = new Instruction(Op.LOOKUP_SWITCH, 0, defaultTarget, lookup.keys, targets);
+                for (LabelNode label : lookup.labels) targets.add(sourceTarget(label, indices, i, real.size()));
+                output.add(new Instruction(Op.LOOKUP_SWITCH, 0, sourceTarget(lookup.dflt, indices, i, real.size()), lookup.keys, targets));
             } else {
-                encoded = encodeSimpleOpcode(opcode);
-                if (encoded == null) return CompileResult.error("opcode " + opcode);
-                if (opcode == Opcodes.IRETURN) returned = true;
+                Instruction encoded = simpleOpcode(opcode);
+                if (encoded == null) throw invalid("opcode " + opcode);
+                output.add(encoded);
             }
-            output.add(encoded);
         }
-        return returned ? new CompileResult(List.copyOf(output), null) : CompileResult.error("no boolean return");
+        return List.copyOf(output);
     }
 
-    private static boolean matchesCurrentMetadataRead(List<AbstractInsnNode> instructions, int index) {
-        if (index + 4 >= instructions.size()) return false;
-        return isVar(instructions.get(index), Opcodes.ALOAD, 1)
-                && isVar(instructions.get(index + 1), Opcodes.ILOAD, 2)
-                && isVar(instructions.get(index + 2), Opcodes.ILOAD, 3)
-                && isVar(instructions.get(index + 3), Opcodes.ILOAD, 4)
-                && instructions.get(index + 4) instanceof MethodInsnNode call
-                && call.getOpcode() == Opcodes.INVOKEVIRTUAL
-                && WORLD.equals(call.owner)
-                && ("getBlockMetadata".equals(call.name) || "func_72805_g".equals(call.name))
-                && METADATA_DESCRIPTOR.equals(call.desc);
+    private static void validateProgram(List<Instruction> code) {
+        if (code.isEmpty() || code.size() > MAX_INSTRUCTIONS) throw invalid("activation instruction budget exceeded or empty program");
+        for (int i = 0; i < code.size(); i++) {
+            Instruction instruction = code.get(i);
+            switch (instruction.op()) {
+                case LOAD_INT -> {
+                    int local = instruction.operand();
+                    if ((local != 6 && local < 10) || local >= MAX_LOCALS) throw invalid("invalid activation load local " + local);
+                }
+                case STORE_INT -> {
+                    if (instruction.operand() < 10 || instruction.operand() >= MAX_LOCALS) throw invalid("invalid activation store local");
+                }
+                case IFEQ, IFNE, IFLT, IFGE, IFGT, IFLE,
+                     IF_ICMPEQ, IF_ICMPNE, IF_ICMPLT, IF_ICMPGE, IF_ICMPGT, IF_ICMPLE, GOTO ->
+                        validateTarget(instruction.target(), i, code.size());
+                case TABLE_SWITCH, LOOKUP_SWITCH -> {
+                    validateTarget(instruction.target(), i, code.size());
+                    validateKeys(instruction.keys(), instruction.targets().size(), instruction.op() == Op.TABLE_SWITCH);
+                    if (instruction.op() == Op.TABLE_SWITCH && instruction.keys().isEmpty()) throw invalid("empty tableswitch");
+                    for (int target : instruction.targets()) validateTarget(target, i, code.size());
+                }
+                default -> { }
+            }
+        }
+        // This is exhaustive, not sampling: the admitted input domain has exactly 384 tuples.
+        for (int side = 0; side < 6; side++) {
+            for (int meta = 0; meta < 16; meta++) {
+                for (int flags = 0; flags < 4; flags++) {
+                    try {
+                        execute(code, side, meta, (flags & 1) != 0, (flags & 2) != 0);
+                    } catch (RuntimeException exception) {
+                        throw new IllegalArgumentException("activation input proof failed: side=" + side
+                                + ", metadata=" + meta + ", clientSide=" + ((flags & 1) != 0)
+                                + ", sneaking=" + ((flags & 2) != 0) + ": " + exception.getMessage(), exception);
+                    }
+                }
+            }
+        }
     }
 
-    private static boolean matchesClientSideRead(List<AbstractInsnNode> instructions, int index) {
-        if (index + 1 >= instructions.size()) return false;
-        return isVar(instructions.get(index), Opcodes.ALOAD, 1)
-                && instructions.get(index + 1) instanceof FieldInsnNode field
-                && field.getOpcode() == Opcodes.GETFIELD
-                && WORLD.equals(field.owner)
-                && ("isRemote".equals(field.name) || "field_72995_K".equals(field.name))
+    private static boolean execute(List<Instruction> code, int side, int metadata, boolean clientSide, boolean sneaking) {
+        Map<Integer, Integer> locals = new HashMap<>();
+        locals.put(6, side);
+        ArrayDeque<Integer> stack = new ArrayDeque<>();
+        int pc = 0;
+        int steps = 0;
+        while (pc >= 0 && pc < code.size()) {
+            if (++steps > MAX_STEPS) throw new IllegalStateException("Activation program exceeded step budget");
+            Instruction instruction = code.get(pc);
+            switch (instruction.op()) {
+                case NOP -> { }
+                case LOAD_INT -> {
+                    Integer value = locals.get(instruction.operand());
+                    if (value == null) throw new IllegalStateException("Uninitialized activation local " + instruction.operand());
+                    stack.push(value);
+                }
+                case LOAD_META -> stack.push(metadata);
+                case LOAD_CLIENT_SIDE -> stack.push(clientSide ? 1 : 0);
+                case LOAD_SNEAKING -> stack.push(sneaking ? 1 : 0);
+                case STORE_INT -> locals.put(instruction.operand(), stack.pop());
+                case CONST_INT -> stack.push(instruction.operand());
+                case INEG -> stack.push(-stack.pop());
+                case IADD, ISUB, IMUL, IDIV, IREM, ISHL, ISHR, IUSHR, IAND, IOR, IXOR -> {
+                    int right = stack.pop();
+                    int left = stack.pop();
+                    stack.push(switch (instruction.op()) {
+                        case IADD -> left + right;
+                        case ISUB -> left - right;
+                        case IMUL -> left * right;
+                        case IDIV -> left / right;
+                        case IREM -> left % right;
+                        case ISHL -> left << right;
+                        case ISHR -> left >> right;
+                        case IUSHR -> left >>> right;
+                        case IAND -> left & right;
+                        case IOR -> left | right;
+                        case IXOR -> left ^ right;
+                        default -> throw new IllegalStateException("not an integer operator");
+                    });
+                }
+                case IFEQ, IFNE, IFLT, IFGE, IFGT, IFLE -> {
+                    int value = stack.pop();
+                    boolean take = switch (instruction.op()) {
+                        case IFEQ -> value == 0;
+                        case IFNE -> value != 0;
+                        case IFLT -> value < 0;
+                        case IFGE -> value >= 0;
+                        case IFGT -> value > 0;
+                        case IFLE -> value <= 0;
+                        default -> false;
+                    };
+                    if (take) { pc = instruction.target(); continue; }
+                }
+                case IF_ICMPEQ, IF_ICMPNE, IF_ICMPLT, IF_ICMPGE, IF_ICMPGT, IF_ICMPLE -> {
+                    int right = stack.pop();
+                    int left = stack.pop();
+                    boolean take = switch (instruction.op()) {
+                        case IF_ICMPEQ -> left == right;
+                        case IF_ICMPNE -> left != right;
+                        case IF_ICMPLT -> left < right;
+                        case IF_ICMPGE -> left >= right;
+                        case IF_ICMPGT -> left > right;
+                        case IF_ICMPLE -> left <= right;
+                        default -> false;
+                    };
+                    if (take) { pc = instruction.target(); continue; }
+                }
+                case GOTO -> { pc = instruction.target(); continue; }
+                case TABLE_SWITCH, LOOKUP_SWITCH -> {
+                    int key = stack.pop();
+                    int index = instruction.keys().indexOf(key);
+                    pc = index < 0 ? instruction.target() : instruction.targets().get(index);
+                    continue;
+                }
+                // JVMS 6.5.ireturn narrows int to boolean with & 1, not != 0.
+                case IRETURN -> { return (stack.pop() & 1) != 0; }
+            }
+            pc++;
+        }
+        throw new IllegalStateException("Activation program terminated without IRETURN");
+    }
+
+    private static boolean metadataRead(List<AbstractInsnNode> code, int i) {
+        return i + 4 < code.size() && isVar(code.get(i), Opcodes.ALOAD, 1)
+                && isVar(code.get(i + 1), Opcodes.ILOAD, 2) && isVar(code.get(i + 2), Opcodes.ILOAD, 3)
+                && isVar(code.get(i + 3), Opcodes.ILOAD, 4) && code.get(i + 4) instanceof MethodInsnNode call
+                && call.getOpcode() == Opcodes.INVOKEVIRTUAL && !call.itf && WORLD.equals(call.owner)
+                && ("getBlockMetadata".equals(call.name) || "func_72805_g".equals(call.name)) && "(III)I".equals(call.desc);
+    }
+
+    private static boolean clientSideRead(List<AbstractInsnNode> code, int i) {
+        return i + 1 < code.size() && isVar(code.get(i), Opcodes.ALOAD, 1)
+                && code.get(i + 1) instanceof FieldInsnNode field && field.getOpcode() == Opcodes.GETFIELD
+                && WORLD.equals(field.owner) && ("isRemote".equals(field.name) || "field_72995_K".equals(field.name))
                 && "Z".equals(field.desc);
     }
 
-    private static boolean matchesSneakingRead(List<AbstractInsnNode> instructions, int index) {
-        if (index + 1 >= instructions.size()) return false;
-        return isVar(instructions.get(index), Opcodes.ALOAD, 5)
-                && instructions.get(index + 1) instanceof MethodInsnNode call
-                && call.getOpcode() == Opcodes.INVOKEVIRTUAL
-                && (ENTITY_PLAYER.equals(call.owner) || ENTITY.equals(call.owner))
-                && ("isSneaking".equals(call.name) || "func_70093_af".equals(call.name))
-                && "()Z".equals(call.desc);
+    private static boolean sneakingRead(List<AbstractInsnNode> code, int i) {
+        return i + 1 < code.size() && isVar(code.get(i), Opcodes.ALOAD, 5)
+                && code.get(i + 1) instanceof MethodInsnNode call && call.getOpcode() == Opcodes.INVOKEVIRTUAL
+                && !call.itf && (PLAYER.equals(call.owner) || ENTITY.equals(call.owner))
+                && ("isSneaking".equals(call.name) || "func_70093_af".equals(call.name)) && "()Z".equals(call.desc);
     }
 
-    private static boolean isVar(AbstractInsnNode instruction, int opcode, int local) {
-        return instruction instanceof VarInsnNode variable
-                && variable.getOpcode() == opcode
-                && variable.var == local;
+    private static boolean isVar(AbstractInsnNode value, int opcode, int local) {
+        return value instanceof VarInsnNode variable && value.getOpcode() == opcode && variable.var == local;
     }
 
-    private static Instruction encodeSimpleOpcode(int opcode) {
-        return switch (opcode) {
-            case Opcodes.NOP -> simple(Op.NOP, 0);
-            case Opcodes.ICONST_M1 -> simple(Op.CONST_INT, -1);
-            case Opcodes.ICONST_0 -> simple(Op.CONST_INT, 0);
-            case Opcodes.ICONST_1 -> simple(Op.CONST_INT, 1);
-            case Opcodes.ICONST_2 -> simple(Op.CONST_INT, 2);
-            case Opcodes.ICONST_3 -> simple(Op.CONST_INT, 3);
-            case Opcodes.ICONST_4 -> simple(Op.CONST_INT, 4);
-            case Opcodes.ICONST_5 -> simple(Op.CONST_INT, 5);
-            case Opcodes.IADD -> simple(Op.IADD, 0);
-            case Opcodes.ISUB -> simple(Op.ISUB, 0);
-            case Opcodes.IMUL -> simple(Op.IMUL, 0);
-            case Opcodes.IDIV -> simple(Op.IDIV, 0);
-            case Opcodes.IREM -> simple(Op.IREM, 0);
-            case Opcodes.INEG -> simple(Op.INEG, 0);
-            case Opcodes.ISHL -> simple(Op.ISHL, 0);
-            case Opcodes.ISHR -> simple(Op.ISHR, 0);
-            case Opcodes.IUSHR -> simple(Op.IUSHR, 0);
-            case Opcodes.IAND -> simple(Op.IAND, 0);
-            case Opcodes.IOR -> simple(Op.IOR, 0);
-            case Opcodes.IXOR -> simple(Op.IXOR, 0);
-            case Opcodes.IRETURN -> simple(Op.IRETURN, 0);
+    private static Instruction simpleOpcode(int opcode) {
+        if (opcode >= Opcodes.ICONST_M1 && opcode <= Opcodes.ICONST_5) return simple(Op.CONST_INT, opcode - Opcodes.ICONST_0);
+        Op op = switch (opcode) {
+            case Opcodes.NOP -> Op.NOP;
+            case Opcodes.IADD -> Op.IADD;
+            case Opcodes.ISUB -> Op.ISUB;
+            case Opcodes.IMUL -> Op.IMUL;
+            case Opcodes.IDIV -> Op.IDIV;
+            case Opcodes.IREM -> Op.IREM;
+            case Opcodes.INEG -> Op.INEG;
+            case Opcodes.ISHL -> Op.ISHL;
+            case Opcodes.ISHR -> Op.ISHR;
+            case Opcodes.IUSHR -> Op.IUSHR;
+            case Opcodes.IAND -> Op.IAND;
+            case Opcodes.IOR -> Op.IOR;
+            case Opcodes.IXOR -> Op.IXOR;
+            case Opcodes.IRETURN -> Op.IRETURN;
             default -> null;
         };
+        return op == null ? null : simple(op, 0);
     }
 
     private static Op jumpOp(int opcode) {
@@ -441,40 +426,32 @@ public final class LegacyBlockActivationCompiler {
         };
     }
 
-    private static int targetIndex(LabelNode label, Map<AbstractInsnNode, Integer> indices) {
-        AbstractInsnNode cursor = label;
-        while (cursor != null) {
-            Integer index = indices.get(cursor);
-            if (index != null) return index;
-            cursor = cursor.getNext();
+    private static int sourceTarget(LabelNode label, Map<AbstractInsnNode, Integer> indices, int from, int size) {
+        for (AbstractInsnNode cursor = label; cursor != null; cursor = cursor.getNext()) {
+            Integer target = indices.get(cursor);
+            if (target != null) { validateTarget(target, from, size); return target; }
         }
-        return -1;
+        throw invalid("invalid source branch target");
     }
 
-    private static Instruction simple(Op op, int operand) {
-        return new Instruction(op, operand, -1, List.of(), List.of());
+    private static void validateTarget(int target, int from, int size) {
+        if (target <= from || target >= size) throw invalid("backward/invalid jump target " + target + " from " + from);
     }
 
-    private static Instruction jump(Op op, int target) {
-        return new Instruction(op, 0, target, List.of(), List.of());
+    private static void validateKeys(List<Integer> keys, int targetCount, boolean contiguous) {
+        if (keys.size() != targetCount || keys.size() > MAX_INSTRUCTIONS) throw invalid("invalid or over-budget switch table");
+        for (int i = 1; i < keys.size(); i++) {
+            long delta = (long) keys.get(i) - keys.get(i - 1);
+            if (delta <= 0 || (contiguous && delta != 1)) throw invalid("invalid switch key order/range");
+        }
     }
 
-    private static int binary(ArrayDeque<Integer> stack, IntBinary operator) {
-        int right = stack.pop();
-        int left = stack.pop();
-        return operator.apply(left, right);
-    }
+    private static Instruction simple(Op op, int operand) { return new Instruction(op, operand, -1, null, null); }
+    private static IllegalArgumentException invalid(String reason) { return new IllegalArgumentException(reason); }
 
-    @FunctionalInterface
-    private interface IntBinary { int apply(int left, int right); }
-
-    private record CompileResult(List<Instruction> instructions, String error) {
-        static CompileResult error(String error) { return new CompileResult(List.of(), error); }
-    }
-
-    private static Map<String, ClassNode> loadClasses(Path jarPath) throws IOException {
+    private static Map<String, ClassNode> loadClasses(Path path) throws IOException {
         Map<String, ClassNode> classes = new LinkedHashMap<>();
-        try (JarFile jar = new JarFile(jarPath.toFile())) {
+        try (JarFile jar = new JarFile(path.toFile())) {
             var entries = jar.entries();
             while (entries.hasMoreElements()) {
                 JarEntry entry = entries.nextElement();
@@ -484,7 +461,7 @@ public final class LegacyBlockActivationCompiler {
                     new ClassReader(input).accept(node, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
                     classes.put(node.name, node);
                 } catch (RuntimeException ignored) {
-                    // The registry/behavior analyzers own malformed-class diagnostics. Never guess.
+                    // Registry/behavior analyzers own malformed-class diagnostics.
                 }
             }
         }
