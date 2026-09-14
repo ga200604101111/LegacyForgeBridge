@@ -1,8 +1,11 @@
 package dev.longyu.legacyforgebridge.convert;
 
+import com.mojang.serialization.Dynamic;
+import net.minecraft.SharedConstants;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.util.datafix.DataFixTypes;
+import net.minecraft.nbt.NbtOps;
 import net.minecraft.util.datafix.DataFixers;
+import net.minecraft.util.datafix.fixes.References;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -20,6 +23,10 @@ class LegacyVanillaStackDataFixTest {
         legacy.putShort("id", (short) numericId);
         legacy.putByte("Count", (byte) 1);
         legacy.putShort("Damage", (short) damage);
-        return DataFixTypes.ITEM_STACK.updateToCurrentVersion(DataFixers.getDataFixer(), legacy, 0);
+        return (CompoundTag) DataFixers.getDataFixer().update(
+                References.ITEM_STACK,
+                new Dynamic<>(NbtOps.INSTANCE, legacy),
+                -1,
+                SharedConstants.WORLD_VERSION).getValue();
     }
 }
