@@ -1,5 +1,6 @@
 package dev.longyu.legacyforgebridge;
 
+import dev.longyu.legacyforgebridge.compat.LegacyStackComponents;
 import dev.longyu.legacyforgebridge.convert.LegacyConversionManager;
 import dev.longyu.legacyforgebridge.convert.runtime.ConvertedContentRuntime;
 import dev.longyu.legacyforgebridge.network.FmlConnectionTrace;
@@ -14,6 +15,9 @@ public final class LegacyForgeBridge implements ModInitializer {
     @Override
     public void onInitialize() {
         LOGGER.info("Initializing LegacyForgeBridge {}", BuildInfo.VERSION);
+
+        // Register LFB-owned stack components before any converted item defaults are constructed.
+        LegacyStackComponents.bootstrap();
 
         // One deterministic trace file per Minecraft launch. This is intentionally initialized
         // before any connection attempt so the previous launch's trace is cleared immediately.
