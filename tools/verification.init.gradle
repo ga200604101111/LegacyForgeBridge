@@ -1,0 +1,30 @@
+// Opt-in reproducibility kit for offline validation of an external, uncommitted legacy corpus.
+// Never publishes dependencies inside the distributable mod JAR.
+gradle.projectsEvaluated {
+    def p = gradle.rootProject
+    p.tasks.register('exportVerificationKit') {
+        doLast {
+            File output = p.layout.buildDirectory.dir('verification-kit').get().asFile
+            p.delete(output)
+            p.copy {
+                from(p.projectDir)
+                include 'src/**', 'docs/**', 'tools/**', 'build.gradle', 'settings.gradle', 'gradle.properties', 'LICENSE', '.github/workflows/**', '.gitignore'
+                into new File(output, 'source')
+            }
+            p.copy {
+                from(p.layout.buildDirectory)
+                include 'classes/**', 'resources/**', 'generated/**', 'libs/**', 'devlibs/**', 'test-results/**', 'reports/tests/**'
+                into new File(output, 'build')
+            }
+            def paths = []
+            def deps = (p.sourceSets.main.compileClasspath.files + p.sourceSets.test.compileClasspath.files + p.sourceSets.test.runtimeClasspath.files).findAll { it.isFile() }.sort { it.absolutePath }
+            deps.unique().eachWithIndex { File dependency, int index ->
+                String name = String.format('%03d-', index) + dependency.name
+                p.copy { from dependency; into new File(output, 'deps'); rename { name } }
+                paths.add('deps/' + name)
+            }
+            new File(output, 'classpath.json').setText(groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(paths)), 'UTF-8')
+            new File(output, 'revision.txt').setText(System.getenv('GITHUB_SHA') ?: 'local', 'UTF-8')
+        }
+    }
+}
