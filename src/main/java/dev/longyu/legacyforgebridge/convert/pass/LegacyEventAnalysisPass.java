@@ -2,6 +2,7 @@ package dev.longyu.legacyforgebridge.convert.pass;
 
 import com.google.gson.*;
 import dev.longyu.legacyforgebridge.convert.LegacyEventAnalyzer;
+import dev.longyu.legacyforgebridge.convert.LegacyEventHandlerConstructionAnalyzer;
 import dev.longyu.legacyforgebridge.convert.LegacyEventPolicy;
 import dev.longyu.legacyforgebridge.convert.api.*;
 
@@ -14,6 +15,7 @@ public final class LegacyEventAnalysisPass implements ConversionPass {
 
     @Override public void apply(ConversionContext context) throws Exception {
         var result=new LegacyEventAnalyzer().analyze(context.sourceJar());
+        var constructionAnalyzer=new LegacyEventHandlerConstructionAnalyzer();
         JsonObject root=new JsonObject();root.addProperty("schemaVersion",1);JsonArray bindings=new JsonArray();
         for(var binding:result.bindings()){
             JsonObject value=new JsonObject();
@@ -24,7 +26,21 @@ public final class LegacyEventAnalysisPass implements ConversionPass {
             value.addProperty("executionPolicy",LegacyEventPolicy.execution(binding.eventType()).name().toLowerCase());
             JsonObject registration=new JsonObject();registration.addProperty("owner",binding.registrationOwner());
             registration.addProperty("method",binding.registrationMethod());registration.addProperty("descriptor",binding.registrationDescriptor());
-            value.add("registration",registration);bindings.add(value);
+            value.add("registration",registration);
+
+            JsonObject construction=new JsonObject();
+            if(binding.handlerClass().equals(binding.registrationOwner())&&"<init>".equals(binding.registrationMethod())){
+                var plan=constructionAnalyzer.analyze(context.sourceJar(),binding.handlerClass(),binding.registrationDescriptor());
+                construction.addProperty("strategy",plan.strategy().name().toLowerCase());
+                construction.addProperty("constructorDescriptor",plan.constructorDescriptor());
+                if(plan.parentClass()!=null)construction.addProperty("parentClass",plan.parentClass());
+                construction.addProperty("registrationBus",plan.bus().name().toLowerCase());
+                if(!plan.diagnostic().isBlank())construction.addProperty("diagnostic",plan.diagnostic());
+            }else{
+                construction.addProperty("strategy","source_constructor");
+                construction.addProperty("provenance","registered_external_instance");
+            }
+            value.add("construction",construction);bindings.add(value);
         }
         root.add("bindings",bindings);JsonArray diagnostics=new JsonArray();result.diagnostics().forEach(diagnostics::add);root.add("diagnostics",diagnostics);
         Path output=context.stagingDir().resolve("legacyforgebridge/event-analysis.json");Files.createDirectories(output.getParent());
