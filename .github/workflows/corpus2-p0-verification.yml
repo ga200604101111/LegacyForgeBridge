@@ -3,7 +3,7 @@ on:
   push:
     branches: [ 'feature/generic-conversion-bamboo-corpus2' ]
 permissions:
-  contents: read
+  contents: write
 concurrency:
   group: corpus2-p0-${{ github.ref }}
   cancel-in-progress: true
@@ -16,6 +16,10 @@ jobs:
           fetch-depth: 2
       - name: Verify committed source diff hygiene
         run: git diff --check HEAD^
+      - name: Apply reversible Via sound boundary
+        run: |
+          python tools/apply-corpus2-p0d-sound-boundary.py
+          git diff --check
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -25,6 +29,16 @@ jobs:
           gradle-version: '9.5.1'
       - name: Full build and tests
         run: gradle build --stacktrace
+      - name: Commit tested sound boundary
+        if: success()
+        run: |
+          if ! git diff --quiet -- src/main/java/dev/longyu/legacyforgebridge/protocol/ViaLegacySoundMappings.java src/main/java/dev/longyu/legacyforgebridge/mixin/client/LegacyLocalPlayerSoundMixin.java src/main/resources/legacyforgebridge.client.mixins.json src/test/java/dev/longyu/legacyforgebridge/protocol/ViaLegacySoundMappingsTest.java src/test/java/dev/longyu/legacyforgebridge/mixin/client/LegacyLocalPlayerSoundMixinBytecodeTest.java; then
+            git config user.name "YingHunag09"
+            git config user.email "58656806+ga200604101111@users.noreply.github.com"
+            git add src/main/java/dev/longyu/legacyforgebridge/protocol/ViaLegacySoundMappings.java src/main/java/dev/longyu/legacyforgebridge/mixin/client/LegacyLocalPlayerSoundMixin.java src/main/resources/legacyforgebridge.client.mixins.json src/test/java/dev/longyu/legacyforgebridge/protocol/ViaLegacySoundMappingsTest.java src/test/java/dev/longyu/legacyforgebridge/mixin/client/LegacyLocalPlayerSoundMixinBytecodeTest.java
+            git commit -m "feat: route legacy sound events through reversible Via mappings"
+            git push origin HEAD:feature/generic-conversion-bamboo-corpus2
+          fi
       - uses: actions/upload-artifact@v7
         if: success()
         with:
