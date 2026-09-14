@@ -1,21 +1,27 @@
 package dev.longyu.legacyforgebridge.convert.runtime;
 
+import dev.longyu.legacyforgebridge.compat.LegacyBlockActivationRegistry;
 import dev.longyu.legacyforgebridge.compat.LegacyBlockPlacementRegistry;
+import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.context.BlockPlaceContext;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.IntegerProperty;
+import net.minecraft.world.phys.BlockHitResult;
 
 /**
- * Neutral modern Block carrier for Minecraft 1.7.x raw metadata.
+ * Neutral modern Block carrier for Minecraft 1.7.x raw metadata and proven source behavior.
  *
- * <p>The property deliberately remains an opaque 0..15 value. Direction, growth stage, powered
- * state and other meanings are projected onto semantic modern properties only when a later source
- * behavior compiler can prove those meanings. Keeping the raw value first prevents unrelated old
- * metadata layouts from being conflated.</p>
+ * <p>The metadata property deliberately remains an opaque 0..15 value. Direction, growth stage,
+ * powered state and other meanings are projected onto semantic modern properties only when a
+ * source behavior compiler can prove those meanings. Keeping the raw value first prevents
+ * unrelated old metadata layouts from being conflated.</p>
  */
 public final class ConvertedLegacyBlock extends Block {
     public static final IntegerProperty LEGACY_META = IntegerProperty.create("legacy_meta", 0, 15);
@@ -38,6 +44,19 @@ public final class ConvertedLegacyBlock extends Block {
         if (base == null) return null;
         Integer legacyMeta = LegacyBlockPlacementRegistry.placementMeta(convertedId, context);
         return legacyMeta == null ? base : withLegacyMeta(base, legacyMeta);
+    }
+
+    /**
+     * Minecraft 1.21.11 routes the default item-on-block path to this hook for the main hand. That
+     * matches the single-hand Minecraft 1.7 activation model without intercepting modern item use
+     * or inventing an off-hand callback that never existed in the source game.
+     */
+    @Override
+    protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player,
+                                                BlockHitResult hitResult) {
+        Boolean handled = LegacyBlockActivationRegistry.handled(convertedId, hitResult);
+        if (handled == null) return super.useWithoutItem(state, level, pos, player, hitResult);
+        return handled ? InteractionResult.SUCCESS : InteractionResult.PASS;
     }
 
     public static int legacyMeta(BlockState state) {
