@@ -35,13 +35,13 @@ public final class LegacyBlockActivationRegistry {
      * read-only subset.
      */
     public static Boolean handled(Identifier blockId, int legacyMetadata, boolean clientSide,
-                                  BlockHitResult hitResult) {
+                                  boolean sneaking, BlockHitResult hitResult) {
         if (blockId == null || hitResult == null) return null;
         LegacyBlockActivationCompiler.Program program = RULES.get(blockId);
         if (program == null) return null;
         try {
             return program.evaluate(LegacyBlockPlacementRegistry.legacySide(hitResult.getDirection()),
-                    legacyMetadata, clientSide);
+                    legacyMetadata, clientSide, sneaking);
         } catch (RuntimeException exception) {
             if (FAILED.add(blockId)) {
                 LegacyForgeBridge.LOGGER.error("Converted legacy block activation rule failed closed for {}", blockId, exception);
