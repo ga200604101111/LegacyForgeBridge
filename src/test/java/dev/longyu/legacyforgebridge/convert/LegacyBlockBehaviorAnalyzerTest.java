@@ -33,13 +33,19 @@ class LegacyBlockBehaviorAnalyzerTest {
         var block = analysis.blocks().getFirst();
         assertEquals("turn_lamp", block.registryName());
         assertEquals("other/world/TurnLamp", block.implementationClass());
-        assertEquals(3, block.callbacks().size());
+        assertEquals(4, block.callbacks().size());
 
         var activate = block.callbacks().stream()
                 .filter(value -> value.kind() == LegacyBlockBehaviorAnalyzer.CallbackKind.ACTIVATE)
                 .findFirst().orElseThrow();
         assertEquals("other/world/TurnLamp", activate.owner());
         assertEquals("func_149727_a", activate.method());
+
+        var placementMeta = block.callbacks().stream()
+                .filter(value -> value.kind() == LegacyBlockBehaviorAnalyzer.CallbackKind.PLACED)
+                .findFirst().orElseThrow();
+        assertEquals("other/world/TurnLamp", placementMeta.owner());
+        assertEquals("func_149660_a", placementMeta.method());
 
         var placed = block.callbacks().stream()
                 .filter(value -> value.kind() == LegacyBlockBehaviorAnalyzer.CallbackKind.PLACED_BY)
@@ -87,6 +93,15 @@ class LegacyBlockBehaviorAnalyzerTest {
         m.visitInsn(Opcodes.ICONST_1);
         m.visitInsn(Opcodes.IRETURN);
         m.visitMaxs(1, 10);
+        m.visitEnd();
+        m = w.visitMethod(Opcodes.ACC_PUBLIC, "func_149660_a",
+                "(Lnet/minecraft/world/World;IIIIFFFI)I", null, null);
+        m.visitCode();
+        m.visitVarInsn(Opcodes.ILOAD, 9);
+        m.visitIntInsn(Opcodes.BIPUSH, 8);
+        m.visitInsn(Opcodes.IOR);
+        m.visitInsn(Opcodes.IRETURN);
+        m.visitMaxs(2, 10);
         m.visitEnd();
         m = w.visitMethod(Opcodes.ACC_PUBLIC, "onBlockPlacedBy",
                 "(Lnet/minecraft/world/World;IIILnet/minecraft/entity/EntityLivingBase;Lnet/minecraft/item/ItemStack;)V", null, null);
