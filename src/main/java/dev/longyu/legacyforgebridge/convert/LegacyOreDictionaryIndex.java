@@ -33,10 +33,12 @@ public final class LegacyOreDictionaryIndex {
             ConversionContext context
     ) {
         Map<String, List<JsonElement>> entries = new LinkedHashMap<>();
-        for (LegacyRecipeAnalyzer.Registration registration : analysis.of(LegacyRecipeAnalyzer.Kind.ORE_REGISTER)) {
+        LegacyRecipeValueResolver resolver = new LegacyRecipeValueResolver();
+        for (LegacyRecipeAnalyzer.Registration source : analysis.of(LegacyRecipeAnalyzer.Kind.ORE_REGISTER)) {
+            LegacyRecipeAnalyzer.Registration registration = resolver.resolve(source);
             if (registration.arguments().size() < 2) continue;
-            LegacyRecipeAnalyzer.Value nameValue = LegacyRecipeValueResolver.resolve(registration.arguments().get(0));
-            LegacyRecipeAnalyzer.Value stackValue = LegacyRecipeValueResolver.resolve(registration.arguments().get(1));
+            LegacyRecipeAnalyzer.Value nameValue = registration.arguments().get(0);
+            LegacyRecipeAnalyzer.Value stackValue = registration.arguments().get(1);
             if (!(nameValue instanceof LegacyRecipeAnalyzer.TextValue name) || name.value().isBlank()) continue;
 
             Optional<LegacyRecipeStackResolver.StackSpec> stack = LegacyRecipeStackResolver.resolve(stackValue);
