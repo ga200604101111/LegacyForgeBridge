@@ -31,6 +31,10 @@ public final class LegacyBehaviorApi {
         public static String func_135052_a(String key,Object[] args) { return translate(key,args); }
         public static String format(String key,Object... args) { return translate(key,args); }
     }
+    public static final class StatCollector {
+        public static String func_74838_a(String key) { return translate(key,new Object[0]); }
+        public static String translateToLocal(String key) { return func_74838_a(key); }
+    }
     public enum UseAction { none, eat, drink, block, bow }
     public static class Material { }
     public static class CreativeTab { }
@@ -104,7 +108,9 @@ public final class LegacyBehaviorApi {
     public static class Stack {
         public int field_77994_a=1;
         public Item item;
+        /** Compatibility alias retained for existing bridge tests; legacy bytecode uses field_77990_d. */
         public Tag tag;
+        public Tag field_77990_d;
         public Object handle;
         public Stack(Item item) { this(item,null); }
         public void func_77972_a(int amount,Living actor) {
@@ -113,15 +119,15 @@ public final class LegacyBehaviorApi {
             if (amount > 0) actor.field_70170_p.command(new Durability(this,amount,actor));
         }
         public void damageItem(int amount,Living actor) { func_77972_a(amount,actor); }
-        public Stack(Item item,Tag tag) { this.item=item;this.tag=tag; }
-        public Tag func_77978_p() { return tag; }
-        public Tag getTagCompound() { return tag; }
-        public boolean func_77942_o() { return tag!=null; }
+        public Stack(Item item,Tag tag) { this.item=item;this.tag=tag;this.field_77990_d=tag; }
+        public Tag func_77978_p() { return field_77990_d; }
+        public Tag getTagCompound() { return field_77990_d; }
+        public boolean func_77942_o() { return field_77990_d!=null; }
         public boolean hasTagCompound() { return func_77942_o(); }
         public Item func_77973_b() { return item; }
         public Item getItem() { return item; }
-        public void func_77982_d(Tag value) { tag=value; }
-        public void setTagCompound(Tag value) { tag=value; }
+        public void func_77982_d(Tag value) { tag=value;field_77990_d=value; }
+        public void setTagCompound(Tag value) { func_77982_d(value); }
     }
     public static class Tag {
         public final Map<String,Object> values = new LinkedHashMap<>();
@@ -129,6 +135,10 @@ public final class LegacyBehaviorApi {
         public Tag(Map<String,Object> data) { values.putAll(data); }
         public int func_74762_e(String key) { Object v=values.get(key);return v instanceof Number n?n.intValue():0; }
         public int getInteger(String key) { return func_74762_e(key); }
+        public short func_74765_d(String key) { Object v=values.get(key);return v instanceof Number n?n.shortValue():0; }
+        public short getShort(String key) { return func_74765_d(key); }
+        public TagList func_150295_c(String key,int type) { Object v=values.get(key);return type==10&&v instanceof TagList list?list:new TagList(); }
+        public TagList getTagList(String key,int type) { return func_150295_c(key,type); }
         public String func_74779_i(String key) { Object v=values.get(key);return v instanceof String s?s:""; }
         public String getString(String key) { return func_74779_i(key); }
         public float func_74760_g(String key) { Object v=values.get(key);return v instanceof Number n?n.floatValue():0; }
@@ -151,6 +161,18 @@ public final class LegacyBehaviorApi {
         public void setBoolean(String key,boolean value) { func_74757_a(key,value); }
         public void func_82580_o(String key) { values.remove(key); }
         public void removeTag(String key) { func_82580_o(key); }
+    }
+    public static class TagList {
+        public final List<Tag> values=new ArrayList<>();
+        public TagList() { }
+        public TagList(Collection<Tag> values) {
+            if(values.size()>4096)throw new IllegalArgumentException("Source NBT list budget exceeded");
+            this.values.addAll(values);
+        }
+        public int func_74745_c() { return values.size(); }
+        public int tagCount() { return func_74745_c(); }
+        public Tag func_150305_b(int index) { return index>=0&&index<values.size()?values.get(index):new Tag(); }
+        public Tag getCompoundTagAt(int index) { return func_150305_b(index); }
     }
     public static class Entity {
         public World field_70170_p;

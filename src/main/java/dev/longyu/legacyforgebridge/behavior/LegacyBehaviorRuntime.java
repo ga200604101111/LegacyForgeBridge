@@ -270,7 +270,7 @@ public final class LegacyBehaviorRuntime {
                 var view = new LegacyBehaviorApi.Stack(item, tag(key));
                 view.field_77994_a = key.getCount();
                 view.handle = key;
-                originalTags.put(key, view.tag == null ? null : new LinkedHashMap<>(view.tag.values));
+                originalTags.put(key, view.field_77990_d == null ? null : new LinkedHashMap<>(view.field_77990_d.values));
                 return view;
             });
         }
@@ -334,14 +334,14 @@ public final class LegacyBehaviorRuntime {
             }
             if (view.field_77994_a > result.getMaxStackSize()) throw new IllegalArgumentException("Source stack exceeds native stack limit");
             result.setCount(view.field_77994_a);
-            if (view.tag == null) result.remove(DataComponents.CUSTOM_DATA);
-            else result.set(DataComponents.CUSTOM_DATA, CustomData.of(LegacyTagAdapter.write(view.tag)));
+            if (view.field_77990_d == null) result.remove(DataComponents.CUSTOM_DATA);
+            else result.set(DataComponents.CUSTOM_DATA, CustomData.of(LegacyTagAdapter.write(view.field_77990_d)));
             return result;
         }
         void commit() {
             // Resolve all potentially invalid adapters before publishing any native effects.
             Map<LegacyBehaviorApi.Stack, CompoundTag> tags = new IdentityHashMap<>();
-            for (var view : stacks.values()) if (view.tag != null) tags.put(view, LegacyTagAdapter.write(view.tag));
+            for (var view : stacks.values()) if (view.field_77990_d != null) tags.put(view, LegacyTagAdapter.write(view.field_77990_d));
             for (var view : entities.values()) if (view instanceof LegacyBehaviorApi.Living living) {
                 for (var applied : living.appliedEffects) effect(applied.id);
             }
@@ -381,9 +381,9 @@ public final class LegacyBehaviorRuntime {
                 ItemStack nativeStack = pair.getKey();
                 var view = pair.getValue();
                 Map<String, Object> before = originalTags.get(nativeStack);
-                if (view.tag == null) {
+                if (view.field_77990_d == null) {
                     if (before != null) nativeStack.remove(DataComponents.CUSTOM_DATA);
-                } else if (before == null || !before.equals(view.tag.values)) {
+                } else if (before == null || !before.equals(view.field_77990_d.values)) {
                     nativeStack.set(DataComponents.CUSTOM_DATA, CustomData.of(tags.get(view)));
                 }
                 if (view.field_77994_a >= 0 && view.field_77994_a <= nativeStack.getMaxStackSize()) nativeStack.setCount(view.field_77994_a);

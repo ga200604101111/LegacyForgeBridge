@@ -27,6 +27,26 @@ class LegacyBehaviorAdaptersTest {
         assertEquals(original.get("bytes"),output.get("bytes"));assertEquals(9007199254740993L,output.getLongOr("l",0));
         assertFalse(output.contains("name"));assertNotSame(original.get("otherMod"),output.get("otherMod"));
     }
+    @Test void compoundListAndLegacyStackTagFieldRoundTrip() {
+        CompoundTag original=new CompoundTag();
+        CompoundTag enchant=new CompoundTag();enchant.putShort("id",(short)8);enchant.putShort("lvl",(short)3);
+        ListTag compounds=new ListTag();compounds.add(enchant);original.put("spench",compounds);
+        ListTag opaqueStrings=new ListTag();opaqueStrings.add(StringTag.valueOf("keep-opaque"));original.put("otherList",opaqueStrings);
+        var source=LegacyTagAdapter.read(original);var list=source.func_150295_c("spench",10);
+        assertEquals(1,list.func_74745_c());assertEquals((short)8,list.func_150305_b(0).func_74765_d("id"));
+        assertEquals((short)3,list.getCompoundTagAt(0).getShort("lvl"));
+        assertEquals(original,LegacyTagAdapter.write(source));
+        assertInstanceOf(net.minecraft.nbt.ListTag.class,source.values.get("otherList"));
+        var stack=new LegacyBehaviorApi.Stack(new LegacyBehaviorApi.Item());assertNull(stack.field_77990_d);
+        stack.field_77990_d=source;assertTrue(stack.hasTagCompound());assertSame(source,stack.getTagCompound());
+        var replacement=new LegacyBehaviorApi.Tag();stack.setTagCompound(replacement);
+        assertSame(replacement,stack.field_77990_d);assertSame(replacement,stack.tag);
+    }
+    @Test void statCollectorUsesTheSameConvertedTranslationBoundary() {
+        LegacyBehaviorApi.begin("translation_fixture",(key,args)->"translated:"+key);
+        try { assertEquals("translated:lfb.converted.translation_fixture.bambooEnch.chain",LegacyBehaviorApi.StatCollector.func_74838_a("bambooEnch.chain")); }
+        finally { LegacyBehaviorApi.end(); }
+    }
     @Test void originalBooleanUsesByteCoercionAndInvalidNewNbtIsRejected() {
         var tag=new LegacyBehaviorApi.Tag(Map.of("b",256));assertFalse(tag.getBoolean("b"));
         tag.setBoolean("b",true);assertTrue(tag.getBoolean("b"));
