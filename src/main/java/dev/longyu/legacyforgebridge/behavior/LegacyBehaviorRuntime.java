@@ -129,6 +129,23 @@ public final class LegacyBehaviorRuntime {
         @Override public String remove(int index){return delegate.remove(index);}
         private static void check(String value){if(value==null||value.length()>4096)throw new IllegalArgumentException("Invalid source tooltip line");}
     }
+    /** Client-presentation equivalent of Forge 1.7 RenderLivingEvent.Specials.Pre. */
+    public static boolean renderSpecialsPre(LivingEntity entity) {
+        if(entity==null)return false;
+        Snapshot snapshot=new Snapshot(entity.level());
+        return renderSpecialsPrePrograms(snapshot.living(entity));
+    }
+    static boolean renderSpecialsPrePrograms(LegacyBehaviorApi.Living source) {
+        if(source==null)return false;
+        for(var program:LegacyBehaviorRegistry.events("renderSpecialsPre")) {
+            var event=new LegacyBehaviorApi.Event();event.entityLiving=source;
+            boolean completed=invoke(program.mod(),"event/renderSpecialsPre",()->{program.program().run(event);return true;},false);
+            if(!completed||event.entityLiving!=source)return false;
+            if(event.isCanceled())return true;
+        }
+        return false;
+    }
+
     public record UseOutcome(boolean handled, boolean sustained) { }
 
     public static UseOutcome use(ItemStack stack, Player player, InteractionHand hand) {
@@ -330,6 +347,7 @@ public final class LegacyBehaviorRuntime {
             for (int i = 0; i < armor.length; i++) view.equipment[i + 1] = stack(nativeEntity.getItemBySlot(armor[i]));
             if (nativeEntity instanceof Player player && view instanceof LegacyBehaviorApi.Player actor) {
                 // Do not copy all 36 inventory tags for callbacks which only inspect equipment.
+                actor.displayName=player.getDisplayName().getString();
                 actor.field_71071_by.lookup = index -> index < 36
                         ? stack(player.getInventory().getItem(index)) : view.equipment[index - 35];
             }

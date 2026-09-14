@@ -12,7 +12,8 @@
     "SpecialModelRenderersMixin",
     "LegacyLivingBehaviorMixin",
     "LegacyHurtBehaviorMixin",
-    "LegacyLocalPlayerSoundMixin"
+    "LegacyLocalPlayerSoundMixin",
+    "LegacyNameTagBehaviorMixin"
   ],
   "injectors": {
     "defaultRequire": 1

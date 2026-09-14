@@ -222,6 +222,8 @@ public final class LegacyBehaviorApi {
     public static class Player extends Living {
         public Stack requestedUse;
         public int requestedDuration;
+        public String displayName="";
+        public String getDisplayName() { return displayName; }
         public Inventory field_71071_by = new Inventory();
         public final List<Chat> messages = new ArrayList<>();
         public void func_146105_b(Chat text) {

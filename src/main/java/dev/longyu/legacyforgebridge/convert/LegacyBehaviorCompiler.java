@@ -40,7 +40,8 @@ public final class LegacyBehaviorCompiler {
             Map.entry("net/minecraftforge/event/entity/living/LivingHurtEvent","Event"),
             Map.entry("net/minecraftforge/event/entity/EntityEvent","Event"),
             Map.entry("net/minecraftforge/event/entity/PlaySoundAtEntityEvent","Event"),
-            Map.entry("net/minecraftforge/event/entity/player/ItemTooltipEvent","Event"));
+            Map.entry("net/minecraftforge/event/entity/player/ItemTooltipEvent","Event"),
+            Map.entry("net/minecraftforge/client/event/RenderLivingEvent$Specials$Pre","Event"));
     private static final Set<String> PRESENTATION_STATEFUL_ITEM_API=Set.of(
             "net/minecraft/item/Item","net/minecraft/item/ItemSword","net/minecraft/item/ItemArmor","net/minecraft/item/ItemBow",
             "net/minecraft/item/ItemTool","net/minecraft/item/ItemPickaxe","net/minecraft/item/ItemAxe","net/minecraft/item/ItemSpade",
@@ -144,6 +145,7 @@ public final class LegacyBehaviorCompiler {
                 case "net/minecraftforge/event/entity/living/LivingHurtEvent"->"hurt";
                 case "net/minecraftforge/event/entity/PlaySoundAtEntityEvent"->"sound";
                 case "net/minecraftforge/event/entity/player/ItemTooltipEvent"->"tooltipEvent";
+                case "net/minecraftforge/client/event/RenderLivingEvent$Specials$Pre"->"renderSpecialsPre";
                 default->null;
             };
             if(kind==null){
@@ -344,7 +346,8 @@ public final class LegacyBehaviorCompiler {
                 throw new IllegalArgumentException("Unproven static field initializer "+r);
         }else {
             String owner=mapped(r.owner);if(JDK.contains(r.owner))return;
-            try {var field=Class.forName(owner.replace('/','.')).getField(r.name);if(!Type.getDescriptor(field.getType()).equals(descriptor(r.desc)))throw new NoSuchFieldException();}
+            String fieldName=canonicalField(r.owner,r.name,r.desc);
+            try {var field=Class.forName(owner.replace('/','.')).getField(fieldName);if(!Type.getDescriptor(field.getType()).equals(descriptor(r.desc)))throw new NoSuchFieldException();}
             catch(ReflectiveOperationException ex){throw new IllegalArgumentException("Unsupported API field "+r);}
         }
     }
@@ -380,6 +383,11 @@ public final class LegacyBehaviorCompiler {
             current=c.parent;
         }
         return false;
+    }
+    private static String canonicalField(String owner,String name,String desc){
+        if(owner.equals("net/minecraftforge/client/event/RenderLivingEvent$Specials$Pre")
+                &&name.equals("entity")&&desc.equals("Lnet/minecraft/entity/EntityLivingBase;"))return "entityLiving";
+        return name;
     }
     private String mapped(String type){
         if(type==null)return null;if(type.startsWith("["))return descriptor(type);
@@ -463,7 +471,7 @@ public final class LegacyBehaviorCompiler {
                     @Override public void visitTypeInsn(int op,String t){super.visitTypeInsn(op,mapped(t));}
                     @Override public void visitFieldInsn(int op,String o,String n,String d){
                         if(opaque(d)&&op==Opcodes.GETSTATIC){super.visitInsn(Opcodes.ACONST_NULL);return;}
-                        super.visitFieldInsn(op,mapped(o),n,descriptor(d));
+                        super.visitFieldInsn(op,mapped(o),canonicalField(o,n,d),descriptor(d));
                     }
                     @Override public void visitMethodInsn(int op,String o,String n,String d,boolean itf){
                         Ref target=resolve(new Ref(o,n,d));String owner=target==null?o:target.owner;
