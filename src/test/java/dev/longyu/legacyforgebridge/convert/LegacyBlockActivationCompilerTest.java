@@ -60,11 +60,43 @@ class LegacyBlockActivationCompilerTest {
         assertThrows(IllegalStateException.class, () -> program.evaluate(1, 0));
     }
 
+    @Test void exactLegacySneakingReadCompilesToTypedPlayerInput() throws Exception {
+        Path jar = tempDir.resolve("SneakingActivation.jar");
+        try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(jar))) {
+            put(out, "foreign/use/SneakGate.class", playerGate("func_70093_af"));
+            put(out, "foreign/use/Bootstrap.class", bootstrap("foreign/use/SneakGate", "sneak_gate"));
+        }
+
+        var analysis = new LegacyBlockActivationCompiler().compile(jar);
+        assertTrue(analysis.diagnostics().isEmpty(), String.join("\n", analysis.diagnostics()));
+        assertEquals(1, analysis.programs().size());
+        var program = analysis.programs().getFirst();
+        assertTrue(program.instructions().stream()
+                .anyMatch(value -> value.op() == LegacyBlockActivationCompiler.Op.LOAD_SNEAKING));
+        assertFalse(program.evaluate(1, 0, false, false));
+        assertTrue(program.evaluate(1, 0, false, true));
+        assertThrows(IllegalStateException.class, () -> program.evaluate(1, 0, false));
+    }
+
     @Test void arbitraryWorldDependencyFailsClosedInsteadOfGuessing() throws Exception {
         Path jar = tempDir.resolve("UnsafeActivation.jar");
         try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(jar))) {
             put(out, "foreign/use/WorldGate.class", arbitraryWorldGate());
             put(out, "foreign/use/Bootstrap.class", bootstrap("foreign/use/WorldGate", "world_gate"));
+        }
+
+        var analysis = new LegacyBlockActivationCompiler().compile(jar);
+        assertEquals(1, analysis.activationCallbacks());
+        assertTrue(analysis.programs().isEmpty());
+        assertTrue(analysis.diagnostics().stream().anyMatch(value -> value.contains("Unsupported pure activation callback")),
+                String.join("\n", analysis.diagnostics()));
+    }
+
+    @Test void arbitraryPlayerDependencyFailsClosedInsteadOfGuessing() throws Exception {
+        Path jar = tempDir.resolve("UnsafePlayerActivation.jar");
+        try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(jar))) {
+            put(out, "foreign/use/PlayerGate.class", arbitraryPlayerGate());
+            put(out, "foreign/use/Bootstrap.class", bootstrap("foreign/use/PlayerGate", "player_gate"));
         }
 
         var analysis = new LegacyBlockActivationCompiler().compile(jar);
@@ -109,6 +141,20 @@ class LegacyBlockActivationCompilerTest {
         return w.toByteArray();
     }
 
+    private static byte[] playerGate(String methodName) {
+        ClassWriter w = blockClass("foreign/use/SneakGate");
+        MethodVisitor m = w.visitMethod(Opcodes.ACC_PUBLIC, "onBlockActivated",
+                "(Lnet/minecraft/world/World;IIILnet/minecraft/entity/player/EntityPlayer;IFFF)Z", null, null);
+        m.visitCode();
+        m.visitVarInsn(Opcodes.ALOAD, 5);
+        m.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "net/minecraft/entity/player/EntityPlayer", methodName, "()Z", false);
+        m.visitInsn(Opcodes.IRETURN);
+        m.visitMaxs(1, 10);
+        m.visitEnd();
+        w.visitEnd();
+        return w.toByteArray();
+    }
+
     private static byte[] arbitraryWorldGate() {
         ClassWriter w = blockClass("foreign/use/WorldGate");
         MethodVisitor m = w.visitMethod(Opcodes.ACC_PUBLIC, "onBlockActivated",
@@ -116,6 +162,20 @@ class LegacyBlockActivationCompilerTest {
         m.visitCode();
         m.visitVarInsn(Opcodes.ALOAD, 1);
         m.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "net/minecraft/world/World", "isDaytime", "()Z", false);
+        m.visitInsn(Opcodes.IRETURN);
+        m.visitMaxs(1, 10);
+        m.visitEnd();
+        w.visitEnd();
+        return w.toByteArray();
+    }
+
+    private static byte[] arbitraryPlayerGate() {
+        ClassWriter w = blockClass("foreign/use/PlayerGate");
+        MethodVisitor m = w.visitMethod(Opcodes.ACC_PUBLIC, "onBlockActivated",
+                "(Lnet/minecraft/world/World;IIILnet/minecraft/entity/player/EntityPlayer;IFFF)Z", null, null);
+        m.visitCode();
+        m.visitVarInsn(Opcodes.ALOAD, 5);
+        m.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "net/minecraft/entity/player/EntityPlayer", "isCreative", "()Z", false);
         m.visitInsn(Opcodes.IRETURN);
         m.visitMaxs(1, 10);
         m.visitEnd();
