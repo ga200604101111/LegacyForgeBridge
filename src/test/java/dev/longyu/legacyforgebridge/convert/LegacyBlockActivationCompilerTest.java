@@ -15,6 +15,7 @@ import java.util.jar.JarOutputStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LegacyBlockActivationCompilerTest {
@@ -41,10 +42,28 @@ class LegacyBlockActivationCompilerTest {
         assertFalse(program.evaluate(4));
     }
 
-    @Test void worldDependentActivationFailsClosedInsteadOfGuessing() throws Exception {
+    @Test void exactLegacyIsRemoteReadCompilesToTypedClientSideInput() throws Exception {
+        Path jar = tempDir.resolve("ClientSideActivation.jar");
+        try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(jar))) {
+            put(out, "foreign/use/ClientGate.class", clientSideGate("field_72995_K"));
+            put(out, "foreign/use/Bootstrap.class", bootstrap("foreign/use/ClientGate", "client_gate"));
+        }
+
+        var analysis = new LegacyBlockActivationCompiler().compile(jar);
+        assertTrue(analysis.diagnostics().isEmpty(), String.join("\n", analysis.diagnostics()));
+        assertEquals(1, analysis.programs().size());
+        var program = analysis.programs().getFirst();
+        assertTrue(program.instructions().stream()
+                .anyMatch(value -> value.op() == LegacyBlockActivationCompiler.Op.LOAD_CLIENT_SIDE));
+        assertFalse(program.evaluate(1, 0, false));
+        assertTrue(program.evaluate(1, 0, true));
+        assertThrows(IllegalStateException.class, () -> program.evaluate(1, 0));
+    }
+
+    @Test void arbitraryWorldDependencyFailsClosedInsteadOfGuessing() throws Exception {
         Path jar = tempDir.resolve("UnsafeActivation.jar");
         try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(jar))) {
-            put(out, "foreign/use/WorldGate.class", worldGate());
+            put(out, "foreign/use/WorldGate.class", arbitraryWorldGate());
             put(out, "foreign/use/Bootstrap.class", bootstrap("foreign/use/WorldGate", "world_gate"));
         }
 
@@ -76,13 +95,27 @@ class LegacyBlockActivationCompilerTest {
         return w.toByteArray();
     }
 
-    private static byte[] worldGate() {
+    private static byte[] clientSideGate(String fieldName) {
+        ClassWriter w = blockClass("foreign/use/ClientGate");
+        MethodVisitor m = w.visitMethod(Opcodes.ACC_PUBLIC, "onBlockActivated",
+                "(Lnet/minecraft/world/World;IIILnet/minecraft/entity/player/EntityPlayer;IFFF)Z", null, null);
+        m.visitCode();
+        m.visitVarInsn(Opcodes.ALOAD, 1);
+        m.visitFieldInsn(Opcodes.GETFIELD, "net/minecraft/world/World", fieldName, "Z");
+        m.visitInsn(Opcodes.IRETURN);
+        m.visitMaxs(1, 10);
+        m.visitEnd();
+        w.visitEnd();
+        return w.toByteArray();
+    }
+
+    private static byte[] arbitraryWorldGate() {
         ClassWriter w = blockClass("foreign/use/WorldGate");
         MethodVisitor m = w.visitMethod(Opcodes.ACC_PUBLIC, "onBlockActivated",
                 "(Lnet/minecraft/world/World;IIILnet/minecraft/entity/player/EntityPlayer;IFFF)Z", null, null);
         m.visitCode();
         m.visitVarInsn(Opcodes.ALOAD, 1);
-        m.visitFieldInsn(Opcodes.GETFIELD, "net/minecraft/world/World", "isRemote", "Z");
+        m.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "net/minecraft/world/World", "isDaytime", "()Z", false);
         m.visitInsn(Opcodes.IRETURN);
         m.visitMaxs(1, 10);
         m.visitEnd();
