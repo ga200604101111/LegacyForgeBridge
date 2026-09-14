@@ -1,5 +1,8 @@
 package dev.longyu.legacyforgebridge.convert.runtime;
 
+import dev.longyu.legacyforgebridge.compat.LegacyBlockPlacementRegistry;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
@@ -16,15 +19,25 @@ import net.minecraft.world.level.block.state.properties.IntegerProperty;
  */
 public final class ConvertedLegacyBlock extends Block {
     public static final IntegerProperty LEGACY_META = IntegerProperty.create("legacy_meta", 0, 15);
+    private final Identifier convertedId;
 
-    public ConvertedLegacyBlock(BlockBehaviour.Properties properties) {
+    public ConvertedLegacyBlock(Identifier convertedId, BlockBehaviour.Properties properties) {
         super(properties);
+        this.convertedId = convertedId;
         registerDefaultState(stateDefinition.any().setValue(LEGACY_META, 0));
     }
 
     @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
         builder.add(LEGACY_META);
+    }
+
+    @Override
+    public BlockState getStateForPlacement(BlockPlaceContext context) {
+        BlockState base = super.getStateForPlacement(context);
+        if (base == null) return null;
+        Integer legacyMeta = LegacyBlockPlacementRegistry.placementMeta(convertedId, context);
+        return legacyMeta == null ? base : withLegacyMeta(base, legacyMeta);
     }
 
     public static int legacyMeta(BlockState state) {
