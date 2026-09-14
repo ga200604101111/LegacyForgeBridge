@@ -206,7 +206,8 @@ class ViaLegacySoundMappingsTest {
         Map<String,String> middleToLegacy=Map.of(
                 "minecraft:entity.player.hurt_old","minecraft:game.player.hurt",
                 "minecraft:entity.villager.ambient_old","minecraft:mob.villager.idle");
-        var first=stage(newestToMiddle),second=stage(middleToLegacy);
+        var first=stage(newestToMiddle);
+        var second=stage(middleToLegacy);
         var path=ViaLegacySoundMappings.trace("minecraft:entity.player.hurt",List.of(first,second)).orElseThrow();
         assertEquals("game.player.hurt",path.legacyName());
         assertEquals("minecraft:entity.villager.ambient",path.toModern("mob.villager.idle").orElseThrow());
