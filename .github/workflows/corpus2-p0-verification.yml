@@ -19,6 +19,7 @@ jobs:
       - name: Apply native ItemTooltip event runtime/client bridge
         run: |
           python tools/apply-corpus2-tooltip-runtime.py
+          python tools/fix-corpus2-tooltip-runtime-fixture.py
           git diff --check
       - uses: actions/setup-java@v5
         with:
