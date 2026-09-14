@@ -3,7 +3,7 @@ on:
   push:
     branches: [ 'feature/generic-conversion-bamboo-corpus2' ]
 permissions:
-  contents: read
+  contents: write
 concurrency:
   group: corpus2-p0-${{ github.ref }}
   cancel-in-progress: true
@@ -16,6 +16,10 @@ jobs:
           fetch-depth: 2
       - name: Verify committed source diff hygiene
         run: git diff --check HEAD^
+      - name: Apply source-proven constant table compiler integration
+        run: |
+          python tools/apply-corpus2-constant-table-compiler.py
+          git diff --check
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -25,6 +29,16 @@ jobs:
           gradle-version: '9.5.1'
       - name: Full build and tests
         run: gradle build --stacktrace
+      - name: Commit tested constant table compiler source
+        if: success()
+        run: |
+          if ! git diff --quiet -- src/main/java/dev/longyu/legacyforgebridge/convert/LegacyBehaviorCompiler.java src/test/java/dev/longyu/legacyforgebridge/convert/LegacyBehaviorConstantTableCompilerTest.java; then
+            git config user.name "YingHunag09"
+            git config user.email "58656806+ga200604101111@users.noreply.github.com"
+            git add src/main/java/dev/longyu/legacyforgebridge/convert/LegacyBehaviorCompiler.java src/test/java/dev/longyu/legacyforgebridge/convert/LegacyBehaviorConstantTableCompilerTest.java
+            git commit -m "feat: reconstruct source-proven constant name tables in callbacks"
+            git push origin HEAD:feature/generic-conversion-bamboo-corpus2
+          fi
       - uses: actions/upload-artifact@v7
         if: success()
         with:
