@@ -1,0 +1,16 @@
+--- a/src/main/java/dev/longyu/legacyforgebridge/convert/pass/GenericContentPass.java
++++ b/src/main/java/dev/longyu/legacyforgebridge/convert/pass/GenericContentPass.java
+@@ -32,10 +32,12 @@
+     public void apply(ConversionContext context) throws IOException {
+         LegacyRegistryAnalyzer analyzer = new LegacyRegistryAnalyzer();
+         LegacyRegistryAnalyzer.Analysis analysis = analyzer.analyze(context.sourceJar());
++        // No GameRegistry content is a valid result for resource-only or wrapper-only legacy JARs.
++        // Do not downgrade such candidates merely because the generic content pass had nothing to emit.
++        if (analysis.registrations().isEmpty()) return;
+         for (String diagnostic : analysis.diagnostics()) {
+             context.diagnostics().warning("LFB-CONVERT-REGISTRY-0002", SupportLevel.MANUAL_REQUIRED, diagnostic);
+         }
+-        if (analysis.registrations().isEmpty()) return;
+ 
+         String namespace = context.metadata().fabricId();
+         JsonObject root = new JsonObject();
