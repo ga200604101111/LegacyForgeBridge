@@ -3,7 +3,7 @@ on:
   push:
     branches: [ 'verify/alpha25-rpgtool' ]
 permissions:
-  contents: read
+  contents: write
 concurrency:
   group: alpha25-verification-${{ github.ref }}
   cancel-in-progress: true
@@ -12,6 +12,9 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
+      - name: Apply checksum-verified source batch
+        if: hashFiles('tools/complete-alpha25.py') != ''
+        run: python3 tools/complete-alpha25.py
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -21,6 +24,18 @@ jobs:
           gradle-version: '9.5.1'
       - name: Full build and tests
         run: gradle build --stacktrace
+      - name: Save successfully tested source snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -A src docs tools
+          if ! git diff --cached --quiet; then
+            git diff --cached --check
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git commit -m 'feat: complete alpha.25 source tooltips, gems, weapon callbacks and equipment integration [skip ci]'
+            git push origin HEAD:verify/alpha25-rpgtool
+          fi
       - name: Export offline corpus verification kit
         if: always()
         run: gradle -I tools/verification.init.gradle exportVerificationKit --stacktrace

@@ -24,7 +24,10 @@ gradle.projectsEvaluated {
                 paths.add('deps/' + name)
             }
             new File(output, 'classpath.json').setText(groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(paths)), 'UTF-8')
-            new File(output, 'revision.txt').setText(System.getenv('GITHUB_SHA') ?: 'local', 'UTF-8')
+            def revision = ['git', 'rev-parse', 'HEAD'].execute(null, p.projectDir)
+            revision.waitFor()
+            if (revision.exitValue() != 0) throw new GradleException('Unable to record tested source revision')
+            new File(output, 'revision.txt').setText(revision.text.trim() + '\n', 'UTF-8')
         }
     }
 }
