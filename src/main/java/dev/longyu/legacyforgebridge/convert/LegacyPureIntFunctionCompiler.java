@@ -46,8 +46,8 @@ public final class LegacyPureIntFunctionCompiler {
 
         public static Program constant(int value) {
             return new Program(1, List.of(
-                    simple(Op.CONST, value),
-                    simple(Op.IRETURN, 0)));
+                    constant(value),
+                    noOperand(Op.IRETURN)));
         }
 
         public int evaluate(int input) {
@@ -149,19 +149,19 @@ public final class LegacyPureIntFunctionCompiler {
             Instruction encoded;
             if (instruction instanceof VarInsnNode variable) {
                 if (variable.getOpcode() == Opcodes.ILOAD && allowedLocal(variable.var, inputLocal)) {
-                    encoded = simple(Op.LOAD, variable.var);
+                    encoded = withOperand(Op.LOAD, variable.var);
                 } else if (variable.getOpcode() == Opcodes.ISTORE && variable.var > inputLocal) {
-                    encoded = simple(Op.STORE, variable.var);
+                    encoded = withOperand(Op.STORE, variable.var);
                 } else return Result.error("unsupported local opcode " + opcode + " local=" + variable.var);
             } else if (instruction instanceof IincInsnNode increment) {
                 if (increment.var <= inputLocal) return Result.error("source input mutation is not admitted");
                 encoded = new Instruction(Op.IINC, increment.var, increment.incr, -1, List.of(), List.of());
             } else if (instruction instanceof IntInsnNode value) {
                 if (opcode != Opcodes.BIPUSH && opcode != Opcodes.SIPUSH) return Result.error("int opcode " + opcode);
-                encoded = simple(Op.CONST, value.operand);
+                encoded = constant(value.operand);
             } else if (instruction instanceof LdcInsnNode ldc) {
                 if (!(ldc.cst instanceof Integer value)) return Result.error("non-int LDC " + ldc.cst);
-                encoded = simple(Op.CONST, value);
+                encoded = constant(value);
             } else if (instruction instanceof JumpInsnNode jump) {
                 int target = targetIndex(jump.label, indices);
                 if (target <= i) return Result.error("backward/invalid jump target " + target);
@@ -207,27 +207,27 @@ public final class LegacyPureIntFunctionCompiler {
 
     private static Instruction simpleOpcode(int opcode) {
         return switch (opcode) {
-            case Opcodes.NOP -> simple(Op.NOP, 0);
-            case Opcodes.ICONST_M1 -> simple(Op.CONST, -1);
-            case Opcodes.ICONST_0 -> simple(Op.CONST, 0);
-            case Opcodes.ICONST_1 -> simple(Op.CONST, 1);
-            case Opcodes.ICONST_2 -> simple(Op.CONST, 2);
-            case Opcodes.ICONST_3 -> simple(Op.CONST, 3);
-            case Opcodes.ICONST_4 -> simple(Op.CONST, 4);
-            case Opcodes.ICONST_5 -> simple(Op.CONST, 5);
-            case Opcodes.IADD -> simple(Op.IADD, 0);
-            case Opcodes.ISUB -> simple(Op.ISUB, 0);
-            case Opcodes.IMUL -> simple(Op.IMUL, 0);
-            case Opcodes.IDIV -> simple(Op.IDIV, 0);
-            case Opcodes.IREM -> simple(Op.IREM, 0);
-            case Opcodes.INEG -> simple(Op.INEG, 0);
-            case Opcodes.ISHL -> simple(Op.ISHL, 0);
-            case Opcodes.ISHR -> simple(Op.ISHR, 0);
-            case Opcodes.IUSHR -> simple(Op.IUSHR, 0);
-            case Opcodes.IAND -> simple(Op.IAND, 0);
-            case Opcodes.IOR -> simple(Op.IOR, 0);
-            case Opcodes.IXOR -> simple(Op.IXOR, 0);
-            case Opcodes.IRETURN -> simple(Op.IRETURN, 0);
+            case Opcodes.NOP -> noOperand(Op.NOP);
+            case Opcodes.ICONST_M1 -> constant(-1);
+            case Opcodes.ICONST_0 -> constant(0);
+            case Opcodes.ICONST_1 -> constant(1);
+            case Opcodes.ICONST_2 -> constant(2);
+            case Opcodes.ICONST_3 -> constant(3);
+            case Opcodes.ICONST_4 -> constant(4);
+            case Opcodes.ICONST_5 -> constant(5);
+            case Opcodes.IADD -> noOperand(Op.IADD);
+            case Opcodes.ISUB -> noOperand(Op.ISUB);
+            case Opcodes.IMUL -> noOperand(Op.IMUL);
+            case Opcodes.IDIV -> noOperand(Op.IDIV);
+            case Opcodes.IREM -> noOperand(Op.IREM);
+            case Opcodes.INEG -> noOperand(Op.INEG);
+            case Opcodes.ISHL -> noOperand(Op.ISHL);
+            case Opcodes.ISHR -> noOperand(Op.ISHR);
+            case Opcodes.IUSHR -> noOperand(Op.IUSHR);
+            case Opcodes.IAND -> noOperand(Op.IAND);
+            case Opcodes.IOR -> noOperand(Op.IOR);
+            case Opcodes.IXOR -> noOperand(Op.IXOR);
+            case Opcodes.IRETURN -> noOperand(Op.IRETURN);
             default -> null;
         };
     }
@@ -269,8 +269,16 @@ public final class LegacyPureIntFunctionCompiler {
         return operation.apply(left, right);
     }
 
-    private static Instruction simple(Op op, int value) {
-        return new Instruction(op, 0, value, -1, List.of(), List.of());
+    private static Instruction withOperand(Op op, int operand) {
+        return new Instruction(op, operand, 0, -1, List.of(), List.of());
+    }
+
+    private static Instruction constant(int value) {
+        return new Instruction(Op.CONST, 0, value, -1, List.of(), List.of());
+    }
+
+    private static Instruction noOperand(Op op) {
+        return new Instruction(op, 0, 0, -1, List.of(), List.of());
     }
 
     private static Instruction jump(Op op, int target) {
