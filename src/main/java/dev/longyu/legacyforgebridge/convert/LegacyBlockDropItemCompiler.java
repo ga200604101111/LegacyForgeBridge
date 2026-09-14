@@ -26,14 +26,18 @@ import java.util.jar.JarFile;
  *
  * <p>Only four exact return shapes are admitted:</p>
  * <ul>
- *     <li>a static Item field already bound to a proven legacy registry registration;</li>
- *     <li>{@code Item.getItemFromBlock(staticBlockField)} for a proven block registration;</li>
+ *     <li>a static Item field bound either to a proven source registration or to the pinned
+ *     Minecraft 1.7.10 {@code Items} platform table;</li>
+ *     <li>{@code Item.getItemFromBlock(staticBlockField)} where that block is either a proven
+ *     source registration or a pinned 1.7.10 {@code Blocks} platform field;</li>
  *     <li>{@code null};</li>
  *     <li>{@code Item.getItemById(0)}, the legacy air/no-item sentinel.</li>
  * </ul>
  *
  * <p>No source class is defined or executed. Conditional returns, instance state, helper calls,
- * world access and unproven static fields fail closed. Quantity and item damage are intentionally
+ * world access and unproven static fields fail closed. Vanilla fields are kept as legacy
+ * {@code minecraft:<registryName>} identities; metadata flattening remains a later DFU-backed
+ * stage because a single 1.7 item ID can map to several modern IDs. Quantity and item damage are
  * separate evidence and must be proven before a later materializer can alter modern drops.</p>
  */
 public final class LegacyBlockDropItemCompiler {
@@ -130,11 +134,17 @@ public final class LegacyBlockDropItemCompiler {
                 && field.getOpcode() == Opcodes.GETSTATIC
                 && instructions.get(1).getOpcode() == Opcodes.ARETURN) {
             LegacyRegistryAnalyzer.FieldBinding binding = fields.get(fieldKey(field.owner, field.name, field.desc));
-            if (binding == null) return CompileResult.error("static return field has no proven registry binding");
-            if (binding.kind() != LegacyRegistryAnalyzer.Kind.ITEM) {
-                return CompileResult.error("static return field is not a proven item registration");
+            if (binding != null) {
+                if (binding.kind() != LegacyRegistryAnalyzer.Kind.ITEM) {
+                    return CompileResult.error("static return field is not a proven item registration");
+                }
+                return CompileResult.target(target(TargetKind.ITEM, binding, field));
             }
-            return CompileResult.target(target(TargetKind.ITEM, binding, field));
+            LegacyVanillaRegistry1710.Entry vanilla = LegacyVanillaRegistry1710.resolve(field.owner, field.name).orElse(null);
+            if (vanilla == null || vanilla.kind() != LegacyRegistryAnalyzer.Kind.ITEM) {
+                return CompileResult.error("static return field has no proven source or vanilla 1.7.10 item identity");
+            }
+            return CompileResult.target(platformTarget(TargetKind.ITEM, vanilla, field));
         }
 
         if (instructions.size() == 3
@@ -146,11 +156,17 @@ public final class LegacyBlockDropItemCompiler {
                 && call.desc.equals(ITEM_FROM_BLOCK)
                 && instructions.get(2).getOpcode() == Opcodes.ARETURN) {
             LegacyRegistryAnalyzer.FieldBinding binding = fields.get(fieldKey(field.owner, field.name, field.desc));
-            if (binding == null) return CompileResult.error("block-to-item field has no proven registry binding");
-            if (binding.kind() != LegacyRegistryAnalyzer.Kind.BLOCK) {
-                return CompileResult.error("Item.getItemFromBlock input is not a proven block registration");
+            if (binding != null) {
+                if (binding.kind() != LegacyRegistryAnalyzer.Kind.BLOCK) {
+                    return CompileResult.error("Item.getItemFromBlock input is not a proven block registration");
+                }
+                return CompileResult.target(target(TargetKind.BLOCK_ITEM, binding, field));
             }
-            return CompileResult.target(target(TargetKind.BLOCK_ITEM, binding, field));
+            LegacyVanillaRegistry1710.Entry vanilla = LegacyVanillaRegistry1710.resolve(field.owner, field.name).orElse(null);
+            if (vanilla == null || vanilla.kind() != LegacyRegistryAnalyzer.Kind.BLOCK) {
+                return CompileResult.error("block-to-item field has no proven source or vanilla 1.7.10 block identity");
+            }
+            return CompileResult.target(platformTarget(TargetKind.BLOCK_ITEM, vanilla, field));
         }
 
         if (instructions.size() == 2
@@ -176,6 +192,10 @@ public final class LegacyBlockDropItemCompiler {
 
     private static Target target(TargetKind kind, LegacyRegistryAnalyzer.FieldBinding binding, FieldInsnNode field) {
         return new Target(kind, binding.registryName(), binding.legacyNamespace(), field.owner, field.name, field.desc);
+    }
+
+    private static Target platformTarget(TargetKind kind, LegacyVanillaRegistry1710.Entry entry, FieldInsnNode field) {
+        return new Target(kind, entry.registryName(), "minecraft", field.owner, field.name, field.desc);
     }
 
     private static List<AbstractInsnNode> realInstructions(MethodNode method) {
