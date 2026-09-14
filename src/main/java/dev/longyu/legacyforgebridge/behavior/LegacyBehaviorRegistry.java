@@ -54,6 +54,20 @@ public final class LegacyBehaviorRegistry {
         var definition = new ItemDefinition(pending.mod(), item, hooks.isEmpty() ? Set.of() : Set.of(hooks.split(",")));
         if (pending.items().putIfAbsent(id, definition) != null) throw new IllegalArgumentException("Duplicate behavior item " + id);
     }
+    /**
+     * Returns an item already constructed in the current bootstrap transaction.
+     * Generated event adapters use this to bind a source listener back to the
+     * exact source Item instance that registered itself, instead of invoking its
+     * legacy constructor a second time. The value is never visible outside the
+     * pending transaction.
+     */
+    public static ItemDefinition bootstrapItem(String id) {
+        Pending pending = pending();
+        ItemDefinition definition = pending.items().get(id);
+        if (definition == null) throw new IllegalArgumentException("Behavior bootstrap item not registered yet: " + id);
+        if (!definition.mod().equals(pending.mod())) throw new IllegalArgumentException("Behavior bootstrap item owner mismatch");
+        return definition;
+    }
     public static void registerEvent(String mod, String kind, LegacyBehaviorApi.EventProgram program) {
         Pending pending = pending();
         if (!pending.mod().equals(mod)) throw new IllegalArgumentException("Behavior event owner mismatch");
