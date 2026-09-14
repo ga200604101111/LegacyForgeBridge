@@ -270,8 +270,11 @@ public final class LegacyBehaviorApi {
         public Entity getEntity() { return attacker; }
     }
     public static class Event {
+        public Entity entity;
         public Living entityLiving;
         public Damage source=new Damage();
+        public String name;
+        public float volume,pitch;
         public float ammount,distance,damageMultiplier=1;
         private boolean canceled;
         public void setCanceled(boolean value) { canceled=value; }

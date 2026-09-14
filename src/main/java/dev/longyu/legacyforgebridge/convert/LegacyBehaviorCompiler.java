@@ -37,7 +37,9 @@ public final class LegacyBehaviorCompiler {
             Map.entry("net/minecraft/entity/ai/attributes/IAttribute","Attribute"),Map.entry("net/minecraft/entity/ai/attributes/AttributeModifier","Modifier"),
             Map.entry("net/minecraftforge/event/entity/living/LivingEvent$LivingJumpEvent","Event"),
             Map.entry("net/minecraftforge/event/entity/living/LivingFallEvent","Event"),
-            Map.entry("net/minecraftforge/event/entity/living/LivingHurtEvent","Event"));
+            Map.entry("net/minecraftforge/event/entity/living/LivingHurtEvent","Event"),
+            Map.entry("net/minecraftforge/event/entity/EntityEvent","Event"),
+            Map.entry("net/minecraftforge/event/entity/PlaySoundAtEntityEvent","Event"));
     private static final Set<String> JDK=Set.of("java/lang/Object","java/lang/String","java/lang/StringBuilder","java/lang/StringBuffer",
             "java/lang/Integer","java/lang/Long","java/lang/Float","java/lang/Double","java/lang/Boolean","java/lang/Math",
             "java/util/UUID","com/google/common/collect/Multimap","java/util/List","java/util/ArrayList","java/util/HashMap","java/util/Map","java/util/Iterator","java/util/Random","java/util/Collection");
@@ -129,6 +131,7 @@ public final class LegacyBehaviorCompiler {
                 case "net/minecraftforge/event/entity/living/LivingEvent$LivingJumpEvent"->"jump";
                 case "net/minecraftforge/event/entity/living/LivingFallEvent"->"fall";
                 case "net/minecraftforge/event/entity/living/LivingHurtEvent"->"hurt";
+                case "net/minecraftforge/event/entity/PlaySoundAtEntityEvent"->"sound";
                 default->null;
             };
             if(kind==null){

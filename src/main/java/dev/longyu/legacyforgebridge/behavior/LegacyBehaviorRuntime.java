@@ -162,6 +162,26 @@ public final class LegacyBehaviorRuntime {
             return true;
         }, false)) snapshot.commit();
     }
+    public record SoundOutcome(boolean canceled,String name,float volume,float pitch) { }
+    public static SoundOutcome soundEvent(Entity entity,String name,float volume,float pitch) {
+        if(entity==null||name==null||!Float.isFinite(volume)||!Float.isFinite(pitch))
+            return new SoundOutcome(false,name,volume,pitch);
+        return soundPrograms(()->new Snapshot(entity.level()).entity(entity),name,volume,pitch);
+    }
+    static SoundOutcome soundPrograms(Supplier<LegacyBehaviorApi.Entity> entitySource,String name,float volume,float pitch) {
+        String current=name;
+        for(var program:LegacyBehaviorRegistry.events("sound")) {
+            var event=new LegacyBehaviorApi.Event();
+            event.entity=Objects.requireNonNull(entitySource.get());
+            if(event.entity instanceof LegacyBehaviorApi.Living living)event.entityLiving=living;
+            event.name=current;event.volume=volume;event.pitch=pitch;
+            if(invoke(program.mod(),"event/sound",()->{program.program().run(event);return true;},false)) {
+                if(event.isCanceled())return new SoundOutcome(true,current,volume,pitch);
+                if(event.name!=null)current=event.name;
+            }
+        }
+        return new SoundOutcome(false,current,volume,pitch);
+    }
     public static void jump(LivingEntity entity) {
         if(!clientActorAllowed(entity))return;
         runEvent("jump",entity,null,0F,0F,1F);

@@ -60,6 +60,24 @@ class LegacyBehaviorAdaptersTest {
             assertTrue(calls.contains(required),required);
         assertTrue(calls("ConvertedBehaviorItem").contains("hit"));
     }
+    @Test void soundPresentationEventsOnlyOwnNameAndCancellation() {
+        String mod="sound_adapter";
+        try {
+            assertTrue(LegacyBehaviorRegistry.begin(mod));
+            LegacyBehaviorRegistry.registerEvent(mod,"sound",event->{
+                if("cancel.me".equals(event.name)){event.setCanceled(true);return;}
+                event.name="replacement.sound";event.volume=99F;event.pitch=77F;
+                event.entity.field_70159_w=123D;
+            });
+            LegacyBehaviorRegistry.finish();
+            var source=new LegacyBehaviorApi.Entity();source.field_70159_w=4D;
+            var changed=LegacyBehaviorRuntime.soundPrograms(()->source,"original.sound",.35F,1.25F);
+            assertFalse(changed.canceled());assertEquals("replacement.sound",changed.name());
+            assertEquals(.35F,changed.volume());assertEquals(1.25F,changed.pitch());
+            var canceled=LegacyBehaviorRuntime.soundPrograms(()->new LegacyBehaviorApi.Entity(),"cancel.me",.8F,.9F);
+            assertTrue(canceled.canceled());assertEquals("cancel.me",canceled.name());
+        } finally { LegacyBehaviorRegistry.abort();LegacyBehaviorRegistry.removeMod(mod); }
+    }
     @Test void commandAndEntityQueryBudgetsRemainBounded() {
         var world=new LegacyBehaviorApi.World();var player=new LegacyBehaviorApi.Player();player.field_70170_p=world;
         for(int i=0;i<1024;i++)world.command(new LegacyBehaviorApi.Sound(0,0,0,"random.break",1,1));
