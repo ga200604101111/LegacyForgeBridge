@@ -13,7 +13,8 @@
     "LegacyLivingBehaviorMixin",
     "LegacyHurtBehaviorMixin",
     "LegacyLocalPlayerSoundMixin",
-    "LegacyNameTagBehaviorMixin"
+    "LegacyNameTagBehaviorMixin",
+    "LegacyFuelValuesMixin"
   ],
   "injectors": {
     "defaultRequire": 1
