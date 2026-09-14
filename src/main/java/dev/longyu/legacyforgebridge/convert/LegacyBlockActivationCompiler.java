@@ -31,17 +31,21 @@ import java.util.jar.JarFile;
  * Compiles a bounded source-independent subset of Minecraft 1.7 {@code Block#onBlockActivated}.
  *
  * <p>The admitted slice may make a boolean decision from the clicked legacy side, integer
- * temporaries/constants, the raw metadata of the block being activated, and the legacy world's
- * client/server-side flag. Metadata is admitted only for the exact bytecode sequence
- * {@code world.getBlockMetadata(x, y, z)} using the callback's own World/x/y/z arguments. The
- * client-side flag is admitted only for the exact {@code world.isRemote} field read from that same
- * callback World. Neighbor reads, source Block instance state, player state, hit-vector floats,
- * arbitrary fields/methods, allocations, world mutation and loops remain fail-closed.</p>
+ * temporaries/constants, the raw metadata of the block being activated, the legacy world's
+ * client/server-side flag, and the activating player's sneaking flag. Metadata is admitted only
+ * for the exact bytecode sequence {@code world.getBlockMetadata(x, y, z)} using the callback's own
+ * World/x/y/z arguments. The client-side flag is admitted only for the exact {@code world.isRemote}
+ * field read from that same callback World. Sneaking is admitted only for an exact
+ * {@code player.isSneaking()} call on the callback Player argument. Neighbor reads, source Block
+ * instance state, other player state, hit-vector floats, arbitrary fields/methods, allocations,
+ * world mutation and loops remain fail-closed.</p>
  */
 public final class LegacyBlockActivationCompiler {
     private static final int MAX_INSTRUCTIONS = 96;
     private static final int MAX_STEPS = 256;
     private static final String WORLD = "net/minecraft/world/World";
+    private static final String ENTITY = "net/minecraft/entity/Entity";
+    private static final String ENTITY_PLAYER = "net/minecraft/entity/player/EntityPlayer";
     private static final String METADATA_DESCRIPTOR = "(III)I";
 
     public enum Op {
@@ -49,6 +53,7 @@ public final class LegacyBlockActivationCompiler {
         LOAD_INT,
         LOAD_META,
         LOAD_CLIENT_SIDE,
+        LOAD_SNEAKING,
         STORE_INT,
         CONST_INT,
         IADD,
@@ -107,19 +112,33 @@ public final class LegacyBlockActivationCompiler {
             if (requires(Op.LOAD_CLIENT_SIDE)) {
                 throw new IllegalStateException("Activation program requires client/server side");
             }
-            return evaluate(side, 0, false);
+            if (requires(Op.LOAD_SNEAKING)) {
+                throw new IllegalStateException("Activation program requires player sneaking state");
+            }
+            return evaluate(side, 0, false, false);
         }
 
-        /** Convenience evaluator for programs that do not depend on client/server side. */
+        /** Convenience evaluator for programs that do not depend on client/server or player state. */
         public boolean evaluate(int side, int metadata) {
             if (requires(Op.LOAD_CLIENT_SIDE)) {
                 throw new IllegalStateException("Activation program requires client/server side");
             }
-            return evaluate(side, metadata, false);
+            if (requires(Op.LOAD_SNEAKING)) {
+                throw new IllegalStateException("Activation program requires player sneaking state");
+            }
+            return evaluate(side, metadata, false, false);
+        }
+
+        /** Convenience evaluator for programs that do not depend on player state. */
+        public boolean evaluate(int side, int metadata, boolean clientSide) {
+            if (requires(Op.LOAD_SNEAKING)) {
+                throw new IllegalStateException("Activation program requires player sneaking state");
+            }
+            return evaluate(side, metadata, clientSide, false);
         }
 
         /** Pure evaluator shared by tests and the modern runtime adapter. */
-        public boolean evaluate(int side, int metadata, boolean clientSide) {
+        public boolean evaluate(int side, int metadata, boolean clientSide, boolean sneaking) {
             if (side < 0 || side > 5) {
                 throw new IllegalArgumentException("Legacy side outside 0..5: " + side);
             }
@@ -145,6 +164,7 @@ public final class LegacyBlockActivationCompiler {
                     }
                     case LOAD_META -> stack.push(metadata);
                     case LOAD_CLIENT_SIDE -> stack.push(clientSide ? 1 : 0);
+                    case LOAD_SNEAKING -> stack.push(sneaking ? 1 : 0);
                     case STORE_INT -> locals.put(instruction.operand(), stack.pop());
                     case CONST_INT -> stack.push(instruction.operand());
                     case IADD -> stack.push(binary(stack, (left, right) -> left + right));
@@ -275,6 +295,12 @@ public final class LegacyBlockActivationCompiler {
                 i += 1;
                 continue;
             }
+            if (matchesSneakingRead(real, i)) {
+                output.add(simple(Op.NOP, 0));
+                output.add(simple(Op.LOAD_SNEAKING, 0));
+                i += 1;
+                continue;
+            }
 
             AbstractInsnNode instruction = real.get(i);
             int opcode = instruction.getOpcode();
@@ -351,6 +377,16 @@ public final class LegacyBlockActivationCompiler {
                 && WORLD.equals(field.owner)
                 && ("isRemote".equals(field.name) || "field_72995_K".equals(field.name))
                 && "Z".equals(field.desc);
+    }
+
+    private static boolean matchesSneakingRead(List<AbstractInsnNode> instructions, int index) {
+        if (index + 1 >= instructions.size()) return false;
+        return isVar(instructions.get(index), Opcodes.ALOAD, 5)
+                && instructions.get(index + 1) instanceof MethodInsnNode call
+                && call.getOpcode() == Opcodes.INVOKEVIRTUAL
+                && (ENTITY_PLAYER.equals(call.owner) || ENTITY.equals(call.owner))
+                && ("isSneaking".equals(call.name) || "func_70093_af".equals(call.name))
+                && "()Z".equals(call.desc);
     }
 
     private static boolean isVar(AbstractInsnNode instruction, int opcode, int local) {
