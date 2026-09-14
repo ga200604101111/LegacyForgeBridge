@@ -16,10 +16,9 @@ jobs:
           fetch-depth: 2
       - name: Verify committed source diff hygiene
         run: git diff --check HEAD^
-      - name: Apply presentation-only ItemTooltip event compiler slice
+      - name: Apply native ItemTooltip event runtime/client bridge
         run: |
-          python tools/apply-corpus2-tooltip-event-compiler.py
-          python tools/fix-corpus2-tooltip-event-fixture.py
+          python tools/apply-corpus2-tooltip-runtime.py
           git diff --check
       - uses: actions/setup-java@v5
         with:
@@ -30,14 +29,14 @@ jobs:
           gradle-version: '9.5.1'
       - name: Full build and tests
         run: gradle build --stacktrace
-      - name: Commit tested tooltip event compiler source
+      - name: Commit tested tooltip runtime/client source
         if: success()
         run: |
-          if ! git diff --quiet -- src/main/java/dev/longyu/legacyforgebridge/behavior/LegacyBehaviorApi.java src/main/java/dev/longyu/legacyforgebridge/behavior/LegacyBehaviorRegistry.java src/main/java/dev/longyu/legacyforgebridge/convert/LegacyBehaviorCompiler.java src/main/java/dev/longyu/legacyforgebridge/convert/runtime/GeneratedModSupport.java src/test/java/dev/longyu/legacyforgebridge/convert/LegacyBehaviorTooltipEventCompilerTest.java; then
+          if ! git diff --quiet -- src/main/java/dev/longyu/legacyforgebridge/behavior/LegacyBehaviorRegistry.java src/main/java/dev/longyu/legacyforgebridge/behavior/LegacyBehaviorRuntime.java src/main/java/dev/longyu/legacyforgebridge/behavior/LegacyBehaviorClient.java src/main/java/dev/longyu/legacyforgebridge/convert/LegacyBehaviorCompiler.java src/test/java/dev/longyu/legacyforgebridge/convert/LegacyBehaviorTooltipEventCompilerTest.java src/test/java/dev/longyu/legacyforgebridge/behavior/LegacyBehaviorTooltipEventRuntimeTest.java src/test/java/dev/longyu/legacyforgebridge/behavior/LegacyBehaviorClientTooltipComponentsTest.java; then
             git config user.name "YingHunag09"
             git config user.email "58656806+ga200604101111@users.noreply.github.com"
-            git add src/main/java/dev/longyu/legacyforgebridge/behavior/LegacyBehaviorApi.java src/main/java/dev/longyu/legacyforgebridge/behavior/LegacyBehaviorRegistry.java src/main/java/dev/longyu/legacyforgebridge/convert/LegacyBehaviorCompiler.java src/main/java/dev/longyu/legacyforgebridge/convert/runtime/GeneratedModSupport.java src/test/java/dev/longyu/legacyforgebridge/convert/LegacyBehaviorTooltipEventCompilerTest.java
-            git commit -m "feat: compile presentation-only ItemTooltip event targets"
+            git add src/main/java/dev/longyu/legacyforgebridge/behavior/LegacyBehaviorRegistry.java src/main/java/dev/longyu/legacyforgebridge/behavior/LegacyBehaviorRuntime.java src/main/java/dev/longyu/legacyforgebridge/behavior/LegacyBehaviorClient.java src/main/java/dev/longyu/legacyforgebridge/convert/LegacyBehaviorCompiler.java src/test/java/dev/longyu/legacyforgebridge/convert/LegacyBehaviorTooltipEventCompilerTest.java src/test/java/dev/longyu/legacyforgebridge/behavior/LegacyBehaviorTooltipEventRuntimeTest.java src/test/java/dev/longyu/legacyforgebridge/behavior/LegacyBehaviorClientTooltipComponentsTest.java
+            git commit -m "feat: bridge source ItemTooltip events into native client tooltips"
             git push origin HEAD:feature/generic-conversion-bamboo-corpus2
           fi
       - uses: actions/upload-artifact@v7
