@@ -1,5 +1,6 @@
 package dev.longyu.legacyforgebridge.convert.pass;
 
+import dev.longyu.legacyforgebridge.convert.LegacyCoremodActivationAnalyzer;
 import dev.longyu.legacyforgebridge.convert.api.ConversionContext;
 import dev.longyu.legacyforgebridge.convert.api.ConversionPass;
 import dev.longyu.legacyforgebridge.convert.api.SupportLevel;
@@ -49,11 +50,32 @@ public final class LegacyBytecodeAuditPass implements ConversionPass {
 
         var analysis = context.analysis();
         if (analysis.coremodReferenceCount() > 0) {
-            context.diagnostics().error(
-                    "LFB-CONVERT-COREMOD-0001",
-                    SupportLevel.UNSUPPORTED,
-                    "Legacy CoreMod/IClassTransformer markers are present. This candidate is blocked until transformation intent is migrated explicitly."
-            );
+            var coremod = new LegacyCoremodActivationAnalyzer().analyze(context.sourceJar(), analysis);
+            for (String detail : coremod.diagnostics()) {
+                context.diagnostics().info(
+                        "LFB-CONVERT-COREMOD-0002",
+                        SupportLevel.AUTO,
+                        detail
+                );
+            }
+            if (coremod.activated()) {
+                String transformers = coremod.transformerListProven()
+                        ? String.join(", ", coremod.transformerClasses())
+                        : "<dynamic/unproven>";
+                context.diagnostics().error(
+                        "LFB-CONVERT-COREMOD-0001",
+                        SupportLevel.UNSUPPORTED,
+                        "An active legacy FMLCorePlugin is declared (" + coremod.pluginClass()
+                                + "; transformers=" + transformers
+                                + "). This candidate is blocked until each active transformation intent is migrated explicitly."
+                );
+            } else {
+                context.diagnostics().info(
+                        "LFB-CONVERT-COREMOD-0003",
+                        SupportLevel.AUTO,
+                        "Coremod marker classes are dormant because the source manifest does not activate an FMLCorePlugin; marker presence alone does not block conversion."
+                );
+            }
         }
 
         if (analysis.openglReferenceCount() > 0) {

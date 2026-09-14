@@ -17,6 +17,9 @@ import net.minecraft.world.entity.EquipmentSlotGroup;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.item.CreativeModeTab;
+import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.ToolMaterial;
@@ -27,10 +30,30 @@ import java.util.concurrent.ConcurrentHashMap;
 /** Native registry adapter. Item-specific constants and source callbacks belong to the converted mod. */
 public final class GeneratedModSupport {
     private static final Map<Identifier,Item> ITEMS=new ConcurrentHashMap<>();
+    private static final Map<Identifier,Block> BLOCKS=new ConcurrentHashMap<>();
     private static final Set<String> ACTIVE_MODS=ConcurrentHashMap.newKeySet();
     private static final Map<String,int[]> COUNTS=new ConcurrentHashMap<>();
     private GeneratedModSupport() { }
-    public static void beginMod(String modId){if(ACTIVE_MODS.add(modId))COUNTS.put(modId,new int[2]);}
+    public static void beginMod(String modId){if(ACTIVE_MODS.add(modId))COUNTS.put(modId,new int[3]);}
+    public static void registerBlock(String idValue,String descriptionKey){
+        Identifier id=Identifier.parse(idValue);
+        if(BuiltInRegistries.BLOCK.containsKey(id)){BLOCKS.put(id,BuiltInRegistries.BLOCK.getValue(id));return;}
+        ResourceKey<Block> blockKey=ResourceKey.create(Registries.BLOCK,id);
+        BlockBehaviour.Properties blockProperties=BlockBehaviour.Properties.of().setId(blockKey).overrideDescription(descriptionKey);
+        Block block=new Block(blockProperties);
+        Registry.register(BuiltInRegistries.BLOCK,blockKey,block);BLOCKS.put(id,block);
+
+        if(!BuiltInRegistries.ITEM.containsKey(id)){
+            ResourceKey<Item> itemKey=ResourceKey.create(Registries.ITEM,id);
+            Item.Properties itemProperties=new Item.Properties().setId(itemKey).overrideDescription(descriptionKey);
+            BlockItem blockItem=new BlockItem(block,itemProperties);
+            Registry.register(BuiltInRegistries.ITEM,itemKey,blockItem);
+            blockItem.registerBlocks(Item.BY_BLOCK,blockItem);
+            ITEMS.put(id,blockItem);
+        }else ITEMS.put(id,BuiltInRegistries.ITEM.getValue(id));
+        int[] counts=COUNTS.get(id.getNamespace());if(counts!=null){counts[0]++;counts[1]++;}
+    }
+
     public static void registerItem(String idValue,String kind,String descriptionKey,int durability,float attackDamage,float attackSpeed,float armor){
         Identifier id=Identifier.parse(idValue);
         if(BuiltInRegistries.ITEM.containsKey(id)){ITEMS.put(id,BuiltInRegistries.ITEM.getValue(id));return;}
@@ -85,11 +108,11 @@ public final class GeneratedModSupport {
         CreativeModeTab tab=FabricItemGroup.builder().icon(()->new ItemStack(finalIcon)).title(title)
                 .displayItems((params,output)->snapshot.forEach(output::accept)).build();
         Registry.register(BuiltInRegistries.CREATIVE_MODE_TAB,ResourceKey.create(BuiltInRegistries.CREATIVE_MODE_TAB.key(),id),tab);
-        int[] counts=COUNTS.get(id.getNamespace());if(counts!=null)counts[1]++;
+        int[] counts=COUNTS.get(id.getNamespace());if(counts!=null)counts[2]++;
     }
     public static void finishMod(String modId){
-        int[] counts=COUNTS.getOrDefault(modId,new int[2]);
-        LegacyForgeBridge.LOGGER.info("Generated converted mod initialized: mod={}, generatedItems={}, generatedCreativeTabs={}, sourceBehaviors={}",modId,counts[0],counts[1],LegacyBehaviorRegistry.itemCount(modId));
+        int[] counts=COUNTS.getOrDefault(modId,new int[3]);
+        LegacyForgeBridge.LOGGER.info("Generated converted mod initialized: mod={}, generatedItems={}, generatedBlocks={}, generatedCreativeTabs={}, sourceBehaviors={}",modId,counts[0],counts[1],counts[2],LegacyBehaviorRegistry.itemCount(modId));
     }
     private static Item resolveItem(Identifier id){Item item=ITEMS.get(id);return item!=null?item:BuiltInRegistries.ITEM.containsKey(id)?BuiltInRegistries.ITEM.getValue(id):null;}
 }

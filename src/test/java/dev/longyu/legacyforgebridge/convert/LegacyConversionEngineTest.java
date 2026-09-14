@@ -93,7 +93,7 @@ class LegacyConversionEngineTest {
 
     @Test
     void blocksLegacyCoremodsBeforeCandidateJarIsEmitted() throws Exception {
-        Path source = createLegacyJar(tempDir.resolve("LegacyCoremod.jar"), true, true, true);
+        Path source = createLegacyJar(tempDir.resolve("LegacyCoremod.jar"), true, true, true, true);
         LegacyConversionEngine engine = new LegacyConversionEngine();
 
         ConversionResult result = engine.convert(
@@ -107,6 +107,24 @@ class LegacyConversionEngineTest {
         assertTrue(Files.isRegularFile(result.manifestFile()));
         String manifest = Files.readString(result.manifestFile(), StandardCharsets.UTF_8);
         assertTrue(manifest.contains("LFB-CONVERT-COREMOD-0001"));
+    }
+
+
+    @Test
+    void dormantTransformerClassesDoNotBlockAnOrdinaryForgeMod() throws Exception {
+        Path source = createLegacyJar(tempDir.resolve("DormantCoremodMarkers.jar"), true, true, true, false);
+        LegacyConversionEngine engine = new LegacyConversionEngine();
+
+        ConversionResult result = engine.convert(
+                source,
+                tempDir.resolve("converted-dormant-coremod"),
+                tempDir.resolve("manifests-dormant-coremod")
+        );
+
+        assertEquals(ConversionStatus.PARTIAL, result.status());
+        assertTrue(result.candidateJar().isPresent());
+        assertTrue(result.diagnostics().stream().anyMatch(diagnostic -> diagnostic.ruleId().equals("LFB-CONVERT-COREMOD-0003")));
+        assertFalse(result.diagnostics().stream().anyMatch(diagnostic -> diagnostic.ruleId().equals("LFB-CONVERT-COREMOD-0001")));
     }
 
     @Test
@@ -147,6 +165,16 @@ class LegacyConversionEngineTest {
             boolean includeClass,
             boolean includeLanguage
     ) throws IOException {
+        return createLegacyJar(jar, coremod, includeClass, includeLanguage, false);
+    }
+
+    private static Path createLegacyJar(
+            Path jar,
+            boolean coremod,
+            boolean includeClass,
+            boolean includeLanguage,
+            boolean activateCoremod
+    ) throws IOException {
         String mcmod = """
                 [
                   {
@@ -158,7 +186,10 @@ class LegacyConversionEngineTest {
                   }
                 ]
                 """;
-        try (JarOutputStream output = new JarOutputStream(Files.newOutputStream(jar))) {
+        java.util.jar.Manifest manifest = new java.util.jar.Manifest();
+        manifest.getMainAttributes().put(java.util.jar.Attributes.Name.MANIFEST_VERSION, "1.0");
+        if (activateCoremod) manifest.getMainAttributes().putValue("FMLCorePlugin", "example.LegacyMod");
+        try (JarOutputStream output = new JarOutputStream(Files.newOutputStream(jar), manifest)) {
             writeEntry(output, "mcmod.info", mcmod.getBytes(StandardCharsets.UTF_8));
             if (includeLanguage) {
                 writeEntry(

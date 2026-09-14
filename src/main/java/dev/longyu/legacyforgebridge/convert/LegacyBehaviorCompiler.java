@@ -17,7 +17,10 @@ public final class LegacyBehaviorCompiler {
     public static final String REG="dev/longyu/legacyforgebridge/behavior/LegacyBehaviorRegistry";
     private static final Map<String,String> TYPES=Map.ofEntries(
             Map.entry("net/minecraft/item/Item","Item"),Map.entry("net/minecraft/item/ItemSword","Sword"),
-            Map.entry("net/minecraft/item/ItemArmor","Armor"),Map.entry("net/minecraft/item/ItemStack","Stack"),
+            Map.entry("net/minecraft/item/ItemArmor","Armor"),Map.entry("net/minecraft/item/ItemBow","Bow"),
+            Map.entry("net/minecraft/item/ItemTool","Tool"),Map.entry("net/minecraft/item/ItemPickaxe","Pickaxe"),
+            Map.entry("net/minecraft/item/ItemAxe","Axe"),Map.entry("net/minecraft/item/ItemSpade","Spade"),Map.entry("net/minecraft/item/ItemHoe","Hoe"),
+            Map.entry("net/minecraft/item/ItemStack","Stack"),
             Map.entry("net/minecraft/item/Item$ToolMaterial","Material"),Map.entry("net/minecraft/item/ItemArmor$ArmorMaterial","Material"),
             Map.entry("net/minecraft/creativetab/CreativeTabs","CreativeTab"),Map.entry("net/minecraft/nbt/NBTTagCompound","Tag"),
             Map.entry("net/minecraft/entity/Entity","Entity"),Map.entry("net/minecraft/entity/EntityLivingBase","Living"),
@@ -61,6 +64,9 @@ public final class LegacyBehaviorCompiler {
         byte[] bytes;String parent;final Map<Ref,MethodInfo> methods=new LinkedHashMap<>();final Map<Ref,FieldInfo> fields=new LinkedHashMap<>();
     }
     public Result compile(Path source,String mod,String bootstrap,Map<String,String> itemIds) throws IOException {
+        return compile(source,mod,bootstrap,itemIds,List.of());
+    }
+    public Result compile(Path source,String mod,String bootstrap,Map<String,String> itemIds,List<LegacyItemRenderAnalyzer.ItemAllocation> provenAllocations) throws IOException {
         classes.clear();selected.clear();fields.clear();included.clear();diagnostics.clear();
         prefix=bootstrap+"Source/";
         try(JarFile jar=new JarFile(source.toFile())) {
@@ -71,7 +77,10 @@ public final class LegacyBehaviorCompiler {
         }
         var itemAnalysis=new LegacyItemRenderAnalyzer().analyzeItems(source);
         diagnostics.addAll(itemAnalysis.diagnostics());List<ItemBinding> items=new ArrayList<>();
-        for(var a:itemAnalysis.items()) {
+        LinkedHashMap<String,LegacyItemRenderAnalyzer.ItemAllocation> allocations=new LinkedHashMap<>();
+        for(var a:itemAnalysis.items())allocations.put(a.itemName(),a);
+        for(var a:provenAllocations)allocations.putIfAbsent(a.itemName(),a);
+        for(var a:allocations.values()) {
             String id=itemIds.get(a.itemName());if(id==null)continue;
             if(!admit(new Ref(a.itemClass(),"<init>",a.constructorDescriptor()),"constructor "+id))continue;
             Set<String> hooks=new LinkedHashSet<>();
@@ -85,6 +94,7 @@ public final class LegacyBehaviorCompiler {
             root(a.itemClass(),"func_77615_a","(Lnet/minecraft/item/ItemStack;Lnet/minecraft/world/World;Lnet/minecraft/entity/player/EntityPlayer;I)V","release",hooks);
             root(a.itemClass(),"func_77644_a","(Lnet/minecraft/item/ItemStack;Lnet/minecraft/entity/EntityLivingBase;Lnet/minecraft/entity/EntityLivingBase;)Z","hit",hooks);
             if(a.inheritedSwordBlocking()){hooks.add("use");hooks.add("action");hooks.add("duration");}
+            if(isSubclass(a.itemClass(),"net/minecraft/item/ItemBow")){hooks.add("use");hooks.add("action");hooks.add("duration");hooks.add("release");}
             if(hooks.isEmpty())hooks.add("identity");
             items.add(new ItemBinding(id,a.itemClass(),Set.copyOf(hooks),a));
         }
@@ -232,6 +242,14 @@ public final class LegacyBehaviorCompiler {
     private static Class<?> javaType(Type t)throws ClassNotFoundException{return switch(t.getSort()){
         case Type.BOOLEAN->boolean.class;case Type.BYTE->byte.class;case Type.CHAR->char.class;case Type.SHORT->short.class;case Type.INT->int.class;case Type.FLOAT->float.class;case Type.LONG->long.class;case Type.DOUBLE->double.class;
         case Type.ARRAY->Class.forName(t.getDescriptor().replace('/','.'));default->Class.forName(t.getClassName());};}
+    private boolean isSubclass(String type,String parent){
+        for(String current=type;current!=null;){
+            if(current.equals(parent))return true;
+            Clazz c=classes.get(current);if(c==null)return false;
+            current=c.parent;
+        }
+        return false;
+    }
     private String mapped(String type){
         if(type==null)return null;if(type.startsWith("["))return descriptor(type);
         if(classes.containsKey(type))return prefix+type;

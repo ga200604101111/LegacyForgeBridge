@@ -36,7 +36,11 @@ dependencies {
     // Never include/shade ASM inside this mod: doing so creates Knot/app ClassLoader conflicts
     // with Mixin, MixinExtras and preLaunch mods such as AsyncLogger.
     compileOnly 'org.ow2.asm:asm:9.10.1'
+    compileOnly 'org.ow2.asm:asm-tree:9.10.1'
+    compileOnly 'org.ow2.asm:asm-analysis:9.10.1'
     testImplementation 'org.ow2.asm:asm:9.10.1'
+    testImplementation 'org.ow2.asm:asm-tree:9.10.1'
+    testImplementation 'org.ow2.asm:asm-analysis:9.10.1'
 
     testImplementation platform('org.junit:junit-bom:5.11.4')
     testImplementation 'org.junit.jupiter:junit-jupiter'

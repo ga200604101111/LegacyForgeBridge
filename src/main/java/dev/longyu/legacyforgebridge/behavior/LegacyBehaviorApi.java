@@ -56,6 +56,11 @@ public final class LegacyBehaviorApi {
         public Item setMaxStackSize(int value) { return func_77625_d(value); }
         public Item func_77664_n() { return this; }
         public Item setFull3D() { return this; }
+        public Item func_77627_a(boolean value) { return this; }
+        public Item setHasSubtypes(boolean value) { return func_77627_a(value); }
+        public Item func_77642_a(Item value) { return this; }
+        public Item setContainerItem(Item value) { return func_77642_a(value); }
+        public Item setNoRepair() { return this; }
         public void func_77624_a(Stack stack, Player player, List<String> lines, boolean advanced) { }
         public void addInformation(Stack stack, Player player, List<String> lines, boolean advanced) { func_77624_a(stack,player,lines,advanced); }
         public void func_77663_a(Stack stack, World world, Entity entity, int index, boolean selected) { }
@@ -77,6 +82,17 @@ public final class LegacyBehaviorApi {
         @Override public int func_77626_a(Stack stack) { return 72000; }
     }
     public static class Armor extends Item { public Armor(Material material,int render,int slot) { armorSlot=slot;maximumStackSize=1; } }
+    public static class Bow extends Item {
+        public Bow() { maximumStackSize=1; }
+        @Override public UseAction func_77661_b(Stack stack) { return UseAction.bow; }
+        @Override public int func_77626_a(Stack stack) { return 72000; }
+        @Override public Stack func_77659_a(Stack stack,World world,Player player) { player.func_71008_a(stack,func_77626_a(stack));return stack; }
+    }
+    public static class Tool extends Item { public Tool(Material material) { maximumStackSize=1; } }
+    public static class Pickaxe extends Tool { public Pickaxe(Material material) { super(material); } }
+    public static class Axe extends Tool { public Axe(Material material) { super(material); } }
+    public static class Spade extends Tool { public Spade(Material material) { super(material); } }
+    public static class Hoe extends Tool { public Hoe(Material material) { super(material); } }
     public static class Stack {
         public int field_77994_a=1;
         public Item item;
