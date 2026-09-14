@@ -39,7 +39,12 @@ public final class LegacyBehaviorCompiler {
             Map.entry("net/minecraftforge/event/entity/living/LivingFallEvent","Event"),
             Map.entry("net/minecraftforge/event/entity/living/LivingHurtEvent","Event"),
             Map.entry("net/minecraftforge/event/entity/EntityEvent","Event"),
-            Map.entry("net/minecraftforge/event/entity/PlaySoundAtEntityEvent","Event"));
+            Map.entry("net/minecraftforge/event/entity/PlaySoundAtEntityEvent","Event"),
+            Map.entry("net/minecraftforge/event/entity/player/ItemTooltipEvent","Event"));
+    private static final Set<String> PRESENTATION_STATEFUL_ITEM_API=Set.of(
+            "net/minecraft/item/Item","net/minecraft/item/ItemSword","net/minecraft/item/ItemArmor","net/minecraft/item/ItemBow",
+            "net/minecraft/item/ItemTool","net/minecraft/item/ItemPickaxe","net/minecraft/item/ItemAxe","net/minecraft/item/ItemSpade",
+            "net/minecraft/item/ItemHoe","net/minecraft/item/ItemBlock");
     private static final Set<String> JDK=Set.of("java/lang/Object","java/lang/String","java/lang/StringBuilder","java/lang/StringBuffer",
             "java/lang/Integer","java/lang/Long","java/lang/Short","java/lang/Float","java/lang/Double","java/lang/Boolean","java/lang/Math",
             "java/util/UUID","com/google/common/collect/Multimap","java/util/List","java/util/ArrayList","java/util/HashMap","java/util/Map","java/util/Iterator","java/util/Random","java/util/Collection");
@@ -49,7 +54,7 @@ public final class LegacyBehaviorCompiler {
             Map.entry("getMaxItemUseDuration","func_77626_a"),Map.entry("onPlayerStoppedUsing","func_77615_a"),Map.entry("hitEntity","func_77644_a"));
     private final Map<String,Clazz> classes=new LinkedHashMap<>();
     private final Set<Ref> selected=new LinkedHashSet<>(),fields=new LinkedHashSet<>();
-    private final Set<String> included=new LinkedHashSet<>(),syntheticParentConstructors=new LinkedHashSet<>(),syntheticNameConstructors=new LinkedHashSet<>();
+    private final Set<String> included=new LinkedHashSet<>(),syntheticParentConstructors=new LinkedHashSet<>(),syntheticNameConstructors=new LinkedHashSet<>(),syntheticPresentationConstructors=new LinkedHashSet<>();
     private final Map<Ref,LegacyConstantNameTableAnalyzer.Table> constantNameTables=new LinkedHashMap<>();
     private final List<String> diagnostics=new ArrayList<>();
     private String prefix;
@@ -57,6 +62,7 @@ public final class LegacyBehaviorCompiler {
         public ItemBinding { hooks=Collections.unmodifiableSet(new TreeSet<>(hooks)); }
     }
     public record EventBinding(String owner,String method,String descriptor,String kind,String targetItemId) { }
+    private record PresentationBinding(String id,String sourceClass) { }
     public record Result(Map<String,byte[]> classes,List<ItemBinding> items,List<EventBinding> events,List<String> diagnostics) { }
     private record Ref(String owner,String name,String desc) { }
     private record FieldInfo(int access,Object value) { }
@@ -71,7 +77,7 @@ public final class LegacyBehaviorCompiler {
         return compile(source,mod,bootstrap,itemIds,List.of());
     }
     public Result compile(Path source,String mod,String bootstrap,Map<String,String> itemIds,List<LegacyItemRenderAnalyzer.ItemAllocation> provenAllocations) throws IOException {
-        classes.clear();selected.clear();fields.clear();included.clear();syntheticParentConstructors.clear();syntheticNameConstructors.clear();constantNameTables.clear();diagnostics.clear();
+        classes.clear();selected.clear();fields.clear();included.clear();syntheticParentConstructors.clear();syntheticNameConstructors.clear();syntheticPresentationConstructors.clear();constantNameTables.clear();diagnostics.clear();
         prefix=bootstrap+"Source/";
         var constantAnalysis=new LegacyConstantNameTableAnalyzer().analyze(source);
         diagnostics.addAll(constantAnalysis.diagnostics());
@@ -124,6 +130,7 @@ public final class LegacyBehaviorCompiler {
         }
 
         List<EventBinding> events=new ArrayList<>();
+        LinkedHashMap<String,PresentationBinding> presentationTargets=new LinkedHashMap<>();
         Set<String> eventKeys=new LinkedHashSet<>();
         LegacyEventHandlerConstructionAnalyzer constructionAnalyzer=new LegacyEventHandlerConstructionAnalyzer();
         for(LegacyEventAnalyzer.Binding binding:eventAnalysis.bindings()) {
@@ -136,6 +143,7 @@ public final class LegacyBehaviorCompiler {
                 case "net/minecraftforge/event/entity/living/LivingFallEvent"->"fall";
                 case "net/minecraftforge/event/entity/living/LivingHurtEvent"->"hurt";
                 case "net/minecraftforge/event/entity/PlaySoundAtEntityEvent"->"sound";
+                case "net/minecraftforge/event/entity/player/ItemTooltipEvent"->"tooltipEvent";
                 default->null;
             };
             if(kind==null){
@@ -161,6 +169,28 @@ public final class LegacyBehaviorCompiler {
                     events.add(new EventBinding(type,r.name,r.desc,kind,itemTarget.id()));
                 continue;
             }
+            if(kind.equals("tooltipEvent")&&instance&&binding.handlerClass().equals(binding.registrationOwner())
+                    &&"<init>".equals(binding.registrationMethod())){
+                List<PresentationBinding> candidates=allocations.values().stream()
+                        .filter(allocation->allocation.itemClass().equals(type)
+                                &&allocation.constructorDescriptor().equals(binding.registrationDescriptor()))
+                        .map(allocation->{String id=itemIds.get(allocation.itemName());return id==null?null:new PresentationBinding(id,type);})
+                        .filter(Objects::nonNull).distinct().toList();
+                if(candidates.size()==1){
+                    PresentationBinding candidate=candidates.getFirst();
+                    if(presentationParentConstructor(type)==null){
+                        diagnostics.add("presentation event constructor "+type+": unsupported direct item parent "+classes.get(type).parent);
+                    }else if(admitPresentation(r,type,"event "+kind)){
+                        PresentationBinding previous=presentationTargets.putIfAbsent(candidate.id(),candidate);
+                        if(previous==null||previous.equals(candidate)){
+                            syntheticPresentationConstructors.add(type);
+                            events.add(new EventBinding(type,r.name,r.desc,kind,candidate.id()));
+                            continue;
+                        }
+                        diagnostics.add("Ambiguous presentation target identity "+candidate.id());
+                    }
+                }else if(candidates.size()>1)diagnostics.add("Ambiguous presentation event source identity for "+type+": "+candidates);
+            }
 
             LegacyEventHandlerConstructionAnalyzer.Strategy construction=null;
             if(instance){
@@ -182,7 +212,7 @@ public final class LegacyBehaviorCompiler {
         Map<String,byte[]> output=new LinkedHashMap<>();
         for(String type:included)output.put(mapped(type)+".class",emit(type));
         for(int i=0;i<events.size();i++) output.put(bootstrap+"Event"+i+".class",eventAdapter(bootstrap+"Event"+i,events.get(i)));
-        output.put(bootstrap+".class",bootstrap(bootstrap,mod,items,events));
+        output.put(bootstrap+".class",bootstrap(bootstrap,mod,items,new ArrayList<>(presentationTargets.values()),events));
         verifyGenerated(output);
         return new Result(Map.copyOf(output),List.copyOf(items),List.copyOf(events),List.copyOf(new LinkedHashSet<>(diagnostics)));
     }
@@ -209,8 +239,42 @@ public final class LegacyBehaviorCompiler {
         if(r!=null&&classes.containsKey(r.owner)&&admit(r,owner+" "+hook))hooks.add(hook);
     }
     private boolean admit(Ref root,String label) {
-        Set<Ref> oldMethods=new LinkedHashSet<>(selected),oldFields=new LinkedHashSet<>(fields);Set<String> oldClasses=new LinkedHashSet<>(included);
-        try{validate(root);return true;}catch(RuntimeException ex){selected.clear();selected.addAll(oldMethods);fields.clear();fields.addAll(oldFields);included.clear();included.addAll(oldClasses);diagnostics.add(label+": "+ex.getMessage());return false;}
+        Set<Ref> oldMethods=new LinkedHashSet<>(selected),oldFields=new LinkedHashSet<>(fields);Set<String> oldClasses=new LinkedHashSet<>(included),oldParent=new LinkedHashSet<>(syntheticParentConstructors),oldNames=new LinkedHashSet<>(syntheticNameConstructors),oldPresentation=new LinkedHashSet<>(syntheticPresentationConstructors);
+        try{validate(root);return true;}catch(RuntimeException ex){restore(oldMethods,oldFields,oldClasses,oldParent,oldNames,oldPresentation);diagnostics.add(label+": "+ex.getMessage());return false;}
+    }
+    private boolean admitPresentation(Ref root,String target,String label) {
+        Set<Ref> oldMethods=new LinkedHashSet<>(selected),oldFields=new LinkedHashSet<>(fields);Set<String> oldClasses=new LinkedHashSet<>(included),oldParent=new LinkedHashSet<>(syntheticParentConstructors),oldNames=new LinkedHashSet<>(syntheticNameConstructors),oldPresentation=new LinkedHashSet<>(syntheticPresentationConstructors);
+        try{validate(root);validatePresentationState(root,target);return true;}catch(RuntimeException ex){restore(oldMethods,oldFields,oldClasses,oldParent,oldNames,oldPresentation);diagnostics.add(label+": "+ex.getMessage());return false;}
+    }
+    private void restore(Set<Ref> methods,Set<Ref> oldFields,Set<String> oldClasses,Set<String> oldParent,Set<String> oldNames,Set<String> oldPresentation){
+        selected.clear();selected.addAll(methods);fields.clear();fields.addAll(oldFields);included.clear();included.addAll(oldClasses);
+        syntheticParentConstructors.clear();syntheticParentConstructors.addAll(oldParent);syntheticNameConstructors.clear();syntheticNameConstructors.addAll(oldNames);syntheticPresentationConstructors.clear();syntheticPresentationConstructors.addAll(oldPresentation);
+    }
+    private void validatePresentationState(Ref root,String target){
+        LinkedHashSet<String> hierarchy=new LinkedHashSet<>();
+        for(String current=target;current!=null&&classes.containsKey(current);current=classes.get(current).parent)hierarchy.add(current);
+        ArrayDeque<Ref> pending=new ArrayDeque<>();LinkedHashSet<Ref> seen=new LinkedHashSet<>();pending.add(root);
+        while(!pending.isEmpty()){
+            Ref requested=pending.removeFirst(),resolved=resolve(requested);if(resolved==null||!classes.containsKey(resolved.owner)||!seen.add(resolved))continue;
+            MethodInfo method=classes.get(resolved.owner).methods.get(resolved);
+            for(Object op:method.ops)if(op instanceof List<?> parts&&parts.size()==2&&parts.get(0) instanceof Integer opcode&&parts.get(1) instanceof Ref field
+                    &&(opcode==Opcodes.GETFIELD||opcode==Opcodes.PUTFIELD)&&hierarchy.contains(field.owner))
+                throw new IllegalArgumentException("presentation callback depends on source instance field "+field);
+            for(Ref call:method.calls){
+                Ref next=resolve(call);
+                if(next!=null&&classes.containsKey(next.owner))pending.add(next);
+                else if(PRESENTATION_STATEFUL_ITEM_API.contains(call.owner))
+                    throw new IllegalArgumentException("presentation callback depends on legacy item instance API "+call);
+            }
+        }
+    }
+    private String presentationParentConstructor(String type){
+        Clazz clazz=classes.get(type);if(clazz==null)return null;
+        return switch(clazz.parent){
+            case "net/minecraft/item/Item","net/minecraft/item/ItemBow"->"()V";
+            case "net/minecraft/item/ItemSword","net/minecraft/item/ItemTool","net/minecraft/item/ItemPickaxe","net/minecraft/item/ItemAxe","net/minecraft/item/ItemSpade","net/minecraft/item/ItemHoe"->"(Lnet/minecraft/item/Item$ToolMaterial;)V";
+            default->null;
+        };
     }
     private void readClass(byte[] bytes) {
         new ClassReader(bytes).accept(new ClassVisitor(Opcodes.ASM9) {
@@ -376,6 +440,17 @@ public final class LegacyBehaviorCompiler {
             constructor.visitVarInsn(Opcodes.ALOAD,0);constructor.visitVarInsn(Opcodes.ALOAD,1);constructor.visitFieldInsn(Opcodes.PUTFIELD,mapped(type),table.nameField(),"Ljava/lang/String;");
             constructor.visitInsn(Opcodes.RETURN);constructor.visitMaxs(0,0);constructor.visitEnd();
         }
+        if(syntheticPresentationConstructors.contains(type)){
+            String sourceDescriptor=presentationParentConstructor(type);MethodVisitor constructor=w.visitMethod(Opcodes.ACC_PUBLIC,"<init>","()V",null,null);constructor.visitCode();constructor.visitVarInsn(Opcodes.ALOAD,0);
+            for(Type argument:Type.getArgumentTypes(sourceDescriptor)){
+                switch(argument.getSort()){
+                    case Type.OBJECT,Type.ARRAY->constructor.visitInsn(Opcodes.ACONST_NULL);
+                    case Type.LONG->constructor.visitInsn(Opcodes.LCONST_0);case Type.FLOAT->constructor.visitInsn(Opcodes.FCONST_0);case Type.DOUBLE->constructor.visitInsn(Opcodes.DCONST_0);
+                    default->constructor.visitInsn(Opcodes.ICONST_0);
+                }
+            }
+            constructor.visitMethodInsn(Opcodes.INVOKESPECIAL,mapped(c.parent),"<init>",descriptor(sourceDescriptor),false);constructor.visitInsn(Opcodes.RETURN);constructor.visitMaxs(0,0);constructor.visitEnd();
+        }
         new ClassReader(c.bytes).accept(new ClassVisitor(Opcodes.ASM9){
             @Override public MethodVisitor visitMethod(int a,String n,String d,String sig,String[]exceptions){
                 if(!selected.contains(new Ref(type,n,d)))return null;
@@ -408,12 +483,13 @@ public final class LegacyBehaviorCompiler {
         MethodVisitor c=w.visitMethod(Opcodes.ACC_PUBLIC,"<init>","(L"+receiver+";)V",null,null);c.visitCode();c.visitVarInsn(Opcodes.ALOAD,0);c.visitMethodInsn(Opcodes.INVOKESPECIAL,"java/lang/Object","<init>","()V",false);c.visitVarInsn(Opcodes.ALOAD,0);c.visitVarInsn(Opcodes.ALOAD,1);c.visitFieldInsn(Opcodes.PUTFIELD,name,"target","L"+receiver+";");c.visitInsn(Opcodes.RETURN);c.visitMaxs(0,0);c.visitEnd();
         MethodVisitor m=w.visitMethod(Opcodes.ACC_PUBLIC,"run","(L"+API+"$Event;)V",null,null);m.visitCode();if(!stat){m.visitVarInsn(Opcodes.ALOAD,0);m.visitFieldInsn(Opcodes.GETFIELD,name,"target","L"+receiver+";");}m.visitVarInsn(Opcodes.ALOAD,1);m.visitMethodInsn(stat?Opcodes.INVOKESTATIC:Opcodes.INVOKEVIRTUAL,receiver,binding.method,descriptor(binding.descriptor),false);m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
     }
-    private byte[] bootstrap(String name,String mod,List<ItemBinding> items,List<EventBinding> events){
+    private byte[] bootstrap(String name,String mod,List<ItemBinding> items,List<PresentationBinding> presentations,List<EventBinding> events){
         ClassWriter w=writer();w.visit(Opcodes.V21,Opcodes.ACC_PUBLIC|Opcodes.ACC_FINAL,name,null,"java/lang/Object",null);
         MethodVisitor m=w.visitMethod(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"initialize","()V",null,null);m.visitCode();m.visitLdcInsn(mod);m.visitMethodInsn(Opcodes.INVOKESTATIC,REG,"begin","(Ljava/lang/String;)Z",false);Label done=new Label();m.visitJumpInsn(Opcodes.IFEQ,done);
         Label start=new Label(),end=new Label(),failed=new Label();
         m.visitTryCatchBlock(start,end,failed,"java/lang/Throwable");m.visitLabel(start);
         for(ItemBinding item:items){var a=item.allocation;m.visitLdcInsn(item.id);m.visitTypeInsn(Opcodes.NEW,mapped(a.itemClass()));m.visitInsn(Opcodes.DUP);for(var arg:a.arguments()){if("Lnet/minecraft/block/Block;".equals(arg.descriptor())&&arg.value() instanceof String blockId){m.visitTypeInsn(Opcodes.NEW,API+"$Block");m.visitInsn(Opcodes.DUP);m.visitLdcInsn(blockId);m.visitMethodInsn(Opcodes.INVOKESPECIAL,API+"$Block","<init>","(Ljava/lang/String;)V",false);}else if(arg.value()==null)m.visitInsn(Opcodes.ACONST_NULL);else m.visitLdcInsn(arg.value());}m.visitMethodInsn(Opcodes.INVOKESPECIAL,mapped(a.itemClass()),"<init>",descriptor(a.constructorDescriptor()),false);m.visitLdcInsn(String.join(",",new TreeSet<>(item.hooks)));m.visitMethodInsn(Opcodes.INVOKESTATIC,REG,"registerItem","(Ljava/lang/String;L"+API+"$Item;Ljava/lang/String;)V",false);}
+        for(PresentationBinding presentation:presentations){m.visitLdcInsn(presentation.id());m.visitTypeInsn(Opcodes.NEW,mapped(presentation.sourceClass()));m.visitInsn(Opcodes.DUP);m.visitMethodInsn(Opcodes.INVOKESPECIAL,mapped(presentation.sourceClass()),"<init>","()V",false);m.visitMethodInsn(Opcodes.INVOKESTATIC,REG,"registerPresentationItem","(Ljava/lang/String;L"+API+"$Item;)V",false);}
         Map<String,Integer> locals=new LinkedHashMap<>();
         for(int i=0;i<events.size();i++){EventBinding e=events.get(i);String receiver=mapped(e.owner);
             if(e.targetItemId()==null&&!locals.containsKey(e.owner)){

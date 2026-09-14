@@ -60,6 +60,7 @@ public final class GeneratedModSupport {
         ResourceKey<Item> key=ResourceKey.create(Registries.ITEM,id);
         Item.Properties properties=new Item.Properties().setId(key).overrideDescription(descriptionKey);
         var source=LegacyBehaviorRegistry.item(idValue);
+        if(source!=null&&source.presentationOnly())source=null;
         if(source!=null){
             int count=source.item().maximumStackSize;
             if(count>=1&&count<=99)properties.stacksTo(count);

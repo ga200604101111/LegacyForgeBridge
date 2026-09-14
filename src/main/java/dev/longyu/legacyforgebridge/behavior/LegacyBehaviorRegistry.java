@@ -5,8 +5,9 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /** Candidate-owned registrations, published atomically only after source constructors succeed. */
 public final class LegacyBehaviorRegistry {
-    public record ItemDefinition(String mod, LegacyBehaviorApi.Item item, Set<String> hooks) {
+    public record ItemDefinition(String mod, LegacyBehaviorApi.Item item, Set<String> hooks, boolean presentationOnly) {
         public ItemDefinition { hooks = Set.copyOf(hooks); Objects.requireNonNull(item); }
+        public ItemDefinition(String mod, LegacyBehaviorApi.Item item, Set<String> hooks) { this(mod,item,hooks,false); }
     }
     public record EventDefinition(String mod, String kind, LegacyBehaviorApi.EventProgram program) { }
     private record Pending(String mod, Map<String, ItemDefinition> items, List<EventDefinition> events) { }
@@ -51,7 +52,13 @@ public final class LegacyBehaviorRegistry {
     public static void registerItem(String id, LegacyBehaviorApi.Item item, String hooks) {
         Pending pending = pending();
         if (!id.startsWith(pending.mod() + ':')) throw new IllegalArgumentException("Behavior item owner mismatch");
-        var definition = new ItemDefinition(pending.mod(), item, hooks.isEmpty() ? Set.of() : Set.of(hooks.split(",")));
+        var definition = new ItemDefinition(pending.mod(), item, hooks.isEmpty() ? Set.of() : Set.of(hooks.split(",")), false);
+        if (pending.items().putIfAbsent(id, definition) != null) throw new IllegalArgumentException("Duplicate behavior item " + id);
+    }
+    public static void registerPresentationItem(String id, LegacyBehaviorApi.Item item) {
+        Pending pending = pending();
+        if (!id.startsWith(pending.mod() + ':')) throw new IllegalArgumentException("Behavior presentation item owner mismatch");
+        var definition = new ItemDefinition(pending.mod(), Objects.requireNonNull(item), Set.of(), true);
         if (pending.items().putIfAbsent(id, definition) != null) throw new IllegalArgumentException("Duplicate behavior item " + id);
     }
     /**
@@ -81,7 +88,7 @@ public final class LegacyBehaviorRegistry {
         return EVENTS.stream().filter(event -> event.kind().equals(kind)).toList();
     }
     public static synchronized int itemCount(String mod) {
-        return (int) ITEMS.values().stream().filter(item -> item.mod().equals(mod)).count();
+        return (int) ITEMS.values().stream().filter(item -> item.mod().equals(mod) && !item.presentationOnly()).count();
     }
     public static synchronized void removeMod(String mod) {
         ITEMS.entrySet().removeIf(entry -> entry.getValue().mod().equals(mod));

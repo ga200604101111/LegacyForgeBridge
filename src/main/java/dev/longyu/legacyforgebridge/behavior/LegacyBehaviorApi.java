@@ -294,6 +294,8 @@ public final class LegacyBehaviorApi {
     public static class Event {
         public Entity entity;
         public Living entityLiving;
+        public Stack itemStack;
+        public List<String> toolTip;
         public Damage source=new Damage();
         public String name;
         public float volume,pitch;
