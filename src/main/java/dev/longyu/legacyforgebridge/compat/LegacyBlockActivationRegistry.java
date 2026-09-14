@@ -32,14 +32,14 @@ public final class LegacyBlockActivationRegistry {
     /**
      * Returns null when no converted rule exists or when the bounded source program fails. A
      * non-null boolean is the exact legacy onBlockActivated consume/pass decision for the admitted
-     * pure subset.
+     * read-only subset.
      */
-    public static Boolean handled(Identifier blockId, BlockHitResult hitResult) {
+    public static Boolean handled(Identifier blockId, int legacyMetadata, BlockHitResult hitResult) {
         if (blockId == null || hitResult == null) return null;
         LegacyBlockActivationCompiler.Program program = RULES.get(blockId);
         if (program == null) return null;
         try {
-            return program.evaluate(LegacyBlockPlacementRegistry.legacySide(hitResult.getDirection()));
+            return program.evaluate(LegacyBlockPlacementRegistry.legacySide(hitResult.getDirection()), legacyMetadata);
         } catch (RuntimeException exception) {
             if (FAILED.add(blockId)) {
                 LegacyForgeBridge.LOGGER.error("Converted legacy block activation rule failed closed for {}", blockId, exception);
