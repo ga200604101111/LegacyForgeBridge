@@ -3,6 +3,7 @@ package dev.longyu.legacyforgebridge.convert.runtime;
 import dev.longyu.legacyforgebridge.LegacyForgeBridge;
 import dev.longyu.legacyforgebridge.behavior.ConvertedBehaviorItem;
 import dev.longyu.legacyforgebridge.behavior.LegacyBehaviorRegistry;
+import dev.longyu.legacyforgebridge.compat.LegacyBlockPlacementRegistry;
 import dev.longyu.legacyforgebridge.compat.LegacyFuelRegistry;
 import dev.longyu.legacyforgebridge.compat.LegacyStackComponents;
 import net.fabricmc.fabric.api.itemgroup.v1.FabricItemGroup;
@@ -42,7 +43,7 @@ public final class GeneratedModSupport {
         if(BuiltInRegistries.BLOCK.containsKey(id)){BLOCKS.put(id,BuiltInRegistries.BLOCK.getValue(id));return;}
         ResourceKey<Block> blockKey=ResourceKey.create(Registries.BLOCK,id);
         BlockBehaviour.Properties blockProperties=BlockBehaviour.Properties.of().setId(blockKey).overrideDescription(descriptionKey);
-        Block block=new ConvertedLegacyBlock(blockProperties);
+        Block block=new ConvertedLegacyBlock(id,blockProperties);
         Registry.register(BuiltInRegistries.BLOCK,blockKey,block);BLOCKS.put(id,block);
 
         if(!BuiltInRegistries.ITEM.containsKey(id)){
@@ -111,6 +112,7 @@ public final class GeneratedModSupport {
         int[] counts=COUNTS.get(id.getNamespace());if(counts!=null)counts[2]++;
     }
     public static void finishMod(String modId){
+        LegacyBlockPlacementRegistry.loadMod(modId);
         LegacyFuelRegistry.loadMod(modId);
         int[] counts=COUNTS.getOrDefault(modId,new int[3]);
         LegacyForgeBridge.LOGGER.info("Generated converted mod initialized: mod={}, generatedItems={}, generatedBlocks={}, generatedCreativeTabs={}, sourceBehaviors={}",modId,counts[0],counts[1],counts[2],LegacyBehaviorRegistry.itemCount(modId));
