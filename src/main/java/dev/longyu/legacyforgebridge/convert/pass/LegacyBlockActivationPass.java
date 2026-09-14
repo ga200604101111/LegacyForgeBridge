@@ -31,8 +31,9 @@ public final class LegacyBlockActivationPass implements ConversionPass {
         // unrelated resource/item-only JARs.
         if (analysis.activationCallbacks() == 0) return;
 
+        var effects = LegacyBlockActivationEffectsPass.materialize(context);
         JsonArray rules = new JsonArray();
-        int skipped = Math.max(0, analysis.activationCallbacks() - analysis.programs().size());
+        int skipped = Math.max(0, analysis.activationCallbacks() - analysis.programs().size() - effects.writtenRules());
         for (LegacyBlockActivationCompiler.Program program : analysis.programs()) {
             String legacyId = legacyId(context, program.legacyNamespace(), program.registryName());
             String modernId = modernBlockId(context, legacyId);
@@ -56,13 +57,18 @@ public final class LegacyBlockActivationPass implements ConversionPass {
         }
 
         for (String diagnostic : analysis.diagnostics()) {
-            context.diagnostics().warning("LFB-CONVERT-BLOCK-ACTIVATION-0002", SupportLevel.MANUAL_REQUIRED, diagnostic);
+            // Suppress a pure-compiler rejection ONLY when every registration sharing this
+            // callback has a complete, materialized effect rule. Missing identity stays visible.
+            boolean covered = effects.completedCallbacks().stream().anyMatch(key ->
+                    diagnostic.startsWith("Unsupported pure activation callback " + key + ":"));
+            if (!covered) context.diagnostics().warning("LFB-CONVERT-BLOCK-ACTIVATION-0002", SupportLevel.MANUAL_REQUIRED, diagnostic);
         }
 
         JsonObject root = new JsonObject();
         root.addProperty("schemaVersion", 1);
         root.add("rules", rules);
         root.addProperty("sourceCallbacks", analysis.activationCallbacks());
+        root.addProperty("effectRules", effects.writtenRules());
         root.addProperty("skippedRules", skipped);
         Path output = context.stagingDir().resolve(RULES_PATH);
         Files.createDirectories(output.getParent());

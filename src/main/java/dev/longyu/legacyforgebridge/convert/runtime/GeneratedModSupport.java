@@ -3,6 +3,7 @@ package dev.longyu.legacyforgebridge.convert.runtime;
 import dev.longyu.legacyforgebridge.LegacyForgeBridge;
 import dev.longyu.legacyforgebridge.behavior.ConvertedBehaviorItem;
 import dev.longyu.legacyforgebridge.behavior.LegacyBehaviorRegistry;
+import dev.longyu.legacyforgebridge.compat.LegacyBlockActivationEffectsRegistry;
 import dev.longyu.legacyforgebridge.compat.LegacyBlockActivationRegistry;
 import dev.longyu.legacyforgebridge.compat.LegacyBlockPlacementRegistry;
 import dev.longyu.legacyforgebridge.compat.LegacyFuelRegistry;
@@ -115,6 +116,7 @@ public final class GeneratedModSupport {
     public static void finishMod(String modId){
         LegacyBlockPlacementRegistry.loadMod(modId);
         LegacyBlockActivationRegistry.loadMod(modId);
+        LegacyBlockActivationEffectsRegistry.loadMod(modId);
         LegacyFuelRegistry.loadMod(modId);
         int[] counts=COUNTS.getOrDefault(modId,new int[3]);
         LegacyForgeBridge.LOGGER.info("Generated converted mod initialized: mod={}, generatedItems={}, generatedBlocks={}, generatedCreativeTabs={}, sourceBehaviors={}",modId,counts[0],counts[1],counts[2],LegacyBehaviorRegistry.itemCount(modId));

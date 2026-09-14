@@ -1,5 +1,6 @@
 package dev.longyu.legacyforgebridge.convert.runtime;
 
+import dev.longyu.legacyforgebridge.compat.LegacyBlockActivationEffectsRegistry;
 import dev.longyu.legacyforgebridge.compat.LegacyBlockActivationRegistry;
 import dev.longyu.legacyforgebridge.compat.LegacyBlockPlacementRegistry;
 import net.minecraft.core.BlockPos;
@@ -54,6 +55,9 @@ public final class ConvertedLegacyBlock extends Block {
     @Override
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player,
                                                 BlockHitResult hitResult) {
+        InteractionResult effect = LegacyBlockActivationEffectsRegistry.activate(
+                convertedId, state, level, pos, player, hitResult);
+        if (effect != null) return effect;
         Boolean handled = LegacyBlockActivationRegistry.handled(
                 convertedId, legacyMeta(state), level.isClientSide(), player.isShiftKeyDown(), hitResult);
         if (handled == null) return super.useWithoutItem(state, level, pos, player, hitResult);
