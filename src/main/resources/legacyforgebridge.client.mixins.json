@@ -1,6 +1,6 @@
 {
   "required": true,
-  "package": "dev.longyu.legacyforgebridge.mixin.client",
+  "package": "dev.yinghuang.legacyforgebridge.mixin.client",
   "compatibilityLevel": "JAVA_21",
   "client": [
     "TranslatableContentsMixin",

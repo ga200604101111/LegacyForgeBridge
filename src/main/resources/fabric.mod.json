@@ -12,13 +12,13 @@
   "environment": "client",
   "entrypoints": {
     "main": [
-      "dev.longyu.legacyforgebridge.LegacyForgeBridge"
+      "dev.yinghuang.legacyforgebridge.LegacyForgeBridge"
     ],
     "client": [
-      "dev.longyu.legacyforgebridge.LegacyForgeBridgeClient"
+      "dev.yinghuang.legacyforgebridge.LegacyForgeBridgeClient"
     ],
     "viafabricplus": [
-      "dev.longyu.legacyforgebridge.protocol.ViaFabricPlusEntrypoint"
+      "dev.yinghuang.legacyforgebridge.protocol.ViaFabricPlusEntrypoint"
     ]
   },
   "mixins": [
