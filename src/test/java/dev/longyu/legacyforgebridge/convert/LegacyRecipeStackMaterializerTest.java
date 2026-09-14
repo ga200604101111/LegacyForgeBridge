@@ -36,6 +36,11 @@ class LegacyRecipeStackMaterializerTest {
         assertEquals(5, sword.components().get("minecraft:damage").getAsInt());
         assertEquals("fabric:components", sword.ingredientJson().getAsJsonObject().get("fabric:type").getAsString());
 
+        var undamagedSword = LegacyRecipeStackMaterializer.materialize(
+                spec(LegacyRegistryAnalyzer.Kind.ITEM, "iron_sword", "minecraft", 1, 0), context).orElseThrow();
+        assertEquals(0, undamagedSword.components().get("minecraft:damage").getAsInt());
+        assertEquals("fabric:components", undamagedSword.ingredientJson().getAsJsonObject().get("fabric:type").getAsString());
+
         var custom = LegacyRecipeStackMaterializer.materialize(
                 spec(LegacyRegistryAnalyzer.Kind.ITEM, "teaCup", "fixture", 4, 3), context).orElseThrow();
         assertEquals("fixture:tea_cup", custom.id());
