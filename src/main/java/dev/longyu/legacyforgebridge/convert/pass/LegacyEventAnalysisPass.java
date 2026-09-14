@@ -2,6 +2,7 @@ package dev.longyu.legacyforgebridge.convert.pass;
 
 import com.google.gson.*;
 import dev.longyu.legacyforgebridge.convert.LegacyEventAnalyzer;
+import dev.longyu.legacyforgebridge.convert.LegacyEventPolicy;
 import dev.longyu.legacyforgebridge.convert.api.*;
 
 import java.nio.charset.StandardCharsets;
@@ -20,6 +21,7 @@ public final class LegacyEventAnalysisPass implements ConversionPass {
             value.addProperty("descriptor",binding.descriptor());value.addProperty("eventType",binding.eventType());
             value.addProperty("bus",binding.bus().name().toLowerCase());value.addProperty("side",binding.side().name().toLowerCase());
             value.addProperty("priority",binding.priority());value.addProperty("receiveCanceled",binding.receiveCanceled());
+            value.addProperty("executionPolicy",LegacyEventPolicy.execution(binding.eventType()).name().toLowerCase());
             JsonObject registration=new JsonObject();registration.addProperty("owner",binding.registrationOwner());
             registration.addProperty("method",binding.registrationMethod());registration.addProperty("descriptor",binding.registrationDescriptor());
             value.add("registration",registration);bindings.add(value);
