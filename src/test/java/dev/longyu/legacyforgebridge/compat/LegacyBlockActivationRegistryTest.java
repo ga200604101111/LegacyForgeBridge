@@ -30,12 +30,12 @@ class LegacyBlockActivationRegistryTest {
                 instruction(LegacyBlockActivationCompiler.Op.IRETURN, 0)));
         LegacyBlockActivationRegistry.installForTests(id, program);
 
-        assertEquals(Boolean.FALSE, LegacyBlockActivationRegistry.handled(id, 0, hit(Direction.DOWN)));
-        assertEquals(Boolean.TRUE, LegacyBlockActivationRegistry.handled(id, 0, hit(Direction.UP)));
-        assertEquals(Boolean.FALSE, LegacyBlockActivationRegistry.handled(id, 0, hit(Direction.NORTH)));
-        assertEquals(Boolean.TRUE, LegacyBlockActivationRegistry.handled(id, 0, hit(Direction.SOUTH)));
-        assertEquals(Boolean.FALSE, LegacyBlockActivationRegistry.handled(id, 0, hit(Direction.WEST)));
-        assertEquals(Boolean.TRUE, LegacyBlockActivationRegistry.handled(id, 0, hit(Direction.EAST)));
+        assertEquals(Boolean.FALSE, LegacyBlockActivationRegistry.handled(id, 0, false, hit(Direction.DOWN)));
+        assertEquals(Boolean.TRUE, LegacyBlockActivationRegistry.handled(id, 0, false, hit(Direction.UP)));
+        assertEquals(Boolean.FALSE, LegacyBlockActivationRegistry.handled(id, 0, false, hit(Direction.NORTH)));
+        assertEquals(Boolean.TRUE, LegacyBlockActivationRegistry.handled(id, 0, false, hit(Direction.SOUTH)));
+        assertEquals(Boolean.FALSE, LegacyBlockActivationRegistry.handled(id, 0, false, hit(Direction.WEST)));
+        assertEquals(Boolean.TRUE, LegacyBlockActivationRegistry.handled(id, 0, false, hit(Direction.EAST)));
     }
 
     @Test
@@ -48,14 +48,26 @@ class LegacyBlockActivationRegistryTest {
                 instruction(LegacyBlockActivationCompiler.Op.IRETURN, 0)));
         LegacyBlockActivationRegistry.installForTests(id, program);
 
-        assertEquals(Boolean.FALSE, LegacyBlockActivationRegistry.handled(id, 2, hit(Direction.UP)));
-        assertEquals(Boolean.TRUE, LegacyBlockActivationRegistry.handled(id, 3, hit(Direction.UP)));
+        assertEquals(Boolean.FALSE, LegacyBlockActivationRegistry.handled(id, 2, false, hit(Direction.UP)));
+        assertEquals(Boolean.TRUE, LegacyBlockActivationRegistry.handled(id, 3, false, hit(Direction.UP)));
+    }
+
+    @Test
+    void evaluatesLegacyIsRemoteFromModernClientSideState() {
+        Identifier id = Identifier.fromNamespaceAndPath("fixture", "side_only_gate");
+        LegacyBlockActivationCompiler.Program program = program("side_only_gate", List.of(
+                instruction(LegacyBlockActivationCompiler.Op.LOAD_CLIENT_SIDE, 0),
+                instruction(LegacyBlockActivationCompiler.Op.IRETURN, 0)));
+        LegacyBlockActivationRegistry.installForTests(id, program);
+
+        assertEquals(Boolean.FALSE, LegacyBlockActivationRegistry.handled(id, 0, false, hit(Direction.UP)));
+        assertEquals(Boolean.TRUE, LegacyBlockActivationRegistry.handled(id, 0, true, hit(Direction.UP)));
     }
 
     @Test
     void absentRuleLeavesModernBlockBehaviorUntouched() {
         Identifier id = Identifier.fromNamespaceAndPath("fixture", "missing");
-        assertNull(LegacyBlockActivationRegistry.handled(id, 0, hit(Direction.UP)));
+        assertNull(LegacyBlockActivationRegistry.handled(id, 0, false, hit(Direction.UP)));
     }
 
     private static LegacyBlockActivationCompiler.Program program(String name,
