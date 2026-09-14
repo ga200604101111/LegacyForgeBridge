@@ -22,10 +22,9 @@ public final class LegacyRecipeJsonMaterializer {
             ConversionContext context,
             LegacyOreDictionaryIndex oreDictionary
     ) {
-        List<LegacyRecipeAnalyzer.Value> args = registration.arguments().stream()
-                .map(LegacyRecipeValueResolver::resolve)
-                .toList();
-        return switch (registration.kind()) {
+        LegacyRecipeAnalyzer.Registration resolved = new LegacyRecipeValueResolver().resolve(registration);
+        List<LegacyRecipeAnalyzer.Value> args = resolved.arguments();
+        return switch (resolved.kind()) {
             case SHAPED -> shaped(args, context, oreDictionary);
             case SHAPELESS -> shapeless(args, context, oreDictionary);
             case SMELTING -> smelting(args, context, oreDictionary);
@@ -62,7 +61,7 @@ public final class LegacyRecipeJsonMaterializer {
             }
             Optional<JsonElement> ingredient = ingredient(ingredientValue, context, oreDictionary);
             if (ingredient.isEmpty()) return Optional.empty();
-            keys.put(key.value(), ingredient.get()); // Forge recipe parsing also gives the later key binding authority.
+            keys.put(key.value(), ingredient.get());
         }
 
         Set<Character> used = new LinkedHashSet<>();
