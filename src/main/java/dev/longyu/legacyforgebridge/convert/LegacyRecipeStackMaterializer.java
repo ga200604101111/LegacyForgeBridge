@@ -64,7 +64,9 @@ public final class LegacyRecipeStackMaterializer {
             try {
                 LegacyVanillaStackDataFix.ModernStack fixed = LegacyVanillaStackDataFix.upgrade(
                         registry.registryName(), stack.meta());
-                return Optional.of(new ModernStack(fixed.id(), stack.count(), fixed.components(), false));
+                JsonObject exactComponents = fixed.components().deepCopy();
+                preserveExplicitZeroDamage(registry.registryName(), stack.meta(), fixed.id(), exactComponents);
+                return Optional.of(new ModernStack(fixed.id(), stack.count(), exactComponents, false));
             } catch (RuntimeException invalidVanillaStack) {
                 return Optional.empty();
             }
@@ -82,5 +84,29 @@ public final class LegacyRecipeStackMaterializer {
             components.addProperty(LegacyStackComponents.LEGACY_META_ID.toString(), stack.meta());
         }
         return Optional.of(new ModernStack(modernId, stack.count(), components, wildcard));
+    }
+
+    /**
+     * Current ItemStack serialization omits unchanged default components. In 1.7, however, a
+     * recipe ingredient with data value 0 is still exact: an undamaged sword must not match a
+     * damaged sword. Probe data value 1 through the same DFU chain; if it proves this legacy data
+     * slot became modern DAMAGE on the same item identity, explicitly require DAMAGE=0.
+     */
+    private static void preserveExplicitZeroDamage(
+            String legacyRegistryName,
+            int meta,
+            String modernId,
+            JsonObject components
+    ) {
+        if (meta != 0 || components.has("minecraft:damage")) return;
+        LegacyVanillaStackDataFix.ModernStack one = LegacyVanillaStackDataFix.upgrade(legacyRegistryName, 1);
+        JsonElement damage = one.components().get("minecraft:damage");
+        if (modernId.equals(one.id())
+                && damage != null
+                && damage.isJsonPrimitive()
+                && damage.getAsJsonPrimitive().isNumber()
+                && damage.getAsInt() == 1) {
+            components.addProperty("minecraft:damage", 0);
+        }
     }
 }
