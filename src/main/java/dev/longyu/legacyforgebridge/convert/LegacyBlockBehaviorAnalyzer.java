@@ -43,7 +43,8 @@ public final class LegacyBlockBehaviorAnalyzer {
 
     public record Callback(CallbackKind kind, String owner, String method, String descriptor) { }
 
-    public record BlockBehavior(String registryName, String implementationClass, List<Callback> callbacks) {
+    public record BlockBehavior(String registryName, String legacyNamespace, String implementationClass,
+                                List<Callback> callbacks) {
         public BlockBehavior { callbacks = List.copyOf(callbacks); }
     }
 
@@ -132,7 +133,8 @@ public final class LegacyBlockBehaviorAnalyzer {
                     Callback callback = effective.get(kind);
                     if (callback != null) callbacks.add(callback);
                 }
-                output.add(new BlockBehavior(registration.registryName(), implementation, callbacks));
+                output.add(new BlockBehavior(registration.registryName(), registration.legacyNamespace(),
+                        implementation, callbacks));
             }
         }
 
