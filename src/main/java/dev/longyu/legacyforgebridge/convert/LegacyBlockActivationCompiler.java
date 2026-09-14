@@ -4,6 +4,7 @@ import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.FieldInsnNode;
 import org.objectweb.asm.tree.IntInsnNode;
 import org.objectweb.asm.tree.JumpInsnNode;
 import org.objectweb.asm.tree.LabelNode;
@@ -30,11 +31,12 @@ import java.util.jar.JarFile;
  * Compiles a bounded source-independent subset of Minecraft 1.7 {@code Block#onBlockActivated}.
  *
  * <p>The admitted slice may make a boolean decision from the clicked legacy side, integer
- * temporaries/constants and the raw metadata of the block being activated. Metadata is admitted
- * only for the exact bytecode sequence {@code world.getBlockMetadata(x, y, z)} using the callback's
- * own World/x/y/z arguments, so neighboring-world reads cannot be mistaken for local block state.
- * Source Block instance state, player state, hit-vector floats, arbitrary fields/methods,
- * allocations, world mutation and loops remain fail-closed.</p>
+ * temporaries/constants, the raw metadata of the block being activated, and the legacy world's
+ * client/server-side flag. Metadata is admitted only for the exact bytecode sequence
+ * {@code world.getBlockMetadata(x, y, z)} using the callback's own World/x/y/z arguments. The
+ * client-side flag is admitted only for the exact {@code world.isRemote} field read from that same
+ * callback World. Neighbor reads, source Block instance state, player state, hit-vector floats,
+ * arbitrary fields/methods, allocations, world mutation and loops remain fail-closed.</p>
  */
 public final class LegacyBlockActivationCompiler {
     private static final int MAX_INSTRUCTIONS = 96;
@@ -46,6 +48,7 @@ public final class LegacyBlockActivationCompiler {
         NOP,
         LOAD_INT,
         LOAD_META,
+        LOAD_CLIENT_SIDE,
         STORE_INT,
         CONST_INT,
         IADD,
@@ -96,16 +99,27 @@ public final class LegacyBlockActivationCompiler {
     ) {
         public Program { instructions = List.copyOf(instructions); }
 
-        /** Convenience evaluator for programs that provably do not depend on block metadata. */
+        /** Convenience evaluator for programs that depend only on clicked side and integer locals. */
         public boolean evaluate(int side) {
-            if (instructions.stream().anyMatch(instruction -> instruction.op() == Op.LOAD_META)) {
+            if (requires(Op.LOAD_META)) {
                 throw new IllegalStateException("Activation program requires legacy block metadata");
             }
-            return evaluate(side, 0);
+            if (requires(Op.LOAD_CLIENT_SIDE)) {
+                throw new IllegalStateException("Activation program requires client/server side");
+            }
+            return evaluate(side, 0, false);
+        }
+
+        /** Convenience evaluator for programs that do not depend on client/server side. */
+        public boolean evaluate(int side, int metadata) {
+            if (requires(Op.LOAD_CLIENT_SIDE)) {
+                throw new IllegalStateException("Activation program requires client/server side");
+            }
+            return evaluate(side, metadata, false);
         }
 
         /** Pure evaluator shared by tests and the modern runtime adapter. */
-        public boolean evaluate(int side, int metadata) {
+        public boolean evaluate(int side, int metadata, boolean clientSide) {
             if (side < 0 || side > 5) {
                 throw new IllegalArgumentException("Legacy side outside 0..5: " + side);
             }
@@ -130,6 +144,7 @@ public final class LegacyBlockActivationCompiler {
                         stack.push(value);
                     }
                     case LOAD_META -> stack.push(metadata);
+                    case LOAD_CLIENT_SIDE -> stack.push(clientSide ? 1 : 0);
                     case STORE_INT -> locals.put(instruction.operand(), stack.pop());
                     case CONST_INT -> stack.push(instruction.operand());
                     case IADD -> stack.push(binary(stack, (left, right) -> left + right));
@@ -182,6 +197,10 @@ public final class LegacyBlockActivationCompiler {
                 pc++;
             }
             throw new IllegalStateException("Activation program terminated without IRETURN");
+        }
+
+        private boolean requires(Op op) {
+            return instructions.stream().anyMatch(instruction -> instruction.op() == op);
         }
     }
 
@@ -250,6 +269,12 @@ public final class LegacyBlockActivationCompiler {
                 i += 4;
                 continue;
             }
+            if (matchesClientSideRead(real, i)) {
+                output.add(simple(Op.NOP, 0));
+                output.add(simple(Op.LOAD_CLIENT_SIDE, 0));
+                i += 1;
+                continue;
+            }
 
             AbstractInsnNode instruction = real.get(i);
             int opcode = instruction.getOpcode();
@@ -316,6 +341,16 @@ public final class LegacyBlockActivationCompiler {
                 && WORLD.equals(call.owner)
                 && ("getBlockMetadata".equals(call.name) || "func_72805_g".equals(call.name))
                 && METADATA_DESCRIPTOR.equals(call.desc);
+    }
+
+    private static boolean matchesClientSideRead(List<AbstractInsnNode> instructions, int index) {
+        if (index + 1 >= instructions.size()) return false;
+        return isVar(instructions.get(index), Opcodes.ALOAD, 1)
+                && instructions.get(index + 1) instanceof FieldInsnNode field
+                && field.getOpcode() == Opcodes.GETFIELD
+                && WORLD.equals(field.owner)
+                && ("isRemote".equals(field.name) || "field_72995_K".equals(field.name))
+                && "Z".equals(field.desc);
     }
 
     private static boolean isVar(AbstractInsnNode instruction, int opcode, int local) {
