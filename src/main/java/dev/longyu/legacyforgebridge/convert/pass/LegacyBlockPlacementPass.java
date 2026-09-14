@@ -30,6 +30,11 @@ public final class LegacyBlockPlacementPass implements ConversionPass {
         LegacyBlockPlacementCompiler.Analysis blockAnalysis = new LegacyBlockPlacementCompiler().compile(context.sourceJar());
         LegacyItemBlockPlacementAnalyzer.Analysis itemAnalysis = new LegacyItemBlockPlacementAnalyzer().analyze(context.sourceJar());
 
+        // A resource-only or item-only JAR has no block placement semantic surface. The underlying
+        // registry analyzer deliberately reports "no concrete GameRegistry registrations" for its
+        // own standalone use; that absence is not a conversion warning for this optional pass.
+        if (blockAnalysis.programs().isEmpty() && itemAnalysis.behaviors().isEmpty()) return;
+
         Map<String, LegacyItemBlockPlacementAnalyzer.Behavior> itemByLegacyId = new LinkedHashMap<>();
         for (var behavior : itemAnalysis.behaviors()) {
             itemByLegacyId.put(legacyId(context, behavior.legacyNamespace(), behavior.registryName()), behavior);
