@@ -11,7 +11,8 @@
     "ViaModernModItemBoundaryMixin",
     "SpecialModelRenderersMixin",
     "LegacyLivingBehaviorMixin",
-    "LegacyHurtBehaviorMixin"
+    "LegacyHurtBehaviorMixin",
+    "LegacyLocalPlayerSoundMixin"
   ],
   "injectors": {
     "defaultRequire": 1
