@@ -27,7 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class LegacyBlockActivationPassTest {
     @TempDir Path tempDir;
 
-    @Test void materializesPureSideDecisionAndSkipsWorldDependentActivation() throws Exception {
+    @Test void materializesPureSideDecisionAndSkipsArbitraryWorldDependentActivation() throws Exception {
         Path jar = tempDir.resolve("fixture.jar");
         try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(jar))) {
             put(out, "foreign/use/SideGate.class", sideGate());
@@ -98,7 +98,7 @@ class LegacyBlockActivationPassTest {
                 "(Lnet/minecraft/world/World;IIILnet/minecraft/entity/player/EntityPlayer;IFFF)Z", null, null);
         method.visitCode();
         method.visitVarInsn(Opcodes.ALOAD, 1);
-        method.visitFieldInsn(Opcodes.GETFIELD, "net/minecraft/world/World", "isRemote", "Z");
+        method.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "net/minecraft/world/World", "isDaytime", "()Z", false);
         method.visitInsn(Opcodes.IRETURN);
         method.visitMaxs(1, 10);
         method.visitEnd();
