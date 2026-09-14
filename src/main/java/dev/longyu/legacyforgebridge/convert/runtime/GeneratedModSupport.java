@@ -3,6 +3,7 @@ package dev.longyu.legacyforgebridge.convert.runtime;
 import dev.longyu.legacyforgebridge.LegacyForgeBridge;
 import dev.longyu.legacyforgebridge.behavior.ConvertedBehaviorItem;
 import dev.longyu.legacyforgebridge.behavior.LegacyBehaviorRegistry;
+import dev.longyu.legacyforgebridge.compat.LegacyFuelRegistry;
 import dev.longyu.legacyforgebridge.compat.LegacyStackComponents;
 import net.fabricmc.fabric.api.itemgroup.v1.FabricItemGroup;
 import net.minecraft.core.Registry;
@@ -71,13 +72,8 @@ public final class GeneratedModSupport {
         }
         if("sword".equals(kind)){
             properties.sword(ToolMaterial.DIAMOND,attackDamage-ToolMaterial.DIAMOND.attackDamageBonus(),attackSpeed);
-            // Minecraft 1.7.10 has no player-visible attack-speed stat. Preserve the modern
-            // attribute internally for client/protocol mechanics, but never expose that newer
-            // stat as a tooltip row on a converted legacy weapon.
             properties.attributes(legacyWeaponAttributes(attackDamage,attackSpeed));
         }
-        // The admitted source hit callback includes its own inherited sword wear.
-        // Native postHurtEnemy must not apply a second durability charge.
         if(source!=null && source.hooks().contains("hit"))properties.component(DataComponents.WEAPON,new Weapon(0));
         int sourceSlot=source==null?-1:source.item().armorSlot;
         EquipmentSlot slot=switch(sourceSlot){case 0->EquipmentSlot.HEAD;case 1->EquipmentSlot.CHEST;case 2->EquipmentSlot.LEGS;case 3->EquipmentSlot.FEET;default->null;};
@@ -115,6 +111,7 @@ public final class GeneratedModSupport {
         int[] counts=COUNTS.get(id.getNamespace());if(counts!=null)counts[2]++;
     }
     public static void finishMod(String modId){
+        LegacyFuelRegistry.loadMod(modId);
         int[] counts=COUNTS.getOrDefault(modId,new int[3]);
         LegacyForgeBridge.LOGGER.info("Generated converted mod initialized: mod={}, generatedItems={}, generatedBlocks={}, generatedCreativeTabs={}, sourceBehaviors={}",modId,counts[0],counts[1],counts[2],LegacyBehaviorRegistry.itemCount(modId));
     }
