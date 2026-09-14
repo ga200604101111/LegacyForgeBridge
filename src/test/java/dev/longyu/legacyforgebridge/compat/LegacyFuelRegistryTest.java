@@ -14,8 +14,11 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 class LegacyFuelRegistryTest {
     @BeforeAll static void bootstrapMinecraft() {
         SharedConstants.tryDetectVersion();
-        Bootstrap.bootStrap();
+        // Production registers LFB-owned data components during mod initialization, before
+        // Minecraft freezes the built-in registries. Keep the unit-test bootstrap in that same
+        // order; registering legacy_meta after Bootstrap.bootStrap() is intentionally illegal.
         LegacyStackComponents.bootstrap();
+        Bootstrap.bootStrap();
     }
 
     @AfterEach void clear() {
