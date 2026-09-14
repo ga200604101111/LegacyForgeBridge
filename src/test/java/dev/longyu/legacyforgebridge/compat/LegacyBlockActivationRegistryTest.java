@@ -30,12 +30,12 @@ class LegacyBlockActivationRegistryTest {
                 instruction(LegacyBlockActivationCompiler.Op.IRETURN, 0)));
         LegacyBlockActivationRegistry.installForTests(id, program);
 
-        assertEquals(Boolean.FALSE, LegacyBlockActivationRegistry.handled(id, 0, false, hit(Direction.DOWN)));
-        assertEquals(Boolean.TRUE, LegacyBlockActivationRegistry.handled(id, 0, false, hit(Direction.UP)));
-        assertEquals(Boolean.FALSE, LegacyBlockActivationRegistry.handled(id, 0, false, hit(Direction.NORTH)));
-        assertEquals(Boolean.TRUE, LegacyBlockActivationRegistry.handled(id, 0, false, hit(Direction.SOUTH)));
-        assertEquals(Boolean.FALSE, LegacyBlockActivationRegistry.handled(id, 0, false, hit(Direction.WEST)));
-        assertEquals(Boolean.TRUE, LegacyBlockActivationRegistry.handled(id, 0, false, hit(Direction.EAST)));
+        assertEquals(Boolean.FALSE, LegacyBlockActivationRegistry.handled(id, 0, false, false, hit(Direction.DOWN)));
+        assertEquals(Boolean.TRUE, LegacyBlockActivationRegistry.handled(id, 0, false, false, hit(Direction.UP)));
+        assertEquals(Boolean.FALSE, LegacyBlockActivationRegistry.handled(id, 0, false, false, hit(Direction.NORTH)));
+        assertEquals(Boolean.TRUE, LegacyBlockActivationRegistry.handled(id, 0, false, false, hit(Direction.SOUTH)));
+        assertEquals(Boolean.FALSE, LegacyBlockActivationRegistry.handled(id, 0, false, false, hit(Direction.WEST)));
+        assertEquals(Boolean.TRUE, LegacyBlockActivationRegistry.handled(id, 0, false, false, hit(Direction.EAST)));
     }
 
     @Test
@@ -48,8 +48,8 @@ class LegacyBlockActivationRegistryTest {
                 instruction(LegacyBlockActivationCompiler.Op.IRETURN, 0)));
         LegacyBlockActivationRegistry.installForTests(id, program);
 
-        assertEquals(Boolean.FALSE, LegacyBlockActivationRegistry.handled(id, 2, false, hit(Direction.UP)));
-        assertEquals(Boolean.TRUE, LegacyBlockActivationRegistry.handled(id, 3, false, hit(Direction.UP)));
+        assertEquals(Boolean.FALSE, LegacyBlockActivationRegistry.handled(id, 2, false, false, hit(Direction.UP)));
+        assertEquals(Boolean.TRUE, LegacyBlockActivationRegistry.handled(id, 3, false, false, hit(Direction.UP)));
     }
 
     @Test
@@ -60,14 +60,26 @@ class LegacyBlockActivationRegistryTest {
                 instruction(LegacyBlockActivationCompiler.Op.IRETURN, 0)));
         LegacyBlockActivationRegistry.installForTests(id, program);
 
-        assertEquals(Boolean.FALSE, LegacyBlockActivationRegistry.handled(id, 0, false, hit(Direction.UP)));
-        assertEquals(Boolean.TRUE, LegacyBlockActivationRegistry.handled(id, 0, true, hit(Direction.UP)));
+        assertEquals(Boolean.FALSE, LegacyBlockActivationRegistry.handled(id, 0, false, false, hit(Direction.UP)));
+        assertEquals(Boolean.TRUE, LegacyBlockActivationRegistry.handled(id, 0, true, false, hit(Direction.UP)));
+    }
+
+    @Test
+    void evaluatesLegacySneakingFromModernPlayerState() {
+        Identifier id = Identifier.fromNamespaceAndPath("fixture", "sneak_gate");
+        LegacyBlockActivationCompiler.Program program = program("sneak_gate", List.of(
+                instruction(LegacyBlockActivationCompiler.Op.LOAD_SNEAKING, 0),
+                instruction(LegacyBlockActivationCompiler.Op.IRETURN, 0)));
+        LegacyBlockActivationRegistry.installForTests(id, program);
+
+        assertEquals(Boolean.FALSE, LegacyBlockActivationRegistry.handled(id, 0, false, false, hit(Direction.UP)));
+        assertEquals(Boolean.TRUE, LegacyBlockActivationRegistry.handled(id, 0, false, true, hit(Direction.UP)));
     }
 
     @Test
     void absentRuleLeavesModernBlockBehaviorUntouched() {
         Identifier id = Identifier.fromNamespaceAndPath("fixture", "missing");
-        assertNull(LegacyBlockActivationRegistry.handled(id, 0, false, hit(Direction.UP)));
+        assertNull(LegacyBlockActivationRegistry.handled(id, 0, false, false, hit(Direction.UP)));
     }
 
     private static LegacyBlockActivationCompiler.Program program(String name,
