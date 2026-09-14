@@ -12,6 +12,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
       - name: Verify committed source diff hygiene
         run: git diff --check HEAD^
       - uses: actions/setup-java@v5
