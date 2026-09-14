@@ -3,12 +3,15 @@ name: rename-package-namespace
 on:
   push:
     branches: [ rename-longyu-to-yinghuang ]
+  pull_request:
+    branches: [ main ]
 
 permissions:
   contents: write
 
 jobs:
   rename-and-verify:
+    if: github.event_name == 'push' || github.event.pull_request.head.ref == 'rename-longyu-to-yinghuang'
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout branch
