@@ -41,7 +41,7 @@ public final class LegacyBehaviorCompiler {
             Map.entry("net/minecraftforge/event/entity/EntityEvent","Event"),
             Map.entry("net/minecraftforge/event/entity/PlaySoundAtEntityEvent","Event"));
     private static final Set<String> JDK=Set.of("java/lang/Object","java/lang/String","java/lang/StringBuilder","java/lang/StringBuffer",
-            "java/lang/Integer","java/lang/Long","java/lang/Float","java/lang/Double","java/lang/Boolean","java/lang/Math",
+            "java/lang/Integer","java/lang/Long","java/lang/Short","java/lang/Float","java/lang/Double","java/lang/Boolean","java/lang/Math",
             "java/util/UUID","com/google/common/collect/Multimap","java/util/List","java/util/ArrayList","java/util/HashMap","java/util/Map","java/util/Iterator","java/util/Random","java/util/Collection");
     private static final Map<String,String> NAMES=Map.ofEntries(
             Map.entry("addInformation","func_77624_a"),Map.entry("onUpdate","func_77663_a"),
@@ -49,7 +49,8 @@ public final class LegacyBehaviorCompiler {
             Map.entry("getMaxItemUseDuration","func_77626_a"),Map.entry("onPlayerStoppedUsing","func_77615_a"),Map.entry("hitEntity","func_77644_a"));
     private final Map<String,Clazz> classes=new LinkedHashMap<>();
     private final Set<Ref> selected=new LinkedHashSet<>(),fields=new LinkedHashSet<>();
-    private final Set<String> included=new LinkedHashSet<>(),syntheticParentConstructors=new LinkedHashSet<>();
+    private final Set<String> included=new LinkedHashSet<>(),syntheticParentConstructors=new LinkedHashSet<>(),syntheticNameConstructors=new LinkedHashSet<>();
+    private final Map<Ref,LegacyConstantNameTableAnalyzer.Table> constantNameTables=new LinkedHashMap<>();
     private final List<String> diagnostics=new ArrayList<>();
     private String prefix;
     public record ItemBinding(String id,String sourceClass,Set<String> hooks,LegacyItemRenderAnalyzer.ItemAllocation allocation) {
@@ -70,8 +71,11 @@ public final class LegacyBehaviorCompiler {
         return compile(source,mod,bootstrap,itemIds,List.of());
     }
     public Result compile(Path source,String mod,String bootstrap,Map<String,String> itemIds,List<LegacyItemRenderAnalyzer.ItemAllocation> provenAllocations) throws IOException {
-        classes.clear();selected.clear();fields.clear();included.clear();syntheticParentConstructors.clear();diagnostics.clear();
+        classes.clear();selected.clear();fields.clear();included.clear();syntheticParentConstructors.clear();syntheticNameConstructors.clear();constantNameTables.clear();diagnostics.clear();
         prefix=bootstrap+"Source/";
+        var constantAnalysis=new LegacyConstantNameTableAnalyzer().analyze(source);
+        diagnostics.addAll(constantAnalysis.diagnostics());
+        for(var table:constantAnalysis.tables())constantNameTables.put(new Ref(table.field().owner(),table.field().name(),table.field().descriptor()),table);
         LegacyEventAnalyzer.Analysis eventAnalysis=new LegacyEventAnalyzer().analyze(source);
         diagnostics.addAll(eventAnalysis.diagnostics());
         Map<String,Set<String>> selfRegisterCtors=new LinkedHashMap<>();
@@ -263,6 +267,15 @@ public final class LegacyBehaviorCompiler {
                 include(r.owner);field(new Ref(c.parent,r.name,r.desc));return;
             }
             include(r.owner);fields.add(r);
+            var table=constantNameTables.get(r);
+            if(table!=null){
+                Clazz value=classes.get(table.valueType());
+                Ref nameField=new Ref(table.valueType(),table.nameField(),"Ljava/lang/String;");
+                FieldInfo nameInfo=value==null?null:value.fields.get(nameField);
+                if(value==null||!"java/lang/Object".equals(value.parent)||nameInfo==null||(nameInfo.access&Opcodes.ACC_STATIC)!=0)
+                    throw new IllegalArgumentException("Unsupported constant name-table value type "+table.valueType());
+                include(table.valueType());fields.add(nameField);syntheticNameConstructors.add(table.valueType());
+            }
             if((info.access&Opcodes.ACC_STATIC)!=0&&info.value==null&&collectionInitializer(r)==null)
                 throw new IllegalArgumentException("Unproven static field initializer "+r);
         }else {
@@ -339,12 +352,28 @@ public final class LegacyBehaviorCompiler {
         }
         if(!staticCollections.isEmpty()){
             MethodVisitor m=w.visitMethod(Opcodes.ACC_STATIC,"<clinit>","()V",null,null);m.visitCode();
-            for(Ref f:staticCollections){String init=collectionInitializer(f);m.visitTypeInsn(Opcodes.NEW,init);m.visitInsn(Opcodes.DUP);m.visitMethodInsn(Opcodes.INVOKESPECIAL,init,"<init>","()V",false);m.visitFieldInsn(Opcodes.PUTSTATIC,mapped(type),f.name,descriptor(f.desc));}
+            for(Ref f:staticCollections){
+                String init=collectionInitializer(f);m.visitTypeInsn(Opcodes.NEW,init);m.visitInsn(Opcodes.DUP);m.visitMethodInsn(Opcodes.INVOKESPECIAL,init,"<init>","()V",false);m.visitFieldInsn(Opcodes.PUTSTATIC,mapped(type),f.name,descriptor(f.desc));
+                var table=constantNameTables.get(f);
+                if(table!=null)for(var entry:table.entries()){
+                    m.visitFieldInsn(Opcodes.GETSTATIC,mapped(type),f.name,descriptor(f.desc));
+                    m.visitLdcInsn((int)entry.id());m.visitInsn(Opcodes.I2S);m.visitMethodInsn(Opcodes.INVOKESTATIC,"java/lang/Short","valueOf","(S)Ljava/lang/Short;",false);
+                    m.visitTypeInsn(Opcodes.NEW,mapped(table.valueType()));m.visitInsn(Opcodes.DUP);m.visitLdcInsn(entry.name());m.visitMethodInsn(Opcodes.INVOKESPECIAL,mapped(table.valueType()),"<init>","(Ljava/lang/String;)V",false);
+                    m.visitMethodInsn(Opcodes.INVOKEVIRTUAL,"java/util/HashMap","put","(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",false);m.visitInsn(Opcodes.POP);
+                }
+            }
             m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();
         }
         if(syntheticParentConstructors.contains(type)){
             MethodVisitor constructor=w.visitMethod(Opcodes.ACC_PUBLIC,"<init>","()V",null,null);constructor.visitCode();
             constructor.visitVarInsn(Opcodes.ALOAD,0);constructor.visitMethodInsn(Opcodes.INVOKESPECIAL,mapped(c.parent),"<init>","()V",false);
+            constructor.visitInsn(Opcodes.RETURN);constructor.visitMaxs(0,0);constructor.visitEnd();
+        }
+        if(syntheticNameConstructors.contains(type)){
+            var table=constantNameTables.values().stream().filter(value->value.valueType().equals(type)).findFirst().orElseThrow();
+            MethodVisitor constructor=w.visitMethod(Opcodes.ACC_PUBLIC,"<init>","(Ljava/lang/String;)V",null,null);constructor.visitCode();
+            constructor.visitVarInsn(Opcodes.ALOAD,0);constructor.visitMethodInsn(Opcodes.INVOKESPECIAL,"java/lang/Object","<init>","()V",false);
+            constructor.visitVarInsn(Opcodes.ALOAD,0);constructor.visitVarInsn(Opcodes.ALOAD,1);constructor.visitFieldInsn(Opcodes.PUTFIELD,mapped(type),table.nameField(),"Ljava/lang/String;");
             constructor.visitInsn(Opcodes.RETURN);constructor.visitMaxs(0,0);constructor.visitEnd();
         }
         new ClassReader(c.bytes).accept(new ClassVisitor(Opcodes.ASM9){
