@@ -1,5 +1,7 @@
 # alpha.25 工作暫存／下次接續
 
+> 此為暫停時的歷史快照。2026-09-14 已接續完成描述／武器／裝備回呼整合；目前驗證與尚待實機驗收的界線見 [ALPHA25-COMPLETED-BEHAVIOR.md](ALPHA25-COMPLETED-BEHAVIOR.md)。
+
 狀態：依使用者要求暫停，只保存目前修改。這是 WIP 原始碼快照，不是已通過建置或可安裝的發行版。
 
 分支：`feature/runtime-content-conversion-rpgtool`。

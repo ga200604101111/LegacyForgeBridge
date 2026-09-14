@@ -1,19 +1,27 @@
 package dev.longyu.legacyforgebridge.behavior;
 
-import com.google.gson.JsonElement;
-import com.mojang.serialization.JsonOps;
 import dev.longyu.legacyforgebridge.LegacyForgeBridge;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LightningBolt;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.resources.Identifier;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.sounds.SoundEvent;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
@@ -55,16 +63,7 @@ public final class LegacyBehaviorRuntime {
     public static LegacyBehaviorApi.Tag tag(ItemStack stack) {
         CustomData data=stack.get(DataComponents.CUSTOM_DATA);
         if(data==null) return null;
-        JsonElement json=NbtOps.INSTANCE.convertTo(JsonOps.INSTANCE,data.copyTag());
-        if(!json.isJsonObject()) return null;
-        Map<String,Object> values=new LinkedHashMap<>();
-        json.getAsJsonObject().entrySet().forEach(e->{
-            if(e.getValue().isJsonPrimitive()) {
-                var p=e.getValue().getAsJsonPrimitive();
-                values.put(e.getKey(),p.isString()?p.getAsString():p.isBoolean()?(byte)(p.getAsBoolean()?1:0):p.getAsNumber());
-            } else values.put(e.getKey(),e.getValue());
-        });
-        return new LegacyBehaviorApi.Tag(values);
+        return LegacyTagAdapter.read(data.copyTag());
     }
     public static LegacyBehaviorApi.UseAction action(String id,LegacyBehaviorApi.Tag tag) {
         var d=LegacyBehaviorRegistry.item(id);
@@ -94,14 +93,45 @@ public final class LegacyBehaviorRuntime {
             return true;
         },false);
     }
-    public static boolean startUse(ItemStack stack,Player player) {
-        var d=definition(stack);if(d==null||!d.hooks().contains("use"))return false;
-        Snapshot s=new Snapshot(player.level());LegacyBehaviorApi.Player p=(LegacyBehaviorApi.Player)s.living(player);
-        LegacyBehaviorApi.Stack input=s.stack(stack);
-        boolean completed=invoke(d.mod(),"use",()->{d.item().func_77659_a(input,s.world,p);return true;},false);
-        if(completed)s.commit();
-        return completed&&p.requestedUse==input&&p.requestedDuration>0;
+    public record UseOutcome(boolean handled, boolean sustained) { }
+
+    public static UseOutcome use(ItemStack stack, Player player, InteractionHand hand) {
+        var definition = definition(stack);
+        if (definition == null || !definition.hooks().contains("use")) return new UseOutcome(false, false);
+        Snapshot snapshot = new Snapshot(player.level());
+        var actor = (LegacyBehaviorApi.Player) snapshot.living(player);
+        var input = snapshot.stack(stack);
+        LegacyBehaviorApi.Stack[] output = {input};
+        ItemStack[] replacement = {stack};
+        boolean completed = invoke(definition.mod(), "use", () -> {
+            output[0] = definition.item().func_77659_a(input, snapshot.world, actor);
+            if (output[0] != input) replacement[0] = snapshot.materialize(output[0]);
+            return true;
+        }, false);
+        if (!completed) return new UseOutcome(false, false);
+        snapshot.commit();
+        // Inventory/NBT changes on a remote Forge server remain server-authoritative.
+        if (!player.level().isClientSide() && output[0] != input) player.setItemInHand(hand, replacement[0]);
+        return new UseOutcome(true, actor.requestedUse == input && actor.requestedDuration > 0
+                && output[0] == input && !stack.isEmpty());
     }
+
+    public static boolean startUse(ItemStack stack, Player player) {
+        return use(stack, player, InteractionHand.MAIN_HAND).sustained();
+    }
+
+    public static void hit(ItemStack stack, LivingEntity target, LivingEntity attacker) {
+        var definition = definition(stack);
+        if (attacker.level().isClientSide() || definition == null || !definition.hooks().contains("hit")) return;
+        Snapshot snapshot = new Snapshot(attacker.level());
+        var victim = snapshot.living(target);
+        var actor = snapshot.living(attacker);
+        if (invoke(definition.mod(), "hit", () -> {
+            definition.item().func_77644_a(snapshot.stack(stack), victim, actor);
+            return true;
+        }, false)) snapshot.commit();
+    }
+
     public static void release(ItemStack stack,LivingEntity entity,int remaining) {
         var d=definition(stack);if(d==null||!d.hooks().contains("release")||!(entity instanceof Player player))return;
         // Remote 1.7.10 servers execute the original skill release. Never run server effects twice.
@@ -111,21 +141,26 @@ public final class LegacyBehaviorRuntime {
     }
     public static void inventoryTick(Player player) {
         if(player.level().isClientSide())return;
-        Snapshot s=new Snapshot(player.level());var p=(LegacyBehaviorApi.Player)s.living(player);
-        for(int index=0;index<player.getInventory().getContainerSize();index++) {
-            ItemStack item=player.getInventory().getItem(index);var d=definition(item);if(d==null)continue;
-            final int slot=index;
-            if(d.hooks().contains("tick"))invoke(d.mod(),"tick",()->{
-                d.item().func_77663_a(s.stack(item),s.world,p,slot,item==player.getMainHandItem());return true;
-            },false);
+        // Old InventoryPlayer.onUpdate visited the 36 main slots, not armor and offhand.
+        for (int index = 0; index < Math.min(36, player.getInventory().getContainerSize()); index++) {
+            tick(player, player.getInventory().getItem(index), index, false);
         }
-        for(EquipmentSlot slot:List.of(EquipmentSlot.HEAD,EquipmentSlot.CHEST,EquipmentSlot.LEGS,EquipmentSlot.FEET)) {
-            ItemStack item=player.getItemBySlot(slot);var d=definition(item);
-            if(d!=null&&d.hooks().contains("armorTick"))invoke(d.mod(),"armorTick",()->{
-                d.item().onArmorTick(s.world,p,s.stack(item));return true;
-            },false);
+        for (EquipmentSlot slot : List.of(EquipmentSlot.FEET, EquipmentSlot.LEGS, EquipmentSlot.CHEST, EquipmentSlot.HEAD)) {
+            tick(player, player.getItemBySlot(slot), -1, true);
         }
-        s.commit();
+    }
+    private static void tick(Player player, ItemStack item, int index, boolean armor) {
+        var definition = definition(item);
+        String hook = armor ? "armorTick" : "tick";
+        if (definition == null || !definition.hooks().contains(hook)) return;
+        Snapshot snapshot = new Snapshot(player.level());
+        var actor = (LegacyBehaviorApi.Player) snapshot.living(player);
+        if (invoke(definition.mod(), hook, () -> {
+            if (armor) definition.item().onArmorTick(snapshot.world, actor, snapshot.stack(item));
+            else definition.item().func_77663_a(snapshot.stack(item), snapshot.world, actor, index,
+                    index == player.getInventory().getSelectedSlot());
+            return true;
+        }, false)) snapshot.commit();
     }
     public static void jump(LivingEntity entity) {
         if(!clientActorAllowed(entity))return;
@@ -147,84 +182,234 @@ public final class LegacyBehaviorRuntime {
     private static java.util.function.Predicate<LivingEntity> localPlayer=e->false;
     public static void setLocalPlayer(java.util.function.Predicate<LivingEntity> value){localPlayer=value;}
     private static LegacyBehaviorApi.Event runEvent(String kind,LivingEntity entity,DamageSource source,float amount,float distance,float multiplier) {
-        Snapshot s=new Snapshot(entity.level());var e=new LegacyBehaviorApi.Event();
-        e.entityLiving=s.living(entity);e.ammount=amount;e.distance=distance;e.damageMultiplier=multiplier;
-        if(source!=null)e.source.attacker=s.entity(source.getEntity());
-        for(var program:LegacyBehaviorRegistry.events(kind)) {
-            if(e.isCanceled())break;
-            invoke(program.mod(),"event/"+kind,()->{program.program().run(e);return true;},false);
+        var result = new LegacyBehaviorApi.Event();
+        result.ammount = amount;
+        result.distance = distance;
+        result.damageMultiplier = multiplier;
+        for (var program : LegacyBehaviorRegistry.events(kind)) {
+            if (result.isCanceled()) break;
+            Snapshot snapshot = new Snapshot(entity.level());
+            var event = new LegacyBehaviorApi.Event();
+            event.entityLiving = snapshot.living(entity);
+            event.ammount = result.ammount;
+            event.distance = result.distance;
+            event.damageMultiplier = result.damageMultiplier;
+            if (source != null) event.source.attacker = snapshot.entity(source.getEntity());
+            if (invoke(program.mod(), "event/" + kind, () -> { program.program().run(event); return true; }, false)) {
+                snapshot.commit();
+                result = event;
+            }
         }
-        s.commit();return e;
+        return result;
     }
-    private static Holder<MobEffect> effect(int id){return switch(id){case 16->MobEffects.NIGHT_VISION;case 13->MobEffects.WATER_BREATHING;default->null;};}
+    private static Holder<MobEffect> effect(int id) {
+        return switch(id) {
+            case 16 -> MobEffects.NIGHT_VISION;
+            case 13 -> MobEffects.WATER_BREATHING;
+            case 19 -> MobEffects.POISON;
+            case 20 -> MobEffects.WITHER;
+            default -> throw new IllegalArgumentException("Unsupported legacy potion ID: " + id);
+        };
+    }
+    private static SoundEvent sound(String name) {
+        return switch (name) {
+            case "random.anvil_use" -> SoundEvents.ANVIL_USE;
+            case "random.break" -> SoundEvents.ITEM_BREAK.value();
+            case "random.explode" -> SoundEvents.GENERIC_EXPLODE.value();
+            default -> throw new IllegalArgumentException("Unsupported legacy sound: " + name);
+        };
+    }
 
     private static final class Snapshot {
-        final Level level;final LegacyBehaviorApi.World world=new LegacyBehaviorApi.World();
-        final IdentityHashMap<ItemStack,LegacyBehaviorApi.Stack> stacks=new IdentityHashMap<>();
-        final IdentityHashMap<ItemStack,Map<String,Object>> originalTags=new IdentityHashMap<>();
-        final IdentityHashMap<Entity,LegacyBehaviorApi.Entity> entities=new IdentityHashMap<>();
-        Snapshot(Level level){this.level=level;world.field_72995_K=level!=null&&level.isClientSide();}
-        LegacyBehaviorApi.Stack stack(ItemStack nativeStack){
-            if(nativeStack==null||nativeStack.isEmpty())return null;
-            return stacks.computeIfAbsent(nativeStack,k->{
-                var d=definition(k);var item=d==null?new LegacyBehaviorApi.Item():d.item();
-                var s=new LegacyBehaviorApi.Stack(item,tag(k));s.field_77994_a=k.getCount();s.handle=k;
-                originalTags.put(k,s.tag==null?Map.of():new LinkedHashMap<>(s.tag.values));return s;
+        private record Original(Vec3 velocity, float health) { }
+        final Level level;
+        final LegacyBehaviorApi.World world = new LegacyBehaviorApi.World();
+        final IdentityHashMap<ItemStack, LegacyBehaviorApi.Stack> stacks = new IdentityHashMap<>();
+        final IdentityHashMap<ItemStack, Map<String, Object>> originalTags = new IdentityHashMap<>();
+        final IdentityHashMap<Entity, LegacyBehaviorApi.Entity> entities = new IdentityHashMap<>();
+        final IdentityHashMap<Entity, Original> originals = new IdentityHashMap<>();
+
+        Snapshot(Level level) {
+            this.level = level;
+            world.field_72995_K = level != null && level.isClientSide();
+            world.query = (exclude, box) -> {
+                if (level == null) return List.of();
+                Entity nativeExclude = exclude == null ? null : (Entity) exclude.handle;
+                var found = level.getEntities(nativeExclude,
+                        new AABB(box.minX(), box.minY(), box.minZ(), box.maxX(), box.maxY(), box.maxZ()),
+                        candidate -> !candidate.isRemoved());
+                if (found.size() > 512) throw new IllegalArgumentException("Source entity query budget exceeded");
+                return found.stream().map(this::entity).toList();
+            };
+        }
+        LegacyBehaviorApi.Stack stack(ItemStack nativeStack) {
+            if (nativeStack == null || nativeStack.isEmpty()) return null;
+            return stacks.computeIfAbsent(nativeStack, key -> {
+                var definition = definition(key);
+                var item = definition == null ? new LegacyBehaviorApi.Item() : definition.item();
+                var view = new LegacyBehaviorApi.Stack(item, tag(key));
+                view.field_77994_a = key.getCount();
+                view.handle = key;
+                originalTags.put(key, view.tag == null ? null : new LinkedHashMap<>(view.tag.values));
+                return view;
             });
         }
-        LegacyBehaviorApi.Entity entity(Entity entity){
-            if(entity==null)return null;if(entity instanceof LivingEntity living)return living(living);
-            return entities.computeIfAbsent(entity,k->{var e=new LegacyBehaviorApi.Entity();fill(k,e);return e;});
+        LegacyBehaviorApi.Entity entity(Entity nativeEntity) {
+            if (nativeEntity == null) return null;
+            if (nativeEntity instanceof LivingEntity living) return living(living);
+            return entities.computeIfAbsent(nativeEntity, key -> {
+                var view = new LegacyBehaviorApi.Entity(); fill(key, view); return view;
+            });
         }
-        LegacyBehaviorApi.Living living(LivingEntity nativeEntity){
-            var old=entities.get(nativeEntity);if(old!=null)return (LegacyBehaviorApi.Living)old;
-            LegacyBehaviorApi.Living e=nativeEntity instanceof Player?new LegacyBehaviorApi.Player():new LegacyBehaviorApi.Living();
-            entities.put(nativeEntity,e);fill(nativeEntity,e);e.health=nativeEntity.getHealth();
-            e.equipment[0]=stack(nativeEntity.getMainHandItem());e.equipment[1]=stack(nativeEntity.getItemBySlot(EquipmentSlot.FEET));
-            e.equipment[2]=stack(nativeEntity.getItemBySlot(EquipmentSlot.LEGS));e.equipment[3]=stack(nativeEntity.getItemBySlot(EquipmentSlot.CHEST));
-            e.equipment[4]=stack(nativeEntity.getItemBySlot(EquipmentSlot.HEAD));
-            for(int id:new int[]{13,16}){var effect=nativeEntity.getEffect(effect(id));if(effect!=null)e.effects.put(id,new LegacyBehaviorApi.Effect(id,effect.getDuration(),effect.getAmplifier()));}
-            return e;
+        LegacyBehaviorApi.Living living(LivingEntity nativeEntity) {
+            var old = entities.get(nativeEntity);
+            if (old != null) return (LegacyBehaviorApi.Living) old;
+            LegacyBehaviorApi.Living view = nativeEntity instanceof Player
+                    ? new LegacyBehaviorApi.Player() : new LegacyBehaviorApi.Living();
+            entities.put(nativeEntity, view);
+            fill(nativeEntity, view);
+            view.health = nativeEntity.getHealth();
+            view.equipment[0] = stack(nativeEntity.getMainHandItem());
+            EquipmentSlot[] armor = {EquipmentSlot.FEET, EquipmentSlot.LEGS, EquipmentSlot.CHEST, EquipmentSlot.HEAD};
+            for (int i = 0; i < armor.length; i++) view.equipment[i + 1] = stack(nativeEntity.getItemBySlot(armor[i]));
+            if (nativeEntity instanceof Player player && view instanceof LegacyBehaviorApi.Player actor) {
+                // Do not copy all 36 inventory tags for callbacks which only inspect equipment.
+                actor.field_71071_by.lookup = index -> index < 36
+                        ? stack(player.getInventory().getItem(index)) : view.equipment[index - 35];
+            }
+            for (int id : new int[]{13, 16, 19, 20}) {
+                var active = nativeEntity.getEffect(effect(id));
+                if (active != null) view.effects.put(id, new LegacyBehaviorApi.Effect(id, active.getDuration(), active.getAmplifier()));
+            }
+            return view;
         }
-        void fill(Entity nativeEntity,LegacyBehaviorApi.Entity e){
-            e.handle=nativeEntity;e.field_70170_p=world;e.field_70128_L=!nativeEntity.isAlive();e.crouching=nativeEntity.isCrouching();
-            e.field_70165_t=nativeEntity.getX();e.field_70163_u=nativeEntity.getY();e.field_70161_v=nativeEntity.getZ();
-            e.field_70181_x=nativeEntity.getDeltaMovement().y;e.field_70130_N=nativeEntity.getBbWidth();e.field_70131_O=nativeEntity.getBbHeight();
+        void fill(Entity nativeEntity, LegacyBehaviorApi.Entity view) {
+            view.handle = nativeEntity;
+            view.field_70170_p = world;
+            view.field_70128_L = !nativeEntity.isAlive();
+            view.crouching = nativeEntity.isCrouching();
+            view.burning = nativeEntity.isOnFire();
+            view.field_70165_t = nativeEntity.getX();
+            view.field_70163_u = nativeEntity.getY();
+            view.field_70161_v = nativeEntity.getZ();
+            Vec3 velocity = nativeEntity.getDeltaMovement();
+            view.field_70159_w = velocity.x; view.field_70181_x = velocity.y; view.field_70179_y = velocity.z;
+            view.field_70130_N = nativeEntity.getBbWidth(); view.field_70131_O = nativeEntity.getBbHeight();
+            var look = nativeEntity.getLookAngle();
+            view.look = new LegacyBehaviorApi.Vec(look.x, look.y, look.z);
+            var box = nativeEntity.getBoundingBox();
+            view.field_70121_D = new LegacyBehaviorApi.Box(box.minX, box.minY, box.minZ, box.maxX, box.maxY, box.maxZ);
+            originals.put(nativeEntity, new Original(velocity, nativeEntity instanceof LivingEntity living ? living.getHealth() : 0F));
         }
-        void commit(){
-            for(var pair:entities.entrySet()) {
-                Entity nativeEntity=pair.getKey();var e=pair.getValue();
-                if(Double.isFinite(e.field_70181_x)&&e.field_70181_x!=nativeEntity.getDeltaMovement().y)
-                    nativeEntity.setDeltaMovement(nativeEntity.getDeltaMovement().x,e.field_70181_x,nativeEntity.getDeltaMovement().z);
-                if(!world.field_72995_K&&nativeEntity instanceof LivingEntity living&&e instanceof LegacyBehaviorApi.Living le){
-                    if(Float.isFinite(le.health)&&le.health!=living.getHealth())living.setHealth(le.health);
-                    for(var applied:le.appliedEffects){var type=effect(applied.id);if(type!=null)living.addEffect(new MobEffectInstance(type,applied.duration,applied.amplifier));}
+        ItemStack materialize(LegacyBehaviorApi.Stack view) {
+            if (view == null || view.field_77994_a <= 0) return ItemStack.EMPTY;
+            ItemStack result;
+            if (view.handle instanceof ItemStack existing) result = existing.copy();
+            else {
+                String identity = LegacyBehaviorRegistry.identity(view.item)
+                        .orElseThrow(() -> new IllegalArgumentException("Unregistered source drop item"));
+                Identifier id = Identifier.parse(identity);
+                if (!BuiltInRegistries.ITEM.containsKey(id)) throw new IllegalArgumentException("Missing native item " + identity);
+                result = new ItemStack(BuiltInRegistries.ITEM.getValue(id));
+            }
+            if (view.field_77994_a > result.getMaxStackSize()) throw new IllegalArgumentException("Source stack exceeds native stack limit");
+            result.setCount(view.field_77994_a);
+            if (view.tag == null) result.remove(DataComponents.CUSTOM_DATA);
+            else result.set(DataComponents.CUSTOM_DATA, CustomData.of(LegacyTagAdapter.write(view.tag)));
+            return result;
+        }
+        void commit() {
+            // Resolve all potentially invalid adapters before publishing any native effects.
+            Map<LegacyBehaviorApi.Stack, CompoundTag> tags = new IdentityHashMap<>();
+            for (var view : stacks.values()) if (view.tag != null) tags.put(view, LegacyTagAdapter.write(view.tag));
+            for (var view : entities.values()) if (view instanceof LegacyBehaviorApi.Living living) {
+                for (var applied : living.appliedEffects) effect(applied.id);
+            }
+            Map<LegacyBehaviorApi.Drop, ItemStack> drops = new IdentityHashMap<>();
+            for (var command : world.commands) {
+                if (command instanceof LegacyBehaviorApi.Sound request) sound(request.name());
+                if (command instanceof LegacyBehaviorApi.Spawn spawn && spawn.entity() instanceof LegacyBehaviorApi.Drop drop)
+                    drops.put(drop, materialize(drop.stack));
+            }
+            for (var pair : entities.entrySet()) {
+                Entity nativeEntity = pair.getKey();
+                var view = pair.getValue();
+                if (nativeEntity.level() != level || nativeEntity.isRemoved()) continue;
+                Original before = originals.get(nativeEntity);
+                // The client predicts only its own movement, never another player's combat effects.
+                if (!world.field_72995_K || (nativeEntity instanceof LivingEntity living && localPlayer.test(living))) {
+                    Vec3 original = before.velocity();
+                    Vec3 current = nativeEntity.getDeltaMovement();
+                    double x = view.field_70159_w == original.x ? current.x : view.field_70159_w;
+                    double y = view.field_70181_x == original.y ? current.y : view.field_70181_x;
+                    double z = view.field_70179_y == original.z ? current.z : view.field_70179_y;
+                    if (Double.isFinite(x) && Double.isFinite(y) && Double.isFinite(z) && (x != current.x || y != current.y || z != current.z)) {
+                        nativeEntity.setDeltaMovement(x, y, z);
+                        nativeEntity.hurtMarked = true;
+                    }
+                }
+                if (!world.field_72995_K && nativeEntity instanceof LivingEntity living && view instanceof LegacyBehaviorApi.Living source) {
+                    if (Float.isFinite(source.health) && source.health != before.health()) living.setHealth(source.health);
+                    for (var applied : source.appliedEffects)
+                        living.addEffect(new MobEffectInstance(effect(applied.id), applied.duration, applied.amplifier));
+                }
+                if (nativeEntity instanceof Player player && view instanceof LegacyBehaviorApi.Player source) {
+                    for (var message : source.messages) player.displayClientMessage(LegacyText.formatted(message.text()), false);
                 }
             }
-            if(!world.field_72995_K)for(var pair:stacks.entrySet()) {
-                ItemStack nativeStack=pair.getKey();var view=pair.getValue();
-                if(view.field_77994_a>=0&&view.field_77994_a<=nativeStack.getMaxStackSize()&&view.field_77994_a!=nativeStack.getCount())nativeStack.setCount(view.field_77994_a);
-                Map<String,Object> before=originalTags.get(nativeStack);
-                if(view.tag==null){if(!before.isEmpty())nativeStack.remove(DataComponents.CUSTOM_DATA);continue;}
-                if(before.equals(view.tag.values))continue;
-                CustomData custom=nativeStack.get(DataComponents.CUSTOM_DATA);
-                CompoundTag updated=custom==null?new CompoundTag():custom.copyTag();
-                for(String key:before.keySet())if(!view.tag.values.containsKey(key))updated.remove(key);
-                for(var field:view.tag.values.entrySet()) {
-                    String key=field.getKey();Object value=field.getValue();if(Objects.equals(before.get(key),value))continue;
-                    if(value instanceof String text)updated.putString(key,text);
-                    else if(value instanceof Byte n)updated.putByte(key,n);
-                    else if(value instanceof Integer n)updated.putInt(key,n);
-                    else if(value instanceof Long n)updated.putLong(key,n);
-                    else if(value instanceof Float n&&Float.isFinite(n))updated.putFloat(key,n);
-                    else if(value instanceof Double n&&Double.isFinite(n))updated.putDouble(key,n);
+            if (!world.field_72995_K) for (var pair : stacks.entrySet()) {
+                ItemStack nativeStack = pair.getKey();
+                var view = pair.getValue();
+                Map<String, Object> before = originalTags.get(nativeStack);
+                if (view.tag == null) {
+                    if (before != null) nativeStack.remove(DataComponents.CUSTOM_DATA);
+                } else if (before == null || !before.equals(view.tag.values)) {
+                    nativeStack.set(DataComponents.CUSTOM_DATA, CustomData.of(tags.get(view)));
                 }
-                nativeStack.set(DataComponents.CUSTOM_DATA,CustomData.of(updated));
+                if (view.field_77994_a >= 0 && view.field_77994_a <= nativeStack.getMaxStackSize()) nativeStack.setCount(view.field_77994_a);
             }
-            // Legacy world.spawnParticle was a local visual effect; do not broadcast an extra server effect.
-            if(level!=null&&world.field_72995_K)for(var p:world.particles){
-                if(p.type().equals("flame"))level.addParticle(ParticleTypes.FLAME,p.x(),p.y(),p.z(),p.dx(),p.dy(),p.dz());
-                else if(WARNED.add("particle/"+p.type()))LegacyForgeBridge.LOGGER.warn("Unsupported legacy particle name: {}",p.type());
+            if (level instanceof ServerLevel server) for (var command : world.commands) {
+                if (command instanceof LegacyBehaviorApi.Attack attack) {
+                    if (attack.target().handle instanceof Entity target && target.level() == server && target.isAlive()
+                            && attack.source().attacker != null && attack.source().attacker.handle instanceof Player attacker
+                            && attacker.level() == server) {
+                        target.hurtServer(server, server.damageSources().playerAttack(attacker), attack.amount());
+                    }
+                } else if (command instanceof LegacyBehaviorApi.Durability damage) {
+                    if (damage.stack().handle instanceof ItemStack item && damage.actor().handle instanceof LivingEntity actor
+                            && actor.level() == server) {
+                        EquipmentSlot slot = EquipmentSlot.MAINHAND;
+                        for (EquipmentSlot possible : List.of(EquipmentSlot.MAINHAND, EquipmentSlot.OFFHAND, EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET)) if (actor.getItemBySlot(possible) == item) { slot = possible; break; }
+                        item.hurtAndBreak(damage.amount(), actor, slot);
+                    }
+                } else if (command instanceof LegacyBehaviorApi.Spawn spawn) {
+                    var view = spawn.entity();
+                    if (view instanceof LegacyBehaviorApi.Drop drop) {
+                        ItemStack item = drops.get(drop);
+                        if (!item.isEmpty()) {
+                            ItemEntity entity = new ItemEntity(server, view.field_70165_t, view.field_70163_u, view.field_70161_v, item);
+                            entity.setPickUpDelay(Math.max(0, drop.field_145804_b));
+                            server.addFreshEntity(entity);
+                        }
+                    } else if (view instanceof LegacyBehaviorApi.Lightning) {
+                        LightningBolt entity = new LightningBolt(EntityType.LIGHTNING_BOLT, server);
+                        entity.setPos(view.field_70165_t, view.field_70163_u, view.field_70161_v);
+                        server.addFreshEntity(entity);
+                    }
+                } else if (command instanceof LegacyBehaviorApi.Sound request) {
+                    server.playSound(null, request.x(), request.y(), request.z(), sound(request.name()), SoundSource.PLAYERS,
+                            request.volume(), request.pitch());
+                }
+            }
+            // Legacy World.spawnParticle was a client visual request, not an extra broadcast.
+            if (level != null && world.field_72995_K) for (var particle : world.particles) {
+                var type = switch (particle.type()) {
+                    case "flame" -> ParticleTypes.FLAME;
+                    case "smoke" -> ParticleTypes.SMOKE;
+                    default -> null;
+                };
+                if (type != null) level.addParticle(type, particle.x(), particle.y(), particle.z(), particle.dx(), particle.dy(), particle.dz());
+                else if (WARNED.add("particle/" + particle.type())) LegacyForgeBridge.LOGGER.warn("Unsupported legacy particle: {}", particle.type());
             }
         }
     }

@@ -3,27 +3,74 @@ package dev.longyu.legacyforgebridge.behavior;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
-/** Registrations are emitted by the converted mod. No source JAR or JSON is interpreted here. */
+/** Candidate-owned registrations, published atomically only after source constructors succeed. */
 public final class LegacyBehaviorRegistry {
-    public record ItemDefinition(String mod, LegacyBehaviorApi.Item item, Set<String> hooks) { }
+    public record ItemDefinition(String mod, LegacyBehaviorApi.Item item, Set<String> hooks) {
+        public ItemDefinition { hooks = Set.copyOf(hooks); Objects.requireNonNull(item); }
+    }
     public record EventDefinition(String mod, String kind, LegacyBehaviorApi.EventProgram program) { }
-    private static final Map<String,ItemDefinition> ITEMS=new ConcurrentHashMap<>();
-    private static final List<EventDefinition> EVENTS=new java.util.concurrent.CopyOnWriteArrayList<>();
-    private static final Set<String> MODS=ConcurrentHashMap.newKeySet();
+    private record Pending(String mod, Map<String, ItemDefinition> items, List<EventDefinition> events) { }
+    private static final Map<String,ItemDefinition> ITEMS = new ConcurrentHashMap<>();
+    private static final List<EventDefinition> EVENTS = new java.util.concurrent.CopyOnWriteArrayList<>();
+    private static final Set<String> MODS = ConcurrentHashMap.newKeySet();
+    private static final Set<String> INITIALIZING = new HashSet<>();
+    private static final ThreadLocal<Pending> PENDING = new ThreadLocal<>();
     private LegacyBehaviorRegistry() { }
-    public static boolean begin(String mod) {
-        if(!MODS.add(mod))return false;
-        LegacyBehaviorApi.begin(mod,(key,args)->key);return true;
+
+    public static synchronized boolean begin(String mod) {
+        if (MODS.contains(mod)) return false;
+        if (PENDING.get() != null || INITIALIZING.contains(mod)) throw new IllegalStateException("Nested/concurrent source bootstrap: " + mod);
+        LegacyBehaviorApi.begin(mod, (key,args) -> key);
+        PENDING.set(new Pending(mod, new LinkedHashMap<>(), new ArrayList<>()));
+        INITIALIZING.add(mod);
+        return true;
     }
-    public static void finish() { LegacyBehaviorApi.end(); }
-    public static void registerItem(String id,LegacyBehaviorApi.Item item,String hooks) {
-        ITEMS.put(id,new ItemDefinition(id.substring(0,id.indexOf(':')),item,Set.of(hooks.split(","))));
+    public static synchronized void finish() {
+        Pending pending = pending();
+        for (String id : pending.items().keySet()) {
+            if (ITEMS.containsKey(id)) throw new IllegalArgumentException("Behavior identity already registered: " + id);
+        }
+        ITEMS.putAll(pending.items());
+        EVENTS.addAll(pending.events());
+        MODS.add(pending.mod());
+        abort();
     }
-    public static void registerEvent(String mod,String kind,LegacyBehaviorApi.EventProgram program) {
-        EVENTS.add(new EventDefinition(mod,kind,program));
+    public static synchronized void abort() {
+        Pending pending = PENDING.get();
+        if (pending != null) {
+            INITIALIZING.remove(pending.mod());
+            PENDING.remove();
+            LegacyBehaviorApi.end();
+        }
     }
-    public static ItemDefinition item(String id) { return ITEMS.get(id); }
-    public static List<EventDefinition> events(String kind) { return EVENTS.stream().filter(e->e.kind().equals(kind)).toList(); }
-    public static int itemCount(String mod) { return (int)ITEMS.values().stream().filter(i->i.mod().equals(mod)).count(); }
-    public static void removeMod(String mod) { ITEMS.entrySet().removeIf(e->e.getValue().mod().equals(mod));EVENTS.removeIf(e->e.mod().equals(mod));MODS.remove(mod); }
+    private static Pending pending() {
+        Pending pending = PENDING.get();
+        if (pending == null) throw new IllegalStateException("Behavior registration outside bootstrap");
+        return pending;
+    }
+    public static void registerItem(String id, LegacyBehaviorApi.Item item, String hooks) {
+        Pending pending = pending();
+        if (!id.startsWith(pending.mod() + ':')) throw new IllegalArgumentException("Behavior item owner mismatch");
+        var definition = new ItemDefinition(pending.mod(), item, hooks.isEmpty() ? Set.of() : Set.of(hooks.split(",")));
+        if (pending.items().putIfAbsent(id, definition) != null) throw new IllegalArgumentException("Duplicate behavior item " + id);
+    }
+    public static void registerEvent(String mod, String kind, LegacyBehaviorApi.EventProgram program) {
+        Pending pending = pending();
+        if (!pending.mod().equals(mod)) throw new IllegalArgumentException("Behavior event owner mismatch");
+        pending.events().add(new EventDefinition(mod, kind, Objects.requireNonNull(program)));
+    }
+    public static synchronized ItemDefinition item(String id) { return ITEMS.get(id); }
+    public static synchronized Optional<String> identity(LegacyBehaviorApi.Item item) {
+        return ITEMS.entrySet().stream().filter(entry -> entry.getValue().item() == item).map(Map.Entry::getKey).findFirst();
+    }
+    public static synchronized List<EventDefinition> events(String kind) {
+        return EVENTS.stream().filter(event -> event.kind().equals(kind)).toList();
+    }
+    public static synchronized int itemCount(String mod) {
+        return (int) ITEMS.values().stream().filter(item -> item.mod().equals(mod)).count();
+    }
+    public static synchronized void removeMod(String mod) {
+        ITEMS.entrySet().removeIf(entry -> entry.getValue().mod().equals(mod));
+        EVENTS.removeIf(event -> event.mod().equals(mod)); MODS.remove(mod);
+    }
 }

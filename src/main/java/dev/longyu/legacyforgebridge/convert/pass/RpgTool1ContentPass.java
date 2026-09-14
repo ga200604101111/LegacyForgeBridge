@@ -154,7 +154,7 @@ public final class RpgTool1ContentPass implements ConversionPass {
         context.diagnostics().warning(
                 "LFB-RPGTOOL-BEHAVIOR-0001",
                 SupportLevel.RUNTIME_BRIDGE,
-                "RPGTool gem socketing, skill-gem combat effects, wing jump/fall behavior, equipped wing/circle OBJ rendering, and legacy recipes are not yet semantically ported in this test slice. Registry identities, item properties, names, icons, and weapon OBJ rendering are testable."
+                "Content identities are extracted here; source tooltip/use/release/hit/equipment callbacks and wearable rendering are validated by the subsequent common passes. Consult behavior-analysis.json for actual callback coverage. Legacy recipes and complete gameplay acceptance remain outside this content pass."
         );
     }
 

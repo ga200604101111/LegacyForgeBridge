@@ -25,22 +25,30 @@ public final class LegacyBehaviorCompiler {
             Map.entry("net/minecraft/potion/Potion","Potion"),Map.entry("net/minecraft/potion/PotionEffect","Effect"),
             Map.entry("net/minecraft/util/DamageSource","Damage"),Map.entry("net/minecraft/client/resources/I18n","I18n"),
             Map.entry("net/minecraft/item/EnumAction","UseAction"),
+            Map.entry("net/minecraft/entity/player/InventoryPlayer","Inventory"),
+            Map.entry("net/minecraft/util/IChatComponent","Chat"),Map.entry("net/minecraft/util/ChatComponentText","Text"),
+            Map.entry("net/minecraft/util/AxisAlignedBB","Box"),Map.entry("net/minecraft/util/Vec3","Vec"),
+            Map.entry("net/minecraft/entity/effect/EntityLightningBolt","Lightning"),Map.entry("net/minecraft/entity/item/EntityItem","Drop"),
+            Map.entry("net/minecraft/entity/SharedMonsterAttributes","Attributes"),
+            Map.entry("net/minecraft/entity/ai/attributes/IAttribute","Attribute"),Map.entry("net/minecraft/entity/ai/attributes/AttributeModifier","Modifier"),
             Map.entry("net/minecraftforge/event/entity/living/LivingEvent$LivingJumpEvent","Event"),
             Map.entry("net/minecraftforge/event/entity/living/LivingFallEvent","Event"),
             Map.entry("net/minecraftforge/event/entity/living/LivingHurtEvent","Event"));
     private static final Set<String> JDK=Set.of("java/lang/Object","java/lang/String","java/lang/StringBuilder","java/lang/StringBuffer",
             "java/lang/Integer","java/lang/Long","java/lang/Float","java/lang/Double","java/lang/Boolean","java/lang/Math",
-            "java/util/List","java/util/ArrayList","java/util/HashMap","java/util/Map","java/util/Iterator","java/util/Random","java/util/Collection");
+            "java/util/UUID","com/google/common/collect/Multimap","java/util/List","java/util/ArrayList","java/util/HashMap","java/util/Map","java/util/Iterator","java/util/Random","java/util/Collection");
     private static final Map<String,String> NAMES=Map.ofEntries(
             Map.entry("addInformation","func_77624_a"),Map.entry("onUpdate","func_77663_a"),
             Map.entry("onItemRightClick","func_77659_a"),Map.entry("getItemUseAction","func_77661_b"),
-            Map.entry("getMaxItemUseDuration","func_77626_a"),Map.entry("onPlayerStoppedUsing","func_77615_a"));
+            Map.entry("getMaxItemUseDuration","func_77626_a"),Map.entry("onPlayerStoppedUsing","func_77615_a"),Map.entry("hitEntity","func_77644_a"));
     private final Map<String,Clazz> classes=new LinkedHashMap<>();
     private final Set<Ref> selected=new LinkedHashSet<>(),fields=new LinkedHashSet<>();
     private final Set<String> included=new LinkedHashSet<>();
     private final List<String> diagnostics=new ArrayList<>();
     private String prefix;
-    public record ItemBinding(String id,String sourceClass,Set<String> hooks,LegacyItemRenderAnalyzer.ItemAllocation allocation) { }
+    public record ItemBinding(String id,String sourceClass,Set<String> hooks,LegacyItemRenderAnalyzer.ItemAllocation allocation) {
+        public ItemBinding { hooks=Collections.unmodifiableSet(new TreeSet<>(hooks)); }
+    }
     public record EventBinding(String owner,String method,String descriptor,String kind) { }
     public record Result(Map<String,byte[]> classes,List<ItemBinding> items,List<EventBinding> events,List<String> diagnostics) { }
     private record Ref(String owner,String name,String desc) { }
@@ -72,10 +80,10 @@ public final class LegacyBehaviorCompiler {
             root(a.itemClass(),"onArmorTick","(Lnet/minecraft/world/World;Lnet/minecraft/entity/player/EntityPlayer;Lnet/minecraft/item/ItemStack;)V","armorTick",hooks);
             root(a.itemClass(),"func_77661_b","(Lnet/minecraft/item/ItemStack;)Lnet/minecraft/item/EnumAction;","action",hooks);
             root(a.itemClass(),"func_77626_a","(Lnet/minecraft/item/ItemStack;)I","duration",hooks);
-            // Use lifecycle only: combat skill release handlers with unmapped world/entity APIs are
-            // rejected explicitly. On legacy connections the original server remains authoritative.
+            // All admitted callbacks retain source branches; remote legacy server effects are never duplicated.
             root(a.itemClass(),"func_77659_a","(Lnet/minecraft/item/ItemStack;Lnet/minecraft/world/World;Lnet/minecraft/entity/player/EntityPlayer;)Lnet/minecraft/item/ItemStack;","use",hooks);
             root(a.itemClass(),"func_77615_a","(Lnet/minecraft/item/ItemStack;Lnet/minecraft/world/World;Lnet/minecraft/entity/player/EntityPlayer;I)V","release",hooks);
+            root(a.itemClass(),"func_77644_a","(Lnet/minecraft/item/ItemStack;Lnet/minecraft/entity/EntityLivingBase;Lnet/minecraft/entity/EntityLivingBase;)Z","hit",hooks);
             if(a.inheritedSwordBlocking()){hooks.add("use");hooks.add("action");hooks.add("duration");}
             if(hooks.isEmpty())hooks.add("identity");
             items.add(new ItemBinding(id,a.itemClass(),Set.copyOf(hooks),a));
@@ -186,7 +194,10 @@ public final class LegacyBehaviorCompiler {
         descriptor(r.desc);
         if(classes.containsKey(r.owner)){
             Clazz c=classes.get(r.owner);FieldInfo info=c.fields.get(r);
-            if(info==null)throw new IllegalArgumentException("Unknown source field "+r);
+            if(info==null) {
+                if(c.parent==null)throw new IllegalArgumentException("Unknown source field "+r);
+                include(r.owner);field(new Ref(c.parent,r.name,r.desc));return;
+            }
             include(r.owner);fields.add(r);
             if((info.access&Opcodes.ACC_STATIC)!=0&&info.value==null&&collectionInitializer(r)==null)
                 throw new IllegalArgumentException("Unproven static field initializer "+r);
@@ -294,6 +305,8 @@ public final class LegacyBehaviorCompiler {
     private byte[] bootstrap(String name,String mod,List<ItemBinding> items,List<EventBinding> events){
         ClassWriter w=writer();w.visit(Opcodes.V21,Opcodes.ACC_PUBLIC|Opcodes.ACC_FINAL,name,null,"java/lang/Object",null);
         MethodVisitor m=w.visitMethod(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"initialize","()V",null,null);m.visitCode();m.visitLdcInsn(mod);m.visitMethodInsn(Opcodes.INVOKESTATIC,REG,"begin","(Ljava/lang/String;)Z",false);Label done=new Label();m.visitJumpInsn(Opcodes.IFEQ,done);
+        Label start=new Label(),end=new Label(),failed=new Label();
+        m.visitTryCatchBlock(start,end,failed,"java/lang/Throwable");m.visitLabel(start);
         for(ItemBinding item:items){var a=item.allocation;m.visitLdcInsn(item.id);m.visitTypeInsn(Opcodes.NEW,mapped(a.itemClass()));m.visitInsn(Opcodes.DUP);for(var arg:a.arguments()){if(arg.value()==null)m.visitInsn(Opcodes.ACONST_NULL);else m.visitLdcInsn(arg.value());}m.visitMethodInsn(Opcodes.INVOKESPECIAL,mapped(a.itemClass()),"<init>",descriptor(a.constructorDescriptor()),false);m.visitLdcInsn(String.join(",",new TreeSet<>(item.hooks)));m.visitMethodInsn(Opcodes.INVOKESTATIC,REG,"registerItem","(Ljava/lang/String;L"+API+"$Item;Ljava/lang/String;)V",false);}
         Map<String,Integer> locals=new LinkedHashMap<>();
         for(int i=0;i<events.size();i++){EventBinding e=events.get(i);String receiver=mapped(e.owner);if(!locals.containsKey(e.owner)){
@@ -301,6 +314,9 @@ public final class LegacyBehaviorCompiler {
                 if(stat)m.visitInsn(Opcodes.ACONST_NULL);else{m.visitTypeInsn(Opcodes.NEW,receiver);m.visitInsn(Opcodes.DUP);m.visitMethodInsn(Opcodes.INVOKESPECIAL,receiver,"<init>","()V",false);}m.visitVarInsn(Opcodes.ASTORE,local);}
             m.visitLdcInsn(mod);m.visitLdcInsn(e.kind);m.visitTypeInsn(Opcodes.NEW,name+"Event"+i);m.visitInsn(Opcodes.DUP);m.visitVarInsn(Opcodes.ALOAD,locals.get(e.owner));m.visitMethodInsn(Opcodes.INVOKESPECIAL,name+"Event"+i,"<init>","(L"+receiver+";)V",false);m.visitMethodInsn(Opcodes.INVOKESTATIC,REG,"registerEvent","(Ljava/lang/String;Ljava/lang/String;L"+API+"$EventProgram;)V",false);
         }
-        m.visitMethodInsn(Opcodes.INVOKESTATIC,REG,"finish","()V",false);m.visitLabel(done);m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
+        m.visitMethodInsn(Opcodes.INVOKESTATIC,REG,"finish","()V",false);m.visitLabel(end);
+        m.visitJumpInsn(Opcodes.GOTO,done);m.visitLabel(failed);
+        m.visitMethodInsn(Opcodes.INVOKESTATIC,REG,"abort","()V",false);m.visitInsn(Opcodes.ATHROW);
+        m.visitLabel(done);m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
     }
 }

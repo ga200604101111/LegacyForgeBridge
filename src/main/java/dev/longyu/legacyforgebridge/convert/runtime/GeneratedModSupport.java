@@ -5,6 +5,8 @@ import dev.longyu.legacyforgebridge.behavior.ConvertedBehaviorItem;
 import dev.longyu.legacyforgebridge.behavior.LegacyBehaviorRegistry;
 import net.fabricmc.fabric.api.itemgroup.v1.FabricItemGroup;
 import net.minecraft.core.Registry;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.item.component.Weapon;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
@@ -41,6 +43,9 @@ public final class GeneratedModSupport {
             if(source.item().durability>0)durability=source.item().durability;
         }
         if("sword".equals(kind))properties.sword(ToolMaterial.DIAMOND,attackDamage-ToolMaterial.DIAMOND.attackDamageBonus(),attackSpeed);
+        // The admitted source hit callback includes its own inherited sword wear.
+        // Native postHurtEnemy must not apply a second durability charge.
+        if(source!=null && source.hooks().contains("hit"))properties.component(DataComponents.WEAPON,new Weapon(0));
         int sourceSlot=source==null?-1:source.item().armorSlot;
         EquipmentSlot slot=switch(sourceSlot){case 0->EquipmentSlot.HEAD;case 1->EquipmentSlot.CHEST;case 2->EquipmentSlot.LEGS;case 3->EquipmentSlot.FEET;default->null;};
         if(slot==null){if("wing".equals(kind))slot=EquipmentSlot.CHEST;else if("circle".equals(kind))slot=EquipmentSlot.FEET;}

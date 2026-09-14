@@ -1,5 +1,7 @@
 # alpha.25: source callbacks, native use lifecycle, tooltips and equipment behavior
 
+> Historical paused-WIP notes. The completed integration and actual original-corpus test results are in [ALPHA25-COMPLETED-BEHAVIOR.md](ALPHA25-COMPLETED-BEHAVIOR.md). The unsupported-callback list below describes the paused snapshot, not the completed implementation.
+
 ## Corrected source evidence
 
 The uploaded original RPGTool JAR has SHA-256 `b82cd54d2d2db576e82ba02ea4e55b4db92174c5814b45aa3ebbe1b44d98961d`. Earlier statements that SwordBase did not override use behavior were incorrect. Its bytecode overrides right click, use action, duration and release. No-tag/ordinary swords block; `right_range` and `light_range` use a charged BOW action. Other source conditions are preserved, not replaced with unconditional blocking.

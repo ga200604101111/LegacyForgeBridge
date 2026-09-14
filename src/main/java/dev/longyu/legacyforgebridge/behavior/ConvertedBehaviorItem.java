@@ -16,11 +16,15 @@ public final class ConvertedBehaviorItem extends Item {
         ItemStack stack=player.getItemInHand(hand);var d=LegacyBehaviorRuntime.definition(stack);
         if(d==null||!d.hooks().contains("use"))return super.use(level,player,hand);
         LegacyBehaviorRuntime.synchronizeBlocking(stack);
-        if(LegacyBehaviorRuntime.startUse(stack,player)){
+        var result = LegacyBehaviorRuntime.use(stack,player,hand);
+        if(result.sustained()){
             player.startUsingItem(hand);
             return InteractionResult.CONSUME;
         }
-        return InteractionResult.PASS;
+        return result.handled() ? InteractionResult.CONSUME : InteractionResult.PASS;
+    }
+    @Override public void hurtEnemy(ItemStack stack,LivingEntity target,LivingEntity attacker) {
+        LegacyBehaviorRuntime.hit(stack,target,attacker);
     }
     @Override public ItemUseAnimation getUseAnimation(ItemStack stack){
         var d=LegacyBehaviorRuntime.definition(stack);

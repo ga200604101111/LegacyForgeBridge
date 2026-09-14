@@ -10,6 +10,10 @@ import java.util.jar.*;
 public final class BehaviorFixture {
     private BehaviorFixture() { }
     public static Path create(Path root,String namespace,boolean unsupported) throws Exception {
+        return create(root,namespace,unsupported,false);
+    }
+    public static Path createCommands(Path root,String namespace) throws Exception {return create(root,namespace,false,true);}
+    private static Path create(Path root,String namespace,boolean unsupported,boolean commands) throws Exception {
         Path source=root.resolve("sources"),classes=root.resolve("classes");Files.createDirectories(classes);
         Map<String,String> files=new LinkedHashMap<>();
         files.put("net.minecraft.item.Item", "public class Item {public Item func_77655_b(String n){return this;}}");
@@ -73,6 +77,27 @@ public final class BehaviorFixture {
         files.put("net.minecraft.item.Item", "public class Item {public enum ToolMaterial {DIAMOND} public Item func_77655_b(String n){return this;}}");
         files.replace("net.minecraft.item.ItemSword",files.get("net.minecraft.item.ItemSword").replace("Object material","Item.ToolMaterial material"));
         files.replace("net.minecraft.item.ItemArmor","public class ItemArmor extends Item {public enum ArmorMaterial {DIAMOND} public ItemArmor(ArmorMaterial material,int render,int slot){}}");
+        if(commands) {
+            files.put("net.minecraft.item.Item", "public class Item {public static java.util.UUID field_111210_e;public enum ToolMaterial {DIAMOND} public Item func_77655_b(String n){return this;}}");
+            files.put("net.minecraft.item.ItemStack",files.get("net.minecraft.item.ItemStack").replace("public class ItemStack {","public class ItemStack {public void func_77972_a(int n,net.minecraft.entity.EntityLivingBase e){}"));
+            files.put("net.minecraft.util.Vec3","public class Vec3 {public double field_72450_a,field_72448_b,field_72449_c;public Vec3 func_72432_b(){return this;}}");
+            files.put("net.minecraft.util.IChatComponent","public interface IChatComponent {}");
+            files.put("net.minecraft.util.ChatComponentText","public class ChatComponentText implements IChatComponent {public ChatComponentText(String text){}}");
+            files.put("net.minecraft.entity.ai.attributes.AttributeModifier","public class AttributeModifier {public AttributeModifier(java.util.UUID id,String n,double a,int op){} public double func_111164_d(){return 0;}}");
+            files.put("net.minecraft.entity.Entity",files.get("net.minecraft.entity.Entity").replace("public class Entity {","public class Entity {public net.minecraft.util.Vec3 func_70040_Z(){return null;} public void func_70024_g(double x,double y,double z){}"));
+            files.put("net.minecraft.entity.player.EntityPlayer",files.get("net.minecraft.entity.player.EntityPlayer").replace(" {public void"," {public void func_146105_b(net.minecraft.util.IChatComponent t){} public void"));
+            String blade=files.get(namespace+".Blade");
+            blade=blade.substring(0,blade.lastIndexOf('}'))+"""
+                public boolean hitEntity(ItemStack s,net.minecraft.entity.EntityLivingBase target,net.minecraft.entity.EntityLivingBase attacker){
+                    net.minecraft.entity.ai.attributes.AttributeModifier modifier=new net.minecraft.entity.ai.attributes.AttributeModifier(field_111210_e,"independent",8.5,0);
+                    target.func_70024_g(modifier.func_111164_d(),.25,0);s.func_77972_a(4,attacker);return true;
+                }
+                public static void checkMessage(EntityPlayer p){p.func_146105_b(new net.minecraft.util.ChatComponentText("independent message"));}
+                }
+                """;
+            blade=blade.replace("if(s.func_77978_p()!=null)s.func_77978_p().func_74768_a(\"released\",1);","if(s.func_77978_p()!=null)s.func_77978_p().func_74768_a(\"released\",1);checkMessage(p);");
+            files.put(namespace+".Blade",blade);
+        }
         List<String> args=new ArrayList<>(List.of("--release","8","-encoding","UTF-8","-d",classes.toString()));
         for(var entry:files.entrySet()){
             String name=entry.getKey();Path p=source.resolve(name.replace('.','/')+".java");Files.createDirectories(p.getParent());
