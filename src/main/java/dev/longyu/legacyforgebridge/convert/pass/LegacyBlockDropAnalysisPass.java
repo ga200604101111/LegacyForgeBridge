@@ -15,10 +15,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -29,6 +27,10 @@ import java.util.Map;
  * A later runtime materializer may override modern drops only after it has enough evidence for the
  * complete legacy result. Missing evidence therefore remains visibly missing instead of being
  * replaced with guessed defaults.</p>
+ *
+ * <p>Vanilla 1.7 targets intentionally remain as {@code minecraft:<legacy registry id>} rather
+ * than receiving an eager modern {@code id}. Their source metadata can participate in flattening,
+ * so only the complete drop plan may pass them through the DFU-backed stack materializer.</p>
  */
 public final class LegacyBlockDropAnalysisPass implements ConversionPass {
     public static final String ANALYSIS_PATH = "legacyforgebridge/block-drop-analysis.json";
@@ -59,15 +61,18 @@ public final class LegacyBlockDropAnalysisPass implements ConversionPass {
                 item.addProperty("sourceFieldOwner", rule.target().sourceFieldOwner());
                 item.addProperty("sourceFieldName", rule.target().sourceFieldName());
                 item.addProperty("sourceFieldDescriptor", rule.target().sourceFieldDescriptor());
-                String category = rule.target().kind() == LegacyBlockDropItemCompiler.TargetKind.ITEM ? "items" : "blocks";
-                String modernTarget = modernIdentity(context, category,
-                        rule.target().legacyNamespace(), rule.target().registryName());
-                if (modernTarget != null) {
-                    item.addProperty("id", modernTarget);
-                } else {
-                    context.diagnostics().warning("LFB-CONVERT-BLOCK-DROP-0002", SupportLevel.MANUAL_REQUIRED,
-                            "Drop target evidence exists but no modern registry identity was proven for "
-                                    + legacyId(context, rule.target().legacyNamespace(), rule.target().registryName()) + ".");
+
+                if (!"minecraft".equals(rule.target().legacyNamespace())) {
+                    String category = rule.target().kind() == LegacyBlockDropItemCompiler.TargetKind.ITEM ? "items" : "blocks";
+                    String modernTarget = modernIdentity(context, category,
+                            rule.target().legacyNamespace(), rule.target().registryName());
+                    if (modernTarget != null) {
+                        item.addProperty("id", modernTarget);
+                    } else {
+                        context.diagnostics().warning("LFB-CONVERT-BLOCK-DROP-0002", SupportLevel.MANUAL_REQUIRED,
+                                "Drop target evidence exists but no modern registry identity was proven for "
+                                        + legacyId(context, rule.target().legacyNamespace(), rule.target().registryName()) + ".");
+                    }
                 }
             }
             addSource(item, rule.sourceOwner(), rule.sourceMethod(), rule.sourceDescriptor());
