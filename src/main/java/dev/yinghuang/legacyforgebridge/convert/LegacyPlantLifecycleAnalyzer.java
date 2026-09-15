@@ -21,6 +21,8 @@ import java.util.jar.JarFile;
 /**
  * Splits source plant hooks into bounded lifecycle gates without executing legacy code.
  * Presentation-only overrides do not poison growth/survival proof; lifecycle callbacks do.
+ * Forge 1.7 IPlantable overrides are tracked separately because canSustainPlant delegates through
+ * getPlantType/getPlant/getPlantMetadata and therefore they can change both survival and growth.
  */
 public final class LegacyPlantLifecycleAnalyzer {
     private static final Set<String> SURVIVAL = Set.of(
@@ -44,6 +46,7 @@ public final class LegacyPlantLifecycleAnalyzer {
             "getRenderType", "func_149645_b",
             "setBlockBoundsBasedOnState", "func_149719_a");
     private static final Set<String> RANDOM_TICK_SETTER = Set.of("setTickRandomly", "func_149675_a");
+    private static final String PLANT_ACCESS = "Lnet/minecraft/world/IBlockAccess;III";
 
     public enum AgeModel {
         NONE,
@@ -52,10 +55,11 @@ public final class LegacyPlantLifecycleAnalyzer {
         UNKNOWN
     }
 
+    /** Forge 1.7 base behavior, not unpatched vanilla behavior. */
     public enum SurvivalModel {
-        VANILLA_CROPS_FARMLAND,
-        VANILLA_REED,
-        VANILLA_BUSH,
+        FORGE_CROPS_PLAINS,
+        FORGE_REED_BEACH,
+        FORGE_BUSH_PLAINS,
         CUSTOM_SOURCE
     }
 
@@ -69,6 +73,7 @@ public final class LegacyPlantLifecycleAnalyzer {
             boolean dropsInheritedVanilla,
             AgeModel ageModel,
             SurvivalModel survivalModel,
+            List<String> plantableHooks,
             List<String> survivalHooks,
             List<String> growthHooks,
             List<String> bonemealHooks,
@@ -77,6 +82,7 @@ public final class LegacyPlantLifecycleAnalyzer {
             List<String> constructorLifecycleMutations
     ) {
         public Proof {
+            plantableHooks = List.copyOf(plantableHooks);
             survivalHooks = List.copyOf(survivalHooks);
             growthHooks = List.copyOf(growthHooks);
             bonemealHooks = List.copyOf(bonemealHooks);
@@ -98,18 +104,20 @@ public final class LegacyPlantLifecycleAnalyzer {
         var plantAnalysis = new LegacyPlantBlockAnalyzer().analyze(jarPath);
         List<Proof> proofs = new ArrayList<>();
         for (var plant : plantAnalysis.rules()) {
+            List<String> plantable = new ArrayList<>();
             List<String> survival = new ArrayList<>();
             List<String> growth = new ArrayList<>();
             List<String> bonemeal = new ArrayList<>();
             List<String> drops = new ArrayList<>();
             List<String> presentation = new ArrayList<>();
             List<String> constructorMutations = new ArrayList<>();
-            inspectSourceLineage(plant, survival, growth, bonemeal, drops, presentation, constructorMutations);
+            inspectSourceLineage(plant, plantable, survival, growth, bonemeal, drops, presentation, constructorMutations);
 
             boolean tickMutation = !constructorMutations.isEmpty();
-            boolean survivalVanilla = survival.isEmpty() && !tickMutation;
+            boolean plantableBase = plantable.isEmpty();
+            boolean survivalVanilla = survival.isEmpty() && plantableBase && !tickMutation;
             boolean growthVanilla = switch (plant.family()) {
-                case CROPS, REED -> growth.isEmpty() && !tickMutation;
+                case CROPS, REED -> growth.isEmpty() && plantableBase && !tickMutation;
                 case BUSH -> true;
             };
             boolean bonemealVanilla = plant.family() != LegacyPlantBlockAnalyzer.Family.CROPS || bonemeal.isEmpty();
@@ -120,14 +128,14 @@ public final class LegacyPlantLifecycleAnalyzer {
                 case BUSH -> AgeModel.NONE;
             };
             SurvivalModel survivalModel = survivalVanilla ? switch (plant.family()) {
-                case CROPS -> SurvivalModel.VANILLA_CROPS_FARMLAND;
-                case REED -> SurvivalModel.VANILLA_REED;
-                case BUSH -> SurvivalModel.VANILLA_BUSH;
+                case CROPS -> SurvivalModel.FORGE_CROPS_PLAINS;
+                case REED -> SurvivalModel.FORGE_REED_BEACH;
+                case BUSH -> SurvivalModel.FORGE_BUSH_PLAINS;
             } : SurvivalModel.CUSTOM_SOURCE;
 
             proofs.add(new Proof(plant.registryName(), plant.sourceClass(), plant.family(),
                     survivalVanilla, growthVanilla, bonemealVanilla, dropsVanilla,
-                    ageModel, survivalModel, survival, growth, bonemeal, drops,
+                    ageModel, survivalModel, plantable, survival, growth, bonemeal, drops,
                     presentation, constructorMutations));
         }
         return new Analysis(proofs, plantAnalysis.diagnostics());
@@ -135,6 +143,7 @@ public final class LegacyPlantLifecycleAnalyzer {
 
     private void inspectSourceLineage(
             LegacyPlantBlockAnalyzer.Rule plant,
+            List<String> plantable,
             List<String> survival,
             List<String> growth,
             List<String> bonemeal,
@@ -159,6 +168,7 @@ public final class LegacyPlantLifecycleAnalyzer {
                     continue;
                 }
                 if ("<clinit>".equals(method.name)) continue;
+                if (isPlantableHook(method)) plantable.add(signature);
                 if (PRESENTATION.contains(method.name)) presentation.add(signature);
                 if (DROPS.contains(method.name)) drops.add(signature);
                 if (BONEMEAL.contains(method.name)) bonemeal.add(signature);
@@ -176,6 +186,15 @@ public final class LegacyPlantLifecycleAnalyzer {
             }
             current = node.superName;
         }
+    }
+
+    private static boolean isPlantableHook(MethodNode method) {
+        return switch (method.name) {
+            case "getPlantType" -> ("(" + PLANT_ACCESS + ")Lnet/minecraftforge/common/EnumPlantType;").equals(method.desc);
+            case "getPlant" -> ("(" + PLANT_ACCESS + ")Lnet/minecraft/block/Block;").equals(method.desc);
+            case "getPlantMetadata" -> ("(" + PLANT_ACCESS + ")I").equals(method.desc);
+            default -> false;
+        };
     }
 
     private static String baseClass(LegacyPlantBlockAnalyzer.Family family) {

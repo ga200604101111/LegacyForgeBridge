@@ -30,10 +30,10 @@ public final class LegacyPlantLifecyclePass implements ConversionPass {
         if (analysis.proofs().isEmpty()) return;
         Map<String,String> modernIds = modernBlockIds(context.stagingDir());
         JsonObject root = new JsonObject();
-        root.addProperty("schemaVersion", 1);
+        root.addProperty("schemaVersion", 2);
         root.addProperty("sourceSha256", context.sourceHash());
         JsonArray proofs = new JsonArray();
-        int survival = 0, growth = 0, bonemeal = 0, drops = 0, age = 0;
+        int survival = 0, growth = 0, bonemeal = 0, drops = 0, age = 0, plantableBase = 0;
         for (var proof : analysis.proofs()) {
             JsonObject value = new JsonObject();
             value.addProperty("legacyRegistryName", proof.registryName());
@@ -48,6 +48,8 @@ public final class LegacyPlantLifecyclePass implements ConversionPass {
             value.addProperty("dropsInheritedVanilla", proof.dropsInheritedVanilla());
             value.addProperty("ageModel", proof.ageModel().name().toLowerCase());
             value.addProperty("survivalModel", proof.survivalModel().name().toLowerCase());
+            value.addProperty("forgePlantableContractInherited", proof.plantableHooks().isEmpty());
+            value.add("plantableHooks", strings(proof.plantableHooks()));
             value.add("survivalHooks", strings(proof.survivalHooks()));
             value.add("growthHooks", strings(proof.growthHooks()));
             value.add("bonemealHooks", strings(proof.bonemealHooks()));
@@ -55,6 +57,7 @@ public final class LegacyPlantLifecyclePass implements ConversionPass {
             value.add("presentationHooks", strings(proof.presentationHooks()));
             value.add("constructorLifecycleMutations", strings(proof.constructorLifecycleMutations()));
             value.addProperty("runtimeComplete", false);
+            if (proof.plantableHooks().isEmpty()) plantableBase++;
             if (proof.survivalInheritedVanilla()) survival++;
             if (proof.growthInheritedVanilla()) growth++;
             if (proof.bonemealInheritedVanilla()) bonemeal++;
@@ -64,6 +67,7 @@ public final class LegacyPlantLifecyclePass implements ConversionPass {
         }
         root.add("proofs", proofs);
         root.addProperty("classifiedBlocks", proofs.size());
+        root.addProperty("forgePlantableContractProofCompleteBlocks", plantableBase);
         root.addProperty("survivalProofCompleteBlocks", survival);
         root.addProperty("growthProofCompleteBlocks", growth);
         root.addProperty("bonemealProofCompleteBlocks", bonemeal);
@@ -74,7 +78,8 @@ public final class LegacyPlantLifecyclePass implements ConversionPass {
         Files.createDirectories(output.getParent());
         Files.writeString(output, GSON.toJson(root) + "\n", StandardCharsets.UTF_8);
         context.diagnostics().info("LFB-CONVERT-PLANT-LIFECYCLE-0001", SupportLevel.RUNTIME_BRIDGE,
-                "Split legacy plant lifecycle proof: blocks=" + proofs.size()
+                "Split Forge 1.7 plant lifecycle proof: blocks=" + proofs.size()
+                        + ", plantable-base=" + plantableBase
                         + ", survival=" + survival + ", growth=" + growth
                         + ", bonemeal=" + bonemeal + ", drops=" + drops
                         + ", age-model=" + age + "; runtime remains gated.");

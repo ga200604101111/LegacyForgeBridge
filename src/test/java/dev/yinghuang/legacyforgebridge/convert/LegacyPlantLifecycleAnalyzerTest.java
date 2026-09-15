@@ -21,11 +21,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class LegacyPlantLifecycleAnalyzerTest {
     @TempDir Path tempDir;
 
-    @Test void lifecycleGatesSeparatePresentationFromSurvivalGrowthBonemealAndDrops() throws Exception {
+    @Test void lifecycleGatesSeparatePresentationPlantableSurvivalGrowthBonemealAndDrops() throws Exception {
         Path jar = tempDir.resolve("PlantLifecycle.jar");
         try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(jar))) {
             put(out, "p/PureCrop.class", block("p/PureCrop", "net/minecraft/block/BlockCrops", Hook.NONE));
             put(out, "p/TextureCrop.class", block("p/TextureCrop", "net/minecraft/block/BlockCrops", Hook.PRESENTATION));
+            put(out, "p/PlantTypeCrop.class", block("p/PlantTypeCrop", "net/minecraft/block/BlockCrops", Hook.PLANTABLE));
             put(out, "p/SoilCrop.class", block("p/SoilCrop", "net/minecraft/block/BlockCrops", Hook.SURVIVAL));
             put(out, "p/GrowthCrop.class", block("p/GrowthCrop", "net/minecraft/block/BlockCrops", Hook.GROWTH));
             put(out, "p/DropCrop.class", block("p/DropCrop", "net/minecraft/block/BlockCrops", Hook.DROPS));
@@ -39,20 +40,29 @@ class LegacyPlantLifecycleAnalyzerTest {
         assertTrue(analysis.diagnostics().isEmpty(), analysis.diagnostics().toString());
         Map<String,LegacyPlantLifecycleAnalyzer.Proof> proofs = analysis.proofs().stream()
                 .collect(Collectors.toMap(LegacyPlantLifecycleAnalyzer.Proof::registryName, Function.identity()));
-        assertEquals(9, proofs.size());
+        assertEquals(10, proofs.size());
 
         var pure = proofs.get("pure_crop");
+        assertTrue(pure.plantableHooks().isEmpty());
         assertTrue(pure.survivalInheritedVanilla());
         assertTrue(pure.growthInheritedVanilla());
         assertTrue(pure.bonemealInheritedVanilla());
         assertTrue(pure.dropsInheritedVanilla());
         assertEquals(LegacyPlantLifecycleAnalyzer.AgeModel.LEGACY_META_0_7, pure.ageModel());
-        assertEquals(LegacyPlantLifecycleAnalyzer.SurvivalModel.VANILLA_CROPS_FARMLAND, pure.survivalModel());
+        assertEquals(LegacyPlantLifecycleAnalyzer.SurvivalModel.FORGE_CROPS_PLAINS, pure.survivalModel());
 
         var texture = proofs.get("texture_crop");
         assertTrue(texture.survivalInheritedVanilla());
         assertTrue(texture.growthInheritedVanilla());
         assertEquals(1, texture.presentationHooks().size());
+
+        var plantType = proofs.get("plant_type_crop");
+        assertEquals(1, plantType.plantableHooks().size());
+        assertTrue(plantType.plantableHooks().getFirst().contains("getPlantType"));
+        assertFalse(plantType.survivalInheritedVanilla());
+        assertFalse(plantType.growthInheritedVanilla());
+        assertEquals(LegacyPlantLifecycleAnalyzer.AgeModel.UNKNOWN, plantType.ageModel());
+        assertEquals(LegacyPlantLifecycleAnalyzer.SurvivalModel.CUSTOM_SOURCE, plantType.survivalModel());
 
         assertFalse(proofs.get("soil_crop").survivalInheritedVanilla());
         assertTrue(proofs.get("soil_crop").growthInheritedVanilla());
@@ -67,12 +77,12 @@ class LegacyPlantLifecycleAnalyzerTest {
         assertEquals(1, proofs.get("tick_mutated_crop").constructorLifecycleMutations().size());
 
         assertEquals(LegacyPlantLifecycleAnalyzer.AgeModel.LEGACY_META_TIMER_0_15, proofs.get("pure_reed").ageModel());
-        assertEquals(LegacyPlantLifecycleAnalyzer.SurvivalModel.VANILLA_REED, proofs.get("pure_reed").survivalModel());
+        assertEquals(LegacyPlantLifecycleAnalyzer.SurvivalModel.FORGE_REED_BEACH, proofs.get("pure_reed").survivalModel());
         assertEquals(LegacyPlantLifecycleAnalyzer.AgeModel.NONE, proofs.get("pure_bush").ageModel());
-        assertEquals(LegacyPlantLifecycleAnalyzer.SurvivalModel.VANILLA_BUSH, proofs.get("pure_bush").survivalModel());
+        assertEquals(LegacyPlantLifecycleAnalyzer.SurvivalModel.FORGE_BUSH_PLAINS, proofs.get("pure_bush").survivalModel());
     }
 
-    private enum Hook { NONE, PRESENTATION, SURVIVAL, GROWTH, DROPS, BONEMEAL, TICK_MUTATION }
+    private enum Hook { NONE, PRESENTATION, PLANTABLE, SURVIVAL, GROWTH, DROPS, BONEMEAL, TICK_MUTATION }
 
     private static byte[] block(String name, String superName, Hook hook) {
         ClassWriter w = new ClassWriter(ClassWriter.COMPUTE_MAXS);
@@ -88,6 +98,7 @@ class LegacyPlantLifecycleAnalyzerTest {
         init.visitInsn(Opcodes.RETURN); init.visitMaxs(0,0); init.visitEnd();
         switch (hook) {
             case PRESENTATION -> objectReturn(w, "getIcon", "(II)Lnet/minecraft/util/IIcon;");
+            case PLANTABLE -> objectReturn(w, "getPlantType", "(Lnet/minecraft/world/IBlockAccess;III)Lnet/minecraftforge/common/EnumPlantType;");
             case SURVIVAL -> boolReturn(w, "canPlaceBlockOn", "(Lnet/minecraft/block/Block;)Z");
             case GROWTH -> voidReturn(w, "updateTick", "(Lnet/minecraft/world/World;IIILjava/util/Random;)V");
             case DROPS -> objectReturn(w, "func_149866_i", "()Lnet/minecraft/item/Item;");
@@ -116,10 +127,10 @@ class LegacyPlantLifecycleAnalyzerTest {
         MethodVisitor m = w.visitMethod(Opcodes.ACC_STATIC, "<clinit>", "()V", null, null);
         m.visitCode();
         register(m,"p/PureCrop","pure_crop"); register(m,"p/TextureCrop","texture_crop");
-        register(m,"p/SoilCrop","soil_crop"); register(m,"p/GrowthCrop","growth_crop");
-        register(m,"p/DropCrop","drop_crop"); register(m,"p/BonemealCrop","bonemeal_crop");
-        register(m,"p/TickMutatedCrop","tick_mutated_crop"); register(m,"p/PureReed","pure_reed");
-        register(m,"p/PureBush","pure_bush");
+        register(m,"p/PlantTypeCrop","plant_type_crop"); register(m,"p/SoilCrop","soil_crop");
+        register(m,"p/GrowthCrop","growth_crop"); register(m,"p/DropCrop","drop_crop");
+        register(m,"p/BonemealCrop","bonemeal_crop"); register(m,"p/TickMutatedCrop","tick_mutated_crop");
+        register(m,"p/PureReed","pure_reed"); register(m,"p/PureBush","pure_bush");
         m.visitInsn(Opcodes.RETURN); m.visitMaxs(0,0); m.visitEnd(); w.visitEnd(); return w.toByteArray();
     }
     private static void register(MethodVisitor m,String type,String id){

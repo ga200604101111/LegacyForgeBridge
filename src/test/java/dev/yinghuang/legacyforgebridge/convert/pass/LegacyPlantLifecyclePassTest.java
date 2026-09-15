@@ -27,7 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class LegacyPlantLifecyclePassTest {
     @TempDir Path tempDir;
 
-    @Test void sidecarEmitsIndependentLifecycleGatesAndKeepsRuntimeClosed() throws Exception {
+    @Test void sidecarEmitsForgePlantableAndIndependentLifecycleGatesWhileKeepingRuntimeClosed() throws Exception {
         Path source=tempDir.resolve("crop.jar");
         try(JarOutputStream out=new JarOutputStream(Files.newOutputStream(source))){put(out,"x/Crop.class",crop());put(out,"x/Bootstrap.class",bootstrap());}
         Path staging=tempDir.resolve("staging");Files.createDirectories(staging.resolve("legacyforgebridge"));
@@ -37,8 +37,24 @@ class LegacyPlantLifecyclePassTest {
         ConversionContext context=new ConversionContext(source,staging,tempDir.resolve("candidate.jar"),"sha",Files.size(source),metadata,jarAnalysis,new DiagnosticCollector(),"generic-test");
         new LegacyPlantLifecyclePass().apply(context);
         JsonObject root=JsonParser.parseString(Files.readString(staging.resolve(LegacyPlantLifecyclePass.OUTPUT),StandardCharsets.UTF_8)).getAsJsonObject();
-        assertEquals(1,root.get("classifiedBlocks").getAsInt());assertEquals(1,root.get("survivalProofCompleteBlocks").getAsInt());assertEquals(1,root.get("growthProofCompleteBlocks").getAsInt());assertEquals(1,root.get("bonemealProofCompleteBlocks").getAsInt());assertEquals(1,root.get("dropProofCompleteBlocks").getAsInt());assertEquals(1,root.get("ageModelProofCompleteBlocks").getAsInt());assertEquals(0,root.get("runtimeCompleteBlocks").getAsInt());
-        JsonObject proof=root.getAsJsonArray("proofs").get(0).getAsJsonObject();assertEquals("foreign:crop",proof.get("modernId").getAsString());assertEquals("legacy_meta_0_7",proof.get("ageModel").getAsString());assertEquals("vanilla_crops_farmland",proof.get("survivalModel").getAsString());assertTrue(proof.get("survivalInheritedVanilla").getAsBoolean());assertTrue(proof.get("growthInheritedVanilla").getAsBoolean());assertFalse(proof.get("runtimeComplete").getAsBoolean());
+        assertEquals(2,root.get("schemaVersion").getAsInt());
+        assertEquals(1,root.get("classifiedBlocks").getAsInt());
+        assertEquals(1,root.get("forgePlantableContractProofCompleteBlocks").getAsInt());
+        assertEquals(1,root.get("survivalProofCompleteBlocks").getAsInt());
+        assertEquals(1,root.get("growthProofCompleteBlocks").getAsInt());
+        assertEquals(1,root.get("bonemealProofCompleteBlocks").getAsInt());
+        assertEquals(1,root.get("dropProofCompleteBlocks").getAsInt());
+        assertEquals(1,root.get("ageModelProofCompleteBlocks").getAsInt());
+        assertEquals(0,root.get("runtimeCompleteBlocks").getAsInt());
+        JsonObject proof=root.getAsJsonArray("proofs").get(0).getAsJsonObject();
+        assertEquals("foreign:crop",proof.get("modernId").getAsString());
+        assertEquals("legacy_meta_0_7",proof.get("ageModel").getAsString());
+        assertEquals("forge_crops_plains",proof.get("survivalModel").getAsString());
+        assertTrue(proof.get("forgePlantableContractInherited").getAsBoolean());
+        assertEquals(0,proof.getAsJsonArray("plantableHooks").size());
+        assertTrue(proof.get("survivalInheritedVanilla").getAsBoolean());
+        assertTrue(proof.get("growthInheritedVanilla").getAsBoolean());
+        assertFalse(proof.get("runtimeComplete").getAsBoolean());
     }
     private static byte[] crop(){ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,"x/Crop",null,"net/minecraft/block/BlockCrops",null);MethodVisitor c=w.visitMethod(Opcodes.ACC_PUBLIC,"<init>","()V",null,null);c.visitCode();c.visitVarInsn(Opcodes.ALOAD,0);c.visitMethodInsn(Opcodes.INVOKESPECIAL,"net/minecraft/block/BlockCrops","<init>","()V",false);c.visitInsn(Opcodes.RETURN);c.visitMaxs(0,0);c.visitEnd();w.visitEnd();return w.toByteArray();}
     private static byte[] bootstrap(){ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,"x/Bootstrap",null,"java/lang/Object",null);MethodVisitor m=w.visitMethod(Opcodes.ACC_STATIC,"<clinit>","()V",null,null);m.visitCode();m.visitTypeInsn(Opcodes.NEW,"x/Crop");m.visitInsn(Opcodes.DUP);m.visitMethodInsn(Opcodes.INVOKESPECIAL,"x/Crop","<init>","()V",false);m.visitLdcInsn("crop");m.visitMethodInsn(Opcodes.INVOKESTATIC,"cpw/mods/fml/common/registry/GameRegistry","registerBlock","(Lnet/minecraft/block/Block;Ljava/lang/String;)V",false);m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();}

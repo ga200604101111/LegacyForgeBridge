@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class LegacyPlantRuntimeProofPassTest {
     @TempDir Path tempDir;
 
-    @Test void onlyCompleteConsistentPlantProofsBecomeRuntimeEligible() throws Exception {
+    @Test void onlyCompleteConsistentForgePlantProofsBecomeRuntimeEligible() throws Exception {
         Path staging = tempDir.resolve("staging");
         Files.createDirectories(staging.resolve("legacyforgebridge"));
         write(staging, LegacyPlantBlockPass.OUTPUT, """
@@ -35,10 +35,10 @@ class LegacyPlantRuntimeProofPassTest {
                 """);
         write(staging, LegacyPlantLifecyclePass.OUTPUT, """
                 {"sourceSha256":"sha","proofs":[
-                  {"legacyRegistryName":"crop","sourceClass":"p/Crop","family":"crops","modernId":"demo:crop","modernIdentityComplete":true,"survivalInheritedVanilla":true,"growthInheritedVanilla":true,"bonemealInheritedVanilla":true,"dropsInheritedVanilla":true,"ageModel":"legacy_meta_0_7","survivalModel":"vanilla_crops_farmland"},
-                  {"legacyRegistryName":"reed","sourceClass":"p/Reed","family":"reed","modernId":"demo:reed","modernIdentityComplete":true,"survivalInheritedVanilla":true,"growthInheritedVanilla":true,"bonemealInheritedVanilla":true,"dropsInheritedVanilla":true,"ageModel":"legacy_meta_timer_0_15","survivalModel":"vanilla_reed"},
-                  {"legacyRegistryName":"bush","sourceClass":"p/Bush","family":"bush","modernId":"demo:bush","modernIdentityComplete":true,"survivalInheritedVanilla":true,"growthInheritedVanilla":true,"bonemealInheritedVanilla":true,"dropsInheritedVanilla":true,"ageModel":"none","survivalModel":"vanilla_bush"},
-                  {"legacyRegistryName":"custom","sourceClass":"p/Custom","family":"crops","modernId":"demo:custom","modernIdentityComplete":true,"survivalInheritedVanilla":true,"growthInheritedVanilla":true,"bonemealInheritedVanilla":true,"dropsInheritedVanilla":false,"ageModel":"legacy_meta_0_7","survivalModel":"vanilla_crops_farmland"}
+                  {"legacyRegistryName":"crop","sourceClass":"p/Crop","family":"crops","modernId":"demo:crop","modernIdentityComplete":true,"forgePlantableContractInherited":true,"survivalInheritedVanilla":true,"growthInheritedVanilla":true,"bonemealInheritedVanilla":true,"dropsInheritedVanilla":true,"ageModel":"legacy_meta_0_7","survivalModel":"forge_crops_plains"},
+                  {"legacyRegistryName":"reed","sourceClass":"p/Reed","family":"reed","modernId":"demo:reed","modernIdentityComplete":true,"forgePlantableContractInherited":true,"survivalInheritedVanilla":true,"growthInheritedVanilla":true,"bonemealInheritedVanilla":true,"dropsInheritedVanilla":true,"ageModel":"legacy_meta_timer_0_15","survivalModel":"forge_reed_beach"},
+                  {"legacyRegistryName":"bush","sourceClass":"p/Bush","family":"bush","modernId":"demo:bush","modernIdentityComplete":true,"forgePlantableContractInherited":true,"survivalInheritedVanilla":true,"growthInheritedVanilla":true,"bonemealInheritedVanilla":true,"dropsInheritedVanilla":true,"ageModel":"none","survivalModel":"forge_bush_plains"},
+                  {"legacyRegistryName":"custom","sourceClass":"p/Custom","family":"crops","modernId":"demo:custom","modernIdentityComplete":true,"forgePlantableContractInherited":false,"survivalInheritedVanilla":true,"growthInheritedVanilla":true,"bonemealInheritedVanilla":true,"dropsInheritedVanilla":true,"ageModel":"legacy_meta_0_7","survivalModel":"forge_crops_plains"}
                 ]}
                 """);
         write(staging, LegacyPlantPresentationPass.OUTPUT, """
@@ -53,7 +53,9 @@ class LegacyPlantRuntimeProofPassTest {
         ConversionContext context = context(staging, "sha");
         new LegacyPlantRuntimeProofPass().apply(context);
         JsonObject root = JsonParser.parseString(Files.readString(staging.resolve(LegacyPlantRuntimeProofPass.OUTPUT))).getAsJsonObject();
+        assertEquals(2, root.get("schemaVersion").getAsInt());
         assertTrue(root.get("sourceProofsAligned").getAsBoolean());
+        assertTrue(root.get("forgePlantableContractRequired").getAsBoolean());
         assertEquals(4, root.get("classifiedBlocks").getAsInt());
         assertEquals(4, root.get("modernIdentityCompleteBlocks").getAsInt());
         assertEquals(3, root.get("lifecycleProofCompleteBlocks").getAsInt());
@@ -62,11 +64,13 @@ class LegacyPlantRuntimeProofPassTest {
         assertEquals(0, root.get("runtimeCompleteBlocks").getAsInt());
 
         JsonObject crop = root.getAsJsonArray("proofs").get(0).getAsJsonObject();
+        assertTrue(crop.get("forgePlantableContractComplete").getAsBoolean());
         assertTrue(crop.get("runtimeProofComplete").getAsBoolean());
         assertEquals("legacy_crops_1_7_10", crop.get("runtimeAdapter").getAsString());
         assertFalse(crop.get("runtimeComplete").getAsBoolean());
 
         JsonObject custom = root.getAsJsonArray("proofs").get(3).getAsJsonObject();
+        assertFalse(custom.get("forgePlantableContractComplete").getAsBoolean());
         assertFalse(custom.get("runtimeProofComplete").getAsBoolean());
         assertEquals("lifecycle-proof-incomplete", custom.getAsJsonArray("reasons").get(0).getAsString());
     }
@@ -78,7 +82,7 @@ class LegacyPlantRuntimeProofPassTest {
                 {"sourceSha256":"sha","rules":[{"legacyRegistryName":"crop","sourceClass":"p/Crop","family":"crops","modernId":"demo:crop","modernIdentityComplete":true}]}
                 """);
         write(staging, LegacyPlantLifecyclePass.OUTPUT, """
-                {"sourceSha256":"other","proofs":[{"legacyRegistryName":"crop","sourceClass":"p/Crop","family":"crops","modernId":"demo:crop","modernIdentityComplete":true,"survivalInheritedVanilla":true,"growthInheritedVanilla":true,"bonemealInheritedVanilla":true,"dropsInheritedVanilla":true,"ageModel":"legacy_meta_0_7","survivalModel":"vanilla_crops_farmland"}]}
+                {"sourceSha256":"other","proofs":[{"legacyRegistryName":"crop","sourceClass":"p/Crop","family":"crops","modernId":"demo:crop","modernIdentityComplete":true,"forgePlantableContractInherited":true,"survivalInheritedVanilla":true,"growthInheritedVanilla":true,"bonemealInheritedVanilla":true,"dropsInheritedVanilla":true,"ageModel":"legacy_meta_0_7","survivalModel":"forge_crops_plains"}]}
                 """);
         write(staging, LegacyPlantPresentationPass.OUTPUT, """
                 {"sourceSha256":"sha","rules":[{"legacyRegistryName":"crop","sourceClass":"p/Crop","family":"reed","modernId":"demo:other","modernIdentityComplete":true,"presentationComplete":true,"cutoutRuntimeComplete":true}]}

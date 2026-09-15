@@ -52,9 +52,10 @@ public final class LegacyPlantRuntimeProofPass implements ConversionPass {
         keys.addAll(presentations.keySet());
 
         JsonObject root = new JsonObject();
-        root.addProperty("schemaVersion", 1);
+        root.addProperty("schemaVersion", 2);
         root.addProperty("sourceSha256", context.sourceHash());
         root.addProperty("sourceProofsAligned", sourceAligned);
+        root.addProperty("forgePlantableContractRequired", true);
         JsonArray proofs = new JsonArray();
         int identityComplete = 0, lifecycleComplete = 0, presentationComplete = 0, runtimeProofComplete = 0;
 
@@ -93,6 +94,7 @@ public final class LegacyPlantRuntimeProofPass implements ConversionPass {
             if (modernId != null) value.addProperty("modernId", modernId);
             value.addProperty("familyProofComplete", familyConsistent);
             value.addProperty("modernIdentityComplete", identity);
+            value.addProperty("forgePlantableContractComplete", lifecycle != null && bool(lifecycle, "forgePlantableContractInherited"));
             value.addProperty("lifecycleProofComplete", lifecycleOk);
             value.addProperty("presentationProofComplete", presentationOk);
             value.addProperty("runtimeProofComplete", complete);
@@ -119,7 +121,7 @@ public final class LegacyPlantRuntimeProofPass implements ConversionPass {
         Files.writeString(output, GSON.toJson(root) + "\n", StandardCharsets.UTF_8);
 
         context.diagnostics().info("LFB-CONVERT-PLANT-RUNTIME-0001", SupportLevel.RUNTIME_BRIDGE,
-                "Intersected plant runtime evidence: blocks=" + proofs.size()
+                "Intersected Forge 1.7 plant runtime evidence: blocks=" + proofs.size()
                         + ", identity=" + identityComplete
                         + ", lifecycle=" + lifecycleComplete
                         + ", presentation=" + presentationComplete
@@ -131,18 +133,20 @@ public final class LegacyPlantRuntimeProofPass implements ConversionPass {
 
     private static boolean lifecycleComplete(JsonObject proof, String family) {
         if (proof == null || family == null) return false;
-        if (!bool(proof, "survivalInheritedVanilla") || !bool(proof, "dropsInheritedVanilla")) return false;
+        if (!bool(proof, "forgePlantableContractInherited")
+                || !bool(proof, "survivalInheritedVanilla")
+                || !bool(proof, "dropsInheritedVanilla")) return false;
         String age = string(proof, "ageModel");
         String survival = string(proof, "survivalModel");
         return switch (family) {
             case "crops" -> bool(proof, "growthInheritedVanilla")
                     && bool(proof, "bonemealInheritedVanilla")
                     && "legacy_meta_0_7".equals(age)
-                    && "vanilla_crops_farmland".equals(survival);
+                    && "forge_crops_plains".equals(survival);
             case "reed" -> bool(proof, "growthInheritedVanilla")
                     && "legacy_meta_timer_0_15".equals(age)
-                    && "vanilla_reed".equals(survival);
-            case "bush" -> "none".equals(age) && "vanilla_bush".equals(survival);
+                    && "forge_reed_beach".equals(survival);
+            case "bush" -> "none".equals(age) && "forge_bush_plains".equals(survival);
             default -> false;
         };
     }
