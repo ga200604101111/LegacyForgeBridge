@@ -24,7 +24,7 @@ import net.minecraft.world.phys.BlockHitResult;
  * source behavior compiler can prove those meanings. Keeping the raw value first prevents
  * unrelated old metadata layouts from being conflated.</p>
  */
-public final class ConvertedLegacyBlock extends Block {
+public class ConvertedLegacyBlock extends Block {
     public static final IntegerProperty LEGACY_META = IntegerProperty.create("legacy_meta", 0, 15);
     private final Identifier convertedId;
 

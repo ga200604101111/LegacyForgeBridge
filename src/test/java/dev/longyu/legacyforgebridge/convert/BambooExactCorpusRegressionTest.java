@@ -59,6 +59,23 @@ class BambooExactCorpusRegressionTest {
         assertEquals(24, recipes.of(LegacyRecipeAnalyzer.Kind.ORE_REGISTER).size());
         assertEquals(1, recipes.of(LegacyRecipeAnalyzer.Kind.FUEL_HANDLER).size());
 
+        LegacyStorageBlockAnalyzer.Analysis storageAnalysis = new LegacyStorageBlockAnalyzer().analyze(source);
+        assertTrue(storageAnalysis.diagnostics().isEmpty(), storageAnalysis.diagnostics().toString());
+        assertEquals(1, storageAnalysis.rules().size());
+        LegacyStorageBlockAnalyzer.Rule storage = storageAnalysis.rules().getFirst();
+        assertEquals("jpChest", storage.registryName());
+        assertEquals("ruby/bamboo/block/BlockJpchest", storage.sourceBlockClass());
+        assertEquals("ruby/bamboo/tileentity/TileEntityJPChest", storage.sourceTileClass());
+        assertEquals("JP Chest", storage.legacyTileId());
+        assertEquals(54, storage.slots());
+        assertEquals(6, storage.rows());
+        assertEquals(64, storage.stackLimit());
+        assertEquals("Chest", storage.title());
+        assertEquals(64.0, storage.interactionDistanceSq());
+        assertTrue(storage.sneakingPass());
+        assertTrue(storage.dropContents());
+        assertTrue(storage.comparator());
+
         LegacyConversionEngine engine = new LegacyConversionEngine();
         var first = engine.convert(source, tempDir.resolve("converted-a"), tempDir.resolve("manifest-a"));
         var second = engine.convert(source, tempDir.resolve("converted-b"), tempDir.resolve("manifest-b"));
@@ -73,6 +90,15 @@ class BambooExactCorpusRegressionTest {
             JsonObject content = readJson(jar, "legacyforgebridge/converted-content.json");
             assertEquals(42, content.getAsJsonArray("items").size());
             assertEquals(63, content.getAsJsonArray("blocks").size());
+
+            JsonObject storageRules = readJson(jar, "legacyforgebridge/storage-block-rules.json");
+            assertEquals(1, storageRules.getAsJsonArray("rules").size());
+            JsonObject storageRule = storageRules.getAsJsonArray("rules").get(0).getAsJsonObject();
+            assertEquals("bamboomod:jpchest", storageRule.get("id").getAsString());
+            assertEquals(54, storageRule.get("slots").getAsInt());
+            assertEquals(6, storageRule.get("rows").getAsInt());
+            assertEquals(64, storageRule.get("stackLimit").getAsInt());
+            assertTrue(storageRule.get("presentationPending").getAsBoolean());
 
             JsonObject recipeMaterialization = readJson(jar, "legacyforgebridge/recipe-materialization.json");
             assertEquals(125, recipeMaterialization.get("emittedRecipes").getAsInt());

@@ -8,6 +8,7 @@ import dev.longyu.legacyforgebridge.compat.LegacyBlockActivationRegistry;
 import dev.longyu.legacyforgebridge.compat.LegacyBlockPlacementRegistry;
 import dev.longyu.legacyforgebridge.compat.LegacyFuelRegistry;
 import dev.longyu.legacyforgebridge.compat.LegacyStackComponents;
+import dev.longyu.legacyforgebridge.compat.LegacyStorageBlockRegistry;
 import net.fabricmc.fabric.api.itemgroup.v1.FabricItemGroup;
 import net.minecraft.core.Registry;
 import net.minecraft.core.component.DataComponents;
@@ -39,14 +40,21 @@ public final class GeneratedModSupport {
     private static final Set<String> ACTIVE_MODS=ConcurrentHashMap.newKeySet();
     private static final Map<String,int[]> COUNTS=new ConcurrentHashMap<>();
     private GeneratedModSupport() { }
-    public static void beginMod(String modId){LegacyStackComponents.bootstrap();if(ACTIVE_MODS.add(modId))COUNTS.put(modId,new int[3]);}
+    public static void beginMod(String modId){
+        LegacyStackComponents.bootstrap();
+        LegacyStorageBlockRegistry.loadMod(modId);
+        if(ACTIVE_MODS.add(modId))COUNTS.put(modId,new int[3]);
+    }
     public static void registerBlock(String idValue,String descriptionKey){
         Identifier id=Identifier.parse(idValue);
         if(BuiltInRegistries.BLOCK.containsKey(id)){BLOCKS.put(id,BuiltInRegistries.BLOCK.getValue(id));return;}
         ResourceKey<Block> blockKey=ResourceKey.create(Registries.BLOCK,id);
         BlockBehaviour.Properties blockProperties=BlockBehaviour.Properties.of().setId(blockKey).overrideDescription(descriptionKey);
-        Block block=new ConvertedLegacyBlock(id,blockProperties);
+        Block block=LegacyStorageBlockRegistry.hasRule(id)
+                ?new ConvertedLegacyStorageBlock(id,blockProperties)
+                :new ConvertedLegacyBlock(id,blockProperties);
         Registry.register(BuiltInRegistries.BLOCK,blockKey,block);BLOCKS.put(id,block);
+        if(LegacyStorageBlockRegistry.hasRule(id))LegacyStorageBlockRegistry.registerType(id,block);
 
         if(!BuiltInRegistries.ITEM.containsKey(id)){
             ResourceKey<Item> itemKey=ResourceKey.create(Registries.ITEM,id);
