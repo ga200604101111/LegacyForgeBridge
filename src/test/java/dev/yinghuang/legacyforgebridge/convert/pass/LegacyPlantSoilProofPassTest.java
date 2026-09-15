@@ -22,15 +22,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class LegacyPlantSoilProofPassTest {
     @TempDir Path tempDir;
 
-    @Test void farmlandSeedPlacementIsProvenWithoutClaimingForgeSurvivalCompleteness() throws Exception {
+    @Test void defaultForgeSoilAndFertilityAreProvenSeparatelyFromPlacementAndRuntimeMaterialization() throws Exception {
         Path staging = tempDir.resolve("staging");
         Files.createDirectories(staging.resolve("legacyforgebridge"));
-        write(staging, LegacyPlantRuntimeProofPass.OUTPUT, """
-                {"sourceSha256":"sha","proofs":[
+        runtime(staging, "sha", """
                   {"legacyRegistryName":"crop","sourceClass":"p/Crop","family":"crops","modernId":"demo:crop","runtimeProofComplete":true},
                   {"legacyRegistryName":"reed","sourceClass":"p/Reed","family":"reed","modernId":"demo:reed","runtimeProofComplete":true},
                   {"legacyRegistryName":"bush","sourceClass":"p/Bush","family":"bush","modernId":"demo:bush","runtimeProofComplete":true}
-                ]}
                 """);
         write(staging, LegacyItemBlockBindingPass.OUTPUT, """
                 {"sourceSha256":"sha","bindings":[
@@ -38,39 +36,52 @@ class LegacyPlantSoilProofPassTest {
                   {"id":"demo:reed_item","family":"reed","targetBlock":{"modernId":"demo:reed"}}
                 ]}
                 """);
+        extensions(staging, "sha", 0, 0);
 
         new LegacyPlantSoilProofPass().apply(context(staging, "sha"));
         JsonObject root = JsonParser.parseString(Files.readString(staging.resolve(LegacyPlantSoilProofPass.OUTPUT))).getAsJsonObject();
+        assertEquals(2, root.get("schemaVersion").getAsInt());
         assertTrue(root.get("sourceProofsAligned").getAsBoolean());
+        assertTrue(root.get("runtimeProofSourceAligned").getAsBoolean());
+        assertTrue(root.get("placementBindingSourceAligned").getAsBoolean());
+        assertTrue(root.get("soilExtensionSourceAligned").getAsBoolean());
         assertEquals(3, root.get("classifiedBlocks").getAsInt());
         assertEquals(2, root.get("placementTargetProofCompleteBlocks").getAsInt());
         assertEquals(1, root.get("cropVanillaPlacementSoilCompleteBlocks").getAsInt());
-        assertEquals(0, root.get("survivalSoilProofCompleteBlocks").getAsInt());
+        assertEquals(3, root.get("survivalSoilProofCompleteBlocks").getAsInt());
+        assertEquals(1, root.get("cropFertilityProofCompleteBlocks").getAsInt());
+        assertEquals(0, root.get("runtimeCompleteBlocks").getAsInt());
 
         JsonObject crop = root.getAsJsonArray("proofs").get(0).getAsJsonObject();
         assertTrue(crop.get("placementTargetProofComplete").getAsBoolean());
         assertEquals("minecraft:farmland", crop.get("placementSoilId").getAsString());
-        assertTrue(crop.get("placementSoilIdentityComplete").getAsBoolean());
         assertTrue(crop.get("vanillaPlacementSoilSemanticsComplete").getAsBoolean());
-        assertFalse(crop.get("forgeCanSustainPlantExtensibilityComplete").getAsBoolean());
-        assertFalse(crop.get("survivalSoilProofComplete").getAsBoolean());
+        assertTrue(crop.get("forgeCanSustainPlantExtensibilityComplete").getAsBoolean());
+        assertTrue(crop.get("survivalSoilProofComplete").getAsBoolean());
+        assertTrue(crop.get("cropFertilityProofComplete").getAsBoolean());
+        assertEquals(3, crop.getAsJsonArray("forgeDefaultSurvivalBlocks").size());
+        assertFalse(crop.get("adjacentWaterRequired").getAsBoolean());
         assertFalse(crop.get("runtimeComplete").getAsBoolean());
 
         JsonObject reed = root.getAsJsonArray("proofs").get(1).getAsJsonObject();
         assertTrue(reed.get("placementTargetProofComplete").getAsBoolean());
-        assertFalse(reed.get("placementSoilIdentityComplete").getAsBoolean());
-        assertFalse(reed.get("survivalSoilProofComplete").getAsBoolean());
+        assertTrue(reed.get("survivalSoilProofComplete").getAsBoolean());
+        assertTrue(reed.get("adjacentWaterRequired").getAsBoolean());
+        assertFalse(reed.get("convertedReedSelfStackingByVanillaIdentity").getAsBoolean());
+        assertEquals("minecraft:sand", reed.getAsJsonArray("forgeDefaultSurvivalBlocks").get(2).getAsString());
 
         JsonObject bush = root.getAsJsonArray("proofs").get(2).getAsJsonObject();
+        assertFalse(bush.get("placementRequired").getAsBoolean());
         assertFalse(bush.get("placementTargetProofComplete").getAsBoolean());
+        assertTrue(bush.get("survivalSoilProofComplete").getAsBoolean());
         assertFalse(bush.get("runtimeComplete").getAsBoolean());
     }
 
-    @Test void ambiguousCropSoilsAndStaleSourcesFailClosed() throws Exception {
+    @Test void stalePlacementBindingDoesNotEraseIndependentSurvivalProof() throws Exception {
         Path staging = tempDir.resolve("stale");
         Files.createDirectories(staging.resolve("legacyforgebridge"));
-        write(staging, LegacyPlantRuntimeProofPass.OUTPUT, """
-                {"sourceSha256":"sha","proofs":[{"legacyRegistryName":"crop","sourceClass":"p/Crop","family":"crops","modernId":"demo:crop","runtimeProofComplete":true}]}
+        runtime(staging, "sha", """
+                  {"legacyRegistryName":"crop","sourceClass":"p/Crop","family":"crops","modernId":"demo:crop","runtimeProofComplete":true}
                 """);
         write(staging, LegacyItemBlockBindingPass.OUTPUT, """
                 {"sourceSha256":"other","bindings":[
@@ -78,16 +89,53 @@ class LegacyPlantSoilProofPassTest {
                   {"id":"demo:b","family":"seed_food","targetBlock":{"modernId":"demo:crop"},"soilBlock":{"modernId":"demo:magic_soil"}}
                 ]}
                 """);
+        extensions(staging, "sha", 0, 0);
 
         new LegacyPlantSoilProofPass().apply(context(staging, "sha"));
         JsonObject root = JsonParser.parseString(Files.readString(staging.resolve(LegacyPlantSoilProofPass.OUTPUT))).getAsJsonObject();
         assertFalse(root.get("sourceProofsAligned").getAsBoolean());
+        assertFalse(root.get("placementBindingSourceAligned").getAsBoolean());
+        assertTrue(root.get("soilExtensionSourceAligned").getAsBoolean());
         JsonObject crop = root.getAsJsonArray("proofs").get(0).getAsJsonObject();
         assertFalse(crop.get("placementTargetProofComplete").getAsBoolean());
         assertFalse(crop.get("placementSoilIdentityComplete").getAsBoolean());
         assertFalse(crop.get("vanillaPlacementSoilSemanticsComplete").getAsBoolean());
-        assertTrue(crop.getAsJsonArray("reasons").toString().contains("source-proof-hash-mismatch"));
+        assertTrue(crop.get("survivalSoilProofComplete").getAsBoolean());
+        assertTrue(crop.get("cropFertilityProofComplete").getAsBoolean());
+        assertTrue(crop.getAsJsonArray("reasons").toString().contains("placement-binding-proof-hash-mismatch"));
         assertTrue(crop.getAsJsonArray("reasons").toString().contains("crop-placement-soil-identity-incomplete-or-ambiguous"));
+    }
+
+    @Test void sourceSoilHooksBlockDefaultSurvivalAndFertilityProof() throws Exception {
+        Path staging = tempDir.resolve("custom");
+        Files.createDirectories(staging.resolve("legacyforgebridge"));
+        runtime(staging, "sha", """
+                  {"legacyRegistryName":"crop","sourceClass":"p/Crop","family":"crops","modernId":"demo:crop","runtimeProofComplete":true}
+                """);
+        write(staging, LegacyItemBlockBindingPass.OUTPUT,
+                "{\"sourceSha256\":\"sha\",\"bindings\":[]}\n");
+        extensions(staging, "sha", 1, 1);
+
+        new LegacyPlantSoilProofPass().apply(context(staging, "sha"));
+        JsonObject root = JsonParser.parseString(Files.readString(staging.resolve(LegacyPlantSoilProofPass.OUTPUT))).getAsJsonObject();
+        assertEquals(0, root.get("survivalSoilProofCompleteBlocks").getAsInt());
+        assertEquals(0, root.get("cropFertilityProofCompleteBlocks").getAsInt());
+        JsonObject crop = root.getAsJsonArray("proofs").get(0).getAsJsonObject();
+        assertFalse(crop.get("survivalSoilProofComplete").getAsBoolean());
+        assertFalse(crop.get("cropFertilityProofComplete").getAsBoolean());
+        assertTrue(crop.getAsJsonArray("reasons").toString().contains("source-can-sustain-plant-overrides-pending"));
+        assertTrue(crop.getAsJsonArray("reasons").toString().contains("source-is-fertile-overrides-pending"));
+    }
+
+    private static void runtime(Path staging, String hash, String proofs) throws Exception {
+        write(staging, LegacyPlantRuntimeProofPass.OUTPUT,
+                "{\"sourceSha256\":\"" + hash + "\",\"proofs\":[" + proofs + "]}\n");
+    }
+
+    private static void extensions(Path staging, String hash, int sustain, int fertile) throws Exception {
+        write(staging, LegacyPlantSoilExtensionPass.OUTPUT,
+                "{\"sourceSha256\":\"" + hash + "\",\"sourceCanSustainPlantOverrides\":" + sustain
+                        + ",\"sourceFertilityOverrides\":" + fertile + ",\"rules\":[]}\n");
     }
 
     private ConversionContext context(Path staging, String hash) throws Exception {
