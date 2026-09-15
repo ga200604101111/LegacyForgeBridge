@@ -37,6 +37,7 @@ import dev.yinghuang.legacyforgebridge.convert.pass.LegacyPlantBlockPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyPlantLifecyclePass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyPlantPresentationPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyPlantRuntimeProofPass;
+import dev.yinghuang.legacyforgebridge.convert.pass.LegacyPlantSoilProofPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyRecipeAnalysisPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyRecipeMaterializationPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacySingleInputProcessorPass;
@@ -108,6 +109,7 @@ public final class LegacyConversionEngine {
             builder.add(new LegacyPlantLifecyclePass());
             builder.add(new LegacyPlantPresentationPass());
             builder.add(new LegacyPlantRuntimeProofPass());
+            builder.add(new LegacyPlantSoilProofPass());
             builder.add(new LegacySnowballItemPass());
             builder.add(new LegacyLifecycleAnalysisPass());
             builder.add(new LegacyBlockBehaviorAnalysisPass());
