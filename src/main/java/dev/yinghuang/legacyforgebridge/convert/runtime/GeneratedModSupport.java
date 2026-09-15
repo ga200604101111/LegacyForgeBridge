@@ -6,6 +6,7 @@ import dev.yinghuang.legacyforgebridge.behavior.LegacyBehaviorRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyBlockActivationEffectsRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyBlockActivationRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyBlockPlacementRegistry;
+import dev.yinghuang.legacyforgebridge.compat.LegacyFoodItemRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyFuelRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacySingleInputProcessorRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyStackComponents;
@@ -48,6 +49,7 @@ public final class GeneratedModSupport {
 
     public static void beginMod(String modId){
         LegacyStackComponents.bootstrap();
+        LegacyFoodItemRegistry.loadMod(modId);
         LegacyStorageBlockRegistry.loadMod(modId);
         LegacySingleInputProcessorRegistry.loadMod(modId);
         if(ACTIVE_MODS.add(modId))COUNTS.put(modId,new int[3]);
@@ -87,6 +89,8 @@ public final class GeneratedModSupport {
         ResourceKey<Item> key=ResourceKey.create(Registries.ITEM,id);
         Item.Properties properties=new Item.Properties().setId(key).overrideDescription(descriptionKey)
                 .component(LegacyStackComponents.legacyMeta(),0);
+        var food=LegacyFoodItemRegistry.rule(id);
+        if(food!=null)properties.food(LegacyFoodItemRegistry.foodProperties(food));
         var source=LegacyBehaviorRegistry.item(idValue);
         if(source!=null&&source.presentationOnly())source=null;
         if(source!=null){
