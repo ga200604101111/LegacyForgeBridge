@@ -1,6 +1,6 @@
-package dev.longyu.legacyforgebridge.mixin.client;
+package dev.yinghuang.legacyforgebridge.mixin.client;
 
-import dev.longyu.legacyforgebridge.behavior.LegacyBehaviorRuntime;
+import dev.yinghuang.legacyforgebridge.behavior.LegacyBehaviorRuntime;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.world.entity.Entity;

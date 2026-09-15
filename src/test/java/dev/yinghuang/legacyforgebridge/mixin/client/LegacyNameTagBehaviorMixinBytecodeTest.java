@@ -1,4 +1,4 @@
-package dev.longyu.legacyforgebridge.mixin.client;
+package dev.yinghuang.legacyforgebridge.mixin.client;
 
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;

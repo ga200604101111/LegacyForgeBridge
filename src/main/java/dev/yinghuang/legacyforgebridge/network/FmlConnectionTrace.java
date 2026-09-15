@@ -1,7 +1,7 @@
-package dev.longyu.legacyforgebridge.network;
+package dev.yinghuang.legacyforgebridge.network;
 
-import dev.longyu.legacyforgebridge.BuildInfo;
-import dev.longyu.legacyforgebridge.LegacyForgeBridge;
+import dev.yinghuang.legacyforgebridge.BuildInfo;
+import dev.yinghuang.legacyforgebridge.LegacyForgeBridge;
 import net.fabricmc.loader.api.FabricLoader;
 
 import java.io.BufferedWriter;

@@ -1,4 +1,4 @@
-package dev.longyu.legacyforgebridge.convert;
+package dev.yinghuang.legacyforgebridge.convert;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;

@@ -1,8 +1,8 @@
-package dev.longyu.legacyforgebridge.convert.runtime;
+package dev.yinghuang.legacyforgebridge.convert.runtime;
 
-import dev.longyu.legacyforgebridge.compat.LegacyBlockActivationEffectsRegistry;
-import dev.longyu.legacyforgebridge.compat.LegacyBlockActivationRegistry;
-import dev.longyu.legacyforgebridge.compat.LegacyBlockPlacementRegistry;
+import dev.yinghuang.legacyforgebridge.compat.LegacyBlockActivationEffectsRegistry;
+import dev.yinghuang.legacyforgebridge.compat.LegacyBlockActivationRegistry;
+import dev.yinghuang.legacyforgebridge.compat.LegacyBlockPlacementRegistry;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.InteractionResult;

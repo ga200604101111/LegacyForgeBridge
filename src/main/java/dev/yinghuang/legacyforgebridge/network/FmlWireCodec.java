@@ -1,4 +1,4 @@
-package dev.longyu.legacyforgebridge.network;
+package dev.yinghuang.legacyforgebridge.network;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;

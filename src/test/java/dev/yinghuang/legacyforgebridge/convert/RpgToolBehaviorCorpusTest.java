@@ -1,11 +1,11 @@
-package dev.longyu.legacyforgebridge.convert;
+package dev.yinghuang.legacyforgebridge.convert;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import dev.longyu.legacyforgebridge.behavior.*;
-import dev.longyu.legacyforgebridge.behavior.LegacyBehaviorApi.*;
-import dev.longyu.legacyforgebridge.behavior.LegacyBehaviorApi.Stack;
-import dev.longyu.legacyforgebridge.behavior.LegacyBehaviorApi.Tag;
+import dev.yinghuang.legacyforgebridge.behavior.*;
+import dev.yinghuang.legacyforgebridge.behavior.LegacyBehaviorApi.*;
+import dev.yinghuang.legacyforgebridge.behavior.LegacyBehaviorApi.Stack;
+import dev.yinghuang.legacyforgebridge.behavior.LegacyBehaviorApi.Tag;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 import java.net.URLClassLoader;
@@ -46,7 +46,7 @@ class RpgToolBehaviorCorpusTest {
             assertFalse(jar.stream().anyMatch(e->e.getName().contains("/lang/zh_tw.json")),"Do not fabricate a source locale");
         }
         loader = new URLClassLoader(new java.net.URL[]{candidate.toUri().toURL()},RpgToolBehaviorCorpusTest.class.getClassLoader());
-        Class.forName("dev.longyu.legacyforgebridge.generated.rpgtool1.GeneratedContentBehavior",true,loader).getMethod("initialize").invoke(null);
+        Class.forName("dev.yinghuang.legacyforgebridge.generated.rpgtool1.GeneratedContentBehavior",true,loader).getMethod("initialize").invoke(null);
     }
     @AfterAll static void finish() throws Exception { LegacyBehaviorRegistry.removeMod("rpgtool1");if(loader!=null)loader.close(); }
     @BeforeEach void begin() { LegacyBehaviorApi.begin("rpgtool1",(key,args)->language.getOrDefault(key,key)); }

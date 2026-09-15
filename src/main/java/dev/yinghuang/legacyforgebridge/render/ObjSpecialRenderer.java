@@ -1,10 +1,10 @@
-package dev.longyu.legacyforgebridge.render;
+package dev.yinghuang.legacyforgebridge.render;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
-import dev.longyu.legacyforgebridge.LegacyForgeBridge;
+import dev.yinghuang.legacyforgebridge.LegacyForgeBridge;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.client.renderer.special.NoDataSpecialModelRenderer;

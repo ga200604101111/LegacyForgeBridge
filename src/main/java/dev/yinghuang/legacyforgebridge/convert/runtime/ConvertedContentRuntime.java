@@ -1,11 +1,11 @@
-package dev.longyu.legacyforgebridge.convert.runtime;
+package dev.yinghuang.legacyforgebridge.convert.runtime;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import dev.longyu.legacyforgebridge.LegacyForgeBridge;
-import dev.longyu.legacyforgebridge.convert.pass.GeneratedModEntrypointPass;
+import dev.yinghuang.legacyforgebridge.LegacyForgeBridge;
+import dev.yinghuang.legacyforgebridge.convert.pass.GeneratedModEntrypointPass;
 import net.fabricmc.fabric.api.itemgroup.v1.FabricItemGroup;
 import net.fabricmc.fabric.api.itemgroup.v1.ItemGroupEvents;
 import net.fabricmc.loader.api.FabricLoader;

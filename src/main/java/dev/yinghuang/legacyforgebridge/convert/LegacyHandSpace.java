@@ -1,8 +1,8 @@
-package dev.longyu.legacyforgebridge.convert;
+package dev.yinghuang.legacyforgebridge.convert;
 
 import java.util.ArrayList;
 import java.util.List;
-import dev.longyu.legacyforgebridge.convert.LegacyItemRenderAnalyzer.Operation;
+import dev.yinghuang.legacyforgebridge.convert.LegacyItemRenderAnalyzer.Operation;
 
 /** Affine basis conversion, not per-weapon visual offsets. Matrices post-multiply, as legacy GL did. */
 public final class LegacyHandSpace {

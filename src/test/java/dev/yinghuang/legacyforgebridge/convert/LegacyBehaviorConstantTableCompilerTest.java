@@ -1,7 +1,7 @@
-package dev.longyu.legacyforgebridge.convert;
+package dev.yinghuang.legacyforgebridge.convert;
 
-import dev.longyu.legacyforgebridge.behavior.LegacyBehaviorApi;
-import dev.longyu.legacyforgebridge.behavior.LegacyBehaviorRegistry;
+import dev.yinghuang.legacyforgebridge.behavior.LegacyBehaviorApi;
+import dev.yinghuang.legacyforgebridge.behavior.LegacyBehaviorRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.objectweb.asm.ClassWriter;

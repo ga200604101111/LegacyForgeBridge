@@ -1,4 +1,4 @@
-package dev.longyu.legacyforgebridge.behavior;
+package dev.yinghuang.legacyforgebridge.behavior;
 
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;

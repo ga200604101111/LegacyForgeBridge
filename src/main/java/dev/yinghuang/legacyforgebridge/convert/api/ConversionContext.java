@@ -1,6 +1,6 @@
-package dev.longyu.legacyforgebridge.convert.api;
+package dev.yinghuang.legacyforgebridge.convert.api;
 
-import dev.longyu.legacyforgebridge.convert.LegacyJarAnalyzer;
+import dev.yinghuang.legacyforgebridge.convert.LegacyJarAnalyzer;
 
 import java.nio.file.Path;
 import java.util.ArrayList;

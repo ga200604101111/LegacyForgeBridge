@@ -1,4 +1,4 @@
-package dev.longyu.legacyforgebridge.behavior;
+package dev.yinghuang.legacyforgebridge.behavior;
 
 import java.util.*;
 import com.google.common.collect.Multimap;

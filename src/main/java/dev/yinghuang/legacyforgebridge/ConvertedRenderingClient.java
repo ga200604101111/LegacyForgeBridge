@@ -1,8 +1,8 @@
-package dev.longyu.legacyforgebridge;
+package dev.yinghuang.legacyforgebridge;
 
-import dev.longyu.legacyforgebridge.render.ConvertedEquipmentRenderRuntime;
-import dev.longyu.legacyforgebridge.render.GeneratedEquipmentSupport;
-import dev.longyu.legacyforgebridge.render.LegacyObjModel;
+import dev.yinghuang.legacyforgebridge.render.ConvertedEquipmentRenderRuntime;
+import dev.yinghuang.legacyforgebridge.render.GeneratedEquipmentSupport;
+import dev.yinghuang.legacyforgebridge.render.LegacyObjModel;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.resource.v1.ResourceLoader;
 import net.minecraft.resources.Identifier;

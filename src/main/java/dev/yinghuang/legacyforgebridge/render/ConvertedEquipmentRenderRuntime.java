@@ -1,13 +1,13 @@
-package dev.longyu.legacyforgebridge.render;
+package dev.yinghuang.legacyforgebridge.render;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.mojang.blaze3d.vertex.PoseStack;
-import dev.longyu.legacyforgebridge.LegacyForgeBridge;
-import dev.longyu.legacyforgebridge.convert.pass.GeneratedModEntrypointPass;
-import dev.longyu.legacyforgebridge.convert.runtime.ConvertedContentRuntime;
+import dev.yinghuang.legacyforgebridge.LegacyForgeBridge;
+import dev.yinghuang.legacyforgebridge.convert.pass.GeneratedModEntrypointPass;
+import dev.yinghuang.legacyforgebridge.convert.runtime.ConvertedContentRuntime;
 import net.fabricmc.fabric.api.client.rendering.v1.ArmorRenderer;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;

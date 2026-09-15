@@ -1,12 +1,12 @@
-package dev.longyu.legacyforgebridge.convert.pass;
+package dev.yinghuang.legacyforgebridge.convert.pass;
 
-import dev.longyu.legacyforgebridge.behavior.LegacyBehaviorApi;
-import dev.longyu.legacyforgebridge.behavior.LegacyBehaviorRegistry;
-import dev.longyu.legacyforgebridge.convert.Hashing;
-import dev.longyu.legacyforgebridge.convert.LegacyJarAnalyzer;
-import dev.longyu.legacyforgebridge.convert.api.ConversionContext;
-import dev.longyu.legacyforgebridge.convert.api.DiagnosticCollector;
-import dev.longyu.legacyforgebridge.convert.api.LegacyModMetadata;
+import dev.yinghuang.legacyforgebridge.behavior.LegacyBehaviorApi;
+import dev.yinghuang.legacyforgebridge.behavior.LegacyBehaviorRegistry;
+import dev.yinghuang.legacyforgebridge.convert.Hashing;
+import dev.yinghuang.legacyforgebridge.convert.LegacyJarAnalyzer;
+import dev.yinghuang.legacyforgebridge.convert.api.ConversionContext;
+import dev.yinghuang.legacyforgebridge.convert.api.DiagnosticCollector;
+import dev.yinghuang.legacyforgebridge.convert.api.LegacyModMetadata;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.objectweb.asm.*;

@@ -1,10 +1,10 @@
-package dev.longyu.legacyforgebridge.convert;
+package dev.yinghuang.legacyforgebridge.convert;
 
-import dev.longyu.legacyforgebridge.BuildInfo;
-import dev.longyu.legacyforgebridge.LegacyForgeBridge;
-import dev.longyu.legacyforgebridge.convert.api.ConversionResult;
-import dev.longyu.legacyforgebridge.convert.api.ConversionStatus;
-import dev.longyu.legacyforgebridge.convert.runtime.ConvertedModCatalog;
+import dev.yinghuang.legacyforgebridge.BuildInfo;
+import dev.yinghuang.legacyforgebridge.LegacyForgeBridge;
+import dev.yinghuang.legacyforgebridge.convert.api.ConversionResult;
+import dev.yinghuang.legacyforgebridge.convert.api.ConversionStatus;
+import dev.yinghuang.legacyforgebridge.convert.runtime.ConvertedModCatalog;
 
 import java.io.IOException;
 import java.io.InputStream;

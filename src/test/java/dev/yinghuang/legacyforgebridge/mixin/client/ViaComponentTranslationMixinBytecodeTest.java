@@ -1,4 +1,4 @@
-package dev.longyu.legacyforgebridge.mixin.client;
+package dev.yinghuang.legacyforgebridge.mixin.client;
 
 import org.junit.jupiter.api.Test;
 import org.objectweb.asm.AnnotationVisitor;
@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ViaComponentTranslationMixinBytecodeTest {
     @Test
     void jsonCallbacksUseCoercedObjectInsteadOfUnshadedGsonDescriptor() throws Exception {
-        String resource = "/dev/longyu/legacyforgebridge/mixin/client/ViaComponentTranslationMixin.class";
+        String resource = "/dev/yinghuang/legacyforgebridge/mixin/client/ViaComponentTranslationMixin.class";
         try (InputStream stream = ViaComponentTranslationMixinBytecodeTest.class.getResourceAsStream(resource)) {
             assertNotNull(stream, "Missing compiled mixin class");
 

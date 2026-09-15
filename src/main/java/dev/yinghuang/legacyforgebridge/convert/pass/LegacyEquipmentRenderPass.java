@@ -1,18 +1,18 @@
-package dev.longyu.legacyforgebridge.convert.pass;
+package dev.yinghuang.legacyforgebridge.convert.pass;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import dev.longyu.legacyforgebridge.convert.LegacyItemRenderAnalyzer;
-import dev.longyu.legacyforgebridge.convert.LegacyItemRenderAnalyzer.AnimatedOperation;
-import dev.longyu.legacyforgebridge.convert.LegacyItemRenderAnalyzer.EquipmentBinding;
-import dev.longyu.legacyforgebridge.convert.LegacyItemRenderAnalyzer.EquipmentDraw;
-import dev.longyu.legacyforgebridge.convert.LegacyItemRenderAnalyzer.Expression;
-import dev.longyu.legacyforgebridge.convert.api.ConversionContext;
-import dev.longyu.legacyforgebridge.convert.api.ConversionPass;
-import dev.longyu.legacyforgebridge.convert.api.SupportLevel;
+import dev.yinghuang.legacyforgebridge.convert.LegacyItemRenderAnalyzer;
+import dev.yinghuang.legacyforgebridge.convert.LegacyItemRenderAnalyzer.AnimatedOperation;
+import dev.yinghuang.legacyforgebridge.convert.LegacyItemRenderAnalyzer.EquipmentBinding;
+import dev.yinghuang.legacyforgebridge.convert.LegacyItemRenderAnalyzer.EquipmentDraw;
+import dev.yinghuang.legacyforgebridge.convert.LegacyItemRenderAnalyzer.Expression;
+import dev.yinghuang.legacyforgebridge.convert.api.ConversionContext;
+import dev.yinghuang.legacyforgebridge.convert.api.ConversionPass;
+import dev.yinghuang.legacyforgebridge.convert.api.SupportLevel;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
@@ -31,9 +31,9 @@ import java.util.Locale;
 public final class LegacyEquipmentRenderPass implements ConversionPass {
     public static final String MARKER = "legacyforgebridge/generated-equipment.marker";
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    private static final String PROGRAM = "dev/longyu/legacyforgebridge/render/LegacyEquipmentProgram";
+    private static final String PROGRAM = "dev/yinghuang/legacyforgebridge/render/LegacyEquipmentProgram";
     private static final String SINK = PROGRAM + "$Sink";
-    private static final String SUPPORT = "dev/longyu/legacyforgebridge/render/SourceEquipmentSupport";
+    private static final String SUPPORT = "dev/yinghuang/legacyforgebridge/render/SourceEquipmentSupport";
     @Override public String id() { return "source-equipment-render-codegen"; }
 
     @Override public void apply(ConversionContext context) throws IOException {
@@ -181,7 +181,7 @@ public final class LegacyEquipmentRenderPass implements ConversionPass {
             case "neg" -> { emitExpression(method, expression.args().getFirst()); method.visitInsn(Opcodes.FNEG); }
             case "cos", "sin" -> {
                 emitExpression(method, expression.args().getFirst());
-                method.visitMethodInsn(Opcodes.INVOKESTATIC, "dev/longyu/legacyforgebridge/render/LegacyRenderMath", expression.op(), "(F)F", false);
+                method.visitMethodInsn(Opcodes.INVOKESTATIC, "dev/yinghuang/legacyforgebridge/render/LegacyRenderMath", expression.op(), "(F)F", false);
             }
             default -> throw new IllegalArgumentException("Unknown animation expression " + expression.op());
         }

@@ -1,7 +1,7 @@
-package dev.longyu.legacyforgebridge.convert;
+package dev.yinghuang.legacyforgebridge.convert;
 
-import dev.longyu.legacyforgebridge.LegacyForgeBridge;
-import dev.longyu.legacyforgebridge.convert.pass.GeneratedModEntrypointPass;
+import dev.yinghuang.legacyforgebridge.LegacyForgeBridge;
+import dev.yinghuang.legacyforgebridge.convert.pass.GeneratedModEntrypointPass;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.metadata.ModOrigin;
 
@@ -18,7 +18,7 @@ import java.util.jar.JarFile;
 public final class ManagedCandidateInstaller {
     /** Legacy alpha.19-and-earlier fallback for state records that did not persist a managed path. */
     public static final String MANAGED_PREFIX = "legacyforgebridge-converted-";
-    private static final String GENERATED_CLASS_PREFIX = "dev/longyu/legacyforgebridge/generated/";
+    private static final String GENERATED_CLASS_PREFIX = "dev/yinghuang/legacyforgebridge/generated/";
 
     private final Path modsDir;
     private final Path cacheDir;

@@ -1,6 +1,6 @@
-package dev.longyu.legacyforgebridge.convert.runtime;
+package dev.yinghuang.legacyforgebridge.convert.runtime;
 
-import dev.longyu.legacyforgebridge.compat.LegacyStorageBlockRegistry;
+import dev.yinghuang.legacyforgebridge.compat.LegacyStorageBlockRegistry;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.NonNullList;
 import net.minecraft.network.chat.Component;

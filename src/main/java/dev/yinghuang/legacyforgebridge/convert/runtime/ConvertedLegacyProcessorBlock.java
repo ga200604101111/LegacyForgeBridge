@@ -1,6 +1,6 @@
-package dev.longyu.legacyforgebridge.convert.runtime;
+package dev.yinghuang.legacyforgebridge.convert.runtime;
 
-import dev.longyu.legacyforgebridge.compat.LegacySingleInputProcessorRegistry;
+import dev.yinghuang.legacyforgebridge.compat.LegacySingleInputProcessorRegistry;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;

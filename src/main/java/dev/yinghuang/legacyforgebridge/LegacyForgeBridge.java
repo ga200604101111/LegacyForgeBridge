@@ -1,10 +1,10 @@
-package dev.longyu.legacyforgebridge;
+package dev.yinghuang.legacyforgebridge;
 
-import dev.longyu.legacyforgebridge.compat.LegacyStackComponents;
-import dev.longyu.legacyforgebridge.convert.LegacyConversionManager;
-import dev.longyu.legacyforgebridge.convert.runtime.ConvertedContentRuntime;
-import dev.longyu.legacyforgebridge.convert.runtime.LegacyProcessorMenuSupport;
-import dev.longyu.legacyforgebridge.network.FmlConnectionTrace;
+import dev.yinghuang.legacyforgebridge.compat.LegacyStackComponents;
+import dev.yinghuang.legacyforgebridge.convert.LegacyConversionManager;
+import dev.yinghuang.legacyforgebridge.convert.runtime.ConvertedContentRuntime;
+import dev.yinghuang.legacyforgebridge.convert.runtime.LegacyProcessorMenuSupport;
+import dev.yinghuang.legacyforgebridge.network.FmlConnectionTrace;
 import net.fabricmc.api.ModInitializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

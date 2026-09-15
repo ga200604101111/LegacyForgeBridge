@@ -1,6 +1,6 @@
-package dev.longyu.legacyforgebridge.convert.runtime;
+package dev.yinghuang.legacyforgebridge.convert.runtime;
 
-import dev.longyu.legacyforgebridge.compat.LegacyBlockActivationEffectsRegistry;
+import dev.yinghuang.legacyforgebridge.compat.LegacyBlockActivationEffectsRegistry;
 import org.junit.jupiter.api.Test;
 import org.objectweb.asm.*;
 import org.objectweb.asm.tree.*;

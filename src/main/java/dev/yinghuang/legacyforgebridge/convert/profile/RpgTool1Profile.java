@@ -1,15 +1,15 @@
-package dev.longyu.legacyforgebridge.convert.profile;
+package dev.yinghuang.legacyforgebridge.convert.profile;
 
-import dev.longyu.legacyforgebridge.convert.api.ConversionContext;
-import dev.longyu.legacyforgebridge.convert.api.ConversionPass;
-import dev.longyu.legacyforgebridge.convert.api.ConversionPlan;
-import dev.longyu.legacyforgebridge.convert.api.DiagnosticSeverity;
-import dev.longyu.legacyforgebridge.convert.api.LegacyModMetadata;
-import dev.longyu.legacyforgebridge.convert.api.LegacyModProfile;
-import dev.longyu.legacyforgebridge.convert.api.SupportLevel;
-import dev.longyu.legacyforgebridge.convert.pass.RpgTool1ContentPass;
-import dev.longyu.legacyforgebridge.convert.pass.RpgTool1PresentationPass;
-import dev.longyu.legacyforgebridge.convert.pass.RpgTool1ResourceFixPass;
+import dev.yinghuang.legacyforgebridge.convert.api.ConversionContext;
+import dev.yinghuang.legacyforgebridge.convert.api.ConversionPass;
+import dev.yinghuang.legacyforgebridge.convert.api.ConversionPlan;
+import dev.yinghuang.legacyforgebridge.convert.api.DiagnosticSeverity;
+import dev.yinghuang.legacyforgebridge.convert.api.LegacyModMetadata;
+import dev.yinghuang.legacyforgebridge.convert.api.LegacyModProfile;
+import dev.yinghuang.legacyforgebridge.convert.api.SupportLevel;
+import dev.yinghuang.legacyforgebridge.convert.pass.RpgTool1ContentPass;
+import dev.yinghuang.legacyforgebridge.convert.pass.RpgTool1PresentationPass;
+import dev.yinghuang.legacyforgebridge.convert.pass.RpgTool1ResourceFixPass;
 
 /** Corpus-backed RPGTool1 profile layered on the common conversion engine. */
 public final class RpgTool1Profile implements LegacyModProfile {

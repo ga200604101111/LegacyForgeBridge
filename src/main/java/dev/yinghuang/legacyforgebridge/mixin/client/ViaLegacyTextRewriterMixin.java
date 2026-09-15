@@ -1,7 +1,7 @@
-package dev.longyu.legacyforgebridge.mixin.client;
+package dev.yinghuang.legacyforgebridge.mixin.client;
 
-import dev.longyu.legacyforgebridge.compat.LegacyJsonTranslationAliaser;
-import dev.longyu.legacyforgebridge.protocol.ViaFabricPlusBackend;
+import dev.yinghuang.legacyforgebridge.compat.LegacyJsonTranslationAliaser;
+import dev.yinghuang.legacyforgebridge.protocol.ViaFabricPlusBackend;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;

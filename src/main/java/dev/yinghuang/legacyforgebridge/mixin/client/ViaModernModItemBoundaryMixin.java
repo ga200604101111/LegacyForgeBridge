@@ -1,12 +1,12 @@
-package dev.longyu.legacyforgebridge.mixin.client;
+package dev.yinghuang.legacyforgebridge.mixin.client;
 
 import com.viaversion.viaversion.api.connection.UserConnection;
 import com.viaversion.viaversion.api.minecraft.item.Item;
 import com.viaversion.viaversion.api.protocol.Protocol;
 import com.viaversion.viaversion.api.rewriter.Rewriter;
-import dev.longyu.legacyforgebridge.compat.LegacyModItemIdentityBridge;
-import dev.longyu.legacyforgebridge.compat.LegacyViaUseComponents;
-import dev.longyu.legacyforgebridge.protocol.ViaFabricPlusBackend;
+import dev.yinghuang.legacyforgebridge.compat.LegacyModItemIdentityBridge;
+import dev.yinghuang.legacyforgebridge.compat.LegacyViaUseComponents;
+import dev.yinghuang.legacyforgebridge.protocol.ViaFabricPlusBackend;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;

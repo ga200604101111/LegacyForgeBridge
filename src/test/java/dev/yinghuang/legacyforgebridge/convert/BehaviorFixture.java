@@ -1,4 +1,4 @@
-package dev.longyu.legacyforgebridge.convert;
+package dev.yinghuang.legacyforgebridge.convert;
 
 import javax.tools.ToolProvider;
 import java.nio.charset.StandardCharsets;

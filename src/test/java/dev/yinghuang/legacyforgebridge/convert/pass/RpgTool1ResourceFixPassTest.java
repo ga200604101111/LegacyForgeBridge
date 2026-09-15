@@ -1,4 +1,4 @@
-package dev.longyu.legacyforgebridge.convert.pass;
+package dev.yinghuang.legacyforgebridge.convert.pass;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;

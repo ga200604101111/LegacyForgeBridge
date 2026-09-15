@@ -1,4 +1,4 @@
-package dev.longyu.legacyforgebridge.behavior;
+package dev.yinghuang.legacyforgebridge.behavior;
 
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.item.v1.ItemTooltipCallback;

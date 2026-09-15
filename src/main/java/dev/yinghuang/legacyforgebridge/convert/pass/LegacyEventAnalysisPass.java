@@ -1,10 +1,10 @@
-package dev.longyu.legacyforgebridge.convert.pass;
+package dev.yinghuang.legacyforgebridge.convert.pass;
 
 import com.google.gson.*;
-import dev.longyu.legacyforgebridge.convert.LegacyEventAnalyzer;
-import dev.longyu.legacyforgebridge.convert.LegacyEventHandlerConstructionAnalyzer;
-import dev.longyu.legacyforgebridge.convert.LegacyEventPolicy;
-import dev.longyu.legacyforgebridge.convert.api.*;
+import dev.yinghuang.legacyforgebridge.convert.LegacyEventAnalyzer;
+import dev.yinghuang.legacyforgebridge.convert.LegacyEventHandlerConstructionAnalyzer;
+import dev.yinghuang.legacyforgebridge.convert.LegacyEventPolicy;
+import dev.yinghuang.legacyforgebridge.convert.api.*;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;

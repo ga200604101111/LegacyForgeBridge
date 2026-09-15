@@ -1,6 +1,6 @@
-package dev.longyu.legacyforgebridge.mixin.client;
+package dev.yinghuang.legacyforgebridge.mixin.client;
 
-import dev.longyu.legacyforgebridge.compat.LegacyTranslationBridge;
+import dev.yinghuang.legacyforgebridge.compat.LegacyTranslationBridge;
 import net.minecraft.locale.Language;
 import net.minecraft.network.chat.contents.TranslatableContents;
 import org.spongepowered.asm.mixin.Mixin;

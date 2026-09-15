@@ -1,10 +1,10 @@
-package dev.longyu.legacyforgebridge.convert;
+package dev.yinghuang.legacyforgebridge.convert;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import dev.longyu.legacyforgebridge.convert.api.ConversionResult;
-import dev.longyu.legacyforgebridge.convert.api.ConversionStatus;
-import dev.longyu.legacyforgebridge.convert.pass.GeneratedModEntrypointPass;
+import dev.yinghuang.legacyforgebridge.convert.api.ConversionResult;
+import dev.yinghuang.legacyforgebridge.convert.api.ConversionStatus;
+import dev.yinghuang.legacyforgebridge.convert.pass.GeneratedModEntrypointPass;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.objectweb.asm.ClassReader;
@@ -42,7 +42,7 @@ class GeneratedCandidateIntegrationTest {
         assertTrue(new ManagedCandidateInstaller(tempDir.resolve("mods"),tempDir.resolve("cache"),false).isLoaderSafeCandidate(candidate));
 
         try(JarFile jar=new JarFile(candidate.toFile())){
-            String base="dev/longyu/legacyforgebridge/generated/standalonelegacy/";
+            String base="dev/yinghuang/legacyforgebridge/generated/standalonelegacy/";
             assertNotNull(jar.getJarEntry(base+"ConvertedModEntrypoint.class"));
             assertNotNull(jar.getJarEntry(base+"GeneratedContent.class"));
             assertNotNull(jar.getJarEntry(base+"GeneratedClient.class"));
@@ -54,12 +54,12 @@ class GeneratedCandidateIntegrationTest {
             },ClassReader.SKIP_DEBUG|ClassReader.SKIP_FRAMES);
             assertTrue(owners.contains(base+"GeneratedContent"));
             assertTrue(owners.contains(base+"GeneratedClient"));
-            assertFalse(owners.contains("dev/longyu/legacyforgebridge/convert/runtime/ConvertedContentRuntime"));
-            assertFalse(owners.contains("dev/longyu/legacyforgebridge/render/ConvertedEquipmentRenderRuntime"));
+            assertFalse(owners.contains("dev/yinghuang/legacyforgebridge/convert/runtime/ConvertedContentRuntime"));
+            assertFalse(owners.contains("dev/yinghuang/legacyforgebridge/render/ConvertedEquipmentRenderRuntime"));
 
             JsonObject fabric;
             try(InputStreamReader reader=new InputStreamReader(jar.getInputStream(jar.getJarEntry("fabric.mod.json")),StandardCharsets.UTF_8)){fabric=JsonParser.parseReader(reader).getAsJsonObject();}
-            String binary="dev.longyu.legacyforgebridge.generated.standalonelegacy.ConvertedModEntrypoint";
+            String binary="dev.yinghuang.legacyforgebridge.generated.standalonelegacy.ConvertedModEntrypoint";
             assertEquals(binary,fabric.getAsJsonObject("entrypoints").getAsJsonArray("main").get(0).getAsString());
             assertEquals(binary,fabric.getAsJsonObject("entrypoints").getAsJsonArray("client").get(0).getAsString());
         }

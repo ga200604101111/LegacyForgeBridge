@@ -1,7 +1,7 @@
-package dev.longyu.legacyforgebridge.compat;
+package dev.yinghuang.legacyforgebridge.compat;
 
 import com.google.gson.*;
-import dev.longyu.legacyforgebridge.convert.LegacyBlockActivationEffectPlan;
+import dev.yinghuang.legacyforgebridge.convert.LegacyBlockActivationEffectPlan;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.AfterEach;

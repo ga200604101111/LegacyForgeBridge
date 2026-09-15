@@ -1,7 +1,7 @@
-package dev.longyu.legacyforgebridge.compat;
+package dev.yinghuang.legacyforgebridge.compat;
 
 import com.mojang.serialization.Codec;
-import dev.longyu.legacyforgebridge.LegacyForgeBridge;
+import dev.yinghuang.legacyforgebridge.LegacyForgeBridge;
 import net.minecraft.core.Registry;
 import net.minecraft.core.component.DataComponentType;
 import net.minecraft.core.registries.BuiltInRegistries;

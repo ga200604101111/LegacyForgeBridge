@@ -1,4 +1,4 @@
-package dev.longyu.legacyforgebridge.convert;
+package dev.yinghuang.legacyforgebridge.convert;
 
 import org.objectweb.asm.*;
 import org.objectweb.asm.tree.*;

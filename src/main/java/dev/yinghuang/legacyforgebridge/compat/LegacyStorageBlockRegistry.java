@@ -1,13 +1,13 @@
-package dev.longyu.legacyforgebridge.compat;
+package dev.yinghuang.legacyforgebridge.compat;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import dev.longyu.legacyforgebridge.LegacyForgeBridge;
-import dev.longyu.legacyforgebridge.convert.LegacyStoragePresentationAnalyzer;
-import dev.longyu.legacyforgebridge.convert.pass.LegacyStorageBlockPass;
-import dev.longyu.legacyforgebridge.convert.runtime.ConvertedLegacyStorageBlockEntity;
+import dev.yinghuang.legacyforgebridge.LegacyForgeBridge;
+import dev.yinghuang.legacyforgebridge.convert.LegacyStoragePresentationAnalyzer;
+import dev.yinghuang.legacyforgebridge.convert.pass.LegacyStorageBlockPass;
+import dev.yinghuang.legacyforgebridge.convert.runtime.ConvertedLegacyStorageBlockEntity;
 import net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityTypeBuilder;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;

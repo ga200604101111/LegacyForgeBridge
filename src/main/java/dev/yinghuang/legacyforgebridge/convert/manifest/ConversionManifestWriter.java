@@ -1,14 +1,14 @@
-package dev.longyu.legacyforgebridge.convert.manifest;
+package dev.yinghuang.legacyforgebridge.convert.manifest;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import dev.longyu.legacyforgebridge.BuildInfo;
-import dev.longyu.legacyforgebridge.convert.api.ConversionContext;
-import dev.longyu.legacyforgebridge.convert.api.ConversionDiagnostic;
-import dev.longyu.legacyforgebridge.convert.api.ConversionStatus;
-import dev.longyu.legacyforgebridge.convert.api.LegacyModMetadata;
+import dev.yinghuang.legacyforgebridge.BuildInfo;
+import dev.yinghuang.legacyforgebridge.convert.api.ConversionContext;
+import dev.yinghuang.legacyforgebridge.convert.api.ConversionDiagnostic;
+import dev.yinghuang.legacyforgebridge.convert.api.ConversionStatus;
+import dev.yinghuang.legacyforgebridge.convert.api.LegacyModMetadata;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;

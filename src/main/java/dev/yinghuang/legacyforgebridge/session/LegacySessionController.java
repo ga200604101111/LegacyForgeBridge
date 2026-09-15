@@ -1,7 +1,7 @@
-package dev.longyu.legacyforgebridge.session;
+package dev.yinghuang.legacyforgebridge.session;
 
-import dev.longyu.legacyforgebridge.LegacyForgeBridge;
-import dev.longyu.legacyforgebridge.protocol.LegacyProtocolVersions;
+import dev.yinghuang.legacyforgebridge.LegacyForgeBridge;
+import dev.yinghuang.legacyforgebridge.protocol.LegacyProtocolVersions;
 
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;

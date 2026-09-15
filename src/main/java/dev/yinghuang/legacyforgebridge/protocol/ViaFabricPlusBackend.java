@@ -1,10 +1,10 @@
-package dev.longyu.legacyforgebridge.protocol;
+package dev.yinghuang.legacyforgebridge.protocol;
 
 import com.viaversion.viafabricplus.api.ViaFabricPlusBase;
 import com.viaversion.viaversion.api.connection.UserConnection;
 import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
-import dev.longyu.legacyforgebridge.LegacyForgeBridge;
-import dev.longyu.legacyforgebridge.session.LegacySessionController;
+import dev.yinghuang.legacyforgebridge.LegacyForgeBridge;
+import dev.yinghuang.legacyforgebridge.session.LegacySessionController;
 import net.minecraft.network.Connection;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;

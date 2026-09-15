@@ -1,9 +1,9 @@
-package dev.longyu.legacyforgebridge.convert.profile;
+package dev.yinghuang.legacyforgebridge.convert.profile;
 
-import dev.longyu.legacyforgebridge.convert.api.ConversionPlan;
-import dev.longyu.legacyforgebridge.convert.api.LegacyModMetadata;
-import dev.longyu.legacyforgebridge.convert.api.LegacyModProfile;
-import dev.longyu.legacyforgebridge.convert.pass.GenericContentPass;
+import dev.yinghuang.legacyforgebridge.convert.api.ConversionPlan;
+import dev.yinghuang.legacyforgebridge.convert.api.LegacyModMetadata;
+import dev.yinghuang.legacyforgebridge.convert.api.LegacyModProfile;
+import dev.yinghuang.legacyforgebridge.convert.pass.GenericContentPass;
 
 public final class GenericLegacyModProfile implements LegacyModProfile {
     @Override

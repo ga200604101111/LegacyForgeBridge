@@ -1,4 +1,4 @@
-package dev.longyu.legacyforgebridge.convert.runtime;
+package dev.yinghuang.legacyforgebridge.convert.runtime;
 
 import net.minecraft.core.Direction;
 import org.junit.jupiter.api.Test;

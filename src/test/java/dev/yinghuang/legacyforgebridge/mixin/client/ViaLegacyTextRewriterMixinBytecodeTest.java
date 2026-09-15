@@ -1,4 +1,4 @@
-package dev.longyu.legacyforgebridge.mixin.client;
+package dev.yinghuang.legacyforgebridge.mixin.client;
 
 import org.junit.jupiter.api.Test;
 import org.objectweb.asm.ClassReader;
@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ViaLegacyTextRewriterMixinBytecodeTest {
     @Test
     void earlyAliasMixinTargetsTheStringBoundaryBeforeViaLegacyHardcodesEnglish() throws Exception {
-        String resource = "/dev/longyu/legacyforgebridge/mixin/client/ViaLegacyTextRewriterMixin.class";
+        String resource = "/dev/yinghuang/legacyforgebridge/mixin/client/ViaLegacyTextRewriterMixin.class";
         try (InputStream stream = ViaLegacyTextRewriterMixinBytecodeTest.class.getResourceAsStream(resource)) {
             assertNotNull(stream, "Missing compiled ViaLegacy mixin class");
             byte[] bytes = stream.readAllBytes();

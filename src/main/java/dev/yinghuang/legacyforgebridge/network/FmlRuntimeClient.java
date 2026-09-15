@@ -1,4 +1,4 @@
-package dev.longyu.legacyforgebridge.network;
+package dev.yinghuang.legacyforgebridge.network;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;

@@ -1,10 +1,10 @@
-package dev.longyu.legacyforgebridge.convert;
+package dev.yinghuang.legacyforgebridge.convert;
 
 import org.junit.jupiter.api.Test;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.*;
 
-import static dev.longyu.legacyforgebridge.convert.LegacyEventHandlerConstructionAnalyzer.Strategy.*;
+import static dev.yinghuang.legacyforgebridge.convert.LegacyEventHandlerConstructionAnalyzer.Strategy.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 class LegacyEventHandlerConstructionAnalyzerTest {

@@ -1,10 +1,10 @@
-package dev.longyu.legacyforgebridge.convert;
+package dev.yinghuang.legacyforgebridge.convert;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
-import dev.longyu.legacyforgebridge.compat.LegacyStackComponents;
-import dev.longyu.legacyforgebridge.convert.api.ConversionContext;
+import dev.yinghuang.legacyforgebridge.compat.LegacyStackComponents;
+import dev.yinghuang.legacyforgebridge.convert.api.ConversionContext;
 
 import java.util.Locale;
 import java.util.Map;

@@ -1,4 +1,4 @@
-package dev.longyu.legacyforgebridge.behavior;
+package dev.yinghuang.legacyforgebridge.behavior;
 
 import net.minecraft.SharedConstants;
 import net.minecraft.core.component.DataComponents;

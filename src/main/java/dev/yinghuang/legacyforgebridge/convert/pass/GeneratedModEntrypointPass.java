@@ -1,9 +1,9 @@
-package dev.longyu.legacyforgebridge.convert.pass;
+package dev.yinghuang.legacyforgebridge.convert.pass;
 
-import dev.longyu.legacyforgebridge.convert.api.ConversionContext;
-import dev.longyu.legacyforgebridge.convert.api.ConversionPass;
-import dev.longyu.legacyforgebridge.convert.api.LegacyModMetadata;
-import dev.longyu.legacyforgebridge.convert.api.SupportLevel;
+import dev.yinghuang.legacyforgebridge.convert.api.ConversionContext;
+import dev.yinghuang.legacyforgebridge.convert.api.ConversionPass;
+import dev.yinghuang.legacyforgebridge.convert.api.LegacyModMetadata;
+import dev.yinghuang.legacyforgebridge.convert.api.SupportLevel;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
@@ -68,7 +68,7 @@ public final class GeneratedModEntrypointPass implements ConversionPass {
         if (safe.isBlank()) {
             safe = "legacy_mod";
         }
-        return "dev.longyu.legacyforgebridge.generated." + safe;
+        return "dev.yinghuang.legacyforgebridge.generated." + safe;
     }
 
     private static String generatedBaseInternal(LegacyModMetadata metadata) {
@@ -119,7 +119,7 @@ public final class GeneratedModEntrypointPass implements ConversionPass {
         client.visitLdcInsn(modId);
         client.visitMethodInsn(
                 Opcodes.INVOKESTATIC,
-                "dev/longyu/legacyforgebridge/render/ConvertedProcessorPresentationRuntime",
+                "dev/yinghuang/legacyforgebridge/render/ConvertedProcessorPresentationRuntime",
                 "initializeMod",
                 "(Ljava/lang/String;)V",
                 false

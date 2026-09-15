@@ -1,4 +1,4 @@
-package dev.longyu.legacyforgebridge.compat;
+package dev.yinghuang.legacyforgebridge.compat;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;

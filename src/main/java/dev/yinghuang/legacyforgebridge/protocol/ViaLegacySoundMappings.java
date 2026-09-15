@@ -1,4 +1,4 @@
-package dev.longyu.legacyforgebridge.protocol;
+package dev.yinghuang.legacyforgebridge.protocol;
 
 import com.viaversion.viaversion.api.Via;
 import com.viaversion.viaversion.api.connection.ProtocolInfo;

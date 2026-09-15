@@ -1,4 +1,4 @@
-package dev.longyu.legacyforgebridge.protocol;
+package dev.yinghuang.legacyforgebridge.protocol;
 
 import com.viaversion.viafabricplus.api.ViaFabricPlusBase;
 import com.viaversion.viafabricplus.api.entrypoint.ViaFabricPlusLoadEntrypoint;

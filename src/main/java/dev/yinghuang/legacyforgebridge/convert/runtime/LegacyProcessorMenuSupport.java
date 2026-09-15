@@ -1,6 +1,6 @@
-package dev.longyu.legacyforgebridge.convert.runtime;
+package dev.yinghuang.legacyforgebridge.convert.runtime;
 
-import dev.longyu.legacyforgebridge.LegacyForgeBridge;
+import dev.yinghuang.legacyforgebridge.LegacyForgeBridge;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;

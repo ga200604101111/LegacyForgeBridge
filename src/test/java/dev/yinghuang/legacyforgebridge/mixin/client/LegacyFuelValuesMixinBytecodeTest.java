@@ -1,6 +1,6 @@
-package dev.longyu.legacyforgebridge.mixin.client;
+package dev.yinghuang.legacyforgebridge.mixin.client;
 
-import dev.longyu.legacyforgebridge.compat.LegacyFuelRegistry;
+import dev.yinghuang.legacyforgebridge.compat.LegacyFuelRegistry;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.FuelValues;
 import org.junit.jupiter.api.Test;

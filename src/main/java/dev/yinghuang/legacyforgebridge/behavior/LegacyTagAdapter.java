@@ -1,4 +1,4 @@
-package dev.longyu.legacyforgebridge.behavior;
+package dev.yinghuang.legacyforgebridge.behavior;
 
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;

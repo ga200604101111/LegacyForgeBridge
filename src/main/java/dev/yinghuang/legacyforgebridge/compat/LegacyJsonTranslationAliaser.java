@@ -1,4 +1,4 @@
-package dev.longyu.legacyforgebridge.compat;
+package dev.yinghuang.legacyforgebridge.compat;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;

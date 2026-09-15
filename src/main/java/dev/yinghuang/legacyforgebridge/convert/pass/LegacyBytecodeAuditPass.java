@@ -1,9 +1,9 @@
-package dev.longyu.legacyforgebridge.convert.pass;
+package dev.yinghuang.legacyforgebridge.convert.pass;
 
-import dev.longyu.legacyforgebridge.convert.LegacyCoremodActivationAnalyzer;
-import dev.longyu.legacyforgebridge.convert.api.ConversionContext;
-import dev.longyu.legacyforgebridge.convert.api.ConversionPass;
-import dev.longyu.legacyforgebridge.convert.api.SupportLevel;
+import dev.yinghuang.legacyforgebridge.convert.LegacyCoremodActivationAnalyzer;
+import dev.yinghuang.legacyforgebridge.convert.api.ConversionContext;
+import dev.yinghuang.legacyforgebridge.convert.api.ConversionPass;
+import dev.yinghuang.legacyforgebridge.convert.api.SupportLevel;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -12,7 +12,7 @@ import java.util.stream.Stream;
 
 /** Safety gate evaluated after semantic/profile conversion passes. */
 public final class LegacyBytecodeAuditPass implements ConversionPass {
-    private static final String GENERATED_PREFIX = "dev/longyu/legacyforgebridge/generated/";
+    private static final String GENERATED_PREFIX = "dev/yinghuang/legacyforgebridge/generated/";
 
     @Override
     public String id() {

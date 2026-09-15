@@ -1,7 +1,7 @@
-package dev.longyu.legacyforgebridge.protocol;
+package dev.yinghuang.legacyforgebridge.protocol;
 
-import dev.longyu.legacyforgebridge.LegacyForgeBridge;
-import dev.longyu.legacyforgebridge.network.FmlConnectionTrace;
+import dev.yinghuang.legacyforgebridge.LegacyForgeBridge;
+import dev.yinghuang.legacyforgebridge.network.FmlConnectionTrace;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;

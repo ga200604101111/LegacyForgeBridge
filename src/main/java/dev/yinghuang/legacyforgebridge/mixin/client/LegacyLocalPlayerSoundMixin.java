@@ -1,9 +1,9 @@
-package dev.longyu.legacyforgebridge.mixin.client;
+package dev.yinghuang.legacyforgebridge.mixin.client;
 
-import dev.longyu.legacyforgebridge.behavior.LegacyBehaviorRegistry;
-import dev.longyu.legacyforgebridge.behavior.LegacyBehaviorRuntime;
-import dev.longyu.legacyforgebridge.protocol.ViaFabricPlusBackend;
-import dev.longyu.legacyforgebridge.protocol.ViaLegacySoundMappings;
+import dev.yinghuang.legacyforgebridge.behavior.LegacyBehaviorRegistry;
+import dev.yinghuang.legacyforgebridge.behavior.LegacyBehaviorRuntime;
+import dev.yinghuang.legacyforgebridge.protocol.ViaFabricPlusBackend;
+import dev.yinghuang.legacyforgebridge.protocol.ViaLegacySoundMappings;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;

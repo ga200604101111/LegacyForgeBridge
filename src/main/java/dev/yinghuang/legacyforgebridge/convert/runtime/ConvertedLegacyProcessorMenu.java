@@ -1,6 +1,6 @@
-package dev.longyu.legacyforgebridge.convert.runtime;
+package dev.yinghuang.legacyforgebridge.convert.runtime;
 
-import dev.longyu.legacyforgebridge.compat.LegacySingleInputProcessorRegistry;
+import dev.yinghuang.legacyforgebridge.compat.LegacySingleInputProcessorRegistry;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.player.Inventory;

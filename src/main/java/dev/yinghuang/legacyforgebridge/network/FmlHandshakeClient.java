@@ -1,7 +1,7 @@
-package dev.longyu.legacyforgebridge.network;
+package dev.yinghuang.legacyforgebridge.network;
 
-import dev.longyu.legacyforgebridge.compat.LegacyModItemRegistryMap;
-import dev.longyu.legacyforgebridge.convert.runtime.ConvertedModCatalog;
+import dev.yinghuang.legacyforgebridge.compat.LegacyModItemRegistryMap;
+import dev.yinghuang.legacyforgebridge.convert.runtime.ConvertedModCatalog;
 
 import java.util.LinkedHashMap;
 import java.util.Map;

@@ -1,4 +1,4 @@
-package dev.longyu.legacyforgebridge.render;
+package dev.yinghuang.legacyforgebridge.render;
 
 import org.junit.jupiter.api.Test;
 

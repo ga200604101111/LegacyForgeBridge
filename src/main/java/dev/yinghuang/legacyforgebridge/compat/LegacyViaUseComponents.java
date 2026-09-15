@@ -1,4 +1,4 @@
-package dev.longyu.legacyforgebridge.compat;
+package dev.yinghuang.legacyforgebridge.compat;
 
 import com.viaversion.nbt.tag.CompoundTag;
 import com.viaversion.nbt.tag.NumberTag;
@@ -9,9 +9,9 @@ import com.viaversion.viaversion.api.minecraft.item.data.BlocksAttacks;
 import com.viaversion.viaversion.api.minecraft.item.Item;
 import com.viaversion.viaversion.api.protocol.Protocol;
 import net.minecraft.core.registries.BuiltInRegistries;
-import dev.longyu.legacyforgebridge.behavior.LegacyBehaviorApi;
-import dev.longyu.legacyforgebridge.behavior.LegacyBehaviorRegistry;
-import dev.longyu.legacyforgebridge.behavior.LegacyBehaviorRuntime;
+import dev.yinghuang.legacyforgebridge.behavior.LegacyBehaviorApi;
+import dev.yinghuang.legacyforgebridge.behavior.LegacyBehaviorRegistry;
+import dev.yinghuang.legacyforgebridge.behavior.LegacyBehaviorRuntime;
 
 /** Restores the native use component skipped while a mod item travels as a paper carrier. */
 public final class LegacyViaUseComponents {

@@ -1,6 +1,6 @@
-package dev.longyu.legacyforgebridge.compat;
+package dev.yinghuang.legacyforgebridge.compat;
 
-import dev.longyu.legacyforgebridge.convert.LegacyBlockActivationCompiler;
+import dev.yinghuang.legacyforgebridge.convert.LegacyBlockActivationCompiler;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;

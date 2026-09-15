@@ -1,8 +1,8 @@
-package dev.longyu.legacyforgebridge.convert;
+package dev.yinghuang.legacyforgebridge.convert;
 
 import org.junit.jupiter.api.Test;
 
-import static dev.longyu.legacyforgebridge.convert.LegacyEventPolicy.Execution.*;
+import static dev.yinghuang.legacyforgebridge.convert.LegacyEventPolicy.Execution.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 class LegacyEventPolicyTest {

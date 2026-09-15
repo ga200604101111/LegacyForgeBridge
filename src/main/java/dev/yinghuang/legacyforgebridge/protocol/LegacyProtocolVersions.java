@@ -1,4 +1,4 @@
-package dev.longyu.legacyforgebridge.protocol;
+package dev.yinghuang.legacyforgebridge.protocol;
 
 /** Protocol constants that do not depend on a specific protocol translator implementation. */
 public final class LegacyProtocolVersions {

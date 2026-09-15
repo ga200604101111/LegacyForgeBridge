@@ -1,13 +1,13 @@
-package dev.longyu.legacyforgebridge.mixin.client;
+package dev.yinghuang.legacyforgebridge.mixin.client;
 
 import com.viaversion.nbt.tag.CompoundTag;
 import com.viaversion.nbt.tag.StringTag;
 import com.viaversion.viaversion.api.connection.UserConnection;
 import com.viaversion.viaversion.rewriter.text.ComponentRewriterBase;
-import dev.longyu.legacyforgebridge.LegacyForgeBridge;
-import dev.longyu.legacyforgebridge.compat.LegacyTranslationBridge;
-import dev.longyu.legacyforgebridge.compat.ViaJsonObjectAccess;
-import dev.longyu.legacyforgebridge.protocol.ViaFabricPlusBackend;
+import dev.yinghuang.legacyforgebridge.LegacyForgeBridge;
+import dev.yinghuang.legacyforgebridge.compat.LegacyTranslationBridge;
+import dev.yinghuang.legacyforgebridge.compat.ViaJsonObjectAccess;
+import dev.yinghuang.legacyforgebridge.protocol.ViaFabricPlusBackend;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;

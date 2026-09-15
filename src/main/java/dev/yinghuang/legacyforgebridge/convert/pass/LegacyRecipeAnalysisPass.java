@@ -1,9 +1,9 @@
-package dev.longyu.legacyforgebridge.convert.pass;
+package dev.yinghuang.legacyforgebridge.convert.pass;
 
 import com.google.gson.*;
-import dev.longyu.legacyforgebridge.convert.LegacyRecipeAnalyzer;
-import dev.longyu.legacyforgebridge.convert.LegacyRecipeValueResolver;
-import dev.longyu.legacyforgebridge.convert.api.*;
+import dev.yinghuang.legacyforgebridge.convert.LegacyRecipeAnalyzer;
+import dev.yinghuang.legacyforgebridge.convert.LegacyRecipeValueResolver;
+import dev.yinghuang.legacyforgebridge.convert.api.*;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;

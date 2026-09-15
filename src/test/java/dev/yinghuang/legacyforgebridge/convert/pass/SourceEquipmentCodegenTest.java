@@ -1,9 +1,9 @@
-package dev.longyu.legacyforgebridge.convert.pass;
+package dev.yinghuang.legacyforgebridge.convert.pass;
 
-import dev.longyu.legacyforgebridge.convert.EquipmentFixture;
-import dev.longyu.legacyforgebridge.convert.LegacyItemRenderAnalyzer;
-import dev.longyu.legacyforgebridge.render.LegacyEquipmentProgram;
-import dev.longyu.legacyforgebridge.render.LegacyRenderMath;
+import dev.yinghuang.legacyforgebridge.convert.EquipmentFixture;
+import dev.yinghuang.legacyforgebridge.convert.LegacyItemRenderAnalyzer;
+import dev.yinghuang.legacyforgebridge.render.LegacyEquipmentProgram;
+import dev.yinghuang.legacyforgebridge.render.LegacyRenderMath;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import javax.imageio.ImageIO;
@@ -22,7 +22,7 @@ class SourceEquipmentCodegenTest {
         Path texture=temp.resolve("assets/alchemy/textures/relic.png"); Files.createDirectories(texture.getParent());
         BufferedImage image=new BufferedImage(2,2,BufferedImage.TYPE_INT_ARGB); image.setRGB(0,0,0x7FFFFFFF);
         ImageIO.write(image,"png",texture.toFile());
-        String owner="dev/longyu/legacyforgebridge/generated/test/EquipmentPose";
+        String owner="dev/yinghuang/legacyforgebridge/generated/test/EquipmentPose";
         byte[] bytes=LegacyEquipmentRenderPass.compileProgram(owner,binding,temp);
         class Loader extends ClassLoader { Class<?> loadProgram() { return defineClass(owner.replace('/','.'),bytes,0,bytes.length); } }
         LegacyEquipmentProgram program=(LegacyEquipmentProgram)new Loader().loadProgram().getConstructor().newInstance();

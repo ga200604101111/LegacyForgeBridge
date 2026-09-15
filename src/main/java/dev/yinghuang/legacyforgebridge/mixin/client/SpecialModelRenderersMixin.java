@@ -1,6 +1,6 @@
-package dev.longyu.legacyforgebridge.mixin.client;
+package dev.yinghuang.legacyforgebridge.mixin.client;
 
-import dev.longyu.legacyforgebridge.render.ObjSpecialRenderer;
+import dev.yinghuang.legacyforgebridge.render.ObjSpecialRenderer;
 import net.minecraft.client.renderer.special.SpecialModelRenderers;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.ExtraCodecs;

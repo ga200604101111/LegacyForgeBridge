@@ -1,7 +1,7 @@
-package dev.longyu.legacyforgebridge.render;
+package dev.yinghuang.legacyforgebridge.render;
 
 import com.mojang.blaze3d.vertex.PoseStack;
-import dev.longyu.legacyforgebridge.LegacyForgeBridge;
+import dev.yinghuang.legacyforgebridge.LegacyForgeBridge;
 import net.fabricmc.fabric.api.client.rendering.v1.ArmorRenderer;
 import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.renderer.SubmitNodeCollector;

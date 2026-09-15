@@ -1,4 +1,4 @@
-package dev.longyu.legacyforgebridge.convert;
+package dev.yinghuang.legacyforgebridge.convert;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 
-import static dev.longyu.legacyforgebridge.convert.LegacyBlockActivationCompiler.Op;
+import static dev.yinghuang.legacyforgebridge.convert.LegacyBlockActivationCompiler.Op;
 import static org.junit.jupiter.api.Assertions.*;
 
 class LegacyBlockActivationSafetyTest {

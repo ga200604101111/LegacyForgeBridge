@@ -1,6 +1,6 @@
-package dev.longyu.legacyforgebridge.compat;
+package dev.yinghuang.legacyforgebridge.compat;
 
-import dev.longyu.legacyforgebridge.protocol.ViaFabricPlusBackend;
+import dev.yinghuang.legacyforgebridge.protocol.ViaFabricPlusBackend;
 import net.minecraft.locale.Language;
 
 import java.util.Set;

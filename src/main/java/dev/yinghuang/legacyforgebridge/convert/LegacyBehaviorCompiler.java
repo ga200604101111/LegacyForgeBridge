@@ -1,6 +1,6 @@
-package dev.longyu.legacyforgebridge.convert;
+package dev.yinghuang.legacyforgebridge.convert;
 
-import dev.longyu.legacyforgebridge.behavior.LegacyBehaviorApi;
+import dev.yinghuang.legacyforgebridge.behavior.LegacyBehaviorApi;
 import org.objectweb.asm.*;
 import java.io.*;
 import java.nio.file.*;
@@ -13,8 +13,8 @@ import java.util.jar.*;
  * callback, not the whole source mod. Original classes are never loaded or executed by analysis.
  */
 public final class LegacyBehaviorCompiler {
-    public static final String API="dev/longyu/legacyforgebridge/behavior/LegacyBehaviorApi";
-    public static final String REG="dev/longyu/legacyforgebridge/behavior/LegacyBehaviorRegistry";
+    public static final String API="dev/yinghuang/legacyforgebridge/behavior/LegacyBehaviorApi";
+    public static final String REG="dev/yinghuang/legacyforgebridge/behavior/LegacyBehaviorRegistry";
     private static final Map<String,String> TYPES=Map.ofEntries(
             Map.entry("net/minecraft/item/Item","Item"),Map.entry("net/minecraft/item/ItemSword","Sword"),
             Map.entry("net/minecraft/item/ItemArmor","Armor"),Map.entry("net/minecraft/item/ItemBow","Bow"),

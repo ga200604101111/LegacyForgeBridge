@@ -1,15 +1,15 @@
-package dev.longyu.legacyforgebridge;
+package dev.yinghuang.legacyforgebridge;
 
-import dev.longyu.legacyforgebridge.network.FmlConnectionTrace;
-import dev.longyu.legacyforgebridge.network.FmlHandshakeClient;
-import dev.longyu.legacyforgebridge.network.FmlMappedPayload;
-import dev.longyu.legacyforgebridge.network.FmlRuntimeClient;
-import dev.longyu.legacyforgebridge.network.FmlWireCodec;
-import dev.longyu.legacyforgebridge.protocol.LegacyPluginChannelMappings;
-import dev.longyu.legacyforgebridge.protocol.ViaFabricPlusBackend;
-import dev.longyu.legacyforgebridge.protocol.ViaLegacyFmlTransport;
-import dev.longyu.legacyforgebridge.convert.runtime.ConvertedLegacyProcessorScreen;
-import dev.longyu.legacyforgebridge.convert.runtime.LegacyProcessorMenuSupport;
+import dev.yinghuang.legacyforgebridge.network.FmlConnectionTrace;
+import dev.yinghuang.legacyforgebridge.network.FmlHandshakeClient;
+import dev.yinghuang.legacyforgebridge.network.FmlMappedPayload;
+import dev.yinghuang.legacyforgebridge.network.FmlRuntimeClient;
+import dev.yinghuang.legacyforgebridge.network.FmlWireCodec;
+import dev.yinghuang.legacyforgebridge.protocol.LegacyPluginChannelMappings;
+import dev.yinghuang.legacyforgebridge.protocol.ViaFabricPlusBackend;
+import dev.yinghuang.legacyforgebridge.protocol.ViaLegacyFmlTransport;
+import dev.yinghuang.legacyforgebridge.convert.runtime.ConvertedLegacyProcessorScreen;
+import dev.yinghuang.legacyforgebridge.convert.runtime.LegacyProcessorMenuSupport;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientConfigurationConnectionEvents;

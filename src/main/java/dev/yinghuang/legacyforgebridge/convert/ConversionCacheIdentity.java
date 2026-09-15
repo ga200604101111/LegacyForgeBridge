@@ -1,6 +1,6 @@
-package dev.longyu.legacyforgebridge.convert;
+package dev.yinghuang.legacyforgebridge.convert;
 
-import dev.longyu.legacyforgebridge.BuildInfo;
+import dev.yinghuang.legacyforgebridge.BuildInfo;
 
 import java.io.IOException;
 import java.nio.file.Files;

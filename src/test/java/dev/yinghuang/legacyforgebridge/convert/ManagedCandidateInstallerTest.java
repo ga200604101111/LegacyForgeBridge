@@ -1,6 +1,6 @@
-package dev.longyu.legacyforgebridge.convert;
+package dev.yinghuang.legacyforgebridge.convert;
 
-import dev.longyu.legacyforgebridge.convert.pass.GeneratedModEntrypointPass;
+import dev.yinghuang.legacyforgebridge.convert.pass.GeneratedModEntrypointPass;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -105,8 +105,8 @@ class ManagedCandidateInstallerTest {
         try (JarOutputStream output = new JarOutputStream(Files.newOutputStream(path))) {
             add(output, "fabric.mod.json", "{\"schemaVersion\":1,\"id\":\"rpgtool1\",\"version\":\"1.0\"}");
             add(output, "legacyforgebridge/converted-content.json", "{\"sourceSha256\":\"" + marker + "\",\"items\":[]}");
-            add(output, GeneratedModEntrypointPass.MARKER_PATH, "dev.longyu.legacyforgebridge.generated.rpgtool1.ConvertedModEntrypoint\n");
-            add(output, "dev/longyu/legacyforgebridge/generated/rpgtool1/ConvertedModEntrypoint.class", "generated-modern-bytecode");
+            add(output, GeneratedModEntrypointPass.MARKER_PATH, "dev.yinghuang.legacyforgebridge.generated.rpgtool1.ConvertedModEntrypoint\n");
+            add(output, "dev/yinghuang/legacyforgebridge/generated/rpgtool1/ConvertedModEntrypoint.class", "generated-modern-bytecode");
             add(output, "assets/rpgtool1/test.txt", marker);
             if (withLegacyClass) {
                 add(output, "legacy/Unsafe.class", "legacy-bytecode");

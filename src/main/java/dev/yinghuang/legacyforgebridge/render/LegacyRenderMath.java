@@ -1,4 +1,4 @@
-package dev.longyu.legacyforgebridge.render;
+package dev.yinghuang.legacyforgebridge.render;
 
 /** Legacy MathHelper's float trig table, used by compiled animation expressions. */
 public final class LegacyRenderMath {

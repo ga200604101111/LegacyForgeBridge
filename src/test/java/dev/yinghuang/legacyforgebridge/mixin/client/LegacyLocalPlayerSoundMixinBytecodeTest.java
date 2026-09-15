@@ -1,4 +1,4 @@
-package dev.longyu.legacyforgebridge.mixin.client;
+package dev.yinghuang.legacyforgebridge.mixin.client;
 
 import org.junit.jupiter.api.Test;
 import org.objectweb.asm.*;
@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class LegacyLocalPlayerSoundMixinBytecodeTest {
     @Test void localPlayerSoundHookPinsExactModernSoundBoundaryAndUsesViaMapping() throws Exception {
-        String resource="/dev/longyu/legacyforgebridge/mixin/client/LegacyLocalPlayerSoundMixin.class";
+        String resource="/dev/yinghuang/legacyforgebridge/mixin/client/LegacyLocalPlayerSoundMixin.class";
         try(InputStream stream=LegacyLocalPlayerSoundMixinBytecodeTest.class.getResourceAsStream(resource)){
             assertNotNull(stream,"Missing compiled LocalPlayer sound mixin");
             byte[] bytes=stream.readAllBytes();

@@ -1,10 +1,10 @@
-package dev.longyu.legacyforgebridge.compat;
+package dev.yinghuang.legacyforgebridge.compat;
 
 import com.google.gson.*;
-import dev.longyu.legacyforgebridge.LegacyForgeBridge;
-import dev.longyu.legacyforgebridge.convert.LegacyBlockActivationEffectPlan;
-import dev.longyu.legacyforgebridge.convert.pass.LegacyBlockActivationEffectsPass;
-import dev.longyu.legacyforgebridge.convert.runtime.ConvertedLegacyBlock;
+import dev.yinghuang.legacyforgebridge.LegacyForgeBridge;
+import dev.yinghuang.legacyforgebridge.convert.LegacyBlockActivationEffectPlan;
+import dev.yinghuang.legacyforgebridge.convert.pass.LegacyBlockActivationEffectsPass;
+import dev.yinghuang.legacyforgebridge.convert.runtime.ConvertedLegacyBlock;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;

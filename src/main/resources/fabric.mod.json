@@ -14,15 +14,15 @@
   "environment": "client",
   "entrypoints": {
     "main": [
-      "dev.longyu.legacyforgebridge.LegacyForgeBridge"
+      "dev.yinghuang.legacyforgebridge.LegacyForgeBridge"
     ],
     "client": [
-      "dev.longyu.legacyforgebridge.LegacyForgeBridgeClient",
-      "dev.longyu.legacyforgebridge.ConvertedRenderingClient",
-      "dev.longyu.legacyforgebridge.behavior.LegacyBehaviorClient"
+      "dev.yinghuang.legacyforgebridge.LegacyForgeBridgeClient",
+      "dev.yinghuang.legacyforgebridge.ConvertedRenderingClient",
+      "dev.yinghuang.legacyforgebridge.behavior.LegacyBehaviorClient"
     ],
     "viafabricplus": [
-      "dev.longyu.legacyforgebridge.protocol.ViaFabricPlusEntrypoint"
+      "dev.yinghuang.legacyforgebridge.protocol.ViaFabricPlusEntrypoint"
     ]
   },
   "mixins": [

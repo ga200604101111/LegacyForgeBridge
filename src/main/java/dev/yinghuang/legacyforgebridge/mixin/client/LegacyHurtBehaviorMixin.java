@@ -1,6 +1,6 @@
-package dev.longyu.legacyforgebridge.mixin.client;
+package dev.yinghuang.legacyforgebridge.mixin.client;
 
-import dev.longyu.legacyforgebridge.behavior.LegacyBehaviorRuntime;
+import dev.yinghuang.legacyforgebridge.behavior.LegacyBehaviorRuntime;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.LivingEntity;
 import org.spongepowered.asm.mixin.Mixin;

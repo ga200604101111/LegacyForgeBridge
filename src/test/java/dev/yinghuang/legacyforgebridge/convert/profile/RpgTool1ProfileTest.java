@@ -1,11 +1,11 @@
-package dev.longyu.legacyforgebridge.convert.profile;
+package dev.yinghuang.legacyforgebridge.convert.profile;
 
-import dev.longyu.legacyforgebridge.convert.LegacyJarAnalyzer;
-import dev.longyu.legacyforgebridge.convert.api.ConversionContext;
-import dev.longyu.legacyforgebridge.convert.api.ConversionPlan;
-import dev.longyu.legacyforgebridge.convert.api.ConversionStatus;
-import dev.longyu.legacyforgebridge.convert.api.DiagnosticCollector;
-import dev.longyu.legacyforgebridge.convert.api.LegacyModMetadata;
+import dev.yinghuang.legacyforgebridge.convert.LegacyJarAnalyzer;
+import dev.yinghuang.legacyforgebridge.convert.api.ConversionContext;
+import dev.yinghuang.legacyforgebridge.convert.api.ConversionPlan;
+import dev.yinghuang.legacyforgebridge.convert.api.ConversionStatus;
+import dev.yinghuang.legacyforgebridge.convert.api.DiagnosticCollector;
+import dev.yinghuang.legacyforgebridge.convert.api.LegacyModMetadata;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

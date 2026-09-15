@@ -1,4 +1,4 @@
-package dev.longyu.legacyforgebridge.render;
+package dev.yinghuang.legacyforgebridge.render;
 
 /**
  * A converted mod's compiled render program. No Minecraft names appear in this ABI so generated
