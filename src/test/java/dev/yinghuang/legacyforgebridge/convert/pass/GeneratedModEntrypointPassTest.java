@@ -44,25 +44,31 @@ class GeneratedModEntrypointPassTest {
 
         Set<String> interfaces = new HashSet<>();
         Set<String> methods = new HashSet<>();
+        Set<String> clientCalls = new HashSet<>();
         new ClassReader(Files.readAllBytes(classFile)).accept(new ClassVisitor(Opcodes.ASM9) {
             @Override
             public void visit(int version, int access, String name, String signature, String superName, String[] implemented) {
-                if (implemented != null) {
-                    interfaces.addAll(List.of(implemented));
-                }
+                if (implemented != null) interfaces.addAll(List.of(implemented));
             }
 
             @Override
             public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
                 methods.add(name + descriptor);
-                return null;
+                if (!"onInitializeClient".equals(name)) return null;
+                return new MethodVisitor(Opcodes.ASM9) {
+                    @Override
+                    public void visitMethodInsn(int opcode, String owner, String methodName, String methodDescriptor, boolean isInterface) {
+                        clientCalls.add(owner + "#" + methodName + methodDescriptor);
+                    }
+                };
             }
-        }, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+        }, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
 
         assertTrue(interfaces.contains("net/fabricmc/api/ModInitializer"));
         assertTrue(interfaces.contains("net/fabricmc/api/ClientModInitializer"));
         assertTrue(methods.contains("onInitialize()V"));
         assertTrue(methods.contains("onInitializeClient()V"));
+        assertTrue(clientCalls.contains("dev/yinghuang/legacyforgebridge/render/ConvertedPlantPresentationRuntime#initializeMod(Ljava/lang/String;)V"));
     }
 
     private ConversionContext context(Path staging) {
