@@ -37,6 +37,7 @@ import dev.yinghuang.legacyforgebridge.convert.pass.LegacyRecipeAnalysisPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyRecipeMaterializationPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacySingleInputProcessorPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacySingleInputProcessorPresentationPass;
+import dev.yinghuang.legacyforgebridge.convert.pass.LegacySnowballItemPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyStorageBlockPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.NativeItemTagsPass;
 import dev.yinghuang.legacyforgebridge.convert.profile.GenericLegacyModProfile;
@@ -99,6 +100,7 @@ public final class LegacyConversionEngine {
             builder.add(new NativeItemTagsPass());
             builder.add(new LegacyFoodItemPass());
             builder.add(new LegacyItemBlockBindingPass());
+            builder.add(new LegacySnowballItemPass());
             builder.add(new LegacyLifecycleAnalysisPass());
             builder.add(new LegacyBlockBehaviorAnalysisPass());
             builder.add(new LegacyBlockDropAnalysisPass());

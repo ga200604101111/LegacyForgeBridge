@@ -28,6 +28,7 @@ import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.SnowballItem;
 import net.minecraft.world.item.ToolMaterial;
 import net.minecraft.world.item.component.ItemAttributeModifiers;
 import net.minecraft.world.item.component.Weapon;
@@ -119,7 +120,7 @@ public final class GeneratedModSupport {
                     .add(Attributes.ARMOR,new AttributeModifier(modifier,armor,AttributeModifier.Operation.ADD_VALUE),group).build());
         }
         if(durability>0)properties.durability(durability);
-        Item item=new ConvertedBehaviorItem(properties);
+        Item item="snowball".equals(kind)?new SnowballItem(properties):new ConvertedBehaviorItem(properties);
         Registry.register(BuiltInRegistries.ITEM,key,item);
         ITEMS.put(id,item);
         int[] counts=COUNTS.get(id.getNamespace());if(counts!=null)counts[0]++;
