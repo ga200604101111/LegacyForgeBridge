@@ -126,6 +126,15 @@ class BambooExactCorpusRegressionTest {
         assertEquals(6, LegacySingleInputProcessorRuntimeAnalyzer.sourceProgressStep(1, 500, 100));
         assertEquals(-100, LegacySingleInputProcessorRuntimeAnalyzer.sourceEnergyAfterStep(1, 500, 100));
 
+        LegacySingleInputProcessorEnergyIngressAnalyzer.Proof ingressProof =
+                new LegacySingleInputProcessorEnergyIngressAnalyzer().analyze(source, millStone, runtimeProof);
+        assertTrue(ingressProof.complete(), ingressProof.diagnostics().toString());
+        assertTrue(ingressProof.legacyEnergyApiPresent());
+        assertTrue(ingressProof.allSidesConnect());
+        assertTrue(ingressProof.extractionDisabled());
+        assertTrue(ingressProof.queryMethodsReturnZero());
+        assertTrue(ingressProof.receiveSimulationProven());
+
         LegacySingleInputProcessorRecipeAnalyzer.Analysis grindRecipes =
                 new LegacySingleInputProcessorRecipeAnalyzer().analyze(source, millStone);
         assertTrue(grindRecipes.diagnostics().isEmpty(), grindRecipes.diagnostics().toString());
@@ -182,10 +191,18 @@ class BambooExactCorpusRegressionTest {
             assertNotNull(jar.getJarEntry("assets/bamboo/textures/blocks/jpchest_o.png"));
 
             JsonObject processors = readJson(jar, "legacyforgebridge/single-input-processor-rules.json");
-            assertEquals(3, processors.get("schemaVersion").getAsInt());
+            assertEquals(4, processors.get("schemaVersion").getAsInt());
             assertEquals(1, processors.getAsJsonArray("machines").size());
             assertEquals(1, processors.get("runtimeProofCompleteMachines").getAsInt());
+            assertEquals(1, processors.get("energyIngressProofCompleteMachines").getAsInt());
             assertEquals(1, processors.get("baseRuntimeCompleteMachines").getAsInt());
+            assertEquals(1, processors.get("presentationProofCompleteMachines").getAsInt());
+            assertEquals(1, processors.get("guiPresentationRuntimeCompleteMachines").getAsInt());
+            assertEquals(1, processors.get("worldPresentationRuntimeCompleteMachines").getAsInt());
+            assertEquals(1, processors.get("inventoryPresentationRuntimeCompleteMachines").getAsInt());
+            assertEquals(1, processors.get("particlePresentationRuntimeCompleteMachines").getAsInt());
+            assertEquals(1, processors.get("sourcePresentationCompleteMachines").getAsInt());
+            assertEquals(1, processors.get("runtimeCompleteMachines").getAsInt());
             JsonObject machine = processors.getAsJsonArray("machines").get(0).getAsJsonObject();
             assertEquals("bamboomod:bamboomillstone", machine.get("id").getAsString());
             assertEquals("MillStone", machine.get("legacyTileId").getAsString());
@@ -198,16 +215,21 @@ class BambooExactCorpusRegressionTest {
             assertEquals("innerEnergy", machine.get("energyNbtKey").getAsString());
             assertTrue(machine.get("energyAccelerationProven").getAsBoolean());
             assertTrue(machine.get("runtimeProofComplete").getAsBoolean());
+            assertTrue(machine.get("energyIngressProofComplete").getAsBoolean());
+            assertTrue(machine.get("energyAllSidesConnectProven").getAsBoolean());
+            assertTrue(machine.get("energyExtractionDisabledProven").getAsBoolean());
+            assertTrue(machine.get("energyQueryZeroSemanticsProven").getAsBoolean());
+            assertTrue(machine.get("energyReceiveSimulationProven").getAsBoolean());
             assertTrue(machine.get("baseRuntimeComplete").getAsBoolean());
             assertTrue(machine.get("tickingRuntimeComplete").getAsBoolean());
             assertTrue(machine.get("menuRuntimeComplete").getAsBoolean());
             assertTrue(machine.get("sidedTransferRuntimeComplete").getAsBoolean());
             assertTrue(machine.get("progressNbtRuntimeComplete").getAsBoolean());
             assertTrue(machine.get("energyStorageRuntimeComplete").getAsBoolean());
+            assertTrue(machine.get("energyIngressRuntimeComplete").getAsBoolean());
             assertTrue(machine.get("genericScreenRuntimeComplete").getAsBoolean());
-            assertFalse(machine.get("energyIngressRuntimeComplete").getAsBoolean());
-            assertFalse(machine.get("sourcePresentationComplete").getAsBoolean());
-            assertFalse(machine.get("runtimeComplete").getAsBoolean());
+            assertTrue(machine.get("sourcePresentationComplete").getAsBoolean());
+            assertTrue(machine.get("runtimeComplete").getAsBoolean());
             assertEquals(13, machine.get("sourceRecipeCount").getAsInt());
             assertEquals(13, machine.get("materializedRecipeCount").getAsInt());
             assertEquals(13, processors.get("materializedRecipes").getAsInt());
