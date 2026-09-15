@@ -49,22 +49,33 @@ class LegacyPlantRuntimeProofPassTest {
                   {"legacyRegistryName":"custom","sourceClass":"p/Custom","family":"crops","modernId":"demo:custom","modernIdentityComplete":true,"presentationComplete":true,"cutoutRuntimeComplete":true}
                 ]}
                 """);
+        write(staging, LegacyPlantDropProofPass.OUTPUT, """
+                {"sourceSha256":"sha","rules":[
+                  {"legacyRegistryName":"crop","sourceClass":"p/Crop","family":"crops","modernId":"demo:crop","modernIdentityComplete":true,"unsupportedRemovalDropProofComplete":true,"unsupportedRemovalDrop":{"kind":"vanilla_crops_1_7_10"}},
+                  {"legacyRegistryName":"reed","sourceClass":"p/Reed","family":"reed","modernId":"demo:reed","modernIdentityComplete":true,"unsupportedRemovalDropProofComplete":true,"unsupportedRemovalDrop":{"kind":"fixed_item_1_7_10"}},
+                  {"legacyRegistryName":"bush","sourceClass":"p/Bush","family":"bush","modernId":"demo:bush","modernIdentityComplete":true,"unsupportedRemovalDropProofComplete":true,"unsupportedRemovalDrop":{"kind":"self_block_1_7_10"}},
+                  {"legacyRegistryName":"custom","sourceClass":"p/Custom","family":"crops","modernId":"demo:custom","modernIdentityComplete":true,"unsupportedRemovalDropProofComplete":true,"unsupportedRemovalDrop":{"kind":"vanilla_crops_1_7_10"}}
+                ]}
+                """);
 
         ConversionContext context = context(staging, "sha");
         new LegacyPlantRuntimeProofPass().apply(context);
         JsonObject root = JsonParser.parseString(Files.readString(staging.resolve(LegacyPlantRuntimeProofPass.OUTPUT))).getAsJsonObject();
-        assertEquals(2, root.get("schemaVersion").getAsInt());
+        assertEquals(3, root.get("schemaVersion").getAsInt());
         assertTrue(root.get("sourceProofsAligned").getAsBoolean());
         assertTrue(root.get("forgePlantableContractRequired").getAsBoolean());
+        assertTrue(root.get("unsupportedRemovalDropProofRequired").getAsBoolean());
         assertEquals(4, root.get("classifiedBlocks").getAsInt());
         assertEquals(4, root.get("modernIdentityCompleteBlocks").getAsInt());
         assertEquals(3, root.get("lifecycleProofCompleteBlocks").getAsInt());
         assertEquals(4, root.get("presentationProofCompleteBlocks").getAsInt());
+        assertEquals(4, root.get("unsupportedRemovalDropProofCompleteBlocks").getAsInt());
         assertEquals(3, root.get("runtimeProofCompleteBlocks").getAsInt());
         assertEquals(0, root.get("runtimeCompleteBlocks").getAsInt());
 
         JsonObject crop = root.getAsJsonArray("proofs").get(0).getAsJsonObject();
         assertTrue(crop.get("forgePlantableContractComplete").getAsBoolean());
+        assertTrue(crop.get("unsupportedRemovalDropProofComplete").getAsBoolean());
         assertTrue(crop.get("runtimeProofComplete").getAsBoolean());
         assertEquals("legacy_crops_1_7_10", crop.get("runtimeAdapter").getAsString());
         assertFalse(crop.get("runtimeComplete").getAsBoolean());
@@ -86,6 +97,9 @@ class LegacyPlantRuntimeProofPassTest {
                 """);
         write(staging, LegacyPlantPresentationPass.OUTPUT, """
                 {"sourceSha256":"sha","rules":[{"legacyRegistryName":"crop","sourceClass":"p/Crop","family":"reed","modernId":"demo:other","modernIdentityComplete":true,"presentationComplete":true,"cutoutRuntimeComplete":true}]}
+                """);
+        write(staging, LegacyPlantDropProofPass.OUTPUT, """
+                {"sourceSha256":"sha","rules":[{"legacyRegistryName":"crop","sourceClass":"p/Crop","family":"crops","modernId":"demo:crop","modernIdentityComplete":true,"unsupportedRemovalDropProofComplete":true,"unsupportedRemovalDrop":{"kind":"vanilla_crops_1_7_10"}}]}
                 """);
 
         new LegacyPlantRuntimeProofPass().apply(context(staging, "sha"));

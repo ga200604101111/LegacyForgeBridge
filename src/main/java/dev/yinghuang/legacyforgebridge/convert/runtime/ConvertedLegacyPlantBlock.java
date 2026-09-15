@@ -7,10 +7,15 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelReader;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.FarmBlock;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.redstone.Orientation;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -19,9 +24,9 @@ import java.util.List;
  * Dormant until GeneratedModSupport explicitly selects it for a fully proven plant rule.
  *
  * <p>The block carries legacy raw metadata through {@link ConvertedLegacyBlock#LEGACY_META} and
- * implements only the survival/random-tick semantics already locked by
- * {@link LegacyPlantRuntimeRegistry}. Unsupported-removal drops, bonemeal and item placement stay
- * outside this class until their independent proof/runtime gates are complete.</p>
+ * implements only the survival/random-tick/support-loss semantics already locked by
+ * {@link LegacyPlantRuntimeRegistry}. Bonemeal and item placement stay outside this class until
+ * their independent proof/runtime gates are complete.</p>
  */
 public final class ConvertedLegacyPlantBlock extends ConvertedLegacyBlock {
     private static final Identifier WATER = Identifier.parse("minecraft:water");
@@ -47,9 +52,19 @@ public final class ConvertedLegacyPlantBlock extends ConvertedLegacyBlock {
     }
 
     @Override
+    protected void neighborChanged(BlockState state, Level level, BlockPos pos, Block neighborBlock,
+                                   Orientation orientation, boolean movedByPiston) {
+        if (level.isClientSide() || canSurvive(state, level, pos)) return;
+        dropAndRemove(state, level, pos, level.getRandom());
+    }
+
+    @Override
     protected void randomTick(BlockState state, ServerLevel level, BlockPos pos, RandomSource random) {
         LegacyPlantRuntimeRegistry.Rule rule = requiredRule();
-        if (!canSurvive(state, level, pos)) return;
+        if (!canSurvive(state, level, pos)) {
+            dropAndRemove(state, level, pos, random);
+            return;
+        }
         switch (rule.family()) {
             case CROPS -> cropRandomTick(rule, state, level, pos, random);
             case REED -> reedRandomTick(state, level, pos);
@@ -82,6 +97,20 @@ public final class ConvertedLegacyPlantBlock extends ConvertedLegacyBlock {
         } else if (tick.metadata() != legacyMeta(state)) {
             level.setBlock(pos, withLegacyMeta(state, tick.metadata()), 4);
         }
+    }
+
+    private void dropAndRemove(BlockState state, Level level, BlockPos pos, RandomSource random) {
+        if (level.isClientSide()) return;
+        LegacyPlantRuntimeRegistry.Rule rule = requiredRule();
+        List<LegacyPlantRuntimeRegistry.DropStack> drops = LegacyPlantRuntimeRegistry.unsupportedRemovalDrops(
+                rule, legacyMeta(state), random::nextInt);
+        for (LegacyPlantRuntimeRegistry.DropStack drop : drops) {
+            if (!BuiltInRegistries.ITEM.containsKey(drop.itemId())) {
+                throw new IllegalStateException("Missing proven plant drop item at runtime: " + drop.itemId());
+            }
+            popResource(level, pos, new ItemStack(BuiltInRegistries.ITEM.getValue(drop.itemId()), drop.count()));
+        }
+        level.setBlock(pos, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS);
     }
 
     private List<LegacyPlantRuntimeRegistry.SoilSample> cropSoils(LevelReader level, BlockPos cropPos) {

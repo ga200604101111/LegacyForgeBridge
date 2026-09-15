@@ -20,8 +20,9 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Intersects independent plant topology, lifecycle and presentation evidence before any gameplay
- * adapter is allowed to exist. This pass proves eligibility only; it never enables runtime itself.
+ * Intersects independent plant topology, lifecycle, presentation and drop evidence before any
+ * gameplay adapter is allowed to exist. This pass proves eligibility only; it never enables
+ * runtime itself.
  */
 public final class LegacyPlantRuntimeProofPass implements ConversionPass {
     public static final String OUTPUT = "legacyforgebridge/plant-runtime-proof.json";
@@ -34,59 +35,74 @@ public final class LegacyPlantRuntimeProofPass implements ConversionPass {
         Path familyPath = context.stagingDir().resolve(LegacyPlantBlockPass.OUTPUT);
         Path lifecyclePath = context.stagingDir().resolve(LegacyPlantLifecyclePass.OUTPUT);
         Path presentationPath = context.stagingDir().resolve(LegacyPlantPresentationPass.OUTPUT);
-        if (!Files.isRegularFile(familyPath) && !Files.isRegularFile(lifecyclePath) && !Files.isRegularFile(presentationPath)) return;
+        Path dropPath = context.stagingDir().resolve(LegacyPlantDropProofPass.OUTPUT);
+        if (!Files.isRegularFile(familyPath) && !Files.isRegularFile(lifecyclePath)
+                && !Files.isRegularFile(presentationPath) && !Files.isRegularFile(dropPath)) return;
 
         JsonObject familyRoot = readObject(familyPath);
         JsonObject lifecycleRoot = readObject(lifecyclePath);
         JsonObject presentationRoot = readObject(presentationPath);
+        JsonObject dropRoot = readObject(dropPath);
         boolean sourceAligned = sourceMatches(familyRoot, context.sourceHash())
                 && sourceMatches(lifecycleRoot, context.sourceHash())
-                && sourceMatches(presentationRoot, context.sourceHash());
+                && sourceMatches(presentationRoot, context.sourceHash())
+                && sourceMatches(dropRoot, context.sourceHash());
 
         Map<String,JsonObject> families = index(familyRoot, "rules");
         Map<String,JsonObject> lifecycles = index(lifecycleRoot, "proofs");
         Map<String,JsonObject> presentations = index(presentationRoot, "rules");
+        Map<String,JsonObject> drops = index(dropRoot, "rules");
         Set<String> keys = new LinkedHashSet<>();
         keys.addAll(families.keySet());
         keys.addAll(lifecycles.keySet());
         keys.addAll(presentations.keySet());
+        keys.addAll(drops.keySet());
 
         JsonObject root = new JsonObject();
-        root.addProperty("schemaVersion", 2);
+        root.addProperty("schemaVersion", 3);
         root.addProperty("sourceSha256", context.sourceHash());
         root.addProperty("sourceProofsAligned", sourceAligned);
         root.addProperty("forgePlantableContractRequired", true);
+        root.addProperty("unsupportedRemovalDropProofRequired", true);
         JsonArray proofs = new JsonArray();
-        int identityComplete = 0, lifecycleComplete = 0, presentationComplete = 0, runtimeProofComplete = 0;
+        int identityComplete = 0, lifecycleComplete = 0, presentationComplete = 0;
+        int dropComplete = 0, runtimeProofComplete = 0;
 
         for (String key : keys) {
             JsonObject family = families.get(key);
             JsonObject lifecycle = lifecycles.get(key);
             JsonObject presentation = presentations.get(key);
+            JsonObject drop = drops.get(key);
             JsonArray reasons = new JsonArray();
 
-            String registryName = firstString(family, lifecycle, presentation, "legacyRegistryName");
-            String sourceClass = firstString(family, lifecycle, presentation, "sourceClass");
-            String familyName = firstString(family, lifecycle, presentation, "family");
-            String modernId = consistentModernId(family, lifecycle, presentation);
+            String registryName = firstString(family, lifecycle, presentation, drop, "legacyRegistryName");
+            String sourceClass = firstString(family, lifecycle, presentation, drop, "sourceClass");
+            String familyName = firstString(family, lifecycle, presentation, drop, "family");
+            String modernId = consistentModernId(family, lifecycle, presentation, drop);
 
-            boolean familyConsistent = family != null && lifecycle != null && presentation != null
-                    && sameString(family, lifecycle, "family") && sameString(family, presentation, "family");
+            boolean familyConsistent = family != null && lifecycle != null && presentation != null && drop != null
+                    && sameString(family, lifecycle, "family")
+                    && sameString(family, presentation, "family")
+                    && sameString(family, drop, "family");
             boolean identity = modernId != null
                     && bool(family, "modernIdentityComplete")
                     && bool(lifecycle, "modernIdentityComplete")
-                    && bool(presentation, "modernIdentityComplete");
+                    && bool(presentation, "modernIdentityComplete")
+                    && bool(drop, "modernIdentityComplete");
             boolean lifecycleOk = familyConsistent && lifecycleComplete(lifecycle, familyName);
             boolean presentationOk = familyConsistent && bool(presentation, "presentationComplete")
                     && bool(presentation, "cutoutRuntimeComplete");
+            boolean dropOk = familyConsistent && bool(drop, "unsupportedRemovalDropProofComplete")
+                    && drop.has("unsupportedRemovalDrop") && drop.get("unsupportedRemovalDrop").isJsonObject();
 
             if (!sourceAligned) reasons.add("source-proof-hash-mismatch");
             if (!familyConsistent) reasons.add("plant-family-proof-missing-or-inconsistent");
             if (!identity) reasons.add("modern-identity-incomplete-or-inconsistent");
             if (!lifecycleOk) reasons.add("lifecycle-proof-incomplete");
             if (!presentationOk) reasons.add("presentation-proof-incomplete");
+            if (!dropOk) reasons.add("unsupported-removal-drop-proof-incomplete");
 
-            boolean complete = sourceAligned && familyConsistent && identity && lifecycleOk && presentationOk;
+            boolean complete = sourceAligned && familyConsistent && identity && lifecycleOk && presentationOk && dropOk;
             JsonObject value = new JsonObject();
             if (registryName != null) value.addProperty("legacyRegistryName", registryName);
             if (sourceClass != null) value.addProperty("sourceClass", sourceClass);
@@ -97,6 +113,7 @@ public final class LegacyPlantRuntimeProofPass implements ConversionPass {
             value.addProperty("forgePlantableContractComplete", lifecycle != null && bool(lifecycle, "forgePlantableContractInherited"));
             value.addProperty("lifecycleProofComplete", lifecycleOk);
             value.addProperty("presentationProofComplete", presentationOk);
+            value.addProperty("unsupportedRemovalDropProofComplete", dropOk);
             value.addProperty("runtimeProofComplete", complete);
             if (complete) value.addProperty("runtimeAdapter", adapter(familyName));
             value.addProperty("runtimeComplete", false);
@@ -106,6 +123,7 @@ public final class LegacyPlantRuntimeProofPass implements ConversionPass {
             if (identity) identityComplete++;
             if (lifecycleOk) lifecycleComplete++;
             if (presentationOk) presentationComplete++;
+            if (dropOk) dropComplete++;
             if (complete) runtimeProofComplete++;
         }
 
@@ -114,6 +132,7 @@ public final class LegacyPlantRuntimeProofPass implements ConversionPass {
         root.addProperty("modernIdentityCompleteBlocks", identityComplete);
         root.addProperty("lifecycleProofCompleteBlocks", lifecycleComplete);
         root.addProperty("presentationProofCompleteBlocks", presentationComplete);
+        root.addProperty("unsupportedRemovalDropProofCompleteBlocks", dropComplete);
         root.addProperty("runtimeProofCompleteBlocks", runtimeProofComplete);
         root.addProperty("runtimeCompleteBlocks", 0);
         Path output = context.stagingDir().resolve(OUTPUT);
@@ -125,6 +144,7 @@ public final class LegacyPlantRuntimeProofPass implements ConversionPass {
                         + ", identity=" + identityComplete
                         + ", lifecycle=" + lifecycleComplete
                         + ", presentation=" + presentationComplete
+                        + ", unsupported-drop=" + dropComplete
                         + ", runtime-proof=" + runtimeProofComplete
                         + "; gameplay adapters remain disabled until materialization.");
         if (!sourceAligned) context.diagnostics().warning("LFB-CONVERT-PLANT-RUNTIME-0002", SupportLevel.MANUAL_REQUIRED,
@@ -210,11 +230,13 @@ public final class LegacyPlantRuntimeProofPass implements ConversionPass {
         return a != null && a.equals(b);
     }
 
-    private static String firstString(JsonObject a, JsonObject b, JsonObject c, String key) {
+    private static String firstString(JsonObject a, JsonObject b, JsonObject c, JsonObject d, String key) {
         String value = string(a, key);
         if (value != null) return value;
         value = string(b, key);
-        return value != null ? value : string(c, key);
+        if (value != null) return value;
+        value = string(c, key);
+        return value != null ? value : string(d, key);
     }
 
     private static boolean bool(JsonObject object, String key) {
