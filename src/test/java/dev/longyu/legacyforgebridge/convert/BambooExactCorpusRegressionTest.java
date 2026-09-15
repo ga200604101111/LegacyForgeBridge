@@ -12,6 +12,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.jar.JarFile;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -76,6 +77,16 @@ class BambooExactCorpusRegressionTest {
         assertTrue(storage.dropContents());
         assertTrue(storage.comparator());
 
+        LegacyStoragePresentationAnalyzer.Analysis storagePresentation =
+                new LegacyStoragePresentationAnalyzer().analyze(source, List.of(storage.sourceBlockClass()));
+        assertTrue(storagePresentation.diagnostics().isEmpty(), storagePresentation.diagnostics().toString());
+        assertEquals(1, storagePresentation.presentations().size());
+        var presentation = storagePresentation.presentations().get(storage.sourceBlockClass());
+        assertEquals(LegacyStoragePresentationAnalyzer.ORIENTATION_PLAYER_YAW_OPPOSITE_QUADRANT,
+                presentation.orientation());
+        assertEquals("bamboo:jpchest_f", presentation.frontTexture());
+        assertEquals("bamboo:jpchest_o", presentation.otherTexture());
+
         LegacyConversionEngine engine = new LegacyConversionEngine();
         var first = engine.convert(source, tempDir.resolve("converted-a"), tempDir.resolve("manifest-a"));
         var second = engine.convert(source, tempDir.resolve("converted-b"), tempDir.resolve("manifest-b"));
@@ -92,13 +103,39 @@ class BambooExactCorpusRegressionTest {
             assertEquals(63, content.getAsJsonArray("blocks").size());
 
             JsonObject storageRules = readJson(jar, "legacyforgebridge/storage-block-rules.json");
+            assertEquals(2, storageRules.get("schemaVersion").getAsInt());
             assertEquals(1, storageRules.getAsJsonArray("rules").size());
             JsonObject storageRule = storageRules.getAsJsonArray("rules").get(0).getAsJsonObject();
             assertEquals("bamboomod:jpchest", storageRule.get("id").getAsString());
             assertEquals(54, storageRule.get("slots").getAsInt());
             assertEquals(6, storageRule.get("rows").getAsInt());
             assertEquals(64, storageRule.get("stackLimit").getAsInt());
-            assertTrue(storageRule.get("presentationPending").getAsBoolean());
+            assertTrue(storageRule.get("presentationComplete").getAsBoolean());
+            assertFalse(storageRule.get("presentationPending").getAsBoolean());
+            assertEquals(LegacyStoragePresentationAnalyzer.ORIENTATION_PLAYER_YAW_OPPOSITE_QUADRANT,
+                    storageRule.get("orientation").getAsString());
+            assertEquals("bamboo:blocks/jpchest_f", storageRule.get("frontTexture").getAsString());
+            assertEquals("bamboo:blocks/jpchest_o", storageRule.get("otherTexture").getAsString());
+            assertEquals(1, storageRules.get("presentationCompleteRules").getAsInt());
+            assertEquals(0, storageRules.get("presentationPendingRules").getAsInt());
+
+            JsonObject blockState = readJson(jar, "assets/bamboomod/blockstates/jpchest.json");
+            JsonObject variants = blockState.getAsJsonObject("variants");
+            assertEquals("bamboomod:block/jpchest", variants.getAsJsonObject("legacy_meta=0").get("model").getAsString());
+            assertEquals(90, variants.getAsJsonObject("legacy_meta=1").get("y").getAsInt());
+            assertEquals(180, variants.getAsJsonObject("legacy_meta=2").get("y").getAsInt());
+            assertEquals(270, variants.getAsJsonObject("legacy_meta=3").get("y").getAsInt());
+            assertEquals("bamboomod:block/jpchest_all_other",
+                    variants.getAsJsonObject("legacy_meta=15").get("model").getAsString());
+
+            JsonObject blockModel = readJson(jar, "assets/bamboomod/models/block/jpchest.json");
+            JsonObject textures = blockModel.getAsJsonObject("textures");
+            assertEquals("bamboo:blocks/jpchest_f", textures.get("north").getAsString());
+            assertEquals("bamboo:blocks/jpchest_o", textures.get("south").getAsString());
+            assertNotNull(jar.getJarEntry("assets/bamboomod/models/item/jpchest.json"));
+            assertNotNull(jar.getJarEntry("assets/bamboomod/items/jpchest.json"));
+            assertNotNull(jar.getJarEntry("assets/bamboo/textures/blocks/jpchest_f.png"));
+            assertNotNull(jar.getJarEntry("assets/bamboo/textures/blocks/jpchest_o.png"));
 
             JsonObject recipeMaterialization = readJson(jar, "legacyforgebridge/recipe-materialization.json");
             assertEquals(125, recipeMaterialization.get("emittedRecipes").getAsInt());
