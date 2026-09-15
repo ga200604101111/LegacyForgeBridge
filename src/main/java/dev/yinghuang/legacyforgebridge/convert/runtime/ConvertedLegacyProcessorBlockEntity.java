@@ -4,8 +4,11 @@ import dev.yinghuang.legacyforgebridge.LegacyForgeBridge;
 import dev.yinghuang.legacyforgebridge.compat.LegacySingleInputProcessorRegistry;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.NonNullList;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.ContainerHelper;
 import net.minecraft.world.WorldlyContainer;
@@ -35,200 +38,54 @@ public final class ConvertedLegacyProcessorBlockEntity extends BaseContainerBloc
     private float clientRoll;
 
     private final ContainerData data=new ContainerData(){
-        @Override public int get(int index){return switch(index){
-            case 0->grindMotion;
-            case 1->progressStage();
-            case 2->grindTime>0?1:0;
-            case 3->LegacySingleInputProcessorRegistry.presentationKey(rule.id());
-            default->0;
-        };}
-        @Override public void set(int index,int value){
-            if(index==0)grindMotion=value;
-            else if(index==1&&grindTime<=0&&value>0)grindTime=Math.min(rule.processTicks(),Math.round(value/3F*rule.processTicks()));
-        }
+        @Override public int get(int index){return switch(index){case 0->grindMotion;case 1->progressStage();case 2->grindTime>0?1:0;case 3->LegacySingleInputProcessorRegistry.presentationKey(rule.id());default->0;};}
+        @Override public void set(int index,int value){if(index==0)grindMotion=value;else if(index==1&&grindTime<=0&&value>0)grindTime=Math.min(rule.processTicks(),Math.round(value/3F*rule.processTicks()));}
         @Override public int getCount(){return 4;}
     };
 
-    public ConvertedLegacyProcessorBlockEntity(BlockPos pos,BlockState state){
-        super(LegacySingleInputProcessorRegistry.requireType(state.getBlock()),pos,state);
-        this.rule=LegacySingleInputProcessorRegistry.requireRule(state.getBlock());
-        this.items=NonNullList.withSize(rule.slots(),ItemStack.EMPTY);
-    }
-
+    public ConvertedLegacyProcessorBlockEntity(BlockPos pos,BlockState state){super(LegacySingleInputProcessorRegistry.requireType(state.getBlock()),pos,state);this.rule=LegacySingleInputProcessorRegistry.requireRule(state.getBlock());this.items=NonNullList.withSize(rule.slots(),ItemStack.EMPTY);}
     @Override protected Component getDefaultName(){return Component.translatable("block."+rule.id().getNamespace()+"."+rule.id().getPath());}
     @Override public int getContainerSize(){return rule.slots();}
     @Override public int getMaxStackSize(){return rule.stackLimit();}
     @Override protected NonNullList<ItemStack> getItems(){return items;}
-    @Override protected void setItems(NonNullList<ItemStack> values){
-        NonNullList<ItemStack> normalized=NonNullList.withSize(rule.slots(),ItemStack.EMPTY);
-        int count=Math.min(values.size(),normalized.size());
-        for(int slot=0;slot<count;slot++)normalized.set(slot,values.get(slot));
-        this.items=normalized;
-    }
-
-    // Source isItemValidForSlot accepts every item in slot 0 and rejects both output slots.
+    @Override protected void setItems(NonNullList<ItemStack> values){NonNullList<ItemStack> normalized=NonNullList.withSize(rule.slots(),ItemStack.EMPTY);int count=Math.min(values.size(),normalized.size());for(int slot=0;slot<count;slot++)normalized.set(slot,values.get(slot));this.items=normalized;}
     @Override public boolean canPlaceItem(int slot,ItemStack stack){return slot==rule.inputSlot();}
     public boolean canGrindInput(ItemStack stack){return level!=null&&LegacySingleInputProcessorRegistry.findInput(rule,stack,level.registryAccess())!=null;}
-
-    @Override public int[] getSlotsForFace(Direction side){
-        return switch(side){case DOWN->rule.bottomSlots();case UP->rule.topSlots();default->rule.sideSlots();};
-    }
+    @Override public int[] getSlotsForFace(Direction side){return switch(side){case DOWN->rule.bottomSlots();case UP->rule.topSlots();default->rule.sideSlots();};}
     @Override public boolean canPlaceItemThroughFace(int slot,ItemStack stack,@Nullable Direction direction){return canPlaceItem(slot,stack);}
     @Override public boolean canTakeItemThroughFace(int slot,ItemStack stack,Direction direction){return direction!=Direction.DOWN||slot!=rule.inputSlot();}
+    @Override public boolean stillValid(Player player){if(level==null||level.getBlockEntity(worldPosition)!=this)return false;return player.distanceToSqr(worldPosition.getX()+0.5,worldPosition.getY()+0.5,worldPosition.getZ()+0.5)<=rule.interactionDistanceSq();}
 
-    @Override public boolean stillValid(Player player){
-        if(level==null||level.getBlockEntity(worldPosition)!=this)return false;
-        return player.distanceToSqr(worldPosition.getX()+0.5,worldPosition.getY()+0.5,worldPosition.getZ()+0.5)<=rule.interactionDistanceSq();
-    }
-
-    @Override protected void loadAdditional(ValueInput input){
-        super.loadAdditional(input);
-        items=NonNullList.withSize(rule.slots(),ItemStack.EMPTY);
-        ContainerHelper.loadAllItems(input,items);
-        grindTime=input.getIntOr("grindTime",0);
-        activeLegacyMeta=input.getIntOr("grindItemDmg",0);
-        activeLegacyName=input.getStringOr("grindItemName",AIR_ID);
-        activeRecipeIndex=input.getIntOr("lfbActiveRecipe",-1);
-        grindMotion=grindTime>0?Math.floorMod(grindTime,40)/10:0;
-        if(rule.legacyEnergyApiPresent())innerEnergy=input.getIntOr(rule.energyNbtKey(),0);
-    }
-
-    @Override protected void saveAdditional(ValueOutput output){
-        super.saveAdditional(output);
-        ContainerHelper.saveAllItems(output,items);
-        output.putInt("grindTime",grindTime);
-        output.putString("grindItemName",activeLegacyName==null?AIR_ID:activeLegacyName);
-        output.putInt("grindItemDmg",activeLegacyMeta);
-        output.putInt("lfbActiveRecipe",activeRecipeIndex);
-        if(rule.legacyEnergyApiPresent())output.putInt(rule.energyNbtKey(),innerEnergy);
-    }
-
-    @Override protected AbstractContainerMenu createMenu(int containerId,Inventory inventory){
-        return new ConvertedLegacyProcessorMenu(containerId,inventory,this,data);
-    }
-
-    public static void serverTick(ServerLevel level,BlockPos pos,BlockState state,ConvertedLegacyProcessorBlockEntity machine){
-        machine.tickServer();
-    }
-
-    public static void clientTick(Level level,BlockPos pos,BlockState state,ConvertedLegacyProcessorBlockEntity machine){
-        machine.tickClient();
-    }
+    @Override protected void loadAdditional(ValueInput input){super.loadAdditional(input);items=NonNullList.withSize(rule.slots(),ItemStack.EMPTY);ContainerHelper.loadAllItems(input,items);grindTime=input.getIntOr("grindTime",0);activeLegacyMeta=input.getIntOr("grindItemDmg",0);activeLegacyName=input.getStringOr("grindItemName",AIR_ID);activeRecipeIndex=input.getIntOr("lfbActiveRecipe",-1);grindMotion=grindTime>0?Math.floorMod(grindTime,40)/10:0;if(rule.legacyEnergyApiPresent())innerEnergy=input.getIntOr(rule.energyNbtKey(),0);}
+    @Override protected void saveAdditional(ValueOutput output){super.saveAdditional(output);ContainerHelper.saveAllItems(output,items);output.putInt("grindTime",grindTime);output.putString("grindItemName",activeLegacyName==null?AIR_ID:activeLegacyName);output.putInt("grindItemDmg",activeLegacyMeta);output.putInt("lfbActiveRecipe",activeRecipeIndex);if(rule.legacyEnergyApiPresent())output.putInt(rule.energyNbtKey(),innerEnergy);}
+    @Override public ClientboundBlockEntityDataPacket getUpdatePacket(){return ClientboundBlockEntityDataPacket.create(this);}
+    @Override public CompoundTag getUpdateTag(HolderLookup.Provider registries){return saveWithoutMetadata(registries);}
+    @Override protected AbstractContainerMenu createMenu(int containerId,Inventory inventory){return new ConvertedLegacyProcessorMenu(containerId,inventory,this,data);}
+    public static void serverTick(ServerLevel level,BlockPos pos,BlockState state,ConvertedLegacyProcessorBlockEntity machine){machine.tickServer();}
+    public static void clientTick(Level level,BlockPos pos,BlockState state,ConvertedLegacyProcessorBlockEntity machine){machine.tickClient();}
 
     private void tickServer(){
-        if(level==null||level.isClientSide())return;
-        int step=1;
-        if(grindTime!=0&&rule.legacyEnergyApiPresent()){
-            step=sourceProgressStep(grindTime,innerEnergy,rule.minUseEnergy());
-            innerEnergy=sourceEnergyAfterStep(grindTime,innerEnergy,rule.minUseEnergy());
-        }
-        boolean changed=false;
-        int metadata=0;
-        if(grindTime==0){
-            LegacySingleInputProcessorRegistry.ResolvedRecipe recipe=
-                    LegacySingleInputProcessorRegistry.findInput(rule,items.get(rule.inputSlot()),level.registryAccess());
-            if(recipe!=null&&canStart(recipe)){
-                start(recipe);
-                grindTime+=step;
-                metadata=step;
-                changed=true;
-            }
-        }else{
-            grindTime+=step;
-            metadata=step;
-            changed=true;
-            if(grindTime>rule.processTicks()){
-                LegacySingleInputProcessorRegistry.ResolvedRecipe recipe=
-                        LegacySingleInputProcessorRegistry.resolveActive(
-                                rule,activeRecipeIndex,activeLegacyName,activeLegacyMeta,level.registryAccess());
-                grindTime=0;
-                if(recipe!=null)finish(recipe);
-                else LegacyForgeBridge.LOGGER.error(
-                        "Converted processor {} could not resolve active legacy recipe {}:{}; output was not fabricated.",
-                        rule.id(),activeLegacyName,activeLegacyMeta);
-            }
-        }
-        if(rule.metadataDrivesRoll())updateLegacyMetadata(metadata);
-        grindMotion=grindTime>0?Math.floorMod(grindTime,40)/10:0;
-        if(changed){
-            setChanged();
-            level.updateNeighbourForOutputSignal(worldPosition,getBlockState().getBlock());
-        }
+        if(level==null||level.isClientSide())return;int step=1;if(grindTime!=0&&rule.legacyEnergyApiPresent()){step=sourceProgressStep(grindTime,innerEnergy,rule.minUseEnergy());innerEnergy=sourceEnergyAfterStep(grindTime,innerEnergy,rule.minUseEnergy());}
+        boolean changed=false;int metadata=0;
+        if(grindTime==0){LegacySingleInputProcessorRegistry.ResolvedRecipe recipe=LegacySingleInputProcessorRegistry.findInput(rule,items.get(rule.inputSlot()),level.registryAccess());if(recipe!=null&&canStart(recipe)){start(recipe);grindTime+=step;metadata=step;changed=true;}}
+        else{grindTime+=step;metadata=step;changed=true;if(grindTime>rule.processTicks()){LegacySingleInputProcessorRegistry.ResolvedRecipe recipe=LegacySingleInputProcessorRegistry.resolveActive(rule,activeRecipeIndex,activeLegacyName,activeLegacyMeta,level.registryAccess());grindTime=0;if(recipe!=null)finish(recipe);else LegacyForgeBridge.LOGGER.error("Converted processor {} could not resolve active legacy recipe {}:{}; output was not fabricated.",rule.id(),activeLegacyName,activeLegacyMeta);}}
+        if(rule.metadataDrivesRoll())updateLegacyMetadata(metadata);grindMotion=grindTime>0?Math.floorMod(grindTime,40)/10:0;if(changed){setChanged();level.updateNeighbourForOutputSignal(worldPosition,getBlockState().getBlock());}
     }
 
     private void tickClient(){
-        if(level==null||!level.isClientSide()||!rule.metadataDrivesRoll())return;
-        int metadata=ConvertedLegacyBlock.legacyMeta(getBlockState());
-        if(metadata==0){
-            clientRoll=0F;
-        }else{
-            float next=clientRoll+metadata;
-            clientRoll=next<360F?next:0F;
-        }
+        if(level==null||!level.isClientSide()||!rule.metadataDrivesRoll())return;int metadata=ConvertedLegacyBlock.legacyMeta(getBlockState());
+        if(metadata==0){clientRoll=0F;return;}float next=clientRoll+metadata;clientRoll=next<360F?next:0F;
+        if(rule.particle()!=null){LegacySingleInputProcessorRegistry.ResolvedRecipe recipe=LegacySingleInputProcessorRegistry.resolveActive(rule,activeRecipeIndex,activeLegacyName,activeLegacyMeta,level.registryAccess());if(recipe!=null)LegacyProcessorParticleBridge.emit(level,worldPosition,recipe.input(),clientRoll,rule.particle());}
     }
-
-    private void updateLegacyMetadata(int metadata){
-        BlockState state=getBlockState();
-        if(ConvertedLegacyBlock.legacyMeta(state)==metadata)return;
-        level.setBlock(worldPosition,ConvertedLegacyBlock.withLegacyMeta(state,metadata),2);
-    }
-
-    private boolean canStart(LegacySingleInputProcessorRegistry.ResolvedRecipe recipe){
-        ItemStack main=recipe.output(),bonus=recipe.bonus(),slotMain=items.get(1),slotBonus=items.get(2);
-        if(main.isEmpty())return false;
-        // Exact 1.7 source returns early when both outputs are empty, before capacity checks.
-        if(slotMain.isEmpty()&&slotBonus.isEmpty())return true;
-        if(!slotBonus.isEmpty()&&bonus.isEmpty())return false;
-        if(!slotMain.isEmpty()&&!ItemStack.isSameItemSameComponents(slotMain,main))return false;
-        if(!slotBonus.isEmpty()&&!bonus.isEmpty()&&!ItemStack.isSameItemSameComponents(slotBonus,bonus))return false;
-        int mainCount=(slotMain.isEmpty()?0:slotMain.getCount())+main.getCount();
-        boolean ok=mainCount<=getMaxStackSize()&&mainCount<=main.getMaxStackSize();
-        if(ok&&!bonus.isEmpty()){
-            int bonusCount=(slotBonus.isEmpty()?0:slotBonus.getCount())+bonus.getCount();
-            ok=bonusCount<=getMaxStackSize()&&bonusCount<=bonus.getMaxStackSize();
-        }
-        return ok;
-    }
-
-    private void start(LegacySingleInputProcessorRegistry.ResolvedRecipe recipe){
-        activeRecipeIndex=recipe.index();
-        activeLegacyName=recipe.legacyInput().registryId();
-        activeLegacyMeta=recipe.legacyInput().meta();
-        ItemStack input=items.get(rule.inputSlot());
-        input.shrink(recipe.requiredInputCount());
-        if(input.isEmpty())items.set(rule.inputSlot(),ItemStack.EMPTY);
-    }
-
-    private void finish(LegacySingleInputProcessorRegistry.ResolvedRecipe recipe){
-        mergeSourceStyle(1,recipe.output());
-        if(!recipe.bonus().isEmpty()&&level.random.nextFloat()<=recipe.bonusChance())mergeSourceStyle(2,recipe.bonus());
-        activeRecipeIndex=-1;
-        activeLegacyName=AIR_ID;
-        activeLegacyMeta=0;
-    }
-
-    /** Source completion silently does nothing if the occupied output slot no longer matches. */
-    private void mergeSourceStyle(int slot,ItemStack produced){
-        if(produced.isEmpty())return;
-        ItemStack current=items.get(slot);
-        if(current.isEmpty())items.set(slot,produced.copy());
-        else if(ItemStack.isSameItemSameComponents(current,produced))current.grow(produced.getCount());
-    }
-
+    private void updateLegacyMetadata(int metadata){BlockState state=getBlockState();if(ConvertedLegacyBlock.legacyMeta(state)==metadata)return;level.setBlock(worldPosition,ConvertedLegacyBlock.withLegacyMeta(state,metadata),2);}
+    private boolean canStart(LegacySingleInputProcessorRegistry.ResolvedRecipe recipe){ItemStack main=recipe.output(),bonus=recipe.bonus(),slotMain=items.get(1),slotBonus=items.get(2);if(main.isEmpty())return false;if(slotMain.isEmpty()&&slotBonus.isEmpty())return true;if(!slotBonus.isEmpty()&&bonus.isEmpty())return false;if(!slotMain.isEmpty()&&!ItemStack.isSameItemSameComponents(slotMain,main))return false;if(!slotBonus.isEmpty()&&!bonus.isEmpty()&&!ItemStack.isSameItemSameComponents(slotBonus,bonus))return false;int mainCount=(slotMain.isEmpty()?0:slotMain.getCount())+main.getCount();boolean ok=mainCount<=getMaxStackSize()&&mainCount<=main.getMaxStackSize();if(ok&&!bonus.isEmpty()){int bonusCount=(slotBonus.isEmpty()?0:slotBonus.getCount())+bonus.getCount();ok=bonusCount<=getMaxStackSize()&&bonusCount<=bonus.getMaxStackSize();}return ok;}
+    private void start(LegacySingleInputProcessorRegistry.ResolvedRecipe recipe){activeRecipeIndex=recipe.index();activeLegacyName=recipe.legacyInput().registryId();activeLegacyMeta=recipe.legacyInput().meta();ItemStack input=items.get(rule.inputSlot());input.shrink(recipe.requiredInputCount());if(input.isEmpty())items.set(rule.inputSlot(),ItemStack.EMPTY);syncClientState();}
+    private void finish(LegacySingleInputProcessorRegistry.ResolvedRecipe recipe){mergeSourceStyle(1,recipe.output());if(!recipe.bonus().isEmpty()&&level.random.nextFloat()<=recipe.bonusChance())mergeSourceStyle(2,recipe.bonus());activeRecipeIndex=-1;activeLegacyName=AIR_ID;activeLegacyMeta=0;syncClientState();}
+    private void syncClientState(){if(level==null||level.isClientSide())return;BlockState state=getBlockState();level.sendBlockUpdated(worldPosition,state,state,2);}
+    private void mergeSourceStyle(int slot,ItemStack produced){if(produced.isEmpty())return;ItemStack current=items.get(slot);if(current.isEmpty())items.set(slot,produced.copy());else if(ItemStack.isSameItemSameComponents(current,produced))current.grow(produced.getCount());}
     private int progressStage(){return Math.round((float)grindTime/(float)rule.processTicks()*3F);}
-
-    /** Exact source rule: acceleration is only considered once progress is non-zero and energy > minimum. */
-    private static int sourceProgressStep(int progress,int energy,int minUseEnergy){
-        if(progress==0||energy<=minUseEnergy)return 1;
-        return (byte)(energy/minUseEnergy+1);
-    }
-
-    /** Exact source behavior intentionally allows energy to overshoot below zero (e.g. 500 -> -100). */
-    private static int sourceEnergyAfterStep(int progress,int energy,int minUseEnergy){
-        int step=sourceProgressStep(progress,energy,minUseEnergy);
-        return progress==0||energy<=minUseEnergy?energy:energy-minUseEnergy*step;
-    }
-
+    private static int sourceProgressStep(int progress,int energy,int minUseEnergy){if(progress==0||energy<=minUseEnergy)return 1;return (byte)(energy/minUseEnergy+1);}
+    private static int sourceEnergyAfterStep(int progress,int energy,int minUseEnergy){int step=sourceProgressStep(progress,energy,minUseEnergy);return progress==0||energy<=minUseEnergy?energy:energy-minUseEnergy*step;}
     public float clientRoll(){return clientRoll;}
     int grindTimeForTests(){return grindTime;}
     int innerEnergyForTests(){return innerEnergy;}
