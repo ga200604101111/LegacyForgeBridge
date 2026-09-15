@@ -28,7 +28,7 @@ public final class ConvertedLegacyPlantBlock extends ConvertedLegacyBlock {
     private final Identifier convertedId;
 
     public ConvertedLegacyPlantBlock(Identifier convertedId, BlockBehaviour.Properties properties) {
-        super(convertedId, properties.randomTicks().noCollission());
+        super(convertedId, properties.randomTicks().noCollision());
         this.convertedId = convertedId;
         if (!LegacyPlantRuntimeRegistry.hasRule(convertedId)) {
             throw new IllegalStateException("Missing proven plant runtime rule for " + convertedId);
