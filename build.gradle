@@ -219,7 +219,7 @@ tasks.register('verifyNoLongyuNamespace') {
                 if (!entry.directory) {
                     byte[] bytes = zip.getInputStream(entry).bytes
                     String raw = new String(bytes, java.nio.charset.StandardCharsets.ISO_8859_1)
-                    if (raw.contains('dev.yinghuang') || raw.contains('dev/yinghuang')) {
+                    if (raw.contains('dev.longyu') || raw.contains('dev/longyu')) {
                         offenders.add(entry.name)
                     }
                 }
