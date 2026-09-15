@@ -59,6 +59,7 @@ public final class ConvertedProcessorPresentationRuntime {
 
     /** Invoked by the converted mod's generated ClientModInitializer after its common content exists. */
     public static void initializeMod(String modId) {
+        ConvertedLegacyProcessorParticles.install();
         if(modId==null||modId.isBlank()||!INITIALIZED_MODS.add(modId))return;
         ModContainer container=FabricLoader.getInstance().getModContainer(modId).orElse(null);
         if(container==null){
