@@ -27,19 +27,21 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class LegacyPlantPlacementProofPassTest {
     @TempDir Path tempDir;
 
-    @Test void inheritedSeedCompletesWhileSourceInstanceMethodFailsClosed() throws Exception {
+    @Test void inheritedSeedAndSeedFoodMaterializeWhileSourceInstanceMethodFailsClosed() throws Exception {
         Path source = tempDir.resolve("placement.jar");
         try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(source))) {
             put(out, "pkg/Crop.class", block("pkg/Crop")); put(out, "pkg/Soil.class", block("pkg/Soil"));
             put(out, "pkg/PureSeed.class", seed("pkg/PureSeed", false));
             put(out, "pkg/CustomSeed.class", seed("pkg/CustomSeed", true));
+            put(out, "pkg/PureSeedFood.class", seedFood());
             put(out, "pkg/Bootstrap.class", bootstrap());
         }
         Path staging = tempDir.resolve("staging"); Files.createDirectories(staging.resolve("legacyforgebridge"));
         write(staging, LegacyItemBlockBindingPass.OUTPUT, """
                 {"schemaVersion":2,"sourceSha256":"sha","bindings":[
                   {"id":"demo:pure_seed","legacyRegistryName":"pure_seed","sourceClass":"pkg/PureSeed","family":"seeds","topologyProofComplete":true,"modernIdentityComplete":true,"targetBlock":{"modernId":"demo:crop"},"soilBlock":{"modernId":"minecraft:farmland"}},
-                  {"id":"demo:custom_seed","legacyRegistryName":"custom_seed","sourceClass":"pkg/CustomSeed","family":"seeds","topologyProofComplete":true,"modernIdentityComplete":true,"targetBlock":{"modernId":"demo:crop"},"soilBlock":{"modernId":"minecraft:farmland"}}
+                  {"id":"demo:custom_seed","legacyRegistryName":"custom_seed","sourceClass":"pkg/CustomSeed","family":"seeds","topologyProofComplete":true,"modernIdentityComplete":true,"targetBlock":{"modernId":"demo:crop"},"soilBlock":{"modernId":"minecraft:farmland"}},
+                  {"id":"demo:seed_food","legacyRegistryName":"seed_food","sourceClass":"pkg/PureSeedFood","family":"seed_food","nutrition":3,"saturationModifier":0.4,"topologyProofComplete":true,"modernIdentityComplete":true,"targetBlock":{"modernId":"demo:crop"},"soilBlock":{"modernId":"minecraft:farmland"}}
                 ]}
                 """);
         write(staging, LegacyPlantBlockPass.OUTPUT, """
@@ -62,20 +64,33 @@ class LegacyPlantPlacementProofPassTest {
         new LegacyPlantPlacementProofPass().apply(context);
 
         JsonObject root = JsonParser.parseString(Files.readString(staging.resolve(LegacyPlantPlacementProofPass.OUTPUT))).getAsJsonObject();
-        assertEquals(1, root.get("schemaVersion").getAsInt());
+        assertEquals(2, root.get("schemaVersion").getAsInt());
         assertTrue(root.get("sourceProofsAligned").getAsBoolean());
-        assertEquals(2, root.get("classifiedItems").getAsInt());
-        assertEquals(1, root.get("inheritedVanillaPlacementItems").getAsInt());
-        assertEquals(2, root.get("targetProofCompleteItems").getAsInt());
-        assertEquals(1, root.get("placementProofCompleteItems").getAsInt());
-        assertEquals(0, root.get("runtimeCompleteItems").getAsInt());
+        assertEquals(3, root.get("classifiedItems").getAsInt());
+        assertEquals(2, root.get("inheritedVanillaPlacementItems").getAsInt());
+        assertEquals(3, root.get("targetProofCompleteItems").getAsInt());
+        assertEquals(2, root.get("placementProofCompleteItems").getAsInt());
+        assertEquals(1, root.get("seedFoodPropertiesProofCompleteItems").getAsInt());
+        assertEquals(2, root.get("runtimeCompleteItems").getAsInt());
+
         JsonObject pure = root.getAsJsonArray("rules").get(0).getAsJsonObject();
         assertTrue(pure.get("placementProofComplete").getAsBoolean());
+        assertTrue(pure.get("runtimeComplete").getAsBoolean());
         assertEquals("item_seeds_1_7_10", pure.get("placementAdapter").getAsString());
+
         JsonObject custom = root.getAsJsonArray("rules").get(1).getAsJsonObject();
         assertFalse(custom.get("inheritedVanillaPlacement").getAsBoolean());
         assertFalse(custom.get("placementProofComplete").getAsBoolean());
+        assertFalse(custom.get("runtimeComplete").getAsBoolean());
         assertEquals(1, custom.getAsJsonArray("sourceInstanceMethods").size());
+
+        JsonObject food = root.getAsJsonArray("rules").get(2).getAsJsonObject();
+        assertTrue(food.get("seedFoodPropertiesProofRequired").getAsBoolean());
+        assertTrue(food.get("seedFoodPropertiesProofComplete").getAsBoolean());
+        assertEquals(3, food.get("nutrition").getAsInt());
+        assertEquals(0.4F, food.get("saturationModifier").getAsFloat());
+        assertEquals("item_seed_food_1_7_10", food.get("placementAdapter").getAsString());
+        assertTrue(food.get("runtimeComplete").getAsBoolean());
     }
 
     private static byte[] seed(String name, boolean custom) {
@@ -92,6 +107,18 @@ class LegacyPlantPlacementProofPassTest {
         w.visitEnd(); return w.toByteArray();
     }
 
+    private static byte[] seedFood() {
+        ClassWriter w = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7, Opcodes.ACC_PUBLIC, "pkg/PureSeedFood", null, "net/minecraft/item/ItemSeedFood", null);
+        MethodVisitor c = w.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null);
+        c.visitCode(); c.visitVarInsn(Opcodes.ALOAD, 0); c.visitInsn(Opcodes.ICONST_3); c.visitLdcInsn(0.4F);
+        c.visitFieldInsn(Opcodes.GETSTATIC, "pkg/Bootstrap", "CROP", "Lnet/minecraft/block/Block;");
+        c.visitFieldInsn(Opcodes.GETSTATIC, "net/minecraft/init/Blocks", "field_150458_ak", "Lnet/minecraft/block/Block;");
+        c.visitMethodInsn(Opcodes.INVOKESPECIAL, "net/minecraft/item/ItemSeedFood", "<init>",
+                "(IFLnet/minecraft/block/Block;Lnet/minecraft/block/Block;)V", false);
+        c.visitInsn(Opcodes.RETURN); c.visitMaxs(0, 0); c.visitEnd(); w.visitEnd(); return w.toByteArray();
+    }
+
     private static byte[] block(String name) {
         ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,name,null,"net/minecraft/block/Block",null);
         MethodVisitor c=w.visitMethod(Opcodes.ACC_PUBLIC,"<init>","()V",null,null);c.visitCode();c.visitVarInsn(Opcodes.ALOAD,0);c.visitInsn(Opcodes.ACONST_NULL);
@@ -105,7 +132,8 @@ class LegacyPlantPlacementProofPassTest {
         bind.visitCode();bind.visitVarInsn(Opcodes.ALOAD,0);bind.visitVarInsn(Opcodes.ALOAD,1);bind.visitMethodInsn(Opcodes.INVOKESTATIC,"cpw/mods/fml/common/registry/GameRegistry","registerBlock","(Lnet/minecraft/block/Block;Ljava/lang/String;)V",false);bind.visitVarInsn(Opcodes.ALOAD,0);bind.visitInsn(Opcodes.ARETURN);bind.visitMaxs(0,0);bind.visitEnd();
         MethodVisitor m=w.visitMethod(Opcodes.ACC_STATIC,"<clinit>","()V",null,null);m.visitCode();
         m.visitTypeInsn(Opcodes.NEW,"pkg/Crop");m.visitInsn(Opcodes.DUP);m.visitMethodInsn(Opcodes.INVOKESPECIAL,"pkg/Crop","<init>","()V",false);m.visitLdcInsn("crop");m.visitMethodInsn(Opcodes.INVOKESTATIC,"pkg/Bootstrap","bindBlock","(Lnet/minecraft/block/Block;Ljava/lang/String;)Lnet/minecraft/block/Block;",false);m.visitFieldInsn(Opcodes.PUTSTATIC,"pkg/Bootstrap","CROP","Lnet/minecraft/block/Block;");
-        registerItem(m,"pkg/PureSeed","pure_seed");registerItem(m,"pkg/CustomSeed","custom_seed");m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
+        registerItem(m,"pkg/PureSeed","pure_seed");registerItem(m,"pkg/CustomSeed","custom_seed");registerItem(m,"pkg/PureSeedFood","seed_food");
+        m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
     }
     private static void registerItem(MethodVisitor m,String type,String id){m.visitTypeInsn(Opcodes.NEW,type);m.visitInsn(Opcodes.DUP);m.visitMethodInsn(Opcodes.INVOKESPECIAL,type,"<init>","()V",false);m.visitLdcInsn(id);m.visitMethodInsn(Opcodes.INVOKESTATIC,"cpw/mods/fml/common/registry/GameRegistry","registerItem","(Lnet/minecraft/item/Item;Ljava/lang/String;)V",false);}
     private static void write(Path staging,String relative,String json)throws Exception{Path path=staging.resolve(relative);Files.createDirectories(path.getParent());Files.writeString(path,json,StandardCharsets.UTF_8);}

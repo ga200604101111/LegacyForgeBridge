@@ -9,6 +9,8 @@ import dev.yinghuang.legacyforgebridge.compat.LegacyBlockPlacementRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyFoodItemRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyFuelRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyInertModelBlockRegistry;
+import dev.yinghuang.legacyforgebridge.compat.LegacyPlantPlacementRegistry;
+import dev.yinghuang.legacyforgebridge.compat.LegacyPlantRuntimeRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacySingleInputProcessorRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyStackComponents;
 import dev.yinghuang.legacyforgebridge.compat.LegacyStorageBlockRegistry;
@@ -51,6 +53,8 @@ public final class GeneratedModSupport {
 
     public static void beginMod(String modId){
         LegacyStackComponents.bootstrap();
+        LegacyPlantRuntimeRegistry.loadMod(modId);
+        LegacyPlantPlacementRegistry.loadMod(modId);
         LegacyFoodItemRegistry.loadMod(modId);
         LegacyInertModelBlockRegistry.loadMod(modId);
         LegacyStorageBlockRegistry.loadMod(modId);
@@ -66,11 +70,15 @@ public final class GeneratedModSupport {
         boolean inert=LegacyInertModelBlockRegistry.hasRule(id);
         boolean storage=LegacyStorageBlockRegistry.hasRule(id);
         boolean processor=LegacySingleInputProcessorRegistry.hasRule(id);
-        int families=(inert?1:0)+(storage?1:0)+(processor?1:0);
+        var plantRule=LegacyPlantRuntimeRegistry.rule(id);
+        boolean plant=plantRule!=null&&plantRule.family()==LegacyPlantRuntimeRegistry.Family.CROPS
+                &&LegacyPlantPlacementRegistry.cropTargetRuntimeReady(id);
+        int families=(inert?1:0)+(storage?1:0)+(processor?1:0)+(plant?1:0);
         if(families>1)throw new IllegalStateException("Converted block has conflicting specialized runtime rules: "+id);
         Block block=inert?new ConvertedLegacyInertModelBlock(id,blockProperties)
                 :storage?new ConvertedLegacyStorageBlock(id,blockProperties)
                 :processor?new ConvertedLegacyProcessorBlock(id,blockProperties)
+                :plant?new ConvertedLegacyPlantBlock(id,blockProperties)
                 :new ConvertedLegacyBlock(id,blockProperties);
         Registry.register(BuiltInRegistries.BLOCK,blockKey,block);
         BLOCKS.put(id,block);
@@ -97,8 +105,14 @@ public final class GeneratedModSupport {
         Item.Properties properties=new Item.Properties().setId(key).overrideDescription(descriptionKey)
                 .component(LegacyStackComponents.legacyMeta(),0);
         if("snowball".equals(kind))properties.stacksTo(16);
+        var plantingRule=LegacyPlantPlacementRegistry.rule(id);
         var food=LegacyFoodItemRegistry.rule(id);
-        if(food!=null)properties.food(LegacyFoodItemRegistry.foodProperties(food));
+        if(plantingRule!=null&&plantingRule.adapter()==LegacyPlantPlacementRegistry.Adapter.SEED_FOOD){
+            if(food!=null&&(food.nutrition()!=plantingRule.nutrition()
+                    ||Float.compare(food.saturationModifier(),plantingRule.saturationModifier())!=0
+                    ||food.alwaysEdible()))throw new IllegalStateException("Conflicting ItemSeedFood food proof for "+id);
+            properties.food(LegacyPlantPlacementRegistry.foodProperties(plantingRule));
+        }else if(food!=null)properties.food(LegacyFoodItemRegistry.foodProperties(food));
         var source=LegacyBehaviorRegistry.item(idValue);
         if(source!=null&&source.presentationOnly())source=null;
         if(source!=null){
@@ -121,7 +135,13 @@ public final class GeneratedModSupport {
                     .add(Attributes.ARMOR,new AttributeModifier(modifier,armor,AttributeModifier.Operation.ADD_VALUE),group).build());
         }
         if(durability>0)properties.durability(durability);
-        Item item="snowball".equals(kind)?new SnowballItem(properties):new ConvertedBehaviorItem(properties);
+        boolean planting=LegacyPlantPlacementRegistry.hasSeedRuntimeRule(id);
+        if(planting&&"snowball".equals(kind))throw new IllegalStateException("Converted item has conflicting snowball and seed placement runtimes: "+id);
+        if(planting&&source!=null&&source.hooks().stream().anyMatch(hook->!"identity".equals(hook)))
+            throw new IllegalStateException("Source callback unexpectedly survived strict seed placement proof for "+id+": "+source.hooks());
+        Item item="snowball".equals(kind)?new SnowballItem(properties)
+                :planting?new ConvertedLegacyPlantingItem(id,properties)
+                :new ConvertedBehaviorItem(properties);
         Registry.register(BuiltInRegistries.ITEM,key,item);
         ITEMS.put(id,item);
         int[] counts=COUNTS.get(id.getNamespace());if(counts!=null)counts[0]++;

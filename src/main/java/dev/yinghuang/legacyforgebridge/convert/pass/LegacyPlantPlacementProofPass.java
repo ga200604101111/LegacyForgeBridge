@@ -22,7 +22,8 @@ import java.util.Set;
 
 /**
  * Intersects source item behavior, constructor bindings and proven plant target semantics before a
- * planting item may be materialized. Runtime stays disabled in this pass.
+ * planting item may be materialized. ItemSeeds and ItemSeedFood are runtime-complete here; the
+ * more general ItemReed BlockItem-style placement path intentionally remains gated.
  */
 public final class LegacyPlantPlacementProofPass implements ConversionPass {
     public static final String OUTPUT = "legacyforgebridge/plant-placement-proof.json";
@@ -48,7 +49,7 @@ public final class LegacyPlantPlacementProofPass implements ConversionPass {
 
         JsonArray output = new JsonArray();
         JsonArray bindings = bindingsRoot.getAsJsonArray("bindings");
-        int inheritedItems = 0, targetComplete = 0, placementComplete = 0;
+        int inheritedItems = 0, targetComplete = 0, placementComplete = 0, seedFoodComplete = 0, runtimeComplete = 0;
         if (bindings != null) for (JsonElement element : bindings) {
             if (!element.isJsonObject()) continue;
             JsonObject binding = element.getAsJsonObject();
@@ -80,13 +81,25 @@ public final class LegacyPlantPlacementProofPass implements ConversionPass {
             boolean soilProofComplete = !"seeds".equals(itemFamily) && !"seed_food".equals(itemFamily)
                     || soilId != null && bool(soilProof, "placementSoilIdentityComplete")
                     && soilId.equals(string(soilProof, "placementSoilId"));
-            boolean complete = sourceAligned && topology && inherited && targetProof && soilProofComplete;
+
+            boolean seedFoodRequired = "seed_food".equals(itemFamily);
+            Integer nutrition = integer(binding, "nutrition");
+            Float saturation = floating(binding, "saturationModifier");
+            boolean seedFoodProperties = !seedFoodRequired || nutrition != null && nutrition >= 0
+                    && saturation != null && Float.isFinite(saturation) && saturation >= 0F;
+            boolean complete = sourceAligned && topology && inherited && targetProof && soilProofComplete && seedFoodProperties;
+            boolean seedAdapter = "seeds".equals(itemFamily) || "seed_food".equals(itemFamily);
+            boolean runtime = complete && seedAdapter;
 
             JsonObject value = new JsonObject();
             copy(binding, value, "id"); copy(binding, value, "legacyRegistryName");
             copy(binding, value, "sourceClass"); copy(binding, value, "family");
             if (targetId != null) value.addProperty("targetBlockId", targetId);
             if (soilId != null) value.addProperty("soilBlockId", soilId);
+            if (seedFoodRequired && seedFoodProperties) {
+                value.addProperty("nutrition", nutrition);
+                value.addProperty("saturationModifier", saturation);
+            }
             value.addProperty("topologyProofComplete", topology);
             value.addProperty("inheritedVanillaPlacement", inherited);
             JsonArray methods = new JsonArray();
@@ -96,9 +109,11 @@ public final class LegacyPlantPlacementProofPass implements ConversionPass {
             value.addProperty("targetPlacementCallbacksInherited", targetCallbacks);
             value.addProperty("targetProofComplete", targetProof);
             value.addProperty("soilPlacementProofComplete", soilProofComplete);
+            value.addProperty("seedFoodPropertiesProofRequired", seedFoodRequired);
+            value.addProperty("seedFoodPropertiesProofComplete", seedFoodProperties);
             value.addProperty("placementProofComplete", complete);
             if (complete) value.addProperty("placementAdapter", adapter(itemFamily));
-            value.addProperty("runtimeComplete", false);
+            value.addProperty("runtimeComplete", runtime);
             JsonArray reasons = new JsonArray();
             if (!sourceAligned) reasons.add("source-proof-hash-mismatch");
             if (!topology) reasons.add("item-block-topology-incomplete");
@@ -107,15 +122,19 @@ public final class LegacyPlantPlacementProofPass implements ConversionPass {
             if (!plantRuntime) reasons.add("target-plant-runtime-proof-incomplete");
             if (!targetCallbacks) reasons.add("item-reed-target-placement-callbacks-pending");
             if (!soilProofComplete) reasons.add("seed-placement-soil-proof-incomplete");
+            if (!seedFoodProperties) reasons.add("seed-food-properties-incomplete");
+            if (complete && !runtime) reasons.add("item-reed-runtime-materialization-pending");
             value.add("reasons", reasons);
             output.add(value);
             if (inherited) inheritedItems++;
             if (targetProof) targetComplete++;
             if (complete) placementComplete++;
+            if (seedFoodRequired && seedFoodProperties) seedFoodComplete++;
+            if (runtime) runtimeComplete++;
         }
 
         JsonObject root = new JsonObject();
-        root.addProperty("schemaVersion", 1);
+        root.addProperty("schemaVersion", 2);
         root.addProperty("sourceSha256", context.sourceHash());
         root.addProperty("sourceProofsAligned", sourceAligned);
         root.add("rules", output);
@@ -123,14 +142,16 @@ public final class LegacyPlantPlacementProofPass implements ConversionPass {
         root.addProperty("inheritedVanillaPlacementItems", inheritedItems);
         root.addProperty("targetProofCompleteItems", targetComplete);
         root.addProperty("placementProofCompleteItems", placementComplete);
-        root.addProperty("runtimeCompleteItems", 0);
+        root.addProperty("seedFoodPropertiesProofCompleteItems", seedFoodComplete);
+        root.addProperty("runtimeCompleteItems", runtimeComplete);
         Path path = context.stagingDir().resolve(OUTPUT);
         Files.createDirectories(path.getParent());
         Files.writeString(path, GSON.toJson(root) + "\n", StandardCharsets.UTF_8);
         context.diagnostics().info("LFB-CONVERT-PLANT-PLACEMENT-0001", SupportLevel.RUNTIME_BRIDGE,
                 "Intersected source-proven plant item placement evidence: items=" + output.size()
                         + ", inherited=" + inheritedItems + ", target=" + targetComplete
-                        + ", placement-proof=" + placementComplete + "; runtime remains gated.");
+                        + ", placement-proof=" + placementComplete + ", runtime=" + runtimeComplete
+                        + "; ItemReed remains gated behind its full BlockItem-style placement bridge.");
         behaviorAnalysis.diagnostics().forEach(message -> context.diagnostics().warning(
                 "LFB-CONVERT-PLANT-PLACEMENT-0002", SupportLevel.MANUAL_REQUIRED, message));
     }
@@ -175,6 +196,14 @@ public final class LegacyPlantPlacementProofPass implements ConversionPass {
     private static String string(JsonObject object, String key) {
         JsonElement value = object == null ? null : object.get(key);
         return value != null && value.isJsonPrimitive() && value.getAsJsonPrimitive().isString() ? value.getAsString() : null;
+    }
+    private static Integer integer(JsonObject object, String key) {
+        JsonElement value = object == null ? null : object.get(key);
+        return value != null && value.isJsonPrimitive() && value.getAsJsonPrimitive().isNumber() ? value.getAsInt() : null;
+    }
+    private static Float floating(JsonObject object, String key) {
+        JsonElement value = object == null ? null : object.get(key);
+        return value != null && value.isJsonPrimitive() && value.getAsJsonPrimitive().isNumber() ? value.getAsFloat() : null;
     }
     private static JsonObject object(JsonObject object, String key) {
         JsonElement value = object == null ? null : object.get(key);
