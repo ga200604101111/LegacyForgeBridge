@@ -5,6 +5,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import dev.longyu.legacyforgebridge.LegacyForgeBridge;
+import dev.longyu.legacyforgebridge.convert.LegacyStoragePresentationAnalyzer;
 import dev.longyu.legacyforgebridge.convert.pass.LegacyStorageBlockPass;
 import dev.longyu.legacyforgebridge.convert.runtime.ConvertedLegacyStorageBlockEntity;
 import net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityTypeBuilder;
@@ -31,12 +32,18 @@ public final class LegacyStorageBlockRegistry {
 
     public record Rule(Identifier id, int slots, int rows, int stackLimit, String title,
                        double interactionDistanceSq, boolean sneakingPass,
-                       boolean dropContents, boolean comparator) {
+                       boolean dropContents, boolean comparator,
+                       boolean presentationComplete, String orientation) {
         public Rule {
             if (id == null || slots != 54 || rows != 6 || stackLimit < 1 || stackLimit > 64
                     || title == null || title.isBlank() || interactionDistanceSq <= 0.0
                     || interactionDistanceSq > 4096.0) {
                 throw new IllegalArgumentException("Invalid converted storage rule");
+            }
+            orientation = orientation == null ? "" : orientation;
+            if (presentationComplete && !orientation.equals(
+                    LegacyStoragePresentationAnalyzer.ORIENTATION_PLAYER_YAW_OPPOSITE_QUADRANT)) {
+                throw new IllegalArgumentException("Unsupported converted storage orientation: " + orientation);
             }
         }
     }
@@ -125,7 +132,9 @@ public final class LegacyStorageBlockRegistry {
                     decimal(value, "interactionDistanceSq", 0.0),
                     bool(value, "sneakingPass"),
                     bool(value, "dropContents"),
-                    bool(value, "comparator")
+                    bool(value, "comparator"),
+                    bool(value, "presentationComplete"),
+                    string(value, "orientation")
             );
         } catch (RuntimeException invalid) {
             return null;
