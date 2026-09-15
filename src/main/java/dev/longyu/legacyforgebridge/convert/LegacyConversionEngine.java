@@ -20,6 +20,7 @@ import dev.longyu.legacyforgebridge.convert.pass.LegacyBlockBehaviorAnalysisPass
 import dev.longyu.legacyforgebridge.convert.pass.LegacyBlockDropAnalysisPass;
 import dev.longyu.legacyforgebridge.convert.pass.LegacyBlockPlacementPass;
 import dev.longyu.legacyforgebridge.convert.pass.LegacyBytecodeAuditPass;
+import dev.longyu.legacyforgebridge.convert.pass.LegacyClassDependencyAnalysisPass;
 import dev.longyu.legacyforgebridge.convert.pass.LegacyEquipmentRenderPass;
 import dev.longyu.legacyforgebridge.convert.pass.LegacyEventAnalysisPass;
 import dev.longyu.legacyforgebridge.convert.pass.LegacyFuelHandlerPass;
@@ -103,6 +104,9 @@ public final class LegacyConversionEngine {
             builder.add(new LegacyBehaviorPass());
             builder.add(new GeneratedSemanticCodePass());
             builder.add(new GeneratedModEntrypointPass());
+            // Inventory after generated code exists so source classes referenced by modern wrappers
+            // are visible as unresolved loader/runtime dependencies before the final safety audit.
+            builder.add(new LegacyClassDependencyAnalysisPass());
             builder.add(new LegacyBytecodeAuditPass());
             ConversionPlan plan = builder.build();
             for (var pass : plan.passes()) { pass.apply(context); context.markPassApplied(pass.id()); }

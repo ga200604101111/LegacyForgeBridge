@@ -52,7 +52,12 @@ public final class LegacyConversionManager {
         }
         state.beginLaunch(BuildInfo.VERSION);
         state.flush();
-        LegacyForgeBridge.LOGGER.info("Legacy conversion state: {}", state.file());
+        LegacyForgeBridge.LOGGER.info(
+                "Legacy conversion state: {} (schema={}, revision={})",
+                state.file(),
+                BuildInfo.CONVERSION_SCHEMA,
+                BuildInfo.CONVERTER_REVISION
+        );
 
         Properties cache = loadCache();
         List<Path> jars = scanner.scan(paths.oldModsDir());
@@ -81,7 +86,7 @@ public final class LegacyConversionManager {
             progress(state, jarIndex + 1, jars.size(), sourceName, 0, "DISCOVERED", "Legacy JAR discovered in old-mods.");
             progress(state, jarIndex + 1, jars.size(), sourceName, 10, "HASHING", "Calculating source SHA-256 for update detection.");
             String hash = Hashing.sha256(jar);
-            String cacheFingerprint = BuildInfo.VERSION + ":" + hash;
+            String cacheFingerprint = ConversionCacheIdentity.current(hash);
 
             if (prior != null && !prior.sourceSha256().isBlank() && !prior.sourceSha256().equalsIgnoreCase(hash)) {
                 LegacyForgeBridge.LOGGER.info(
@@ -95,9 +100,11 @@ public final class LegacyConversionManager {
                     && !prior.cacheFingerprint().equals(cacheFingerprint)
                     && prior.sourceSha256().equalsIgnoreCase(hash)) {
                 LegacyForgeBridge.LOGGER.info(
-                        "Converter update invalidated cached conversion for {}: converter={}",
+                        "Converter update invalidated cached conversion for {}: converter={}, schema={}, revision={}",
                         sourceName,
-                        BuildInfo.VERSION
+                        BuildInfo.VERSION,
+                        BuildInfo.CONVERSION_SCHEMA,
+                        BuildInfo.CONVERTER_REVISION
                 );
             }
 
@@ -265,7 +272,7 @@ public final class LegacyConversionManager {
             );
 
             // FAILED is retried next launch. All other results are deterministic for
-            // source SHA + converter version, including explicit BLOCKED/PARTIAL outcomes.
+            // source SHA + explicit converter schema/revision, including BLOCKED/PARTIAL outcomes.
             if (result.status() != ConversionStatus.FAILED) {
                 cache.setProperty(sourceName, cacheFingerprint);
             }
@@ -340,7 +347,16 @@ public final class LegacyConversionManager {
             Set<Path> activeManagedJars,
             List<String> restartReasons
     ) throws IOException {
-        progress(state, index, total, sourceName, 20, "CACHE_CHECK", "Source and converter fingerprint matched; validating managed output.");
+        progress(state, index, total, sourceName, 20, "CACHE_CHECK", "Source and converter fingerprint matched; validating cached output.");
+
+        Path cachedCandidate = prior.candidatePath().isBlank() ? null : resolveStatePath(prior.candidatePath());
+        if (!ConversionCacheIdentity.reusableResult(prior.status(), cachedCandidate, prior.candidateSha256())) {
+            LegacyForgeBridge.LOGGER.info(
+                    "Cached fingerprint matched for {}, but status/artifact integrity did not; rebuilding deterministically.",
+                    sourceName
+            );
+            return ReuseResult.NOT_HANDLED;
+        }
 
         if (!prior.loaderSafe()) {
             state.complete(
@@ -362,11 +378,11 @@ public final class LegacyConversionManager {
                             false,
                             false,
                             "SKIPPED",
-                            "Source and converter are unchanged; previous non-loader-safe result was reused without re-analysis."
+                            "Source, converter revision, and cached candidate integrity are unchanged; previous non-loader-safe result was reused."
                     )
             );
             LegacyForgeBridge.LOGGER.info(
-                    "Legacy conversion [{}/{}] 100% SKIPPED {} - source SHA and converter version unchanged",
+                    "Legacy conversion [{}/{}] 100% SKIPPED {} - source, converter revision, and candidate SHA unchanged",
                     index, total, sourceName
             );
             return new ReuseResult(true, false, false, false);
@@ -408,7 +424,7 @@ public final class LegacyConversionManager {
                             false,
                             false,
                             "LOADED",
-                            "Source SHA and converter version are unchanged; loaded managed candidate was reused."
+                            "Source, converter revision, and cached artifacts are unchanged; loaded managed candidate was reused."
                     )
             );
             LegacyForgeBridge.LOGGER.info(
@@ -418,11 +434,8 @@ public final class LegacyConversionManager {
             return new ReuseResult(true, false, true, false);
         }
 
-        Path cachedCandidate = prior.candidatePath().isBlank() ? null : resolveStatePath(prior.candidatePath());
-        if (cachedCandidate != null
-                && Files.isRegularFile(cachedCandidate)
-                && installer.isLoaderSafeCandidate(cachedCandidate)) {
-            progress(state, index, total, sourceName, 85, "STAGING", "Reusing cached candidate; repairing or activating managed mods/ staging.");
+        if (cachedCandidate != null && installer.isLoaderSafeCandidate(cachedCandidate)) {
+            progress(state, index, total, sourceName, 85, "STAGING", "Reusing verified cached candidate; repairing or activating managed mods/ staging.");
             ManagedCandidateInstaller.StageResult stage = installer.stage(
                     cachedCandidate,
                     prior.fabricId(),
@@ -470,7 +483,7 @@ public final class LegacyConversionManager {
         }
 
         LegacyForgeBridge.LOGGER.info(
-                "Cached fingerprint matched for {}, but cached/staged output was missing or invalid; rebuilding deterministically.",
+                "Verified cached candidate for {} is no longer loader-safe/stageable; rebuilding deterministically.",
                 sourceName
         );
         return ReuseResult.NOT_HANDLED;
@@ -547,7 +560,7 @@ public final class LegacyConversionManager {
                 StandardOpenOption.TRUNCATE_EXISTING,
                 StandardOpenOption.WRITE
         )) {
-            properties.store(output, "LegacyForgeBridge source SHA-256 + converter-version cache");
+            properties.store(output, "LegacyForgeBridge source SHA-256 + converter schema/revision cache");
         }
     }
 

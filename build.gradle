@@ -205,6 +205,35 @@ tasks.withType(Test).configureEach {
     }
 }
 
+// Binary corpora are never committed. The normal unit-test task excludes exact external corpus
+// tests; the dedicated task is fail-closed when explicitly requested without a pinned binary.
+tasks.named('test', Test) {
+    useJUnitPlatform {
+        excludeTags 'exact-corpus'
+    }
+}
+
+def exactCorpusJar = providers.gradleProperty('lfbExactCorpusJar')
+        .orElse(providers.environmentVariable('LFB_EXACT_CORPUS_JAR'))
+
+tasks.register('exactCorpusTest', Test) {
+    group = 'verification'
+    description = 'Runs checksum-pinned whole-JAR corpus regressions; fails if the external corpus is absent.'
+    dependsOn tasks.named('testClasses')
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform {
+        includeTags 'exact-corpus'
+    }
+    doFirst {
+        String corpus = exactCorpusJar.orNull
+        if (corpus == null || corpus.isBlank()) {
+            throw new GradleException('exactCorpusTest requires -PlfbExactCorpusJar=/path/to/Bamboo-2.6.8.5.jar or LFB_EXACT_CORPUS_JAR')
+        }
+        systemProperty 'lfb.exactCorpus.jar', corpus
+    }
+}
+
 jar {
     from('LICENSE') {
         rename { "${it}_${project.name}" }
