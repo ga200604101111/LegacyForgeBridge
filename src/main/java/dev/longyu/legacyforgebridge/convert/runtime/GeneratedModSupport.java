@@ -7,12 +7,12 @@ import dev.longyu.legacyforgebridge.compat.LegacyBlockActivationEffectsRegistry;
 import dev.longyu.legacyforgebridge.compat.LegacyBlockActivationRegistry;
 import dev.longyu.legacyforgebridge.compat.LegacyBlockPlacementRegistry;
 import dev.longyu.legacyforgebridge.compat.LegacyFuelRegistry;
+import dev.longyu.legacyforgebridge.compat.LegacySingleInputProcessorRegistry;
 import dev.longyu.legacyforgebridge.compat.LegacyStackComponents;
 import dev.longyu.legacyforgebridge.compat.LegacyStorageBlockRegistry;
 import net.fabricmc.fabric.api.itemgroup.v1.FabricItemGroup;
 import net.minecraft.core.Registry;
 import net.minecraft.core.component.DataComponents;
-import net.minecraft.world.item.component.Weapon;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
@@ -22,15 +22,20 @@ import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.EquipmentSlotGroup;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
-import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.BlockItem;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.state.BlockBehaviour;
+import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.ToolMaterial;
 import net.minecraft.world.item.component.ItemAttributeModifiers;
-import java.util.*;
+import net.minecraft.world.item.component.Weapon;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockBehaviour;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /** Native registry adapter. Item-specific constants and source callbacks belong to the converted mod. */
@@ -40,21 +45,29 @@ public final class GeneratedModSupport {
     private static final Set<String> ACTIVE_MODS=ConcurrentHashMap.newKeySet();
     private static final Map<String,int[]> COUNTS=new ConcurrentHashMap<>();
     private GeneratedModSupport() { }
+
     public static void beginMod(String modId){
         LegacyStackComponents.bootstrap();
         LegacyStorageBlockRegistry.loadMod(modId);
+        LegacySingleInputProcessorRegistry.loadMod(modId);
         if(ACTIVE_MODS.add(modId))COUNTS.put(modId,new int[3]);
     }
+
     public static void registerBlock(String idValue,String descriptionKey){
         Identifier id=Identifier.parse(idValue);
         if(BuiltInRegistries.BLOCK.containsKey(id)){BLOCKS.put(id,BuiltInRegistries.BLOCK.getValue(id));return;}
         ResourceKey<Block> blockKey=ResourceKey.create(Registries.BLOCK,id);
         BlockBehaviour.Properties blockProperties=BlockBehaviour.Properties.of().setId(blockKey).overrideDescription(descriptionKey);
-        Block block=LegacyStorageBlockRegistry.hasRule(id)
-                ?new ConvertedLegacyStorageBlock(id,blockProperties)
+        boolean storage=LegacyStorageBlockRegistry.hasRule(id);
+        boolean processor=LegacySingleInputProcessorRegistry.hasRule(id);
+        if(storage&&processor)throw new IllegalStateException("Converted block has conflicting storage and processor rules: "+id);
+        Block block=storage?new ConvertedLegacyStorageBlock(id,blockProperties)
+                :processor?new ConvertedLegacyProcessorBlock(id,blockProperties)
                 :new ConvertedLegacyBlock(id,blockProperties);
-        Registry.register(BuiltInRegistries.BLOCK,blockKey,block);BLOCKS.put(id,block);
-        if(LegacyStorageBlockRegistry.hasRule(id))LegacyStorageBlockRegistry.registerType(id,block);
+        Registry.register(BuiltInRegistries.BLOCK,blockKey,block);
+        BLOCKS.put(id,block);
+        if(storage)LegacyStorageBlockRegistry.registerType(id,block);
+        if(processor)LegacySingleInputProcessorRegistry.registerType(id,block);
 
         if(!BuiltInRegistries.ITEM.containsKey(id)){
             ResourceKey<Item> itemKey=ResourceKey.create(Registries.ITEM,id);
@@ -85,7 +98,7 @@ public final class GeneratedModSupport {
             properties.sword(ToolMaterial.DIAMOND,attackDamage-ToolMaterial.DIAMOND.attackDamageBonus(),attackSpeed);
             properties.attributes(legacyWeaponAttributes(attackDamage,attackSpeed));
         }
-        if(source!=null && source.hooks().contains("hit"))properties.component(DataComponents.WEAPON,new Weapon(0));
+        if(source!=null&&source.hooks().contains("hit"))properties.component(DataComponents.WEAPON,new Weapon(0));
         int sourceSlot=source==null?-1:source.item().armorSlot;
         EquipmentSlot slot=switch(sourceSlot){case 0->EquipmentSlot.HEAD;case 1->EquipmentSlot.CHEST;case 2->EquipmentSlot.LEGS;case 3->EquipmentSlot.FEET;default->null;};
         if(slot==null){if("wing".equals(kind))slot=EquipmentSlot.CHEST;else if("circle".equals(kind))slot=EquipmentSlot.FEET;}
@@ -97,9 +110,11 @@ public final class GeneratedModSupport {
         }
         if(durability>0)properties.durability(durability);
         Item item=new ConvertedBehaviorItem(properties);
-        Registry.register(BuiltInRegistries.ITEM,key,item);ITEMS.put(id,item);
+        Registry.register(BuiltInRegistries.ITEM,key,item);
+        ITEMS.put(id,item);
         int[] counts=COUNTS.get(id.getNamespace());if(counts!=null)counts[0]++;
     }
+
     static ItemAttributeModifiers legacyWeaponAttributes(float attackDamage,float attackSpeed){
         return ItemAttributeModifiers.builder()
                 .add(Attributes.ATTACK_DAMAGE,
@@ -110,6 +125,7 @@ public final class GeneratedModSupport {
                         EquipmentSlotGroup.MAINHAND,ItemAttributeModifiers.Display.hidden())
                 .build();
     }
+
     public static void registerCreativeTab(String idValue,String titleKey,String literalTitle,String iconValue,String[] itemValues){
         Identifier id=Identifier.parse(idValue);if(BuiltInRegistries.CREATIVE_MODE_TAB.containsKey(id))return;
         List<Item> entries=new ArrayList<>();for(String value:itemValues){Item item=resolveItem(Identifier.parse(value));if(item!=null)entries.add(item);}
@@ -121,6 +137,7 @@ public final class GeneratedModSupport {
         Registry.register(BuiltInRegistries.CREATIVE_MODE_TAB,ResourceKey.create(BuiltInRegistries.CREATIVE_MODE_TAB.key(),id),tab);
         int[] counts=COUNTS.get(id.getNamespace());if(counts!=null)counts[2]++;
     }
+
     public static void finishMod(String modId){
         LegacyBlockPlacementRegistry.loadMod(modId);
         LegacyBlockActivationRegistry.loadMod(modId);
@@ -129,5 +146,6 @@ public final class GeneratedModSupport {
         int[] counts=COUNTS.getOrDefault(modId,new int[3]);
         LegacyForgeBridge.LOGGER.info("Generated converted mod initialized: mod={}, generatedItems={}, generatedBlocks={}, generatedCreativeTabs={}, sourceBehaviors={}",modId,counts[0],counts[1],counts[2],LegacyBehaviorRegistry.itemCount(modId));
     }
+
     private static Item resolveItem(Identifier id){Item item=ITEMS.get(id);return item!=null?item:BuiltInRegistries.ITEM.containsKey(id)?BuiltInRegistries.ITEM.getValue(id):null;}
 }
