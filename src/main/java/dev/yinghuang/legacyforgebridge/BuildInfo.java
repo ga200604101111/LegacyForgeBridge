@@ -5,6 +5,6 @@ public final class BuildInfo {
     /** Bump whenever the conversion output contract changes, even before public versioning moves. */
     public static final int CONVERSION_SCHEMA = 2;
     /** Cache identity for analyzer/compiler/materializer behavior that can change candidate bytes. */
-    public static final String CONVERTER_REVISION = "2026-09-15.20";
+    public static final String CONVERTER_REVISION = "2026-09-15.21";
     private BuildInfo() { }
 }
