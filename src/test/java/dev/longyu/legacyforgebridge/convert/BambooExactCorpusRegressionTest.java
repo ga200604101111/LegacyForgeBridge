@@ -87,6 +87,38 @@ class BambooExactCorpusRegressionTest {
         assertEquals("bamboo:jpchest_f", presentation.frontTexture());
         assertEquals("bamboo:jpchest_o", presentation.otherTexture());
 
+        LegacySingleInputProcessorAnalyzer.Analysis processorAnalysis =
+                new LegacySingleInputProcessorAnalyzer().analyze(source);
+        assertTrue(processorAnalysis.diagnostics().isEmpty(), processorAnalysis.diagnostics().toString());
+        assertEquals(1, processorAnalysis.rules().size(), processorAnalysis.skipped().toString());
+        LegacySingleInputProcessorAnalyzer.Rule millStone = processorAnalysis.rules().getFirst();
+        assertEquals("bambooMillStone", millStone.registryName());
+        assertEquals("ruby/bamboo/block/BlockMillStone", millStone.sourceBlockClass());
+        assertEquals("ruby/bamboo/tileentity/TileEntityMillStone", millStone.sourceTileClass());
+        assertEquals("MillStone", millStone.legacyTileId());
+        assertEquals(3, millStone.slots());
+        assertEquals(64, millStone.stackLimit());
+        assertEquals(0, millStone.inputSlot());
+        assertEquals(List.of(1, 2), millStone.outputSlots());
+        assertEquals(List.of(0), millStone.topSlots());
+        assertEquals(List.of(2, 1), millStone.bottomSlots());
+        assertEquals(List.of(0), millStone.sideSlots());
+        assertEquals(400, millStone.processTicks());
+        assertEquals(64.0, millStone.interactionDistanceSq());
+        assertEquals(1, millStone.guiId());
+        assertEquals("ruby/bamboo/item/crafting/GrindManager", millStone.recipeManagerOwner());
+        assertEquals("getOutput", millStone.recipeLookupName());
+        assertEquals("(Lnet/minecraft/item/ItemStack;)Lruby/bamboo/api/crafting/grind/IGrindRecipe;",
+                millStone.recipeLookupDescriptor());
+        assertTrue(millStone.comparator());
+        assertTrue(millStone.dropContents());
+        assertTrue(millStone.legacyEnergyApiPresent());
+
+        LegacySingleInputProcessorRecipeAnalyzer.Analysis grindRecipes =
+                new LegacySingleInputProcessorRecipeAnalyzer().analyze(source, millStone);
+        assertTrue(grindRecipes.diagnostics().isEmpty(), grindRecipes.diagnostics().toString());
+        assertEquals(13, grindRecipes.recipes().size());
+
         LegacyConversionEngine engine = new LegacyConversionEngine();
         var first = engine.convert(source, tempDir.resolve("converted-a"), tempDir.resolve("manifest-a"));
         var second = engine.convert(source, tempDir.resolve("converted-b"), tempDir.resolve("manifest-b"));
@@ -136,6 +168,21 @@ class BambooExactCorpusRegressionTest {
             assertNotNull(jar.getJarEntry("assets/bamboomod/items/jpchest.json"));
             assertNotNull(jar.getJarEntry("assets/bamboo/textures/blocks/jpchest_f.png"));
             assertNotNull(jar.getJarEntry("assets/bamboo/textures/blocks/jpchest_o.png"));
+
+            JsonObject processors = readJson(jar, "legacyforgebridge/single-input-processor-rules.json");
+            assertEquals(1, processors.getAsJsonArray("machines").size());
+            JsonObject machine = processors.getAsJsonArray("machines").get(0).getAsJsonObject();
+            assertEquals("bamboomod:bamboomillstone", machine.get("id").getAsString());
+            assertEquals("MillStone", machine.get("legacyTileId").getAsString());
+            assertEquals(3, machine.get("slots").getAsInt());
+            assertEquals(400, machine.get("processTicks").getAsInt());
+            assertEquals(1, machine.get("legacyGuiId").getAsInt());
+            assertTrue(machine.get("legacyEnergyApiPresent").getAsBoolean());
+            assertFalse(machine.get("runtimeComplete").getAsBoolean());
+            assertEquals(13, machine.get("sourceRecipeCount").getAsInt());
+            assertEquals(13, machine.get("materializedRecipeCount").getAsInt());
+            assertEquals(13, processors.get("materializedRecipes").getAsInt());
+            assertEquals(0, processors.get("skippedRecipes").getAsInt());
 
             JsonObject recipeMaterialization = readJson(jar, "legacyforgebridge/recipe-materialization.json");
             assertEquals(125, recipeMaterialization.get("emittedRecipes").getAsInt());

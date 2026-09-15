@@ -7,7 +7,7 @@ public final class BuildInfo {
     public static final int CONVERSION_SCHEMA = 2;
 
     /** Cache identity for analyzer/compiler/materializer behavior that can change candidate bytes. */
-    public static final String CONVERTER_REVISION = "2026-09-15.3";
+    public static final String CONVERTER_REVISION = "2026-09-15.4";
 
     private BuildInfo() { }
 }
