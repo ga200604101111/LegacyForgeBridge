@@ -15,6 +15,7 @@ import java.util.jar.JarOutputStream;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LegacyFoodItemAnalyzerTest {
@@ -35,22 +36,23 @@ class LegacyFoodItemAnalyzerTest {
 
         var analysis = new LegacyFoodItemAnalyzer().analyze(jar);
         assertTrue(analysis.diagnostics().isEmpty(), analysis.diagnostics().toString());
-        assertEquals(4, analysis.rules().size(), analysis.skipped().toString());
-        assertEquals(3, analysis.skipped().size());
+        assertEquals(5, analysis.rules().size(), analysis.skipped().toString());
+        assertEquals(2, analysis.skipped().size());
 
         Map<String,LegacyFoodItemAnalyzer.Rule> rules = analysis.rules().stream()
                 .collect(Collectors.toMap(LegacyFoodItemAnalyzer.Rule::registryName, Function.identity()));
         assertEquals(5, rules.get("simple").nutrition());
         assertEquals(0.7F, rules.get("simple").saturationModifier());
-        assertEquals(false, rules.get("simple").alwaysEdible());
+        assertFalse(rules.get("simple").alwaysEdible());
+        assertFalse(rules.get("simple").wolfFavorite());
         assertEquals(2, rules.get("always").nutrition());
         assertTrue(rules.get("always").alwaysEdible());
         assertEquals(0.6F, rules.get("default_sat").saturationModifier());
         assertEquals(7, rules.get("param").nutrition());
         assertEquals(0.4F, rules.get("param").saturationModifier());
+        assertTrue(rules.get("wolf").wolfFavorite());
 
         String skipped = analysis.skipped().toString();
-        assertTrue(skipped.contains("wolf-favorite"), skipped);
         assertTrue(skipped.contains("potion-effect"), skipped);
         assertTrue(skipped.contains("Custom ItemFood consume callback"), skipped);
     }

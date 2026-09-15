@@ -36,11 +36,11 @@ import java.util.jar.JarFile;
 /**
  * Non-executing proof for the bounded Minecraft 1.7.x ItemFood constructor contract.
  *
- * <p>This first slice deliberately supports only source classes whose active constructor path is
- * straight-line and reaches the vanilla ItemFood (int,float,boolean) or (int,boolean) constructor
- * with constants that can be proven from the registration allocation. Custom consume callbacks,
- * wolf-favorite food and potion-effect food remain fail-closed rather than silently losing legacy
- * semantics.</p>
+ * <p>This slice supports only source classes whose active constructor path is straight-line and
+ * reaches the vanilla ItemFood (int,float,boolean) or (int,boolean) constructor with constants
+ * proven from the registration allocation. Proven wolf-favorite semantics are exported for the
+ * modern native wolf-food tag. Custom consume callbacks and potion-effect food remain fail-closed.
+ * </p>
  */
 public final class LegacyFoodItemAnalyzer {
     private static final String ITEM_FOOD = "net/minecraft/item/ItemFood";
@@ -60,7 +60,8 @@ public final class LegacyFoodItemAnalyzer {
             String sourceClass,
             int nutrition,
             float saturationModifier,
-            boolean alwaysEdible
+            boolean alwaysEdible,
+            boolean wolfFavorite
     ) { }
 
     public record Skipped(String registryName, String sourceClass, String reason) { }
@@ -106,18 +107,13 @@ public final class LegacyFoodItemAnalyzer {
                         "Legacy ItemFood potion-effect semantics are not yet materialized."));
                 continue;
             }
-            if (trace.wolfFavorite()) {
-                skipped.add(new Skipped(registration.registryName(), sourceClass,
-                        "Legacy wolf-favorite food semantics are not yet materialized."));
-                continue;
-            }
             if (trace.nutrition() < 0 || !Float.isFinite(trace.saturationModifier()) || trace.saturationModifier() < 0F) {
                 skipped.add(new Skipped(registration.registryName(), sourceClass,
                         "Legacy ItemFood nutrition/saturation is outside the bounded modern food contract."));
                 continue;
             }
             rules.add(new Rule(registration.registryName(), sourceClass, trace.nutrition(),
-                    trace.saturationModifier(), trace.alwaysEdible()));
+                    trace.saturationModifier(), trace.alwaysEdible(), trace.wolfFavorite()));
         }
         return new Analysis(rules, skipped, diagnostics);
     }

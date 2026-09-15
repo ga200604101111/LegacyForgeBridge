@@ -26,7 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class LegacyFoodItemPassTest {
     @TempDir Path tempDir;
 
-    @Test void sidecarLinksProvenFoodToGeneratedIdentity() throws Exception {
+    @Test void sidecarLinksProvenFoodToGeneratedIdentityAndNativeWolfTag() throws Exception {
         Path source = tempDir.resolve("foreign-food.jar");
         try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(source))) {
             put(out, "other/food/Berry.class", food());
@@ -50,7 +50,9 @@ class LegacyFoodItemPassTest {
 
         JsonObject root = JsonParser.parseString(Files.readString(
                 staging.resolve(LegacyFoodItemPass.OUTPUT), StandardCharsets.UTF_8)).getAsJsonObject();
+        assertEquals(2, root.get("schemaVersion").getAsInt());
         assertEquals(1, root.get("runtimeCompleteRules").getAsInt());
+        assertEquals(1, root.get("wolfFoodRules").getAsInt());
         assertEquals(0, root.get("skippedRules").getAsInt());
         JsonObject rule = root.getAsJsonArray("rules").get(0).getAsJsonObject();
         assertEquals("foreign:berry", rule.get("id").getAsString());
@@ -59,7 +61,14 @@ class LegacyFoodItemPassTest {
         assertEquals(4, rule.get("nutrition").getAsInt());
         assertEquals(0.3F, rule.get("saturationModifier").getAsFloat());
         assertTrue(rule.get("alwaysEdible").getAsBoolean());
+        assertTrue(rule.get("wolfFavorite").getAsBoolean());
         assertTrue(rule.get("runtimeComplete").getAsBoolean());
+
+        JsonObject wolfTag = JsonParser.parseString(Files.readString(
+                staging.resolve("data/minecraft/tags/item/wolf_food.json"), StandardCharsets.UTF_8)).getAsJsonObject();
+        assertEquals(false, wolfTag.get("replace").getAsBoolean());
+        assertEquals(List.of("foreign:berry"), wolfTag.getAsJsonArray("values").asList().stream()
+                .map(value -> value.getAsString()).toList());
     }
 
     private static byte[] food() {
@@ -71,7 +80,7 @@ class LegacyFoodItemPassTest {
         init.visitVarInsn(Opcodes.ALOAD, 0);
         init.visitInsn(Opcodes.ICONST_4);
         init.visitLdcInsn(0.3F);
-        init.visitInsn(Opcodes.ICONST_0);
+        init.visitInsn(Opcodes.ICONST_1);
         init.visitMethodInsn(Opcodes.INVOKESPECIAL, "net/minecraft/item/ItemFood", "<init>", "(IFZ)V", false);
         init.visitVarInsn(Opcodes.ALOAD, 0);
         init.visitMethodInsn(Opcodes.INVOKEVIRTUAL, owner, "setAlwaysEdible", "()Lnet/minecraft/item/ItemFood;", false);
