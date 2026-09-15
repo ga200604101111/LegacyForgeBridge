@@ -35,7 +35,7 @@ public final class GeneratedModEntrypointPass implements ConversionPass {
         String internalName = binaryName.replace('.', '/');
         Path output = context.stagingDir().resolve(internalName + ".class");
         Files.createDirectories(output.getParent());
-        Files.write(output, generate(internalName, generatedBaseInternal(context.metadata())));
+        Files.write(output, generate(internalName, generatedBaseInternal(context.metadata()), context.metadata().fabricId()));
 
         Path marker = context.stagingDir().resolve(MARKER_PATH);
         Files.createDirectories(marker.getParent());
@@ -75,7 +75,7 @@ public final class GeneratedModEntrypointPass implements ConversionPass {
         return generatedBaseBinary(metadata).replace('.', '/');
     }
 
-    private static byte[] generate(String internalName, String generatedBase) {
+    private static byte[] generate(String internalName, String generatedBase, String modId) {
         ClassWriter writer = new ClassWriter(0);
         writer.visit(
                 Opcodes.V21,
@@ -116,8 +116,16 @@ public final class GeneratedModEntrypointPass implements ConversionPass {
                 "()V",
                 false
         );
+        client.visitLdcInsn(modId);
+        client.visitMethodInsn(
+                Opcodes.INVOKESTATIC,
+                "dev/longyu/legacyforgebridge/render/ConvertedProcessorPresentationRuntime",
+                "initializeMod",
+                "(Ljava/lang/String;)V",
+                false
+        );
         client.visitInsn(Opcodes.RETURN);
-        client.visitMaxs(0, 1);
+        client.visitMaxs(1, 1);
         client.visitEnd();
 
         writer.visitEnd();

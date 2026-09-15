@@ -1,5 +1,6 @@
 package dev.longyu.legacyforgebridge.convert.runtime;
 
+import dev.longyu.legacyforgebridge.compat.LegacySingleInputProcessorRegistry;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.player.Inventory;
@@ -17,14 +18,14 @@ public final class ConvertedLegacyProcessorMenu extends AbstractContainerMenu {
 
     /** Client-side constructor used by the shared vanilla MenuType. */
     public ConvertedLegacyProcessorMenu(int containerId, Inventory playerInventory) {
-        this(containerId,playerInventory,new SimpleContainer(3),new SimpleContainerData(3));
+        this(containerId,playerInventory,new SimpleContainer(3),new SimpleContainerData(4));
     }
 
     /** Server-side constructor used by the converted BlockEntity. */
     public ConvertedLegacyProcessorMenu(int containerId, Inventory playerInventory, Container machine, ContainerData data) {
         super(LegacyProcessorMenuSupport.type(),containerId);
         checkContainerSize(machine,3);
-        checkContainerDataCount(data,3);
+        checkContainerDataCount(data,4);
         this.machine=machine;
         this.data=data;
         addSlot(new Slot(machine,0,80,9));
@@ -66,6 +67,7 @@ public final class ConvertedLegacyProcessorMenu extends AbstractContainerMenu {
     public int grindMotion(){return data.get(0);}
     public int progressStage(){return data.get(1);}
     public boolean grinding(){return data.get(2)!=0;}
+    public int presentationKey(){return data.get(3);}
 
     private static final class OutputSlot extends Slot {
         OutputSlot(Container container,int slot,int x,int y){super(container,slot,x,y);}

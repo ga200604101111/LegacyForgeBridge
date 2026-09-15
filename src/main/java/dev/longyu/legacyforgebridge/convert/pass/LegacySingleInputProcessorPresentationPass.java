@@ -19,7 +19,7 @@ import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 
-/** Additive presentation proof stage for already-emitted generic processor rules. */
+/** Additive presentation proof and runtime gate for already-emitted generic processor rules. */
 public final class LegacySingleInputProcessorPresentationPass implements ConversionPass {
     private static final Gson GSON=new GsonBuilder().setPrettyPrinting().create();
 
@@ -41,6 +41,8 @@ public final class LegacySingleInputProcessorPresentationPass implements Convers
         topology.rules().forEach(rule->rules.put(rule.sourceBlockClass(),rule));
         LegacySingleInputProcessorPresentationAnalyzer analyzer=new LegacySingleInputProcessorPresentationAnalyzer();
         int proven=0;
+        int guiRuntime=0;
+        int worldRuntime=0;
         for(JsonElement element:machines){
             if(!element.isJsonObject())continue;
             JsonObject machine=element.getAsJsonObject();
@@ -52,16 +54,29 @@ public final class LegacySingleInputProcessorPresentationPass implements Convers
             machine.addProperty("presentationProofComplete",complete);
             JsonArray diagnostics=new JsonArray();analysis.diagnostics().forEach(diagnostics::add);
             machine.add("presentationDiagnostics",diagnostics);
+            machine.addProperty("guiPresentationRuntimeComplete",complete);
+            machine.addProperty("worldPresentationRuntimeComplete",complete);
+            machine.addProperty("metadataRollRuntimeComplete",complete);
+            machine.addProperty("inventoryPresentationRuntimeComplete",false);
+            machine.addProperty("particlePresentationRuntimeComplete",false);
+            machine.addProperty("sourcePresentationComplete",false);
+            machine.addProperty("runtimeComplete",false);
             if(complete){
                 proven++;
+                guiRuntime++;
+                worldRuntime++;
                 machine.add("presentation",presentationJson(analysis.presentation().orElseThrow()));
             }
         }
         root.addProperty("presentationProofCompleteMachines",proven);
+        root.addProperty("guiPresentationRuntimeCompleteMachines",guiRuntime);
+        root.addProperty("worldPresentationRuntimeCompleteMachines",worldRuntime);
         Files.writeString(output,GSON.toJson(root)+"\n",StandardCharsets.UTF_8);
         if(proven>0){
             context.diagnostics().info("LFB-CONVERT-PROCESSOR-PRESENTATION-0001",SupportLevel.ADAPTED,
-                    "Proven source GUI/TESR presentation for "+proven+" converted processor(s); modern client rendering remains a separate gate.");
+                    "Proven and enabled source GUI/world presentation for "+proven+" converted processor(s).");
+            context.diagnostics().warning("LFB-CONVERT-PROCESSOR-PRESENTATION-0002",SupportLevel.RUNTIME_BRIDGE,
+                    "Processor source inventory-item rendering and client particle presentation remain unresolved; full source presentation is not claimed.");
         }
     }
 

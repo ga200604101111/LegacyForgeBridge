@@ -14,6 +14,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerData;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BaseContainerBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
@@ -31,14 +32,21 @@ public final class ConvertedLegacyProcessorBlockEntity extends BaseContainerBloc
     private int activeRecipeIndex=-1;
     private String activeLegacyName=AIR_ID;
     private int activeLegacyMeta;
+    private float clientRoll;
 
     private final ContainerData data=new ContainerData(){
-        @Override public int get(int index){return switch(index){case 0->grindMotion;case 1->progressStage();case 2->grindTime>0?1:0;default->0;};}
+        @Override public int get(int index){return switch(index){
+            case 0->grindMotion;
+            case 1->progressStage();
+            case 2->grindTime>0?1:0;
+            case 3->LegacySingleInputProcessorRegistry.presentationKey(rule.id());
+            default->0;
+        };}
         @Override public void set(int index,int value){
             if(index==0)grindMotion=value;
             else if(index==1&&grindTime<=0&&value>0)grindTime=Math.min(rule.processTicks(),Math.round(value/3F*rule.processTicks()));
         }
-        @Override public int getCount(){return 3;}
+        @Override public int getCount(){return 4;}
     };
 
     public ConvertedLegacyProcessorBlockEntity(BlockPos pos,BlockState state){
@@ -103,6 +111,10 @@ public final class ConvertedLegacyProcessorBlockEntity extends BaseContainerBloc
         machine.tickServer();
     }
 
+    public static void clientTick(Level level,BlockPos pos,BlockState state,ConvertedLegacyProcessorBlockEntity machine){
+        machine.tickClient();
+    }
+
     private void tickServer(){
         if(level==null||level.isClientSide())return;
         int step=1;
@@ -111,16 +123,19 @@ public final class ConvertedLegacyProcessorBlockEntity extends BaseContainerBloc
             innerEnergy=sourceEnergyAfterStep(grindTime,innerEnergy,rule.minUseEnergy());
         }
         boolean changed=false;
+        int metadata=0;
         if(grindTime==0){
             LegacySingleInputProcessorRegistry.ResolvedRecipe recipe=
                     LegacySingleInputProcessorRegistry.findInput(rule,items.get(rule.inputSlot()),level.registryAccess());
             if(recipe!=null&&canStart(recipe)){
                 start(recipe);
                 grindTime+=step;
+                metadata=step;
                 changed=true;
             }
         }else{
             grindTime+=step;
+            metadata=step;
             changed=true;
             if(grindTime>rule.processTicks()){
                 LegacySingleInputProcessorRegistry.ResolvedRecipe recipe=
@@ -133,11 +148,29 @@ public final class ConvertedLegacyProcessorBlockEntity extends BaseContainerBloc
                         rule.id(),activeLegacyName,activeLegacyMeta);
             }
         }
+        if(rule.metadataDrivesRoll())updateLegacyMetadata(metadata);
         grindMotion=grindTime>0?Math.floorMod(grindTime,40)/10:0;
         if(changed){
             setChanged();
             level.updateNeighbourForOutputSignal(worldPosition,getBlockState().getBlock());
         }
+    }
+
+    private void tickClient(){
+        if(level==null||!level.isClientSide()||!rule.metadataDrivesRoll())return;
+        int metadata=ConvertedLegacyBlock.legacyMeta(getBlockState());
+        if(metadata==0){
+            clientRoll=0F;
+        }else{
+            float next=clientRoll+metadata;
+            clientRoll=next<360F?next:0F;
+        }
+    }
+
+    private void updateLegacyMetadata(int metadata){
+        BlockState state=getBlockState();
+        if(ConvertedLegacyBlock.legacyMeta(state)==metadata)return;
+        level.setBlock(worldPosition,ConvertedLegacyBlock.withLegacyMeta(state,metadata),2);
     }
 
     private boolean canStart(LegacySingleInputProcessorRegistry.ResolvedRecipe recipe){
@@ -196,6 +229,7 @@ public final class ConvertedLegacyProcessorBlockEntity extends BaseContainerBloc
         return progress==0||energy<=minUseEnergy?energy:energy-minUseEnergy*step;
     }
 
+    public float clientRoll(){return clientRoll;}
     int grindTimeForTests(){return grindTime;}
     int innerEnergyForTests(){return innerEnergy;}
     int activeRecipeForTests(){return activeRecipeIndex;}

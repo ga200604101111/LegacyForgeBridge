@@ -45,11 +45,13 @@ public final class ConvertedLegacyProcessorBlock extends ConvertedLegacyBlock im
 
     @Override
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level,BlockState state,BlockEntityType<T> type){
-        if(level.isClientSide())return null;
         BlockEntityType<ConvertedLegacyProcessorBlockEntity> expected=LegacySingleInputProcessorRegistry.requireType(this);
         if(type!=expected)return null;
         return (tickLevel,pos,tickState,blockEntity)->{
-            if(tickLevel instanceof ServerLevel serverLevel&&blockEntity instanceof ConvertedLegacyProcessorBlockEntity processor){
+            if(!(blockEntity instanceof ConvertedLegacyProcessorBlockEntity processor))return;
+            if(tickLevel.isClientSide()){
+                if(processorRule.metadataDrivesRoll())ConvertedLegacyProcessorBlockEntity.clientTick(tickLevel,pos,tickState,processor);
+            }else if(tickLevel instanceof ServerLevel serverLevel){
                 ConvertedLegacyProcessorBlockEntity.serverTick(serverLevel,pos,tickState,processor);
             }
         };
