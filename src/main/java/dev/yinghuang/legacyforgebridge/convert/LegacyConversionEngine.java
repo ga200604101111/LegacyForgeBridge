@@ -34,6 +34,7 @@ import dev.yinghuang.legacyforgebridge.convert.pass.LegacyLifecycleAnalysisPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyObjPresentationPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyOscillatingModelBlockPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyPlantBlockPass;
+import dev.yinghuang.legacyforgebridge.convert.pass.LegacyPlantLifecyclePass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyRecipeAnalysisPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyRecipeMaterializationPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacySingleInputProcessorPass;
@@ -102,6 +103,7 @@ public final class LegacyConversionEngine {
             builder.add(new LegacyFoodItemPass());
             builder.add(new LegacyItemBlockBindingPass());
             builder.add(new LegacyPlantBlockPass());
+            builder.add(new LegacyPlantLifecyclePass());
             builder.add(new LegacySnowballItemPass());
             builder.add(new LegacyLifecycleAnalysisPass());
             builder.add(new LegacyBlockBehaviorAnalysisPass());
@@ -122,8 +124,6 @@ public final class LegacyConversionEngine {
             builder.add(new LegacyBehaviorPass());
             builder.add(new GeneratedSemanticCodePass());
             builder.add(new GeneratedModEntrypointPass());
-            // Inventory after generated code exists so source classes referenced by modern wrappers
-            // are visible as unresolved loader/runtime dependencies before the final safety audit.
             builder.add(new LegacyClassDependencyAnalysisPass());
             builder.add(new LegacyBytecodeAuditPass());
             ConversionPlan plan = builder.build();
