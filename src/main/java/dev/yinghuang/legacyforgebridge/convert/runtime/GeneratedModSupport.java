@@ -96,6 +96,7 @@ public final class GeneratedModSupport {
         ResourceKey<Item> key=ResourceKey.create(Registries.ITEM,id);
         Item.Properties properties=new Item.Properties().setId(key).overrideDescription(descriptionKey)
                 .component(LegacyStackComponents.legacyMeta(),0);
+        if("snowball".equals(kind))properties.stacksTo(16);
         var food=LegacyFoodItemRegistry.rule(id);
         if(food!=null)properties.food(LegacyFoodItemRegistry.foodProperties(food));
         var source=LegacyBehaviorRegistry.item(idValue);
