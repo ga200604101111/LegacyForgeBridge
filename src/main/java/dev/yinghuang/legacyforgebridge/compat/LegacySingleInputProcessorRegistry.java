@@ -59,13 +59,14 @@ public final class LegacySingleInputProcessorRegistry {
     public record Rule(Identifier id,int slots,int stackLimit,int inputSlot,int[] outputSlots,int[] topSlots,int[] bottomSlots,int[] sideSlots,
                        int processTicks,double interactionDistanceSq,boolean comparator,boolean dropContents,
                        boolean legacyEnergyApiPresent,int minUseEnergy,int maxUseEnergy,String energyNbtKey,
-                       boolean metadataDrivesRoll,ParticleRule particle,List<Recipe> recipes){
+                       boolean energyIngressRuntimeComplete,boolean metadataDrivesRoll,ParticleRule particle,List<Recipe> recipes){
         public Rule{
             outputSlots=outputSlots.clone();topSlots=topSlots.clone();bottomSlots=bottomSlots.clone();sideSlots=sideSlots.clone();
             recipes=List.copyOf(recipes);energyNbtKey=energyNbtKey==null?"":energyNbtKey;
             if(id==null||slots!=3||stackLimit<1||stackLimit>64||inputSlot<0||inputSlot>=slots||processTicks<=0
                     ||interactionDistanceSq<=0||interactionDistanceSq>4096||recipes.isEmpty())throw new IllegalArgumentException("Invalid processor rule");
             if(legacyEnergyApiPresent&&(minUseEnergy<=0||maxUseEnergy<minUseEnergy||energyNbtKey.isBlank()))throw new IllegalArgumentException("Incomplete processor energy rule");
+            if(energyIngressRuntimeComplete&&!legacyEnergyApiPresent)throw new IllegalArgumentException("Energy ingress cannot be enabled without a legacy energy contract");
         }
         @Override public int[] outputSlots(){return outputSlots.clone();}
         @Override public int[] topSlots(){return topSlots.clone();}
@@ -84,7 +85,7 @@ public final class LegacySingleInputProcessorRegistry {
                 Rule rule=parse(value);if(rule==null||!rule.id().getNamespace().equals(modId))continue;
                 Rule previous=RULES.putIfAbsent(rule.id(),rule);if(previous!=null&&!sameRule(previous,rule))throw new IllegalStateException("Conflicting converted processor rule for "+rule.id());loaded++;
             }
-            if(loaded>0)LegacyForgeBridge.LOGGER.info("Loaded converted processor base runtime rules: mod={}, machines={}",modId,loaded);
+            if(loaded>0)LegacyForgeBridge.LOGGER.info("Loaded converted processor runtime rules: mod={}, machines={}",modId,loaded);
         }catch(Exception exception){LegacyForgeBridge.LOGGER.error("Failed to load converted processor rules for {}",modId,exception);}
     }
 
@@ -94,12 +95,18 @@ public final class LegacySingleInputProcessorRegistry {
     public static int presentationKey(Identifier id){if(id==null)return 0;int value=id.toString().hashCode();return value==0?1:value;}
 
     public static synchronized void registerType(Identifier id,Block block){
-        if(!RULES.containsKey(id)||TYPES.containsKey(id))return;
-        if(BuiltInRegistries.BLOCK_ENTITY_TYPE.containsKey(id)){
-            @SuppressWarnings("unchecked") BlockEntityType<ConvertedLegacyProcessorBlockEntity> existing=(BlockEntityType<ConvertedLegacyProcessorBlockEntity>)BuiltInRegistries.BLOCK_ENTITY_TYPE.getValue(id);TYPES.put(id,existing);return;
+        Rule rule=RULES.get(id);if(rule==null)return;
+        BlockEntityType<ConvertedLegacyProcessorBlockEntity> type=TYPES.get(id);
+        if(type==null){
+            if(BuiltInRegistries.BLOCK_ENTITY_TYPE.containsKey(id)){
+                @SuppressWarnings("unchecked") BlockEntityType<ConvertedLegacyProcessorBlockEntity> existing=(BlockEntityType<ConvertedLegacyProcessorBlockEntity>)BuiltInRegistries.BLOCK_ENTITY_TYPE.getValue(id);type=existing;
+            }else{
+                type=FabricBlockEntityTypeBuilder.create(ConvertedLegacyProcessorBlockEntity::new,block).build();
+                Registry.register(BuiltInRegistries.BLOCK_ENTITY_TYPE,id,type);
+            }
+            TYPES.put(id,type);
         }
-        BlockEntityType<ConvertedLegacyProcessorBlockEntity> type=FabricBlockEntityTypeBuilder.create(ConvertedLegacyProcessorBlockEntity::new,block).build();
-        Registry.register(BuiltInRegistries.BLOCK_ENTITY_TYPE,id,type);TYPES.put(id,type);
+        LegacyProcessorEnergyCompat.register(rule,type);
     }
     public static BlockEntityType<ConvertedLegacyProcessorBlockEntity> type(Identifier id){return id==null?null:TYPES.get(id);}
     public static BlockEntityType<ConvertedLegacyProcessorBlockEntity> requireType(Block block){Identifier id=BuiltInRegistries.BLOCK.getKey(block);BlockEntityType<ConvertedLegacyProcessorBlockEntity> type=TYPES.get(id);if(type==null)throw new IllegalStateException("No converted processor BlockEntityType for "+id);return type;}
@@ -130,7 +137,9 @@ public final class LegacySingleInputProcessorRegistry {
             if(bool(value,"presentationProofComplete")&&presentation!=null)metadataRoll=bool(presentation,"metadataDrivesRoll");
             ParticleRule particle=null;JsonObject particleValue=value.has("particle")&&value.get("particle").isJsonObject()?value.getAsJsonObject("particle"):null;
             if(bool(value,"particlePresentationRuntimeComplete")&&particleValue!=null)particle=new ParticleRule((float)decimal(particleValue,"blockVelocityMultiplier",0D),(float)decimal(particleValue,"blockScale",0D),integer(particleValue,"itemParticleCount",0),decimal(particleValue,"itemVelocityYOffset",-1D));
-            return new Rule(id,integer(value,"slots",0),integer(value,"stackLimit",0),integer(value,"inputSlot",-1),ints(value.getAsJsonArray("outputSlots")),ints(value.getAsJsonArray("topSlots")),ints(value.getAsJsonArray("bottomSlots")),ints(value.getAsJsonArray("sideSlots")),integer(value,"processTicks",0),decimal(value,"interactionDistanceSq",0),bool(value,"comparator"),bool(value,"dropContents"),bool(value,"legacyEnergyApiPresent"),integer(value,"minUseEnergy",0),integer(value,"maxUseEnergy",0),string(value,"energyNbtKey",""),metadataRoll,particle,recipes);
+            boolean legacyEnergy=bool(value,"legacyEnergyApiPresent");
+            boolean ingress=legacyEnergy&&bool(value,"energyIngressRuntimeComplete");
+            return new Rule(id,integer(value,"slots",0),integer(value,"stackLimit",0),integer(value,"inputSlot",-1),ints(value.getAsJsonArray("outputSlots")),ints(value.getAsJsonArray("topSlots")),ints(value.getAsJsonArray("bottomSlots")),ints(value.getAsJsonArray("sideSlots")),integer(value,"processTicks",0),decimal(value,"interactionDistanceSq",0),bool(value,"comparator"),bool(value,"dropContents"),legacyEnergy,integer(value,"minUseEnergy",0),integer(value,"maxUseEnergy",0),string(value,"energyNbtKey",""),ingress,metadataRoll,particle,recipes);
         }catch(RuntimeException invalid){return null;}
     }
     private static Recipe parseRecipe(JsonObject value){
@@ -139,7 +148,7 @@ public final class LegacySingleInputProcessorRegistry {
         List<JsonObject> inputs=new ArrayList<>();for(JsonElement element:alternatives){if(!element.isJsonObject())return null;inputs.add(element.getAsJsonObject().deepCopy());}
         JsonObject bonus=value.has("bonus")&&value.get("bonus").isJsonObject()?value.getAsJsonObject("bonus"):null;return new Recipe(legacy,inputs,output,bonus,value.has("bonusChance")?value.get("bonusChance").getAsFloat():0F);
     }
-    private static boolean sameRule(Rule left,Rule right){return left.id().equals(right.id())&&left.processTicks()==right.processTicks()&&left.metadataDrivesRoll()==right.metadataDrivesRoll()&&Objects.equals(left.particle(),right.particle())&&left.recipes().size()==right.recipes().size();}
+    private static boolean sameRule(Rule left,Rule right){return left.id().equals(right.id())&&left.processTicks()==right.processTicks()&&left.energyIngressRuntimeComplete()==right.energyIngressRuntimeComplete()&&left.metadataDrivesRoll()==right.metadataDrivesRoll()&&Objects.equals(left.particle(),right.particle())&&left.recipes().size()==right.recipes().size();}
     private static int[] ints(JsonArray array){if(array==null)return new int[0];int[] values=new int[array.size()];for(int i=0;i<values.length;i++)values[i]=array.get(i).getAsInt();return values;}
     private static String required(JsonObject object,String key){String value=string(object,key,null);if(value==null)throw new IllegalArgumentException("Missing "+key);return value;}
     private static String string(JsonObject object,String key,String fallback){JsonElement value=object.get(key);return value!=null&&value.isJsonPrimitive()?value.getAsString():fallback;}

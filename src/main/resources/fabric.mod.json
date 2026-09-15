@@ -33,6 +33,7 @@
     "minecraft": "1.21.11",
     "java": ">=21",
     "fabric-api": "*",
+    "team_reborn_energy": ">=4.2.0",
     "viafabricplus": ">=4.4.15"
   }
 }

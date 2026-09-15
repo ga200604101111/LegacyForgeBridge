@@ -10,19 +10,20 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Exact external-corpus proof for MillStone runtime-only semantics. */
+/** Exact external-corpus proof for MillStone runtime and energy receiver semantics. */
 @Tag("exact-corpus")
 class BambooProcessorRuntimeProofExactTest {
     private static final String BAMBOO_SHA256="bcceb588950f911398cfc94856a45527b4aa17b6e130927b2e0516fdf059b402";
 
     @Test
-    void exactMillStoneProvesExtractionAndEnergyContract()throws Exception{
+    void exactMillStoneProvesExtractionEnergyStorageAndIngressContract()throws Exception{
         String input=System.getProperty("lfb.exactCorpus.jar");
         assertNotNull(input,"Run exactCorpusTest with the checksum-pinned Bamboo 2.6.8.5 JAR");
         Path source=Path.of(input);assertTrue(Files.isRegularFile(source));assertEquals(BAMBOO_SHA256,Hashing.sha256(source));
         var topology=new LegacySingleInputProcessorAnalyzer().analyze(source);
         assertEquals(1,topology.rules().size(),topology.skipped().toString());
-        var proof=new LegacySingleInputProcessorRuntimeAnalyzer().analyze(source,topology.rules().getFirst());
+        var machine=topology.rules().getFirst();
+        var proof=new LegacySingleInputProcessorRuntimeAnalyzer().analyze(source,machine);
         assertTrue(proof.complete(),proof.diagnostics().toString());
         assertTrue(proof.sidedExtractionProven());
         assertTrue(proof.legacyEnergyApiPresent());
@@ -32,5 +33,12 @@ class BambooProcessorRuntimeProofExactTest {
         assertTrue(proof.energyAccelerationProven());
         assertEquals(6,LegacySingleInputProcessorRuntimeAnalyzer.sourceProgressStep(10,500,100));
         assertEquals(-100,LegacySingleInputProcessorRuntimeAnalyzer.sourceEnergyAfterStep(10,500,100));
+
+        var ingress=new LegacySingleInputProcessorEnergyIngressAnalyzer().analyze(source,machine,proof);
+        assertTrue(ingress.complete(),ingress.diagnostics().toString());
+        assertTrue(ingress.allSidesConnect());
+        assertTrue(ingress.extractionDisabled());
+        assertTrue(ingress.queryMethodsReturnZero());
+        assertTrue(ingress.receiveSimulationProven());
     }
 }

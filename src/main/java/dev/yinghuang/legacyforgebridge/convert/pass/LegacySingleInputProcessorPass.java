@@ -6,6 +6,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import dev.yinghuang.legacyforgebridge.convert.LegacySingleInputProcessorAnalyzer;
+import dev.yinghuang.legacyforgebridge.convert.LegacySingleInputProcessorEnergyIngressAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.LegacySingleInputProcessorRecipeAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.LegacySingleInputProcessorRecipeMaterializer;
 import dev.yinghuang.legacyforgebridge.convert.LegacySingleInputProcessorRuntimeAnalyzer;
@@ -35,14 +36,16 @@ public final class LegacySingleInputProcessorPass implements ConversionPass {
 
         Map<String,String> blockIds = generatedBlockIds(context.stagingDir());
         JsonObject root = new JsonObject();
-        root.addProperty("schemaVersion", 3);
+        root.addProperty("schemaVersion", 4);
         root.addProperty("sourceSha256", context.sourceHash());
         JsonArray machines = new JsonArray();
         int emittedRecipes = 0;
         int skippedRecipes = 0;
         int runtimeProofs = 0;
+        int energyIngressProofs = 0;
         int baseRuntimeMachines = 0;
         LegacySingleInputProcessorRuntimeAnalyzer runtimeAnalyzer = new LegacySingleInputProcessorRuntimeAnalyzer();
+        LegacySingleInputProcessorEnergyIngressAnalyzer ingressAnalyzer = new LegacySingleInputProcessorEnergyIngressAnalyzer();
 
         for (var machine : analysis.rules()) {
             String id = blockIds.get(machine.sourceBlockClass());
@@ -55,6 +58,8 @@ public final class LegacySingleInputProcessorPass implements ConversionPass {
 
             var runtime = runtimeAnalyzer.analyze(context.sourceJar(), machine);
             if (runtime.complete()) runtimeProofs++;
+            var ingress = ingressAnalyzer.analyze(context.sourceJar(), machine, runtime);
+            if (ingress.complete()) energyIngressProofs++;
             var recipes = new LegacySingleInputProcessorRecipeAnalyzer().analyze(context.sourceJar(), machine);
             JsonArray recipeJson = new JsonArray();
             for (var recipe : recipes.recipes()) {
@@ -76,7 +81,7 @@ public final class LegacySingleInputProcessorPass implements ConversionPass {
             boolean baseRuntimeComplete = runtime.complete() && allRecipesMaterialized;
             boolean energyStorageRuntimeComplete = baseRuntimeComplete
                     && (!runtime.legacyEnergyApiPresent() || !runtime.energyNbtKey().isBlank());
-            boolean energyIngressRuntimeComplete = !runtime.legacyEnergyApiPresent();
+            boolean energyIngressRuntimeComplete = baseRuntimeComplete && ingress.complete();
             boolean runtimeComplete = baseRuntimeComplete && energyStorageRuntimeComplete
                     && energyIngressRuntimeComplete;
             if (baseRuntimeComplete) baseRuntimeMachines++;
@@ -111,6 +116,16 @@ public final class LegacySingleInputProcessorPass implements ConversionPass {
             JsonArray runtimeDiagnostics = new JsonArray();
             runtime.diagnostics().forEach(runtimeDiagnostics::add);
             value.add("runtimeDiagnostics", runtimeDiagnostics);
+
+            value.addProperty("energyIngressProofComplete", ingress.complete());
+            value.addProperty("energyAllSidesConnectProven", ingress.allSidesConnect());
+            value.addProperty("energyExtractionDisabledProven", ingress.extractionDisabled());
+            value.addProperty("energyQueryZeroSemanticsProven", ingress.queryMethodsReturnZero());
+            value.addProperty("energyReceiveSimulationProven", ingress.receiveSimulationProven());
+            JsonArray ingressDiagnostics = new JsonArray();
+            ingress.diagnostics().forEach(ingressDiagnostics::add);
+            value.add("energyIngressDiagnostics", ingressDiagnostics);
+
             value.add("recipes", recipeJson);
             value.addProperty("sourceRecipeCount", recipes.recipes().size());
             value.addProperty("materializedRecipeCount", recipeJson.size());
@@ -130,17 +145,22 @@ public final class LegacySingleInputProcessorPass implements ConversionPass {
             value.addProperty("runtimeComplete", runtimeComplete);
             machines.add(value);
 
-            if (baseRuntimeComplete && runtime.legacyEnergyApiPresent()) {
+            if (baseRuntimeComplete && runtime.legacyEnergyApiPresent() && ingress.complete()) {
+                context.diagnostics().info(
+                        "LFB-CONVERT-PROCESSOR-0006", SupportLevel.ADAPTED,
+                        "Processor source energy receiver contract is proven for " + id
+                                + "; modern ingress is exposed through the transaction-safe Team Reborn Energy API with 1:1 source units.");
+            } else if (baseRuntimeComplete && runtime.legacyEnergyApiPresent()) {
                 context.diagnostics().warning(
                         "LFB-CONVERT-PROCESSOR-0006", SupportLevel.RUNTIME_BRIDGE,
                         "Processor base runtime is available for " + id
-                                + ", including legacy stored energy consumption, but external legacy energy ingress is not bridged yet.");
+                                + ", but the external legacy energy receiver contract is not proven safe for modern ingress.");
             }
             if (baseRuntimeComplete) {
                 context.diagnostics().warning(
                         "LFB-CONVERT-PROCESSOR-0007", SupportLevel.RUNTIME_BRIDGE,
                         "Processor " + id
-                                + " uses the generic functional LFB screen; source-specific machine presentation remains unresolved.");
+                                + " has functional gameplay runtime; source presentation completion is evaluated by the presentation pass.");
             }
         }
 
@@ -155,6 +175,7 @@ public final class LegacySingleInputProcessorPass implements ConversionPass {
         }
         root.add("skippedMachines", skipped);
         root.addProperty("runtimeProofCompleteMachines", runtimeProofs);
+        root.addProperty("energyIngressProofCompleteMachines", energyIngressProofs);
         root.addProperty("baseRuntimeCompleteMachines", baseRuntimeMachines);
         root.addProperty("materializedRecipes", emittedRecipes);
         root.addProperty("skippedRecipes", skippedRecipes);
@@ -169,6 +190,7 @@ public final class LegacySingleInputProcessorPass implements ConversionPass {
                     "LFB-CONVERT-PROCESSOR-0001", SupportLevel.ADAPTED,
                     "Materialized source-proven single-input processors: machines=" + machines.size()
                             + ", runtimeProofs=" + runtimeProofs
+                            + ", energyIngressProofs=" + energyIngressProofs
                             + ", baseRuntime=" + baseRuntimeMachines
                             + ", recipes=" + emittedRecipes
                             + ", skippedRecipes=" + skippedRecipes + ".");

@@ -23,11 +23,13 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 import org.jetbrains.annotations.Nullable;
+import team.reborn.energy.api.EnergyStorage;
 
-/** Modern base runtime for source-proven three-slot single-input legacy processors. */
+/** Modern runtime for source-proven three-slot single-input legacy processors. */
 public final class ConvertedLegacyProcessorBlockEntity extends BaseContainerBlockEntity implements WorldlyContainer {
     private static final String AIR_ID="minecraft:air";
     private final LegacySingleInputProcessorRegistry.Rule rule;
+    private final LegacyProcessorEnergyStorage energyStorage;
     private NonNullList<ItemStack> items;
     private int grindTime;
     private int grindMotion;
@@ -43,7 +45,13 @@ public final class ConvertedLegacyProcessorBlockEntity extends BaseContainerBloc
         @Override public int getCount(){return 4;}
     };
 
-    public ConvertedLegacyProcessorBlockEntity(BlockPos pos,BlockState state){super(LegacySingleInputProcessorRegistry.requireType(state.getBlock()),pos,state);this.rule=LegacySingleInputProcessorRegistry.requireRule(state.getBlock());this.items=NonNullList.withSize(rule.slots(),ItemStack.EMPTY);}
+    public ConvertedLegacyProcessorBlockEntity(BlockPos pos,BlockState state){
+        super(LegacySingleInputProcessorRegistry.requireType(state.getBlock()),pos,state);
+        this.rule=LegacySingleInputProcessorRegistry.requireRule(state.getBlock());
+        this.items=NonNullList.withSize(rule.slots(),ItemStack.EMPTY);
+        this.energyStorage=rule.legacyEnergyApiPresent()&&rule.energyIngressRuntimeComplete()
+                ?new LegacyProcessorEnergyStorage(rule.maxUseEnergy(),this::commitExternalEnergy):null;
+    }
     @Override protected Component getDefaultName(){return Component.translatable("block."+rule.id().getNamespace()+"."+rule.id().getPath());}
     @Override public int getContainerSize(){return rule.slots();}
     @Override public int getMaxStackSize(){return rule.stackLimit();}
@@ -56,7 +64,10 @@ public final class ConvertedLegacyProcessorBlockEntity extends BaseContainerBloc
     @Override public boolean canTakeItemThroughFace(int slot,ItemStack stack,Direction direction){return direction!=Direction.DOWN||slot!=rule.inputSlot();}
     @Override public boolean stillValid(Player player){if(level==null||level.getBlockEntity(worldPosition)!=this)return false;return player.distanceToSqr(worldPosition.getX()+0.5,worldPosition.getY()+0.5,worldPosition.getZ()+0.5)<=rule.interactionDistanceSq();}
 
-    @Override protected void loadAdditional(ValueInput input){super.loadAdditional(input);items=NonNullList.withSize(rule.slots(),ItemStack.EMPTY);ContainerHelper.loadAllItems(input,items);grindTime=input.getIntOr("grindTime",0);activeLegacyMeta=input.getIntOr("grindItemDmg",0);activeLegacyName=input.getStringOr("grindItemName",AIR_ID);activeRecipeIndex=input.getIntOr("lfbActiveRecipe",-1);grindMotion=grindTime>0?Math.floorMod(grindTime,40)/10:0;if(rule.legacyEnergyApiPresent())innerEnergy=input.getIntOr(rule.energyNbtKey(),0);}
+    @Override protected void loadAdditional(ValueInput input){
+        super.loadAdditional(input);items=NonNullList.withSize(rule.slots(),ItemStack.EMPTY);ContainerHelper.loadAllItems(input,items);grindTime=input.getIntOr("grindTime",0);activeLegacyMeta=input.getIntOr("grindItemDmg",0);activeLegacyName=input.getStringOr("grindItemName",AIR_ID);activeRecipeIndex=input.getIntOr("lfbActiveRecipe",-1);grindMotion=grindTime>0?Math.floorMod(grindTime,40)/10:0;
+        if(rule.legacyEnergyApiPresent()){innerEnergy=input.getIntOr(rule.energyNbtKey(),0);syncEnergyStorageFromSource();}
+    }
     @Override protected void saveAdditional(ValueOutput output){super.saveAdditional(output);ContainerHelper.saveAllItems(output,items);output.putInt("grindTime",grindTime);output.putString("grindItemName",activeLegacyName==null?AIR_ID:activeLegacyName);output.putInt("grindItemDmg",activeLegacyMeta);output.putInt("lfbActiveRecipe",activeRecipeIndex);if(rule.legacyEnergyApiPresent())output.putInt(rule.energyNbtKey(),innerEnergy);}
     @Override public ClientboundBlockEntityDataPacket getUpdatePacket(){return ClientboundBlockEntityDataPacket.create(this);}
     @Override public CompoundTag getUpdateTag(HolderLookup.Provider registries){return saveWithoutMetadata(registries);}
@@ -65,7 +76,12 @@ public final class ConvertedLegacyProcessorBlockEntity extends BaseContainerBloc
     public static void clientTick(Level level,BlockPos pos,BlockState state,ConvertedLegacyProcessorBlockEntity machine){machine.tickClient();}
 
     private void tickServer(){
-        if(level==null||level.isClientSide())return;int step=1;if(grindTime!=0&&rule.legacyEnergyApiPresent()){step=sourceProgressStep(grindTime,innerEnergy,rule.minUseEnergy());innerEnergy=sourceEnergyAfterStep(grindTime,innerEnergy,rule.minUseEnergy());}
+        if(level==null||level.isClientSide())return;int step=1;
+        if(grindTime!=0&&rule.legacyEnergyApiPresent()){
+            step=sourceProgressStep(grindTime,innerEnergy,rule.minUseEnergy());
+            innerEnergy=sourceEnergyAfterStep(grindTime,innerEnergy,rule.minUseEnergy());
+            syncEnergyStorageFromSource();
+        }
         boolean changed=false;int metadata=0;
         if(grindTime==0){LegacySingleInputProcessorRegistry.ResolvedRecipe recipe=LegacySingleInputProcessorRegistry.findInput(rule,items.get(rule.inputSlot()),level.registryAccess());if(recipe!=null&&canStart(recipe)){start(recipe);grindTime+=step;metadata=step;changed=true;}}
         else{grindTime+=step;metadata=step;changed=true;if(grindTime>rule.processTicks()){LegacySingleInputProcessorRegistry.ResolvedRecipe recipe=LegacySingleInputProcessorRegistry.resolveActive(rule,activeRecipeIndex,activeLegacyName,activeLegacyMeta,level.registryAccess());grindTime=0;if(recipe!=null)finish(recipe);else LegacyForgeBridge.LOGGER.error("Converted processor {} could not resolve active legacy recipe {}:{}; output was not fabricated.",rule.id(),activeLegacyName,activeLegacyMeta);}}
@@ -86,6 +102,11 @@ public final class ConvertedLegacyProcessorBlockEntity extends BaseContainerBloc
     private int progressStage(){return Math.round((float)grindTime/(float)rule.processTicks()*3F);}
     private static int sourceProgressStep(int progress,int energy,int minUseEnergy){if(progress==0||energy<=minUseEnergy)return 1;return (byte)(energy/minUseEnergy+1);}
     private static int sourceEnergyAfterStep(int progress,int energy,int minUseEnergy){int step=sourceProgressStep(progress,energy,minUseEnergy);return progress==0||energy<=minUseEnergy?energy:energy-minUseEnergy*step;}
+
+    public EnergyStorage energyStorage(){if(energyStorage==null)throw new IllegalStateException("Processor has no source-proven energy ingress: "+rule.id());return energyStorage;}
+    private void syncEnergyStorageFromSource(){if(energyStorage!=null)energyStorage.setSourceAmount(innerEnergy);}
+    private void commitExternalEnergy(long amount){if(amount<Integer.MIN_VALUE||amount>Integer.MAX_VALUE)throw new IllegalStateException("Processor energy escaped legacy int range: "+amount);innerEnergy=(int)amount;setChanged();}
+
     public float clientRoll(){return clientRoll;}
     int grindTimeForTests(){return grindTime;}
     int innerEnergyForTests(){return innerEnergy;}
