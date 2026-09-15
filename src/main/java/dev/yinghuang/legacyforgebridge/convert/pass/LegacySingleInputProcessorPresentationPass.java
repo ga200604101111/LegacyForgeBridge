@@ -43,6 +43,7 @@ public final class LegacySingleInputProcessorPresentationPass implements Convers
         int proven=0;
         int guiRuntime=0;
         int worldRuntime=0;
+        int inventoryRuntime=0;
         for(JsonElement element:machines){
             if(!element.isJsonObject())continue;
             JsonObject machine=element.getAsJsonObject();
@@ -57,27 +58,78 @@ public final class LegacySingleInputProcessorPresentationPass implements Convers
             machine.addProperty("guiPresentationRuntimeComplete",complete);
             machine.addProperty("worldPresentationRuntimeComplete",complete);
             machine.addProperty("metadataRollRuntimeComplete",complete);
-            machine.addProperty("inventoryPresentationRuntimeComplete",false);
-            machine.addProperty("particlePresentationRuntimeComplete",false);
-            machine.addProperty("sourcePresentationComplete",false);
-            machine.addProperty("runtimeComplete",false);
+            boolean inventoryComplete=false;
             if(complete){
+                LegacySingleInputProcessorPresentationAnalyzer.Presentation proof=analysis.presentation().orElseThrow();
                 proven++;
                 guiRuntime++;
                 worldRuntime++;
-                machine.add("presentation",presentationJson(analysis.presentation().orElseThrow()));
+                machine.add("presentation",presentationJson(proof));
+                if(proof.inventoryUsesZeroRotation()){
+                    writeInventoryPresentation(context.stagingDir(),string(machine,"id"),proof);
+                    inventoryComplete=true;
+                    inventoryRuntime++;
+                }
             }
+            machine.addProperty("inventoryPresentationRuntimeComplete",inventoryComplete);
+            machine.addProperty("particlePresentationRuntimeComplete",false);
+            machine.addProperty("sourcePresentationComplete",false);
+            machine.addProperty("runtimeComplete",false);
         }
         root.addProperty("presentationProofCompleteMachines",proven);
         root.addProperty("guiPresentationRuntimeCompleteMachines",guiRuntime);
         root.addProperty("worldPresentationRuntimeCompleteMachines",worldRuntime);
+        root.addProperty("inventoryPresentationRuntimeCompleteMachines",inventoryRuntime);
         Files.writeString(output,GSON.toJson(root)+"\n",StandardCharsets.UTF_8);
         if(proven>0){
             context.diagnostics().info("LFB-CONVERT-PROCESSOR-PRESENTATION-0001",SupportLevel.ADAPTED,
-                    "Proven and enabled source GUI/world presentation for "+proven+" converted processor(s).");
+                    "Proven and enabled source GUI/world presentation for "+proven+" converted processor(s); inventory3D="+inventoryRuntime+".");
             context.diagnostics().warning("LFB-CONVERT-PROCESSOR-PRESENTATION-0002",SupportLevel.RUNTIME_BRIDGE,
-                    "Processor source inventory-item rendering and client particle presentation remain unresolved; full source presentation is not claimed.");
+                    "Processor client particle presentation remains unresolved; full source presentation is not claimed.");
         }
+    }
+
+    private static void writeInventoryPresentation(Path staging,String idValue,
+                                                   LegacySingleInputProcessorPresentationAnalyzer.Presentation proof)throws Exception{
+        int separator=idValue.indexOf(':');
+        if(separator<=0||separator==idValue.length()-1)throw new IllegalArgumentException("Invalid converted processor id "+idValue);
+        String namespace=idValue.substring(0,separator);
+        String path=idValue.substring(separator+1);
+        String baseName=path+"_processor_base";
+
+        JsonObject base=new JsonObject();
+        base.addProperty("parent","minecraft:block/block");
+        writeJson(staging.resolve("assets/"+namespace+"/models/item/"+baseName+".json"),base);
+
+        JsonObject special=new JsonObject();
+        special.addProperty("type","legacyforgebridge:processor");
+        special.addProperty("texture",proof.entityTexture());
+        special.addProperty("texture_width",proof.modelTextureWidth());
+        special.addProperty("texture_height",proof.modelTextureHeight());
+        special.add("rotating_lower",specialCuboid(proof.rotatingLower()));
+        special.add("static_upper",specialCuboid(proof.staticUpper()));
+        special.addProperty("centered",proof.centeredAtBlock());
+
+        JsonObject model=new JsonObject();
+        model.addProperty("type","minecraft:special");
+        model.addProperty("base",namespace+":item/"+baseName);
+        model.add("model",special);
+        JsonObject item=new JsonObject();
+        item.add("model",model);
+        writeJson(staging.resolve("assets/"+namespace+"/items/"+path+".json"),item);
+    }
+
+    private static JsonObject specialCuboid(LegacySingleInputProcessorPresentationAnalyzer.Cuboid source){
+        JsonObject value=new JsonObject();
+        value.addProperty("u",source.u());value.addProperty("v",source.v());
+        value.addProperty("x",source.x());value.addProperty("y",source.y());value.addProperty("z",source.z());
+        value.addProperty("width",source.width());value.addProperty("height",source.height());value.addProperty("depth",source.depth());
+        return value;
+    }
+
+    private static void writeJson(Path path,JsonObject value)throws Exception{
+        Files.createDirectories(path.getParent());
+        Files.writeString(path,GSON.toJson(value)+"\n",StandardCharsets.UTF_8);
     }
 
     private static JsonObject presentationJson(LegacySingleInputProcessorPresentationAnalyzer.Presentation proof){

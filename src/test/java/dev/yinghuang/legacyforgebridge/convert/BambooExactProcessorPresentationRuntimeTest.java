@@ -24,7 +24,7 @@ class BambooExactProcessorPresentationRuntimeTest {
     @TempDir Path tempDir;
 
     @Test
-    void exactMillStoneGuiAndWorldPresentationAreEnabledWithoutOverclaimingFullPresentation() throws Exception {
+    void exactMillStoneGuiWorldAndInventoryPresentationAreEnabledWithoutOverclaimingParticles() throws Exception {
         String input=System.getProperty("lfb.exactCorpus.jar");
         assertNotNull(input,"exact Bamboo corpus is required");
         Path source=Path.of(input);
@@ -38,12 +38,13 @@ class BambooExactProcessorPresentationRuntimeTest {
             assertEquals(1,root.get("presentationProofCompleteMachines").getAsInt());
             assertEquals(1,root.get("guiPresentationRuntimeCompleteMachines").getAsInt());
             assertEquals(1,root.get("worldPresentationRuntimeCompleteMachines").getAsInt());
+            assertEquals(1,root.get("inventoryPresentationRuntimeCompleteMachines").getAsInt());
             JsonObject machine=root.getAsJsonArray("machines").get(0).getAsJsonObject();
             assertTrue(machine.get("presentationProofComplete").getAsBoolean());
             assertTrue(machine.get("guiPresentationRuntimeComplete").getAsBoolean());
             assertTrue(machine.get("worldPresentationRuntimeComplete").getAsBoolean());
             assertTrue(machine.get("metadataRollRuntimeComplete").getAsBoolean());
-            assertFalse(machine.get("inventoryPresentationRuntimeComplete").getAsBoolean());
+            assertTrue(machine.get("inventoryPresentationRuntimeComplete").getAsBoolean());
             assertFalse(machine.get("particlePresentationRuntimeComplete").getAsBoolean());
             assertFalse(machine.get("sourcePresentationComplete").getAsBoolean());
             assertFalse(machine.get("runtimeComplete").getAsBoolean());
@@ -57,6 +58,7 @@ class BambooExactProcessorPresentationRuntimeTest {
             assertEquals(64,presentation.get("modelTextureHeight").getAsInt());
             assertTrue(presentation.get("metadataDrivesRoll").getAsBoolean());
             assertTrue(presentation.get("centeredAtBlock").getAsBoolean());
+            assertTrue(presentation.get("inventoryUsesZeroRotation").getAsBoolean());
             assertEquals(0.0625F,presentation.get("renderScale").getAsFloat());
 
             JsonObject lower=presentation.getAsJsonObject("rotatingLower");
@@ -69,6 +71,19 @@ class BambooExactProcessorPresentationRuntimeTest {
             assertEquals(8,lower.get("height").getAsInt());
             assertEquals(16,lower.get("depth").getAsInt());
 
+            JsonObject item=readJson(jar,"assets/bamboomod/items/bamboomillstone.json");
+            JsonObject itemModel=item.getAsJsonObject("model");
+            assertEquals("minecraft:special",itemModel.get("type").getAsString());
+            assertEquals("bamboomod:item/bamboomillstone_processor_base",itemModel.get("base").getAsString());
+            JsonObject special=itemModel.getAsJsonObject("model");
+            assertEquals("legacyforgebridge:processor",special.get("type").getAsString());
+            assertEquals("bamboo:textures/entitys/millstone.png",special.get("texture").getAsString());
+            assertEquals(64,special.get("texture_width").getAsInt());
+            assertEquals(64,special.get("texture_height").getAsInt());
+            assertTrue(special.get("centered").getAsBoolean());
+            assertNotNull(special.getAsJsonObject("rotating_lower"));
+            assertNotNull(special.getAsJsonObject("static_upper"));
+            assertNotNull(jar.getJarEntry("assets/bamboomod/models/item/bamboomillstone_processor_base.json"));
             assertNotNull(jar.getJarEntry("assets/bamboo/textures/guis/guimillstone.png"));
             assertNotNull(jar.getJarEntry("assets/bamboo/textures/entitys/millstone.png"));
         }

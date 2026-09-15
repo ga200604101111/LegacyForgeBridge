@@ -1,5 +1,6 @@
 package dev.yinghuang.legacyforgebridge.mixin.client;
 
+import dev.yinghuang.legacyforgebridge.render.ConvertedLegacyProcessorSpecialRenderer;
 import dev.yinghuang.legacyforgebridge.render.ObjSpecialRenderer;
 import net.minecraft.client.renderer.special.SpecialModelRenderers;
 import net.minecraft.resources.Identifier;
@@ -18,10 +19,14 @@ public abstract class SpecialModelRenderersMixin {
     private static ExtraCodecs.LateBoundIdMapper ID_MAPPER;
 
     @Inject(method = "bootstrap", at = @At("TAIL"))
-    private static void lfb$registerConvertedObjRenderer(CallbackInfo ci) {
+    private static void lfb$registerConvertedSpecialRenderers(CallbackInfo ci) {
         ID_MAPPER.put(
                 Identifier.fromNamespaceAndPath("legacyforgebridge", "obj"),
                 ObjSpecialRenderer.Unbaked.MAP_CODEC
+        );
+        ID_MAPPER.put(
+                Identifier.fromNamespaceAndPath("legacyforgebridge", "processor"),
+                ConvertedLegacyProcessorSpecialRenderer.Unbaked.MAP_CODEC
         );
     }
 }
