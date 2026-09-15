@@ -74,12 +74,21 @@ class LegacyPlantPresentationPassTest {
                 staging.resolve("assets/foreign/models/block/pure_crop_stage_7.json"))).getAsJsonObject();
         assertEquals("minecraft:block/cross", stage7.get("parent").getAsString());
         assertEquals("plants:blocks/herb_stage_7", stage7.getAsJsonObject("textures").get("cross").getAsString());
-        String state = Files.readString(staging.resolve("assets/foreign/blockstates/pure_crop.json"));
-        assertTrue(state.contains("legacy_meta=0"));
-        assertTrue(state.contains("legacy_meta=7"));
-        assertTrue(state.contains("legacy_meta=8"));
-        assertTrue(state.contains("legacy_meta=15"));
-        assertTrue(state.contains("foreign:block/pure_crop_stage_7"));
+        JsonObject cropVariants = JsonParser.parseString(Files.readString(
+                staging.resolve("assets/foreign/blockstates/pure_crop.json"))).getAsJsonObject().getAsJsonObject("variants");
+        assertEquals(16, cropVariants.size());
+        assertTrue(cropVariants.has("legacy_meta=0"));
+        assertTrue(cropVariants.has("legacy_meta=7"));
+        assertTrue(cropVariants.has("legacy_meta=8"));
+        assertTrue(cropVariants.has("legacy_meta=15"));
+        assertEquals("foreign:block/pure_crop_stage_0",
+                cropVariants.getAsJsonObject("legacy_meta=0").get("model").getAsString());
+        assertEquals("foreign:block/pure_crop_stage_7",
+                cropVariants.getAsJsonObject("legacy_meta=7").get("model").getAsString());
+        assertEquals("foreign:block/pure_crop_stage_7",
+                cropVariants.getAsJsonObject("legacy_meta=8").get("model").getAsString());
+        assertEquals("foreign:block/pure_crop_stage_7",
+                cropVariants.getAsJsonObject("legacy_meta=15").get("model").getAsString());
 
         JsonObject missing = root.getAsJsonArray("rules").get(1).getAsJsonObject();
         assertFalse(missing.get("assetProofComplete").getAsBoolean());
@@ -92,9 +101,13 @@ class LegacyPlantPresentationPassTest {
         JsonObject reedModel = JsonParser.parseString(Files.readString(
                 staging.resolve("assets/foreign/models/block/reed.json"))).getAsJsonObject();
         assertEquals("plants:blocks/reed", reedModel.getAsJsonObject("textures").get("cross").getAsString());
-        String reedState = Files.readString(staging.resolve("assets/foreign/blockstates/reed.json"));
-        assertTrue(reedState.contains("legacy_meta=0"));
-        assertTrue(reedState.contains("legacy_meta=15"));
+        JsonObject reedVariants = JsonParser.parseString(Files.readString(
+                staging.resolve("assets/foreign/blockstates/reed.json"))).getAsJsonObject().getAsJsonObject("variants");
+        assertEquals(16, reedVariants.size());
+        for (int meta = 0; meta < 16; meta++) {
+            assertEquals("foreign:block/reed",
+                    reedVariants.getAsJsonObject("legacy_meta=" + meta).get("model").getAsString());
+        }
     }
 
     private static byte[] block(String name, String superName, String texture) {
