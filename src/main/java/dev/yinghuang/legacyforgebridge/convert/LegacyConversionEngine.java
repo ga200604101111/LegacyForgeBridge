@@ -23,6 +23,7 @@ import dev.yinghuang.legacyforgebridge.convert.pass.LegacyBytecodeAuditPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyClassDependencyAnalysisPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyEquipmentRenderPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyEventAnalysisPass;
+import dev.yinghuang.legacyforgebridge.convert.pass.LegacyFoodItemPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyFuelHandlerPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyItemRenderPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyInertModelBlockPass;
@@ -94,6 +95,7 @@ public final class LegacyConversionEngine {
             builder.add(new LegacyObjPresentationPass());
             builder.add(new LegacyItemRenderPass());
             builder.add(new NativeItemTagsPass());
+            builder.add(new LegacyFoodItemPass());
             builder.add(new LegacyLifecycleAnalysisPass());
             builder.add(new LegacyBlockBehaviorAnalysisPass());
             builder.add(new LegacyBlockDropAnalysisPass());
