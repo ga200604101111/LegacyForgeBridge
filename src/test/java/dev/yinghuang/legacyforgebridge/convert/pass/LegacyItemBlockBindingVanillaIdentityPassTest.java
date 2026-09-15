@@ -52,7 +52,10 @@ class LegacyItemBlockBindingVanillaIdentityPassTest {
         assertEquals(1, root.get("modernIdentityCompleteBindings").getAsInt());
         assertEquals(1, root.get("vanillaBlockIdentityReferences").getAsInt());
         JsonObject binding = root.getAsJsonArray("bindings").get(0).getAsJsonObject();
+        JsonObject target = binding.getAsJsonObject("targetBlock");
         JsonObject soil = binding.getAsJsonObject("soilBlock");
+        assertEquals("demo:crop", target.get("modernId").getAsString());
+        assertEquals("converted_content", target.get("modernIdentitySource").getAsString());
         assertFalse(soil.get("registered").getAsBoolean());
         assertEquals("net/minecraft/init/Blocks", soil.get("sourceFieldOwner").getAsString());
         assertEquals("field_150458_ak", soil.get("sourceFieldName").getAsString());
@@ -85,13 +88,23 @@ class LegacyItemBlockBindingVanillaIdentityPassTest {
         ClassWriter w = new ClassWriter(ClassWriter.COMPUTE_MAXS);
         w.visit(Opcodes.V1_7, Opcodes.ACC_PUBLIC, "v/Bootstrap", null, "java/lang/Object", null);
         w.visitField(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, "CROP", "Lnet/minecraft/block/Block;", null, null).visitEnd();
+
+        MethodVisitor bind = w.visitMethod(Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC, "bindBlock",
+                "(Lnet/minecraft/block/Block;Ljava/lang/String;)Lnet/minecraft/block/Block;", null, null);
+        bind.visitCode();
+        bind.visitVarInsn(Opcodes.ALOAD, 0); bind.visitVarInsn(Opcodes.ALOAD, 1);
+        bind.visitMethodInsn(Opcodes.INVOKESTATIC, "cpw/mods/fml/common/registry/GameRegistry", "registerBlock",
+                "(Lnet/minecraft/block/Block;Ljava/lang/String;)V", false);
+        bind.visitVarInsn(Opcodes.ALOAD, 0); bind.visitInsn(Opcodes.ARETURN);
+        bind.visitMaxs(0, 0); bind.visitEnd();
+
         MethodVisitor m = w.visitMethod(Opcodes.ACC_STATIC, "<clinit>", "()V", null, null);
         m.visitCode();
         m.visitTypeInsn(Opcodes.NEW, "v/Crop"); m.visitInsn(Opcodes.DUP);
         m.visitMethodInsn(Opcodes.INVOKESPECIAL, "v/Crop", "<init>", "()V", false);
-        m.visitInsn(Opcodes.DUP); m.visitLdcInsn("crop");
-        m.visitMethodInsn(Opcodes.INVOKESTATIC, "cpw/mods/fml/common/registry/GameRegistry", "registerBlock",
-                "(Lnet/minecraft/block/Block;Ljava/lang/String;)V", false);
+        m.visitLdcInsn("crop");
+        m.visitMethodInsn(Opcodes.INVOKESTATIC, "v/Bootstrap", "bindBlock",
+                "(Lnet/minecraft/block/Block;Ljava/lang/String;)Lnet/minecraft/block/Block;", false);
         m.visitFieldInsn(Opcodes.PUTSTATIC, "v/Bootstrap", "CROP", "Lnet/minecraft/block/Block;");
         m.visitTypeInsn(Opcodes.NEW, "v/Seed"); m.visitInsn(Opcodes.DUP);
         m.visitMethodInsn(Opcodes.INVOKESPECIAL, "v/Seed", "<init>", "()V", false);
