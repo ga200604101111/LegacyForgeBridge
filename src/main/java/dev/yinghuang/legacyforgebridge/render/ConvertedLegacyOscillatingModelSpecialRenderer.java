@@ -82,19 +82,37 @@ public final class ConvertedLegacyOscillatingModelSpecialRenderer implements NoD
 
     private record RenderedPart(Part source,ModelPart part) { }
 
+    private record Geometry(String field,int u,int v,float x,float y,float z,int width,int height,int depth,
+                            float pivotX,float pivotY,float pivotZ,boolean mirror) {
+        private static final MapCodec<Geometry> MAP_CODEC=RecordCodecBuilder.mapCodec(instance->instance.group(
+                Codec.STRING.fieldOf("field").forGetter(Geometry::field),
+                Codec.INT.fieldOf("u").forGetter(Geometry::u),Codec.INT.fieldOf("v").forGetter(Geometry::v),
+                Codec.FLOAT.fieldOf("x").forGetter(Geometry::x),Codec.FLOAT.fieldOf("y").forGetter(Geometry::y),Codec.FLOAT.fieldOf("z").forGetter(Geometry::z),
+                Codec.INT.fieldOf("width").forGetter(Geometry::width),Codec.INT.fieldOf("height").forGetter(Geometry::height),Codec.INT.fieldOf("depth").forGetter(Geometry::depth),
+                Codec.FLOAT.fieldOf("pivot_x").forGetter(Geometry::pivotX),Codec.FLOAT.fieldOf("pivot_y").forGetter(Geometry::pivotY),Codec.FLOAT.fieldOf("pivot_z").forGetter(Geometry::pivotZ),
+                Codec.BOOL.optionalFieldOf("mirror",false).forGetter(Geometry::mirror)
+        ).apply(instance,Geometry::new));
+    }
+
+    private record Pose(float baseXRot,float baseYRot,float baseZRot,boolean animated) {
+        private static final MapCodec<Pose> MAP_CODEC=RecordCodecBuilder.mapCodec(instance->instance.group(
+                Codec.FLOAT.optionalFieldOf("base_x_rot",0F).forGetter(Pose::baseXRot),
+                Codec.FLOAT.optionalFieldOf("base_y_rot",0F).forGetter(Pose::baseYRot),
+                Codec.FLOAT.optionalFieldOf("base_z_rot",0F).forGetter(Pose::baseZRot),
+                Codec.BOOL.optionalFieldOf("animated",false).forGetter(Pose::animated)
+        ).apply(instance,Pose::new));
+    }
+
     public record Part(String field,int u,int v,float x,float y,float z,int width,int height,int depth,
                        float pivotX,float pivotY,float pivotZ,boolean mirror,
                        float baseXRot,float baseYRot,float baseZRot,boolean animated) {
         public static final Codec<Part> CODEC=RecordCodecBuilder.create(instance->instance.group(
-                Codec.STRING.fieldOf("field").forGetter(Part::field),
-                Codec.INT.fieldOf("u").forGetter(Part::u),Codec.INT.fieldOf("v").forGetter(Part::v),
-                Codec.FLOAT.fieldOf("x").forGetter(Part::x),Codec.FLOAT.fieldOf("y").forGetter(Part::y),Codec.FLOAT.fieldOf("z").forGetter(Part::z),
-                Codec.INT.fieldOf("width").forGetter(Part::width),Codec.INT.fieldOf("height").forGetter(Part::height),Codec.INT.fieldOf("depth").forGetter(Part::depth),
-                Codec.FLOAT.fieldOf("pivot_x").forGetter(Part::pivotX),Codec.FLOAT.fieldOf("pivot_y").forGetter(Part::pivotY),Codec.FLOAT.fieldOf("pivot_z").forGetter(Part::pivotZ),
-                Codec.BOOL.optionalFieldOf("mirror",false).forGetter(Part::mirror),
-                Codec.FLOAT.optionalFieldOf("base_x_rot",0F).forGetter(Part::baseXRot),Codec.FLOAT.optionalFieldOf("base_y_rot",0F).forGetter(Part::baseYRot),Codec.FLOAT.optionalFieldOf("base_z_rot",0F).forGetter(Part::baseZRot),
-                Codec.BOOL.optionalFieldOf("animated",false).forGetter(Part::animated)
-        ).apply(instance,Part::new));
+                Geometry.MAP_CODEC.forGetter(part->new Geometry(part.field,part.u,part.v,part.x,part.y,part.z,
+                        part.width,part.height,part.depth,part.pivotX,part.pivotY,part.pivotZ,part.mirror)),
+                Pose.MAP_CODEC.forGetter(part->new Pose(part.baseXRot,part.baseYRot,part.baseZRot,part.animated))
+        ).apply(instance,(geometry,pose)->new Part(geometry.field,geometry.u,geometry.v,geometry.x,geometry.y,geometry.z,
+                geometry.width,geometry.height,geometry.depth,geometry.pivotX,geometry.pivotY,geometry.pivotZ,geometry.mirror,
+                pose.baseXRot,pose.baseYRot,pose.baseZRot,pose.animated)));
         LegacyOscillatingModelBlockRegistry.Part runtime(){return new LegacyOscillatingModelBlockRegistry.Part(field,u,v,x,y,z,width,height,depth,pivotX,pivotY,pivotZ,mirror,baseXRot,baseYRot,baseZRot,animated);}
     }
 

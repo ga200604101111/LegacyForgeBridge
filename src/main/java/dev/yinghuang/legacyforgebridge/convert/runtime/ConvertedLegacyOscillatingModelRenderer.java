@@ -60,13 +60,15 @@ public final class ConvertedLegacyOscillatingModelRenderer implements BlockEntit
         matrices.popPose();
     }
 
-    static void applyPose(ModelPart part,LegacyOscillatingModelBlockRegistry.Part source,float dynamicDegrees){
+    /** Shared by the block-entity and inventory special renderers. */
+    public static void applyPose(ModelPart part,LegacyOscillatingModelBlockRegistry.Part source,float dynamicDegrees){
         part.x=source.pivotX();part.y=source.pivotY();part.z=source.pivotZ();
         part.xRot=source.animated()&&Float.isFinite(dynamicDegrees)?(float)Math.toRadians(dynamicDegrees):source.baseXRot();
         part.yRot=source.baseYRot();part.zRot=source.baseZRot();
     }
 
-    static ModelPart part(LegacyOscillatingModelBlockRegistry.Part source,int textureWidth,int textureHeight){
+    /** Shared model-part materializer for world and inventory rendering. */
+    public static ModelPart part(LegacyOscillatingModelBlockRegistry.Part source,int textureWidth,int textureHeight){
         ModelPart.Cube cube=new ModelPart.Cube(source.u(),source.v(),source.x(),source.y(),source.z(),
                 source.width(),source.height(),source.depth(),0F,0F,0F,source.mirror(),textureWidth,textureHeight,EnumSet.allOf(Direction.class));
         ModelPart part=new ModelPart(List.of(cube),Map.of());
