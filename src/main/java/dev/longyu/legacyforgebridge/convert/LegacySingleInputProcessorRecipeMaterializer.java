@@ -18,10 +18,12 @@ public final class LegacySingleInputProcessorRecipeMaterializer {
     ) {
         LegacyRecipeValueResolver resolver = new LegacyRecipeValueResolver();
         JsonArray inputAlternatives = new JsonArray();
+        JsonObject legacyInput;
         if (recipe.input() instanceof LegacySingleInputProcessorRecipeAnalyzer.StackInput input) {
             LegacyRecipeAnalyzer.Value resolvedInput = resolver.resolve(input.stack());
             Optional<LegacyRecipeStackResolver.StackSpec> source = LegacyRecipeStackResolver.resolve(resolvedInput);
             if (source.isEmpty() || !materializeInput(source.get(), context, inputAlternatives)) return Optional.empty();
+            legacyInput = legacyInput(source.get(), context);
         } else {
             // Ore-key processor recipes need a modern tag/member expansion stage. Keep them fail-closed
             // until that evidence is available instead of choosing the first legacy OreDictionary member.
@@ -32,6 +34,7 @@ public final class LegacySingleInputProcessorRecipeMaterializer {
         if (output.isEmpty()) return Optional.empty();
 
         JsonObject json = new JsonObject();
+        json.add("legacyInput", legacyInput);
         json.add("inputAlternatives", inputAlternatives);
         json.add("output", output.get().resultJson());
         json.addProperty("bonusChance", recipe.bonusChance());
@@ -43,6 +46,20 @@ public final class LegacySingleInputProcessorRecipeMaterializer {
         json.addProperty("sourceOwner", recipe.sourceOwner());
         json.addProperty("sourceMethod", recipe.sourceMethod());
         return Optional.of(json);
+    }
+
+    private static JsonObject legacyInput(LegacyRecipeStackResolver.StackSpec source, ConversionContext context) {
+        LegacyRecipeAnalyzer.RegistryValue registry = source.registry();
+        String namespace = registry.legacyNamespace();
+        if (namespace == null || namespace.isBlank()) namespace = context.metadata().primary().modId();
+        JsonObject value = new JsonObject();
+        value.addProperty("kind", registry.kind().name().toLowerCase(java.util.Locale.ROOT));
+        value.addProperty("namespace", namespace);
+        value.addProperty("registryName", registry.registryName());
+        value.addProperty("count", source.count());
+        value.addProperty("meta", source.meta());
+        value.addProperty("wildcardMeta", source.wildcardMeta());
+        return value;
     }
 
     private static Optional<LegacyRecipeStackMaterializer.ModernStack> concrete(

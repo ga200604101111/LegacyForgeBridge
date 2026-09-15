@@ -8,6 +8,7 @@ import com.google.gson.JsonParser;
 import dev.longyu.legacyforgebridge.convert.LegacySingleInputProcessorAnalyzer;
 import dev.longyu.legacyforgebridge.convert.LegacySingleInputProcessorRecipeAnalyzer;
 import dev.longyu.legacyforgebridge.convert.LegacySingleInputProcessorRecipeMaterializer;
+import dev.longyu.legacyforgebridge.convert.LegacySingleInputProcessorRuntimeAnalyzer;
 import dev.longyu.legacyforgebridge.convert.api.ConversionContext;
 import dev.longyu.legacyforgebridge.convert.api.ConversionPass;
 import dev.longyu.legacyforgebridge.convert.api.SupportLevel;
@@ -30,17 +31,26 @@ public final class LegacySingleInputProcessorPass implements ConversionPass {
         var analysis=new LegacySingleInputProcessorAnalyzer().analyze(context.sourceJar());
         if(analysis.rules().isEmpty()&&analysis.skipped().isEmpty())return;
         Map<String,String> blockIds=generatedBlockIds(context.stagingDir());
-        JsonObject root=new JsonObject();root.addProperty("schemaVersion",1);root.addProperty("sourceSha256",context.sourceHash());
-        JsonArray machines=new JsonArray();int emittedRecipes=0,skippedRecipes=0;
+        JsonObject root=new JsonObject();root.addProperty("schemaVersion",2);root.addProperty("sourceSha256",context.sourceHash());
+        JsonArray machines=new JsonArray();int emittedRecipes=0,skippedRecipes=0,runtimeProofs=0;
+        LegacySingleInputProcessorRuntimeAnalyzer runtimeAnalyzer=new LegacySingleInputProcessorRuntimeAnalyzer();
         for(var machine:analysis.rules()){
             String id=blockIds.get(machine.sourceBlockClass());
             if(id==null){context.diagnostics().warning("LFB-CONVERT-PROCESSOR-0003",SupportLevel.MANUAL_REQUIRED,"Source-proven processor has no generated block identity: "+machine.sourceBlockClass()+".");continue;}
+            var runtime=runtimeAnalyzer.analyze(context.sourceJar(),machine);
             JsonObject value=new JsonObject();value.addProperty("id",id);value.addProperty("sourceBlockClass",machine.sourceBlockClass());value.addProperty("sourceTileClass",machine.sourceTileClass());value.addProperty("legacyTileId",machine.legacyTileId());
             value.addProperty("slots",machine.slots());value.addProperty("stackLimit",machine.stackLimit());value.addProperty("inputSlot",machine.inputSlot());
             value.add("outputSlots",ints(machine.outputSlots()));value.add("topSlots",ints(machine.topSlots()));value.add("bottomSlots",ints(machine.bottomSlots()));value.add("sideSlots",ints(machine.sideSlots()));
             value.addProperty("processTicks",machine.processTicks());value.addProperty("interactionDistanceSq",machine.interactionDistanceSq());value.addProperty("legacyGuiId",machine.guiId());
             value.addProperty("recipeManagerOwner",machine.recipeManagerOwner());value.addProperty("recipeLookupName",machine.recipeLookupName());value.addProperty("recipeLookupDescriptor",machine.recipeLookupDescriptor());
-            value.addProperty("comparator",machine.comparator());value.addProperty("dropContents",machine.dropContents());value.addProperty("legacyEnergyApiPresent",machine.legacyEnergyApiPresent());
+            value.addProperty("comparator",machine.comparator());value.addProperty("dropContents",machine.dropContents());
+            value.addProperty("sidedExtractionProven",runtime.sidedExtractionProven());
+            value.addProperty("legacyEnergyApiPresent",runtime.legacyEnergyApiPresent());
+            value.addProperty("minUseEnergy",runtime.minUseEnergy());value.addProperty("maxUseEnergy",runtime.maxUseEnergy());
+            value.addProperty("energyNbtKey",runtime.energyNbtKey());value.addProperty("energyAccelerationProven",runtime.energyAccelerationProven());
+            value.addProperty("runtimeProofComplete",runtime.complete());
+            if(runtime.complete())runtimeProofs++;
+            JsonArray runtimeDiagnostics=new JsonArray();runtime.diagnostics().forEach(runtimeDiagnostics::add);value.add("runtimeDiagnostics",runtimeDiagnostics);
             value.addProperty("sidedTransferRuntimeComplete",false);value.addProperty("progressNbtRuntimeComplete",false);value.addProperty("runtimeComplete",false);
 
             var recipes=new LegacySingleInputProcessorRecipeAnalyzer().analyze(context.sourceJar(),machine);JsonArray recipeJson=new JsonArray();
@@ -54,12 +64,12 @@ public final class LegacySingleInputProcessorPass implements ConversionPass {
         }
         root.add("machines",machines);JsonArray skipped=new JsonArray();
         for(var candidate:analysis.skipped()){JsonObject value=new JsonObject();value.addProperty("registryName",candidate.registryName());value.addProperty("sourceBlockClass",candidate.sourceBlockClass());value.addProperty("reason",candidate.reason());skipped.add(value);}
-        root.add("skippedMachines",skipped);root.addProperty("materializedRecipes",emittedRecipes);root.addProperty("skippedRecipes",skippedRecipes);
+        root.add("skippedMachines",skipped);root.addProperty("runtimeProofCompleteMachines",runtimeProofs);root.addProperty("materializedRecipes",emittedRecipes);root.addProperty("skippedRecipes",skippedRecipes);
         Path output=context.stagingDir().resolve(OUTPUT);Files.createDirectories(output.getParent());Files.writeString(output,GSON.toJson(root)+"\n",StandardCharsets.UTF_8);
         analysis.diagnostics().forEach(message->context.diagnostics().warning("LFB-CONVERT-PROCESSOR-0002",SupportLevel.MANUAL_REQUIRED,message));
         if(!machines.isEmpty()){
-            context.diagnostics().info("LFB-CONVERT-PROCESSOR-0001",SupportLevel.ADAPTED,"Materialized source-proven single-input processor topology/recipes: machines="+machines.size()+", recipes="+emittedRecipes+", skippedRecipes="+skippedRecipes+".");
-            context.diagnostics().warning("LFB-CONVERT-PROCESSOR-0005",SupportLevel.RUNTIME_BRIDGE,"Processor topology and recipes are proven, but modern ticking/menu/client synchronization, sided transfer, progress NBT and legacy energy integration are not complete yet.");
+            context.diagnostics().info("LFB-CONVERT-PROCESSOR-0001",SupportLevel.ADAPTED,"Materialized source-proven single-input processor topology/recipes: machines="+machines.size()+", runtimeProofs="+runtimeProofs+", recipes="+emittedRecipes+", skippedRecipes="+skippedRecipes+".");
+            context.diagnostics().warning("LFB-CONVERT-PROCESSOR-0005",SupportLevel.RUNTIME_BRIDGE,"Processor topology, sided extraction, energy contract and recipes may be proven, but modern ticking/menu/client synchronization and external legacy energy transport are not complete yet.");
         }
     }
 
