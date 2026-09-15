@@ -25,6 +25,7 @@ import dev.yinghuang.legacyforgebridge.convert.pass.LegacyEquipmentRenderPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyEventAnalysisPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyFuelHandlerPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyItemRenderPass;
+import dev.yinghuang.legacyforgebridge.convert.pass.LegacyInertModelBlockPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyLanguageCleanupPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyLanguagePass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyLifecycleAnalysisPass;
@@ -98,6 +99,7 @@ public final class LegacyConversionEngine {
             builder.add(new LegacyBlockDropAnalysisPass());
             builder.add(new LegacyBlockPlacementPass());
             builder.add(new LegacyBlockActivationPass());
+            builder.add(new LegacyInertModelBlockPass());
             builder.add(new LegacyStorageBlockPass());
             builder.add(new LegacySingleInputProcessorPass());
             builder.add(new LegacySingleInputProcessorPresentationPass());
