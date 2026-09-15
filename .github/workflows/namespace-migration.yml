@@ -1,0 +1,87 @@
+name: one-time source namespace migration
+
+on:
+  push:
+    branches: [ 'feature/generic-conversion-bamboo-corpus2' ]
+    paths: [ '.github/workflows/namespace-migration.yml' ]
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Rewrite repository namespace in UTF-8 sources
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root = Path('.')
+          migration_workflow = Path('.github/workflows/namespace-migration.yml')
+          old_dot = 'dev.longyu'
+          new_dot = 'dev.yinghuang'
+          old_path = 'dev/longyu'
+          new_path = 'dev/yinghuang'
+
+          changed = []
+          for path in sorted(root.rglob('*')):
+              if not path.is_file() or '.git' in path.parts or path == migration_workflow:
+                  continue
+              try:
+                  text = path.read_text(encoding='utf-8')
+              except (UnicodeDecodeError, OSError):
+                  continue
+              replaced = text.replace(old_dot, new_dot).replace(old_path, new_path)
+              if replaced != text:
+                  path.write_text(replaced, encoding='utf-8')
+                  changed.append(str(path))
+
+          gradle = Path('build.gradle')
+          text = gradle.read_text(encoding='utf-8')
+          start_marker = '// Public package namespace migration.'
+          end_marker = '// The user supplied original 1.7.10 .lang files.'
+          start = text.find(start_marker)
+          end = text.find(end_marker)
+          if start < 0 or end < 0 or end <= start:
+              raise SystemExit('Could not locate the temporary Gradle relocation block')
+          direct_java = '''java {\n    withSourcesJar()\n    sourceCompatibility = JavaVersion.VERSION_21\n    targetCompatibility = JavaVersion.VERSION_21\n}\n\n'''
+          text = text[:start] + direct_java + text[end:]
+
+          obsolete_filter = '''    filesMatching(['fabric.mod.json', 'legacyforgebridge.client.mixins.json']) {\n        filter { String line -> line\n                .replace('dev.yinghuang', 'dev.yinghuang')\n                .replace('dev/yinghuang', 'dev/yinghuang') }\n    }\n'''
+          if obsolete_filter not in text:
+              raise SystemExit('Could not locate the obsolete processResources namespace filter')
+          text = text.replace(obsolete_filter, '')
+          gradle.write_text(text, encoding='utf-8')
+
+          offenders = []
+          for path in sorted(root.rglob('*')):
+              if not path.is_file() or '.git' in path.parts or path == migration_workflow:
+                  continue
+              try:
+                  text = path.read_text(encoding='utf-8')
+              except (UnicodeDecodeError, OSError):
+                  continue
+              if old_dot in text or old_path in text:
+                  offenders.append(str(path))
+          if offenders:
+              raise SystemExit('Legacy namespace remains in: ' + ', '.join(offenders))
+
+          print(f'Rewritten namespace in {len(changed)} UTF-8 files; temporary Gradle relocation removed.')
+          PY
+      - name: Commit namespace migration
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A ':!.github/workflows/namespace-migration.yml'
+          if git diff --cached --quiet; then
+            echo 'No namespace changes to commit.'
+            exit 0
+          fi
+          git commit -m 'refactor: make yinghuang the source namespace'
+          git push origin HEAD:feature/generic-conversion-bamboo-corpus2
