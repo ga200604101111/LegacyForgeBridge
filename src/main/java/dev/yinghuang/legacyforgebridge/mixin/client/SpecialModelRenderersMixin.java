@@ -1,5 +1,6 @@
 package dev.yinghuang.legacyforgebridge.mixin.client;
 
+import dev.yinghuang.legacyforgebridge.render.ConvertedLegacyInertModelSpecialRenderer;
 import dev.yinghuang.legacyforgebridge.render.ConvertedLegacyProcessorSpecialRenderer;
 import dev.yinghuang.legacyforgebridge.render.ObjSpecialRenderer;
 import net.minecraft.client.renderer.special.SpecialModelRenderers;
@@ -14,19 +15,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(SpecialModelRenderers.class)
 public abstract class SpecialModelRenderersMixin {
-    @Shadow
-    @Final
-    private static ExtraCodecs.LateBoundIdMapper ID_MAPPER;
-
-    @Inject(method = "bootstrap", at = @At("TAIL"))
-    private static void lfb$registerConvertedSpecialRenderers(CallbackInfo ci) {
-        ID_MAPPER.put(
-                Identifier.fromNamespaceAndPath("legacyforgebridge", "obj"),
-                ObjSpecialRenderer.Unbaked.MAP_CODEC
-        );
-        ID_MAPPER.put(
-                Identifier.fromNamespaceAndPath("legacyforgebridge", "processor"),
-                ConvertedLegacyProcessorSpecialRenderer.Unbaked.MAP_CODEC
-        );
+    @Shadow @Final private static ExtraCodecs.LateBoundIdMapper ID_MAPPER;
+    @Inject(method="bootstrap",at=@At("TAIL"))
+    private static void lfb$registerConvertedSpecialRenderers(CallbackInfo ci){
+        ID_MAPPER.put(Identifier.fromNamespaceAndPath("legacyforgebridge","obj"),ObjSpecialRenderer.Unbaked.MAP_CODEC);
+        ID_MAPPER.put(Identifier.fromNamespaceAndPath("legacyforgebridge","processor"),ConvertedLegacyProcessorSpecialRenderer.Unbaked.MAP_CODEC);
+        ID_MAPPER.put(Identifier.fromNamespaceAndPath("legacyforgebridge","inert_model"),ConvertedLegacyInertModelSpecialRenderer.Unbaked.MAP_CODEC);
     }
 }

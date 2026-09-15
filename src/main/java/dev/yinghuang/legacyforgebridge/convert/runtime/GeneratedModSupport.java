@@ -8,6 +8,7 @@ import dev.yinghuang.legacyforgebridge.compat.LegacyBlockActivationRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyBlockPlacementRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyFoodItemRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyFuelRegistry;
+import dev.yinghuang.legacyforgebridge.compat.LegacyInertModelBlockRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacySingleInputProcessorRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyStackComponents;
 import dev.yinghuang.legacyforgebridge.compat.LegacyStorageBlockRegistry;
@@ -50,6 +51,7 @@ public final class GeneratedModSupport {
     public static void beginMod(String modId){
         LegacyStackComponents.bootstrap();
         LegacyFoodItemRegistry.loadMod(modId);
+        LegacyInertModelBlockRegistry.loadMod(modId);
         LegacyStorageBlockRegistry.loadMod(modId);
         LegacySingleInputProcessorRegistry.loadMod(modId);
         if(ACTIVE_MODS.add(modId))COUNTS.put(modId,new int[3]);
@@ -60,14 +62,18 @@ public final class GeneratedModSupport {
         if(BuiltInRegistries.BLOCK.containsKey(id)){BLOCKS.put(id,BuiltInRegistries.BLOCK.getValue(id));return;}
         ResourceKey<Block> blockKey=ResourceKey.create(Registries.BLOCK,id);
         BlockBehaviour.Properties blockProperties=BlockBehaviour.Properties.of().setId(blockKey).overrideDescription(descriptionKey);
+        boolean inert=LegacyInertModelBlockRegistry.hasRule(id);
         boolean storage=LegacyStorageBlockRegistry.hasRule(id);
         boolean processor=LegacySingleInputProcessorRegistry.hasRule(id);
-        if(storage&&processor)throw new IllegalStateException("Converted block has conflicting storage and processor rules: "+id);
-        Block block=storage?new ConvertedLegacyStorageBlock(id,blockProperties)
+        int families=(inert?1:0)+(storage?1:0)+(processor?1:0);
+        if(families>1)throw new IllegalStateException("Converted block has conflicting specialized runtime rules: "+id);
+        Block block=inert?new ConvertedLegacyInertModelBlock(id,blockProperties)
+                :storage?new ConvertedLegacyStorageBlock(id,blockProperties)
                 :processor?new ConvertedLegacyProcessorBlock(id,blockProperties)
                 :new ConvertedLegacyBlock(id,blockProperties);
         Registry.register(BuiltInRegistries.BLOCK,blockKey,block);
         BLOCKS.put(id,block);
+        if(inert)LegacyInertModelBlockRegistry.registerType(id,block);
         if(storage)LegacyStorageBlockRegistry.registerType(id,block);
         if(processor)LegacySingleInputProcessorRegistry.registerType(id,block);
 
