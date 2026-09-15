@@ -1,6 +1,6 @@
 # LegacyForgeBridge — Bamboo alpha.27 conversion-foundation work
 
-Date: 2026-09-15  
+Date: 2026-09-15
 Branch: `feature/generic-conversion-bamboo-corpus2`
 
 ## Scope
