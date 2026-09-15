@@ -12,6 +12,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.BonemealableBlock;
 import net.minecraft.world.level.block.FarmBlock;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
@@ -24,11 +25,11 @@ import java.util.List;
  * Dormant until GeneratedModSupport explicitly selects it for a fully proven plant rule.
  *
  * <p>The block carries legacy raw metadata through {@link ConvertedLegacyBlock#LEGACY_META} and
- * implements only the survival/random-tick/support-loss semantics already locked by
- * {@link LegacyPlantRuntimeRegistry}. Bonemeal and item placement stay outside this class until
- * their independent proof/runtime gates are complete.</p>
+ * implements only the survival/random-tick/support-loss/bonemeal semantics already locked by
+ * {@link LegacyPlantRuntimeRegistry}. Item placement stays outside this class until its independent
+ * proof/runtime gate is complete.</p>
  */
-public final class ConvertedLegacyPlantBlock extends ConvertedLegacyBlock {
+public final class ConvertedLegacyPlantBlock extends ConvertedLegacyBlock implements BonemealableBlock {
     private static final Identifier WATER = Identifier.parse("minecraft:water");
     private final Identifier convertedId;
 
@@ -70,6 +71,26 @@ public final class ConvertedLegacyPlantBlock extends ConvertedLegacyBlock {
             case REED -> reedRandomTick(state, level, pos);
             case BUSH -> { }
         }
+    }
+
+    @Override
+    public boolean isValidBonemealTarget(LevelReader level, BlockPos pos, BlockState state) {
+        LegacyPlantRuntimeRegistry.Rule rule = requiredRule();
+        return rule.family() == LegacyPlantRuntimeRegistry.Family.CROPS
+                && LegacyPlantRuntimeRegistry.isCropBonemealTarget(rule, legacyMeta(state));
+    }
+
+    @Override
+    public boolean isBonemealSuccess(Level level, RandomSource random, BlockPos pos, BlockState state) {
+        return requiredRule().family() == LegacyPlantRuntimeRegistry.Family.CROPS;
+    }
+
+    @Override
+    public void performBonemeal(ServerLevel level, RandomSource random, BlockPos pos, BlockState state) {
+        LegacyPlantRuntimeRegistry.Rule rule = requiredRule();
+        if (rule.family() != LegacyPlantRuntimeRegistry.Family.CROPS) return;
+        int metadata = LegacyPlantRuntimeRegistry.cropBonemealMetadata(rule, legacyMeta(state), random::nextInt);
+        level.setBlock(pos, withLegacyMeta(state, metadata), 2);
     }
 
     private void cropRandomTick(LegacyPlantRuntimeRegistry.Rule rule, BlockState state, ServerLevel level,

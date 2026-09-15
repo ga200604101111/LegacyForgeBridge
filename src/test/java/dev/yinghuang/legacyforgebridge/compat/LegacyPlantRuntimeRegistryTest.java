@@ -117,6 +117,22 @@ class LegacyPlantRuntimeRegistryTest {
                 LegacyPlantRuntimeRegistry.reedRandomTick(9, 1, false));
     }
 
+    @Test void cropBonemealMatches1710IgrowableIncludingOvershootMetadata() {
+        var crop = cropRule();
+        assertTrue(LegacyPlantRuntimeRegistry.isCropBonemealTarget(crop, 0));
+        assertFalse(LegacyPlantRuntimeRegistry.isCropBonemealTarget(crop, 7));
+        assertTrue(LegacyPlantRuntimeRegistry.isCropBonemealTarget(crop, 8));
+        assertFalse(LegacyPlantRuntimeRegistry.isCropBonemealTarget(reedRule(), 0));
+
+        assertEquals(2, LegacyPlantRuntimeRegistry.cropBonemealMetadata(crop, 0, bound -> {
+            assertEquals(4, bound); return 0;
+        }));
+        assertEquals(7, LegacyPlantRuntimeRegistry.cropBonemealMetadata(crop, 4, bound -> 3));
+        assertEquals(7, LegacyPlantRuntimeRegistry.cropBonemealMetadata(crop, 7, bound -> 0));
+        assertEquals(7, LegacyPlantRuntimeRegistry.cropBonemealMetadata(crop, 8, bound -> 3));
+        assertEquals(7, LegacyPlantRuntimeRegistry.cropBonemealMetadata(crop, 15, bound -> 3));
+    }
+
     @Test void unsupportedRemovalDropsMatchInherited1710PlantBasesExactly() {
         var bush = new LegacyPlantRuntimeRegistry.Rule(Identifier.parse("demo:bush"),
                 LegacyPlantRuntimeRegistry.Family.BUSH, Set.of(GRASS, DIRT, FARMLAND), false, false, false,

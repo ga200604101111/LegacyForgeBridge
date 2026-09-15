@@ -170,6 +170,22 @@ public final class LegacyPlantRuntimeRegistry {
         return metadata == 15 ? new ReedTick(0, true) : new ReedTick(metadata + 1, false);
     }
 
+    /** 1.7 BlockCrops IGrowable target check is metadata != 7, including corrupted/overshoot states. */
+    public static boolean isCropBonemealTarget(Rule rule, int metadata) {
+        if (rule == null || metadata < 0 || metadata > 15)
+            throw new IllegalArgumentException("Invalid crop bonemeal target input");
+        return rule.family() == Family.CROPS && metadata != 7;
+    }
+
+    /** Exact 1.7 BlockCrops bonemeal mutation: metadata + random[2,5], clamped down to 7. */
+    public static int cropBonemealMetadata(Rule rule, int metadata, IntUnaryOperator nextInt) {
+        if (rule == null || rule.family() != Family.CROPS || metadata < 0 || metadata > 15 || nextInt == null)
+            throw new IllegalArgumentException("Invalid crop bonemeal input");
+        int roll = nextInt.applyAsInt(4);
+        if (roll < 0 || roll >= 4) throw new IllegalArgumentException("Random source returned value outside requested bound");
+        return Math.min(7, metadata + 2 + roll);
+    }
+
     /** Exact fortune-0 drop sequence used by 1.7 plant checkAndDropBlock/support-loss removal. */
     public static List<DropStack> unsupportedRemovalDrops(Rule rule, int legacyMetadata, IntUnaryOperator nextInt) {
         if (rule == null || legacyMetadata < 0 || legacyMetadata > 15 || nextInt == null)
