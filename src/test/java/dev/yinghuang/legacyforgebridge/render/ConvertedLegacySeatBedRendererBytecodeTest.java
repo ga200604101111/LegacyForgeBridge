@@ -24,16 +24,16 @@ class ConvertedLegacySeatBedRendererBytecodeTest {
             new ClassReader(input.readAllBytes()).accept(new ClassVisitor(Opcodes.ASM9) {
                 @Override
                 public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
-                    if ("method_3563".equals(name) && "()Z".equals(descriptor)) offscreen[0] = true;
+                    if ("shouldRenderOffScreen".equals(name) && "()Z".equals(descriptor)) offscreen[0] = true;
                     return new MethodVisitor(Opcodes.ASM9) {
                         @Override
                         public void visitTypeInsn(int opcode, String type) {
-                            if (opcode == Opcodes.NEW && type.endsWith("class_630$class_628")) cube[0] = true;
+                            if (opcode == Opcodes.NEW && type.endsWith("/ModelPart$Cube")) cube[0] = true;
                         }
                         @Override
                         public void visitMethodInsn(int opcode, String owner, String methodName, String methodDescriptor, boolean isInterface) {
-                            if (owner.endsWith("/class_12249") && "method_75990".equals(methodName)) textureFactory[0] = true;
-                            if (owner.endsWith("/class_11659") && "method_73492".equals(methodName)) queue[0] = true;
+                            if (owner.endsWith("/RenderTypes") && "entityCutout".equals(methodName)) textureFactory[0] = true;
+                            if (owner.endsWith("/SubmitNodeCollector") && "submitModelPart".equals(methodName)) queue[0] = true;
                         }
                     };
                 }
