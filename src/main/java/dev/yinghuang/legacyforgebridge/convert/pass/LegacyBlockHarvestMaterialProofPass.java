@@ -9,6 +9,7 @@ import com.google.gson.JsonParser;
 import dev.yinghuang.legacyforgebridge.convert.LegacyBlockHarvestEligibilityAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.LegacyBlockMaterialProvenanceAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.LegacyMaterialHarvestRules1710;
+import dev.yinghuang.legacyforgebridge.convert.LegacySourceMaterialHarvestAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.api.ConversionContext;
 import dev.yinghuang.legacyforgebridge.convert.api.ConversionPass;
 import dev.yinghuang.legacyforgebridge.convert.api.SupportLevel;
@@ -30,12 +31,14 @@ import java.util.Set;
  * <p>This pass consumes the schema-v5 block-drop sidecar emitted immediately before it. It can
  * complete harvest eligibility only through Forge's first branch:
  * {@code block.getMaterial().isToolNotRequired() == true}. Held-tool classes/levels and the player
- * fallback remain deliberately uncompiled. Gameplay drop execution also remains disabled.</p>
+ * fallback remain deliberately uncompiled. Vanilla Material fields use the pinned MCP908 table;
+ * stable source-owned direct Material singletons may use a separate source proof of the inherited
+ * default no-tool state. Gameplay drop execution remains independently gated.</p>
  */
 public final class LegacyBlockHarvestMaterialProofPass implements ConversionPass {
     public static final int INPUT_SCHEMA = 5;
     public static final int OUTPUT_SCHEMA = 6;
-    public static final String RULE_VERSION = "minecraft-1.7.10-mcp908-forge-1.7.10";
+    public static final String RULE_VERSION = "minecraft-1.7.10-mcp908-forge-1.7.10-source-material-v2";
     public static final String GAMEPLAY_RUNTIME_BLOCKER = "block-drop-gameplay-runtime-pending";
     public static final String TOOL_PLAYER_ROUTE_BLOCKER = "harvest-tool-player-route-pending";
     public static final String MATERIAL_PROVENANCE_BLOCKER = "harvest-material-provenance-pending";
@@ -73,6 +76,8 @@ public final class LegacyBlockHarvestMaterialProofPass implements ConversionPass
                 new LegacyBlockHarvestEligibilityAnalyzer().analyze(context.sourceJar());
         LegacyBlockMaterialProvenanceAnalyzer.Analysis materialAnalysis =
                 new LegacyBlockMaterialProvenanceAnalyzer().analyze(context.sourceJar());
+        LegacySourceMaterialHarvestAnalyzer.Analysis sourceMaterialAnalysis =
+                new LegacySourceMaterialHarvestAnalyzer().analyze(context.sourceJar());
 
         Map<BlockKey, LegacyBlockHarvestEligibilityAnalyzer.Proof> harvestProofs = new LinkedHashMap<>();
         for (LegacyBlockHarvestEligibilityAnalyzer.Proof proof : harvestAnalysis.proofs()) {
@@ -81,6 +86,11 @@ public final class LegacyBlockHarvestMaterialProofPass implements ConversionPass
         Map<BlockKey, LegacyBlockMaterialProvenanceAnalyzer.Proof> materialProofs = new LinkedHashMap<>();
         for (LegacyBlockMaterialProvenanceAnalyzer.Proof proof : materialAnalysis.proofs()) {
             materialProofs.put(new BlockKey(proof.legacyNamespace(), proof.registryName()), proof);
+        }
+        Map<LegacyBlockMaterialProvenanceAnalyzer.MaterialRef, LegacySourceMaterialHarvestAnalyzer.Proof>
+                sourceMaterialProofs = new LinkedHashMap<>();
+        for (LegacySourceMaterialHarvestAnalyzer.Proof proof : sourceMaterialAnalysis.proofs()) {
+            sourceMaterialProofs.put(proof.material(), proof);
         }
 
         int completed = 0;
@@ -105,31 +115,57 @@ public final class LegacyBlockHarvestMaterialProofPass implements ConversionPass
                 plan.addProperty("legacyMaterialProvenanceComplete", provenanceComplete);
                 JsonArray materialReasons = new JsonArray();
                 if (material != null) material.reasons().forEach(materialReasons::add);
-                plan.add("legacyMaterialReasons", materialReasons);
 
-                Optional<LegacyMaterialHarvestRules1710.Rule> rule = Optional.empty();
+                Optional<LegacyMaterialHarvestRules1710.Rule> vanillaRule = Optional.empty();
+                LegacySourceMaterialHarvestAnalyzer.Proof sourceRule = null;
+                Boolean toolNotRequired = null;
+                String namedMaterial = null;
+                boolean sourceOwnedRule = false;
                 if (provenanceComplete) {
                     LegacyBlockMaterialProvenanceAnalyzer.MaterialRef ref = material.material();
-                    rule = LegacyMaterialHarvestRules1710.lookup(ref.owner(), ref.fieldName(), ref.descriptor());
+                    vanillaRule = LegacyMaterialHarvestRules1710.lookup(
+                            ref.owner(), ref.fieldName(), ref.descriptor());
+                    if (vanillaRule.isPresent()) {
+                        namedMaterial = vanillaRule.get().namedMaterial();
+                        toolNotRequired = vanillaRule.get().toolNotRequired();
+                    } else {
+                        sourceRule = sourceMaterialProofs.get(ref);
+                        if (sourceRule != null) {
+                            sourceRule.reasons().forEach(materialReasons::add);
+                            if (sourceRule.complete() && sourceRule.toolNotRequired() != null) {
+                                namedMaterial = "source:" + ref.owner() + "#" + ref.fieldName();
+                                toolNotRequired = sourceRule.toolNotRequired();
+                                sourceOwnedRule = true;
+                            }
+                        }
+                    }
+
                     JsonObject legacyMaterial = new JsonObject();
                     legacyMaterial.addProperty("owner", ref.owner());
                     legacyMaterial.addProperty("fieldName", ref.fieldName());
                     legacyMaterial.addProperty("descriptor", ref.descriptor());
-                    if (rule.isPresent()) {
-                        legacyMaterial.addProperty("namedMaterial", rule.get().namedMaterial());
-                        legacyMaterial.addProperty("toolNotRequired", rule.get().toolNotRequired());
+                    if (namedMaterial != null && toolNotRequired != null) {
+                        legacyMaterial.addProperty("namedMaterial", namedMaterial);
+                        legacyMaterial.addProperty("toolNotRequired", toolNotRequired);
+                        legacyMaterial.addProperty("sourceOwnedRule", sourceOwnedRule);
+                        if (sourceOwnedRule) {
+                            legacyMaterial.addProperty("sourceProofMode",
+                                    "direct_material_default_without_set_requires_tool");
+                        }
                     }
                     plan.add("legacyMaterial", legacyMaterial);
                 }
+                plan.add("legacyMaterialReasons", materialReasons);
 
-                boolean ruleKnown = rule.isPresent();
+                boolean ruleKnown = toolNotRequired != null;
                 plan.addProperty("legacyMaterialHarvestRuleKnown", ruleKnown);
-                boolean fastPathComplete = sourceSafe && provenanceComplete
-                        && ruleKnown && rule.get().toolNotRequired();
+                boolean fastPathComplete = sourceSafe && provenanceComplete && ruleKnown && toolNotRequired;
                 plan.addProperty("materialFastPathHarvestEligibilityProofComplete", fastPathComplete);
                 plan.addProperty("harvestEligibilityProofComplete", fastPathComplete);
                 if (fastPathComplete) {
-                    plan.addProperty("harvestEligibilityMode", "material_tool_not_required_1_7_10");
+                    plan.addProperty("harvestEligibilityMode", sourceOwnedRule
+                            ? "source_material_tool_not_required_1_7_10"
+                            : "material_tool_not_required_1_7_10");
                     completed++;
                 }
 
@@ -138,7 +174,8 @@ public final class LegacyBlockHarvestMaterialProofPass implements ConversionPass
                         fastPathComplete,
                         harvest,
                         provenanceComplete,
-                        rule
+                        ruleKnown,
+                        toolNotRequired
                 ));
             }
         }
@@ -151,6 +188,9 @@ public final class LegacyBlockHarvestMaterialProofPass implements ConversionPass
         JsonArray materialDiagnostics = new JsonArray();
         materialAnalysis.diagnostics().forEach(materialDiagnostics::add);
         root.add("materialProvenanceAnalysisDiagnostics", materialDiagnostics);
+        JsonArray sourceMaterialDiagnostics = new JsonArray();
+        sourceMaterialAnalysis.diagnostics().forEach(sourceMaterialDiagnostics::add);
+        root.add("sourceMaterialHarvestAnalysisDiagnostics", sourceMaterialDiagnostics);
 
         Files.writeString(sidecar, GSON.toJson(root) + "\n", StandardCharsets.UTF_8);
         context.diagnostics().info(
@@ -166,7 +206,8 @@ public final class LegacyBlockHarvestMaterialProofPass implements ConversionPass
             boolean fastPathComplete,
             LegacyBlockHarvestEligibilityAnalyzer.Proof harvest,
             boolean provenanceComplete,
-            Optional<LegacyMaterialHarvestRules1710.Rule> rule
+            boolean ruleKnown,
+            Boolean toolNotRequired
     ) {
         LinkedHashSet<String> blockers = new LinkedHashSet<>();
         if (existing != null) {
@@ -185,9 +226,9 @@ public final class LegacyBlockHarvestMaterialProofPass implements ConversionPass
             }
             if (!provenanceComplete) {
                 blockers.add(MATERIAL_PROVENANCE_BLOCKER);
-            } else if (rule.isEmpty()) {
+            } else if (!ruleKnown) {
                 blockers.add(MATERIAL_RULE_BLOCKER);
-            } else if (!rule.get().toolNotRequired()) {
+            } else if (!Boolean.TRUE.equals(toolNotRequired)) {
                 blockers.add(TOOL_PLAYER_ROUTE_BLOCKER);
             }
         }

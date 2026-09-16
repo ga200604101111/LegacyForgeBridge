@@ -6,8 +6,10 @@ import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldInsnNode;
+import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
+import org.objectweb.asm.tree.TypeInsnNode;
 import org.objectweb.asm.tree.analysis.Analyzer;
 import org.objectweb.asm.tree.analysis.AnalyzerException;
 import org.objectweb.asm.tree.analysis.Frame;
@@ -29,18 +31,20 @@ import java.util.jar.JarFile;
 /**
  * Proves the raw Minecraft 1.7.10 Material field passed into a source-owned Block constructor.
  *
- * <p>This is deliberately provenance-only. A proven {@code Material.field_*} reference does not
- * imply any harvest rule by itself: whether the material requires a tool, how Forge tool classes
- * are matched, and how a modern block should model that decision remain separate platform proofs.
- * The analyzer therefore records the exact legacy field owner/name/descriptor without translating
- * or interpreting the field name.</p>
+ * <p>This is deliberately provenance-only. A proven Material reference does not imply any harvest
+ * rule by itself: whether the material requires a tool, how Forge tool classes are matched, and how
+ * a modern block should model that decision remain separate platform proofs. The analyzer records
+ * the exact legacy field owner/name/descriptor without translating or interpreting the field name.</p>
  *
  * <p>The admitted topology is conservative: the registered implementation may have source-owned
  * superclasses, but the first external superclass must be exactly {@code Block}. The source class
  * that directly extends Block must have at least one constructor that directly invokes a Block
  * constructor, and every such invocation must derive its first Material argument from the same
- * static field. Constructor parameters, computed values, mixed Material fields, malformed bytecode,
- * and specialized external Block subclasses remain unresolved.</p>
+ * static field. Vanilla {@code Material.field_*} references are admitted directly. A source-owned
+ * Material singleton is admitted only when its field type is the owning direct Material subclass and
+ * every source write is the one canonical {@code <clinit>: new/dup/<init>/putstatic} assignment.
+ * Constructor parameters, computed values, mutable source Material fields, mixed fields, malformed
+ * bytecode and specialized external Block subclasses remain unresolved.</p>
  */
 public final class LegacyBlockMaterialProvenanceAnalyzer {
     private static final String VANILLA_BLOCK = "net/minecraft/block/Block";
@@ -83,7 +87,7 @@ public final class LegacyBlockMaterialProvenanceAnalyzer {
                 LinkedHashSet<MaterialRef> materials = new LinkedHashSet<>();
                 for (MethodNode method : direct.methods) {
                     if (!"<init>".equals(method.name)) continue;
-                    ConstructorResult result = inspectConstructor(direct, method);
+                    ConstructorResult result = inspectConstructor(classes, direct, method);
                     directSuperCalls += result.directSuperCalls();
                     materials.addAll(result.materials());
                     reasons.addAll(result.reasons());
@@ -96,7 +100,7 @@ public final class LegacyBlockMaterialProvenanceAnalyzer {
                 } else if (materials.size() == 1 && reasons.isEmpty()) {
                     material = materials.iterator().next();
                 } else if (materials.isEmpty() && reasons.isEmpty()) {
-                    reasons.add("Block Material argument did not resolve to a static Material field");
+                    reasons.add("Block Material argument did not resolve to one stable static Material field");
                 }
             }
 
@@ -143,7 +147,11 @@ public final class LegacyBlockMaterialProvenanceAnalyzer {
         return null;
     }
 
-    private static ConstructorResult inspectConstructor(ClassNode owner, MethodNode method) {
+    private static ConstructorResult inspectConstructor(
+            Map<String, ClassNode> classes,
+            ClassNode owner,
+            MethodNode method
+    ) {
         List<MaterialRef> materials = new ArrayList<>();
         LinkedHashSet<String> reasons = new LinkedHashSet<>();
         Frame<SourceValue>[] frames;
@@ -178,10 +186,10 @@ public final class LegacyBlockMaterialProvenanceAnalyzer {
             }
             int materialStackIndex = frame.getStackSize() - arguments.length;
             SourceValue value = frame.getStack(materialStackIndex);
-            MaterialRef material = staticMaterial(value);
+            MaterialRef material = staticMaterial(classes, value);
             if (material == null) {
                 reasons.add("Block Material argument in " + owner.name + method.desc
-                        + " is not one direct static Material field");
+                        + " is not one stable direct static Material field");
                 continue;
             }
             materials.add(material);
@@ -189,16 +197,87 @@ public final class LegacyBlockMaterialProvenanceAnalyzer {
         return new ConstructorResult(directSuperCalls, materials, List.copyOf(reasons));
     }
 
-    private static MaterialRef staticMaterial(SourceValue value) {
+    private static MaterialRef staticMaterial(Map<String, ClassNode> classes, SourceValue value) {
         if (value == null || value.insns == null || value.insns.size() != 1) return null;
         AbstractInsnNode source = value.insns.iterator().next();
-        if (!(source instanceof FieldInsnNode field)
-                || field.getOpcode() != Opcodes.GETSTATIC
-                || !MATERIAL.equals(field.owner)
-                || !MATERIAL_DESCRIPTOR.equals(field.desc)) {
-            return null;
+        if (!(source instanceof FieldInsnNode field) || field.getOpcode() != Opcodes.GETSTATIC) return null;
+
+        if (MATERIAL.equals(field.owner) && MATERIAL_DESCRIPTOR.equals(field.desc)) {
+            return new MaterialRef(field.owner, field.name, field.desc);
         }
+        if (!stableSourceMaterialSingleton(classes, field)) return null;
         return new MaterialRef(field.owner, field.name, field.desc);
+    }
+
+    private static boolean stableSourceMaterialSingleton(Map<String, ClassNode> classes, FieldInsnNode reference) {
+        Type fieldType;
+        try {
+            fieldType = Type.getType(reference.desc);
+        } catch (RuntimeException ignored) {
+            return false;
+        }
+        if (fieldType.getSort() != Type.OBJECT) return false;
+        String materialClass = fieldType.getInternalName();
+        if (!reference.owner.equals(materialClass)) return false;
+
+        ClassNode owner = classes.get(materialClass);
+        if (owner == null || !MATERIAL.equals(owner.superName)) return false;
+        boolean declaredStatic = false;
+        for (FieldNode field : owner.fields) {
+            if (field.name.equals(reference.name) && field.desc.equals(reference.desc)
+                    && (field.access & Opcodes.ACC_STATIC) != 0) {
+                declaredStatic = true;
+                break;
+            }
+        }
+        if (!declaredStatic) return false;
+
+        int writes = 0;
+        for (ClassNode candidate : classes.values()) {
+            for (MethodNode method : candidate.methods) {
+                for (AbstractInsnNode instruction : method.instructions) {
+                    if (!(instruction instanceof FieldInsnNode put)
+                            || put.getOpcode() != Opcodes.PUTSTATIC
+                            || !put.owner.equals(reference.owner)
+                            || !put.name.equals(reference.name)
+                            || !put.desc.equals(reference.desc)) {
+                        continue;
+                    }
+                    writes++;
+                    if (!candidate.name.equals(reference.owner)
+                            || !"<clinit>".equals(method.name)
+                            || !canonicalNewSingleton(put, materialClass)) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return writes == 1;
+    }
+
+    private static boolean canonicalNewSingleton(FieldInsnNode put, String materialClass) {
+        AbstractInsnNode initInsn = previousReal(put);
+        if (!(initInsn instanceof MethodInsnNode init)
+                || init.getOpcode() != Opcodes.INVOKESPECIAL
+                || !materialClass.equals(init.owner)
+                || !"<init>".equals(init.name)
+                || !"()V".equals(init.desc)) {
+            return false;
+        }
+        AbstractInsnNode dup = previousReal(initInsn);
+        if (dup == null || dup.getOpcode() != Opcodes.DUP) return false;
+        AbstractInsnNode newInsn = previousReal(dup);
+        return newInsn instanceof TypeInsnNode created
+                && created.getOpcode() == Opcodes.NEW
+                && materialClass.equals(created.desc);
+    }
+
+    private static AbstractInsnNode previousReal(AbstractInsnNode node) {
+        for (AbstractInsnNode current = node == null ? null : node.getPrevious(); current != null;
+             current = current.getPrevious()) {
+            if (current.getOpcode() >= 0) return current;
+        }
+        return null;
     }
 
     private static Map<String, ClassNode> loadClasses(Path jarPath) throws IOException {
