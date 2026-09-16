@@ -218,8 +218,10 @@ public final class LegacyBlockDropRuntimeReadinessPass implements ConversionPass
                 reasons.add("silk-touch eligibility value missing despite complete proof");
             } else if (silkEligible) {
                 JsonObject stack = object(plan, "silkTouchStack");
-                if (!allZeroDamage(damages) || !sameSelfStack(plan, stack)) {
+                if (!allZeroDamage(damages)) {
                     reasons.add("metadata-dependent normal drop has no proven equivalent silk stack");
+                } else if (!sameSelfStack(plan, stack)) {
+                    reasons.add("silk-touch stack differs from the proven normal self-drop");
                 }
             }
         }
