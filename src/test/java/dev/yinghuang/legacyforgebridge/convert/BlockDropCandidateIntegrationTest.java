@@ -4,6 +4,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import dev.yinghuang.legacyforgebridge.convert.api.ConversionResult;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyBlockDropAnalysisPass;
+import dev.yinghuang.legacyforgebridge.convert.pass.LegacyBlockDropRuntimeReadinessPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyBlockHarvestMaterialProofPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyBlockMaterialProvenancePass;
 import org.junit.jupiter.api.Test;
@@ -33,7 +34,7 @@ class BlockDropCandidateIntegrationTest {
     @TempDir Path tempDir;
 
     @Test
-    void fullConversionEmbedsSchemaSixNoToolHarvestProofWithoutEnablingGameplayRuntime() throws Exception {
+    void fullConversionEmbedsSchemaSixHarvestProofAndStaticDropReadinessWithoutRuntime() throws Exception {
         Path source = tempDir.resolve("HarvestFastPathLegacy.jar");
         String metadata = "[{\"modid\":\"harvestfast\",\"name\":\"Harvest Fast\",\"version\":\"1.0\",\"mcversion\":\"1.7.10\",\"dependencies\":[]}]";
         try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(source))) {
@@ -51,15 +52,13 @@ class BlockDropCandidateIntegrationTest {
         assertTrue(result.appliedPasses().contains("legacy-block-material-provenance"));
         assertTrue(result.appliedPasses().contains("legacy-block-drop-analysis"));
         assertTrue(result.appliedPasses().contains("legacy-block-harvest-material-proof"));
+        assertTrue(result.appliedPasses().contains("legacy-block-drop-runtime-readiness"));
 
         try (JarFile jar = new JarFile(result.candidateJar().orElseThrow().toFile())) {
             assertNotNull(jar.getJarEntry(LegacyBlockMaterialProvenancePass.OUTPUT_PATH));
             JarEntry dropEntry = jar.getJarEntry(LegacyBlockDropAnalysisPass.PLAN_PATH);
             assertNotNull(dropEntry);
-            JsonObject root;
-            try (InputStreamReader reader = new InputStreamReader(jar.getInputStream(dropEntry), StandardCharsets.UTF_8)) {
-                root = JsonParser.parseReader(reader).getAsJsonObject();
-            }
+            JsonObject root = read(jar, dropEntry);
 
             assertEquals(6, root.get("schemaVersion").getAsInt());
             assertEquals(LegacyBlockHarvestMaterialProofPass.RULE_VERSION,
@@ -75,6 +74,25 @@ class BlockDropCandidateIntegrationTest {
             assertTrue(contains(plan, LegacyBlockHarvestMaterialProofPass.GAMEPLAY_RUNTIME_BLOCKER));
             assertFalse(contains(plan, "harvest-eligibility-proof-pending"));
             assertFalse(plan.get("runtimeComplete").getAsBoolean());
+
+            JarEntry readinessEntry = jar.getJarEntry(LegacyBlockDropRuntimeReadinessPass.OUTPUT_PATH);
+            assertNotNull(readinessEntry);
+            JsonObject readiness = read(jar, readinessEntry);
+            assertEquals(6, readiness.get("sourcePlanSchemaVersion").getAsInt());
+            assertEquals(1, readiness.get("normalSilkStaticSelfDropReadyPlans").getAsInt());
+            assertEquals(0, readiness.get("blockedPlans").getAsInt());
+            assertFalse(readiness.get("lootRuntimeGenerated").getAsBoolean());
+            assertFalse(readiness.get("explosionRuntimeMappingReady").getAsBoolean());
+            JsonObject ready = readiness.getAsJsonArray("ready").get(0).getAsJsonObject();
+            assertEquals("harvestfast:wood", ready.get("id").getAsString());
+            assertTrue(ready.get("normalSilkStaticSelfDropReady").getAsBoolean());
+            assertTrue(ready.get("metadataIndependent").getAsBoolean());
+        }
+    }
+
+    private static JsonObject read(JarFile jar, JarEntry entry) throws Exception {
+        try (InputStreamReader reader = new InputStreamReader(jar.getInputStream(entry), StandardCharsets.UTF_8)) {
+            return JsonParser.parseReader(reader).getAsJsonObject();
         }
     }
 
