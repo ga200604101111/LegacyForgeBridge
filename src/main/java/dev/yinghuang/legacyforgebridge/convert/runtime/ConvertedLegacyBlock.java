@@ -4,6 +4,7 @@ import dev.yinghuang.legacyforgebridge.compat.LegacyBlockActivationEffectsRegist
 import dev.yinghuang.legacyforgebridge.compat.LegacyBlockActivationRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyBlockDropRuntimeRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyBlockPlacementRegistry;
+import dev.yinghuang.legacyforgebridge.compat.LegacyStackComponents;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
@@ -57,15 +58,18 @@ public class ConvertedLegacyBlock extends Block {
     }
 
     /**
-     * Proof-gated static normal/silk drop runtime. Only rules compiled as metadata-independent
-     * count=1 self BlockItems are admitted by {@link LegacyBlockDropRuntimeRegistry}.
+     * Proof-gated normal drop runtime. Admitted rules are count=1 self BlockItems whose exact
+     * legacy item damage is either the metadata-independent zero value or a source-proven 16-entry
+     * block-metadata lookup table. Metadata-dependent rules are admitted only when legacy silk
+     * touch is proven disabled.
      */
     @Override
     protected List<ItemStack> getDrops(BlockState state, LootParams.Builder params) {
-        if (!LegacyBlockDropRuntimeRegistry.hasRule(convertedId)) {
+        LegacyBlockDropRuntimeRegistry.Rule rule = LegacyBlockDropRuntimeRegistry.rule(convertedId);
+        if (rule == null) {
             return super.getDrops(state, params);
         }
-        return List.of(new ItemStack(this));
+        return List.of(legacyDropStack(state, rule));
     }
 
     /**
@@ -76,7 +80,8 @@ public class ConvertedLegacyBlock extends Block {
     @Override
     protected void onExplosionHit(BlockState state, ServerLevel level, BlockPos pos, Explosion explosion,
                                   BiConsumer<ItemStack, BlockPos> dropConsumer) {
-        if (!LegacyBlockDropRuntimeRegistry.hasRule(convertedId)
+        LegacyBlockDropRuntimeRegistry.Rule rule = LegacyBlockDropRuntimeRegistry.rule(convertedId);
+        if (rule == null
                 || (explosion.getBlockInteraction() != Explosion.BlockInteraction.DESTROY
                 && explosion.getBlockInteraction() != Explosion.BlockInteraction.DESTROY_WITH_DECAY)) {
             super.onExplosionHit(state, level, pos, explosion, dropConsumer);
@@ -85,12 +90,21 @@ public class ConvertedLegacyBlock extends Block {
 
         if (LegacyBlockDropRuntimeRegistry.shouldDropFromExplosion(
                 convertedId, level.getRandom().nextFloat(), explosion.radius())) {
-            dropConsumer.accept(new ItemStack(this), pos);
+            dropConsumer.accept(legacyDropStack(state, rule), pos);
         }
 
         // Forge/Minecraft 1.7.10 Block#onBlockExploded removes the block with update flags 3.
         // Source destruction callbacks are proven absent before a rule can reach this runtime.
         level.setBlock(pos, Blocks.AIR.defaultBlockState(), 3);
+    }
+
+    private ItemStack legacyDropStack(BlockState state, LegacyBlockDropRuntimeRegistry.Rule rule) {
+        ItemStack stack = new ItemStack(this);
+        int legacyDamage = rule.legacyDamage(legacyMeta(state));
+        if (legacyDamage != 0) {
+            LegacyStackComponents.set(stack, legacyDamage);
+        }
+        return stack;
     }
 
     /**

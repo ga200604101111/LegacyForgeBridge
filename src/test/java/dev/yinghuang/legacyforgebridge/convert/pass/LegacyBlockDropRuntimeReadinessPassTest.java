@@ -68,13 +68,17 @@ class LegacyBlockDropRuntimeReadinessPassTest {
         assertFalse(output.get("explosionRuntimeMappingReady").getAsBoolean());
         assertEquals(LegacyBlockDropRuntimeReadinessPass.EXPLOSION_INTERACTION_BLOCKER,
                 output.get("explosionRuntimeBlocker").getAsString());
+        assertEquals(1, output.get("normalSilkSelfDropReadyPlans").getAsInt());
         assertEquals(1, output.get("normalSilkStaticSelfDropReadyPlans").getAsInt());
+        assertEquals(0, output.get("normalSilkMetadataMappedSelfDropReadyPlans").getAsInt());
         assertEquals(3, output.get("blockedPlans").getAsInt());
 
         JsonObject ready = output.getAsJsonArray("ready").get(0).getAsJsonObject();
         assertEquals("ready", ready.get("legacyRegistryName").getAsString());
         assertEquals("fixture:ready", ready.get("id").getAsString());
+        assertTrue(ready.get("normalSilkSelfDropReady").getAsBoolean());
         assertTrue(ready.get("normalSilkStaticSelfDropReady").getAsBoolean());
+        assertFalse(ready.get("normalSilkMetadataMappedSelfDropReady").getAsBoolean());
         assertTrue(ready.get("explosionSourceProofComplete").getAsBoolean());
         assertTrue(ready.get("sourceExplosionDestructionOverrideFree").getAsBoolean());
         assertTrue(ready.get("explosionDecayFormulaProofComplete").getAsBoolean());
@@ -89,7 +93,7 @@ class LegacyBlockDropRuntimeReadinessPassTest {
         assertEquals(0, ready.getAsJsonArray("reasons").size());
 
         JsonArray blocked = output.getAsJsonArray("blocked");
-        assertTrue(hasReason(blocked, "metadata", "depends on legacy block metadata"));
+        assertTrue(hasReason(blocked, "metadata", "metadata-dependent normal drop"));
         assertTrue(hasReason(blocked, "harvest", "harvest eligibility proof incomplete"));
         assertTrue(hasReason(blocked, "silk_mismatch", "silk-touch stack differs"));
     }

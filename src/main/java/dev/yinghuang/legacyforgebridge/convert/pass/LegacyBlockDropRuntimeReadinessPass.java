@@ -21,8 +21,10 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Classifies a deliberately narrow block-drop subset that can later be mapped to a static modern
- * self-drop runtime without interpreting unresolved tool or explosion semantics.
+ * Classifies a deliberately narrow block-drop subset that can be mapped to a modern self-drop
+ * runtime without interpreting unresolved tool or explosion semantics. Both metadata-independent
+ * damage-zero drops and source-proven sixteen-entry legacy damage tables are supported; mapped
+ * tables are admitted only when silk touch is proven impossible.
  *
  * <p>This pass is proof-only. It does not generate loot tables or override modern block drops.
  * The exact 1.7.10 and 1.21.11 decay formulas are recorded separately from full explosion runtime
@@ -100,8 +102,12 @@ public final class LegacyBlockDropRuntimeReadinessPass implements ConversionPass
             for (JsonElement element : plans) {
                 JsonObject plan = element.getAsJsonObject();
                 List<String> reasons = readinessReasons(plan);
+                JsonArray damages = plan.getAsJsonArray("itemDamageByBlockMeta");
+                boolean metadataIndependent = allZeroDamage(damages);
                 JsonObject result = identity(plan);
-                result.addProperty("normalSilkStaticSelfDropReady", reasons.isEmpty());
+                result.addProperty("normalSilkSelfDropReady", reasons.isEmpty());
+                result.addProperty("normalSilkStaticSelfDropReady", reasons.isEmpty() && metadataIndependent);
+                result.addProperty("normalSilkMetadataMappedSelfDropReady", reasons.isEmpty() && !metadataIndependent);
                 result.addProperty("explosionSourceProofComplete", bool(plan, "explosionDropProofComplete"));
                 result.addProperty("sourceExplosionDestructionOverrideFree",
                         bool(plan, "sourceExplosionDestructionOverrideFree"));
@@ -116,8 +122,12 @@ public final class LegacyBlockDropRuntimeReadinessPass implements ConversionPass
                 if (reasons.isEmpty()) {
                     result.addProperty("dropKind", "SELF_BLOCK_ITEM");
                     result.addProperty("quantity", 1);
-                    result.addProperty("legacyDamage", 0);
-                    result.addProperty("metadataIndependent", true);
+                    result.addProperty("metadataIndependent", metadataIndependent);
+                    if (metadataIndependent) {
+                        result.addProperty("legacyDamage", 0);
+                    } else {
+                        result.add("legacyDamageByBlockMeta", damages.deepCopy());
+                    }
                     ready.add(result);
                 } else {
                     blocked.add(result);
@@ -126,7 +136,16 @@ public final class LegacyBlockDropRuntimeReadinessPass implements ConversionPass
         }
         root.add("ready", ready);
         root.add("blocked", blocked);
-        root.addProperty("normalSilkStaticSelfDropReadyPlans", ready.size());
+        int staticReady = 0;
+        int metadataMappedReady = 0;
+        for (JsonElement element : ready) {
+            JsonObject entry = element.getAsJsonObject();
+            if (bool(entry, "metadataIndependent")) staticReady++;
+            else metadataMappedReady++;
+        }
+        root.addProperty("normalSilkSelfDropReadyPlans", ready.size());
+        root.addProperty("normalSilkStaticSelfDropReadyPlans", staticReady);
+        root.addProperty("normalSilkMetadataMappedSelfDropReadyPlans", metadataMappedReady);
         root.addProperty("blockedPlans", blocked.size());
 
         Path output = context.stagingDir().resolve(OUTPUT_PATH);
@@ -135,7 +154,7 @@ public final class LegacyBlockDropRuntimeReadinessPass implements ConversionPass
         context.diagnostics().info(
                 "LFB-CONVERT-BLOCK-DROP-READINESS-0001",
                 SupportLevel.RUNTIME_BRIDGE,
-                "Classified static self-drop runtime readiness without enabling drops: ready="
+                "Classified self-drop runtime readiness without enabling drops: ready="
                         + ready.size() + ", blocked=" + blocked.size()
                         + ", explosionHandlers=" + explosionHandlers.size()
                         + ". 1.7.10/1.21.11 decay formulas are separately proven; full explosion runtime remains gated."
@@ -186,16 +205,22 @@ public final class LegacyBlockDropRuntimeReadinessPass implements ConversionPass
         if (!plan.has("quantity") || plan.get("quantity").getAsInt() != 1) {
             reasons.add("normal drop quantity is not exactly one");
         }
-        if (!allZeroDamage(plan.getAsJsonArray("itemDamageByBlockMeta"))) {
-            reasons.add("normal drop depends on legacy block metadata/item damage");
+        JsonArray damages = plan.getAsJsonArray("itemDamageByBlockMeta");
+        if (!validLegacyDamageTable(damages)) {
+            reasons.add("normal drop legacy damage table is missing, malformed, or outside block metadata range");
         }
 
         if (!bool(plan, "silkTouchProofComplete")) {
             reasons.add("silk-touch proof incomplete");
-        } else if (plan.has("silkTouchEligible") && plan.get("silkTouchEligible").getAsBoolean()) {
-            JsonObject stack = object(plan, "silkTouchStack");
-            if (!sameSelfStack(plan, stack)) {
-                reasons.add("silk-touch stack differs from static self block item count=1 damage=0");
+        } else {
+            Boolean silkEligible = optionalBoolean(plan, "silkTouchEligible");
+            if (silkEligible == null) {
+                reasons.add("silk-touch eligibility value missing despite complete proof");
+            } else if (silkEligible) {
+                JsonObject stack = object(plan, "silkTouchStack");
+                if (!allZeroDamage(damages) || !sameSelfStack(plan, stack)) {
+                    reasons.add("metadata-dependent normal drop has no proven equivalent silk stack");
+                }
             }
         }
         return reasons;
@@ -211,10 +236,24 @@ public final class LegacyBlockDropRuntimeReadinessPass implements ConversionPass
         return planId != null && planId.equals(stackId);
     }
 
-    private static boolean allZeroDamage(JsonArray values) {
+    private static boolean validLegacyDamageTable(JsonArray values) {
         if (values == null || values.size() != 16) return false;
         for (JsonElement value : values) {
-            if (!value.isJsonPrimitive() || value.getAsInt() != 0) return false;
+            if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()) return false;
+            try {
+                int damage = value.getAsJsonPrimitive().getAsBigDecimal().intValueExact();
+                if (damage < 0 || damage > 15) return false;
+            } catch (ArithmeticException exception) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean allZeroDamage(JsonArray values) {
+        if (!validLegacyDamageTable(values)) return false;
+        for (JsonElement value : values) {
+            if (value.getAsInt() != 0) return false;
         }
         return true;
     }
@@ -246,5 +285,12 @@ public final class LegacyBlockDropRuntimeReadinessPass implements ConversionPass
     private static boolean bool(JsonObject value, String key) {
         JsonElement element = value.get(key);
         return element != null && element.isJsonPrimitive() && element.getAsBoolean();
+    }
+
+    private static Boolean optionalBoolean(JsonObject value, String key) {
+        JsonElement element = value.get(key);
+        return element != null && element.isJsonPrimitive() && element.getAsJsonPrimitive().isBoolean()
+                ? element.getAsBoolean()
+                : null;
     }
 }

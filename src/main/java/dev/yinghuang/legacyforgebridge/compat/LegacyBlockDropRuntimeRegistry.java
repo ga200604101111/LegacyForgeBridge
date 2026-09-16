@@ -16,24 +16,47 @@ import net.minecraft.world.item.BlockItem;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Runtime registry for proof-complete static 1.7.x block self-drop rules.
+ * Runtime registry for proof-complete 1.7.x block self-drop rules.
  *
  * <p>The conversion pass has already decided source eligibility. Runtime loading is intentionally
  * strict and fail-closed: a rule is executable only when the sidecar explicitly declares that the
- * bridge implementation is wired and every proof/shaping field still matches the one admitted
- * runtime mode.</p>
+ * bridge implementation is wired and every proof/shaping field still matches an admitted runtime
+ * mode.</p>
  */
 public final class LegacyBlockDropRuntimeRegistry {
     public static final int SCHEMA_VERSION = 1;
     private static final Map<Identifier, Rule> RULES = new ConcurrentHashMap<>();
     private static final Set<String> LOAD_ATTEMPTED = ConcurrentHashMap.newKeySet();
 
-    public record Rule(Identifier id) { }
+    public record Rule(Identifier id, boolean metadataIndependent, List<Integer> legacyDamageByBlockMeta) {
+        public Rule {
+            if (id == null) throw new IllegalArgumentException("Missing block id");
+            legacyDamageByBlockMeta = List.copyOf(legacyDamageByBlockMeta);
+            if (legacyDamageByBlockMeta.size() != 16) {
+                throw new IllegalArgumentException("Legacy block-drop damage table must contain 16 entries");
+            }
+            for (int damage : legacyDamageByBlockMeta) {
+                if (damage < 0 || damage > 15) {
+                    throw new IllegalArgumentException("Legacy block-drop item damage outside 0..15: " + damage);
+                }
+            }
+        }
+
+        public int legacyDamage(int blockMeta) {
+            if (blockMeta < 0 || blockMeta > 15) {
+                throw new IllegalArgumentException("Legacy block metadata outside 0..15: " + blockMeta);
+            }
+            return legacyDamageByBlockMeta.get(blockMeta);
+        }
+    }
 
     private LegacyBlockDropRuntimeRegistry() { }
 
@@ -138,31 +161,50 @@ public final class LegacyBlockDropRuntimeRegistry {
         }
     }
 
-    private static Rule parseRule(JsonObject object) {
+    static Rule parseRule(JsonObject object) {
         String idValue = string(object, "id");
+        String mode = string(object, "mode");
+        boolean commonProof = bool(object, "normalSilkSelfDropProofComplete")
+                || bool(object, "normalSilkStaticSelfDropProofComplete");
         if (idValue == null
-                || !LegacyBlockDropRuntimeRulePass.MODE.equals(string(object, "mode"))
                 || !"SELF_BLOCK_ITEM".equals(string(object, "dropKind"))
                 || integer(object, "quantity", -1) != 1
-                || integer(object, "legacyDamage", -1) != 0
-                || !bool(object, "metadataIndependent")
                 || !"inverse_explosion_radius".equals(string(object, "legacyExplosionChanceMode"))
-                || !bool(object, "normalSilkStaticSelfDropProofComplete")
+                || !commonProof
                 || !bool(object, "explosionSourceProofComplete")
                 || !bool(object, "sourceExplosionDestructionOverrideFree")
                 || !bool(object, "explosionDecayFormulaProofComplete")
                 || !bool(object, "explosionAffectedSetSourceProofComplete")) {
             return null;
         }
+
+        boolean metadataIndependent = bool(object, "metadataIndependent");
+        List<Integer> damages;
+        if (LegacyBlockDropRuntimeRulePass.MODE.equals(mode)) {
+            if (!metadataIndependent || integer(object, "legacyDamage", -1) != 0) return null;
+            damages = Collections.nCopies(16, 0);
+        } else if (LegacyBlockDropRuntimeRulePass.METADATA_MODE.equals(mode)) {
+            if (metadataIndependent) return null;
+            damages = damageTable(object.getAsJsonArray("legacyDamageByBlockMeta"));
+            if (damages == null) return null;
+        } else {
+            return null;
+        }
+
         try {
-            return new Rule(Identifier.parse(idValue));
+            return new Rule(Identifier.parse(idValue), metadataIndependent, damages);
         } catch (RuntimeException ignored) {
             return null;
         }
     }
 
     static synchronized void installForTests(Identifier id) {
-        RULES.put(id, new Rule(id));
+        installForTests(id, Collections.nCopies(16, 0));
+    }
+
+    static synchronized void installForTests(Identifier id, List<Integer> legacyDamageByBlockMeta) {
+        boolean metadataIndependent = legacyDamageByBlockMeta.stream().allMatch(value -> value == 0);
+        RULES.put(id, new Rule(id, metadataIndependent, legacyDamageByBlockMeta));
         LOAD_ATTEMPTED.add(id.getNamespace());
     }
 
@@ -173,6 +215,22 @@ public final class LegacyBlockDropRuntimeRegistry {
     static synchronized void clearForTests() {
         RULES.clear();
         LOAD_ATTEMPTED.clear();
+    }
+
+    private static List<Integer> damageTable(JsonArray values) {
+        if (values == null || values.size() != 16) return null;
+        List<Integer> damages = new ArrayList<>(16);
+        for (JsonElement value : values) {
+            if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()) return null;
+            try {
+                int damage = value.getAsJsonPrimitive().getAsBigDecimal().intValueExact();
+                if (damage < 0 || damage > 15) return null;
+                damages.add(damage);
+            } catch (ArithmeticException exception) {
+                return null;
+            }
+        }
+        return List.copyOf(damages);
     }
 
     private static String string(JsonObject object, String key) {

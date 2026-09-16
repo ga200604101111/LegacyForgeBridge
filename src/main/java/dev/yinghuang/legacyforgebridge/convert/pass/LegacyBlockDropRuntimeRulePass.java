@@ -16,18 +16,20 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
- * Compiles proof-complete static block-drop readiness into the runtime-rule sidecar consumed by
+ * Compiles proof-complete block-drop readiness into the runtime-rule sidecar consumed by
  * {@code ConvertedLegacyBlock}.
  *
- * <p>Only entries whose normal and silk results are the same metadata-independent self BlockItem
- * and whose per-affected-block explosion source/formula/event/destruction proof is complete become
- * executable rules. Runtime still revalidates the exact rule shape and fails closed for every other
- * entry.</p>
+ * <p>Metadata-independent damage-zero self drops retain the original static rule. A second narrow
+ * rule admits source-proven sixteen-entry legacy damage tables only when silk touch is already
+ * proven disabled. Both modes still require complete per-affected-block explosion
+ * source/formula/event/destruction proof. Runtime revalidates every shape and fails closed for all
+ * other entries.</p>
  */
 public final class LegacyBlockDropRuntimeRulePass implements ConversionPass {
     public static final String OUTPUT_PATH = "legacyforgebridge/block-drop-runtime-rules.json";
     public static final int READINESS_SCHEMA = 2;
     public static final String MODE = "STATIC_SELF_DROP_LEGACY_EXPLOSION_OVERRIDE";
+    public static final String METADATA_MODE = "METADATA_SELF_DROP_LEGACY_EXPLOSION_OVERRIDE";
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     @Override
@@ -64,18 +66,24 @@ public final class LegacyBlockDropRuntimeRulePass implements ConversionPass {
                 String id = string(entry, "id");
                 if (id == null) continue;
 
+                boolean metadataIndependent = bool(entry, "metadataIndependent");
                 JsonObject rule = new JsonObject();
                 copyString(entry, rule, "legacyRegistryName");
                 copyString(entry, rule, "legacyNamespace");
                 copyString(entry, rule, "sourceClass");
                 rule.addProperty("id", id);
-                rule.addProperty("mode", MODE);
+                rule.addProperty("mode", metadataIndependent ? MODE : METADATA_MODE);
                 rule.addProperty("dropKind", "SELF_BLOCK_ITEM");
                 rule.addProperty("quantity", 1);
-                rule.addProperty("legacyDamage", 0);
-                rule.addProperty("metadataIndependent", true);
+                rule.addProperty("metadataIndependent", metadataIndependent);
+                if (metadataIndependent) {
+                    rule.addProperty("legacyDamage", 0);
+                } else {
+                    rule.add("legacyDamageByBlockMeta", entry.getAsJsonArray("legacyDamageByBlockMeta").deepCopy());
+                }
                 rule.addProperty("legacyExplosionChanceMode", "inverse_explosion_radius");
-                rule.addProperty("normalSilkStaticSelfDropProofComplete", true);
+                rule.addProperty("normalSilkSelfDropProofComplete", true);
+                rule.addProperty("normalSilkStaticSelfDropProofComplete", metadataIndependent);
                 rule.addProperty("explosionSourceProofComplete", true);
                 rule.addProperty("sourceExplosionDestructionOverrideFree", true);
                 rule.addProperty("explosionDecayFormulaProofComplete", true);
@@ -98,15 +106,33 @@ public final class LegacyBlockDropRuntimeRulePass implements ConversionPass {
     }
 
     private static boolean eligible(JsonObject entry) {
-        return bool(entry, "normalSilkStaticSelfDropReady")
-                && bool(entry, "explosionSourceProofComplete")
-                && bool(entry, "sourceExplosionDestructionOverrideFree")
-                && bool(entry, "explosionDecayFormulaProofComplete")
-                && bool(entry, "explosionAffectedSetSourceProofComplete")
-                && "SELF_BLOCK_ITEM".equals(string(entry, "dropKind"))
-                && integer(entry, "quantity", -1) == 1
-                && integer(entry, "legacyDamage", -1) == 0
-                && bool(entry, "metadataIndependent");
+        if (!(bool(entry, "normalSilkSelfDropReady") || bool(entry, "normalSilkStaticSelfDropReady"))
+                || !bool(entry, "explosionSourceProofComplete")
+                || !bool(entry, "sourceExplosionDestructionOverrideFree")
+                || !bool(entry, "explosionDecayFormulaProofComplete")
+                || !bool(entry, "explosionAffectedSetSourceProofComplete")
+                || !"SELF_BLOCK_ITEM".equals(string(entry, "dropKind"))
+                || integer(entry, "quantity", -1) != 1) {
+            return false;
+        }
+        if (bool(entry, "metadataIndependent")) {
+            return integer(entry, "legacyDamage", -1) == 0;
+        }
+        return validLegacyDamageTable(entry.getAsJsonArray("legacyDamageByBlockMeta"));
+    }
+
+    private static boolean validLegacyDamageTable(JsonArray values) {
+        if (values == null || values.size() != 16) return false;
+        for (JsonElement value : values) {
+            if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()) return false;
+            try {
+                int damage = value.getAsJsonPrimitive().getAsBigDecimal().intValueExact();
+                if (damage < 0 || damage > 15) return false;
+            } catch (ArithmeticException exception) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static void copyString(JsonObject source, JsonObject target, String key) {
