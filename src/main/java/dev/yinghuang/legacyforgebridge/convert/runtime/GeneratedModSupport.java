@@ -8,6 +8,7 @@ import dev.yinghuang.legacyforgebridge.compat.LegacyBlockActivationRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyBlockPlacementRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyFoodItemRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyFuelRegistry;
+import dev.yinghuang.legacyforgebridge.compat.LegacyGridPotBlockRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyInertModelBlockRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyPlantPlacementRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyPlantRuntimeRegistry;
@@ -59,6 +60,7 @@ public final class GeneratedModSupport {
         LegacyInertModelBlockRegistry.loadMod(modId);
         LegacyStorageBlockRegistry.loadMod(modId);
         LegacySingleInputProcessorRegistry.loadMod(modId);
+        LegacyGridPotBlockRegistry.loadMod(modId);
         if(ACTIVE_MODS.add(modId))COUNTS.put(modId,new int[3]);
     }
 
@@ -66,21 +68,25 @@ public final class GeneratedModSupport {
         Identifier id=Identifier.parse(idValue);
         if(BuiltInRegistries.BLOCK.containsKey(id)){BLOCKS.put(id,BuiltInRegistries.BLOCK.getValue(id));return;}
         ResourceKey<Block> blockKey=ResourceKey.create(Registries.BLOCK,id);
+        boolean gridPot=LegacyGridPotBlockRegistry.hasRule(id);
         BlockBehaviour.Properties blockProperties=BlockBehaviour.Properties.of().setId(blockKey).overrideDescription(descriptionKey);
+        if(gridPot)blockProperties=blockProperties.dynamicShape().noOcclusion();
         boolean inert=LegacyInertModelBlockRegistry.hasRule(id);
         boolean storage=LegacyStorageBlockRegistry.hasRule(id);
         boolean processor=LegacySingleInputProcessorRegistry.hasRule(id);
         var plantRule=LegacyPlantRuntimeRegistry.rule(id);
         boolean plant=plantRule!=null&&LegacyPlantPlacementRegistry.plantTargetRuntimeReady(id);
-        int families=(inert?1:0)+(storage?1:0)+(processor?1:0)+(plant?1:0);
+        int families=(gridPot?1:0)+(inert?1:0)+(storage?1:0)+(processor?1:0)+(plant?1:0);
         if(families>1)throw new IllegalStateException("Converted block has conflicting specialized runtime rules: "+id);
-        Block block=inert?new ConvertedLegacyInertModelBlock(id,blockProperties)
+        Block block=gridPot?new ConvertedLegacyGridPotBlock(id,blockProperties)
+                :inert?new ConvertedLegacyInertModelBlock(id,blockProperties)
                 :storage?new ConvertedLegacyStorageBlock(id,blockProperties)
                 :processor?new ConvertedLegacyProcessorBlock(id,blockProperties)
                 :plant?new ConvertedLegacyPlantBlock(id,blockProperties)
                 :new ConvertedLegacyBlock(id,blockProperties);
         Registry.register(BuiltInRegistries.BLOCK,blockKey,block);
         BLOCKS.put(id,block);
+        if(gridPot)LegacyGridPotBlockRegistry.registerType(id,block);
         if(inert)LegacyInertModelBlockRegistry.registerType(id,block);
         if(storage)LegacyStorageBlockRegistry.registerType(id,block);
         if(processor)LegacySingleInputProcessorRegistry.registerType(id,block);
@@ -89,7 +95,7 @@ public final class GeneratedModSupport {
             ResourceKey<Item> itemKey=ResourceKey.create(Registries.ITEM,id);
             Item.Properties itemProperties=new Item.Properties().setId(itemKey).overrideDescription(descriptionKey)
                     .component(LegacyStackComponents.legacyMeta(),0);
-            BlockItem blockItem=new BlockItem(block,itemProperties);
+            BlockItem blockItem=gridPot?new ConvertedLegacyGridPotBlockItem(block,itemProperties):new BlockItem(block,itemProperties);
             Registry.register(BuiltInRegistries.ITEM,itemKey,blockItem);
             blockItem.registerBlocks(Item.BY_BLOCK,blockItem);
             ITEMS.put(id,blockItem);
