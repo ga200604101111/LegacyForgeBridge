@@ -5,6 +5,7 @@ import com.google.gson.JsonParser;
 import dev.yinghuang.legacyforgebridge.convert.api.ConversionResult;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyBlockDropAnalysisPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyBlockDropRuntimeReadinessPass;
+import dev.yinghuang.legacyforgebridge.convert.pass.LegacyBlockDropRuntimeRulePass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyBlockHarvestMaterialProofPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyBlockMaterialProvenancePass;
 import org.junit.jupiter.api.Test;
@@ -34,7 +35,7 @@ class BlockDropCandidateIntegrationTest {
     @TempDir Path tempDir;
 
     @Test
-    void fullConversionEmbedsHarvestAndExplosionReadinessProofsWithoutRuntime() throws Exception {
+    void fullConversionEmbedsProofGatedRuntimeRuleWithoutWiringGameplayYet() throws Exception {
         Path source = tempDir.resolve("HarvestFastPathLegacy.jar");
         String metadata = "[{\"modid\":\"harvestfast\",\"name\":\"Harvest Fast\",\"version\":\"1.0\",\"mcversion\":\"1.7.10\",\"dependencies\":[]}]";
         try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(source))) {
@@ -53,6 +54,7 @@ class BlockDropCandidateIntegrationTest {
         assertTrue(result.appliedPasses().contains("legacy-block-drop-analysis"));
         assertTrue(result.appliedPasses().contains("legacy-block-harvest-material-proof"));
         assertTrue(result.appliedPasses().contains("legacy-block-drop-runtime-readiness"));
+        assertTrue(result.appliedPasses().contains("legacy-block-drop-runtime-rules"));
 
         try (JarFile jar = new JarFile(result.candidateJar().orElseThrow().toFile())) {
             assertNotNull(jar.getJarEntry(LegacyBlockMaterialProvenancePass.OUTPUT_PATH));
@@ -96,6 +98,21 @@ class BlockDropCandidateIntegrationTest {
             assertTrue(ready.get("explosionDecayFormulaProofComplete").getAsBoolean());
             assertTrue(ready.get("explosionAffectedSetSourceProofComplete").getAsBoolean());
             assertFalse(ready.get("explosionRuntimeMappingReady").getAsBoolean());
+
+            JarEntry rulesEntry = jar.getJarEntry(LegacyBlockDropRuntimeRulePass.OUTPUT_PATH);
+            assertNotNull(rulesEntry);
+            JsonObject rules = read(jar, rulesEntry);
+            assertEquals(1, rules.get("schemaVersion").getAsInt());
+            assertEquals(1, rules.get("runtimeRuleCount").getAsInt());
+            assertFalse(rules.get("runtimeImplementationWired").getAsBoolean());
+            JsonObject rule = rules.getAsJsonArray("rules").get(0).getAsJsonObject();
+            assertEquals("harvestfast:wood", rule.get("id").getAsString());
+            assertEquals(LegacyBlockDropRuntimeRulePass.MODE, rule.get("mode").getAsString());
+            assertTrue(rule.get("normalSilkStaticSelfDropProofComplete").getAsBoolean());
+            assertTrue(rule.get("explosionSourceProofComplete").getAsBoolean());
+            assertTrue(rule.get("sourceExplosionDestructionOverrideFree").getAsBoolean());
+            assertTrue(rule.get("explosionDecayFormulaProofComplete").getAsBoolean());
+            assertTrue(rule.get("explosionAffectedSetSourceProofComplete").getAsBoolean());
         }
     }
 

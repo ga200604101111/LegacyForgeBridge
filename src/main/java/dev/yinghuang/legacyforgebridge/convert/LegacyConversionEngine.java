@@ -19,6 +19,7 @@ import dev.yinghuang.legacyforgebridge.convert.pass.LegacyBlockActivationPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyBlockBehaviorAnalysisPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyBlockDropAnalysisPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyBlockDropRuntimeReadinessPass;
+import dev.yinghuang.legacyforgebridge.convert.pass.LegacyBlockDropRuntimeRulePass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyBlockHarvestMaterialProofPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyBlockMaterialProvenancePass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyBlockPlacementPass;
@@ -126,6 +127,7 @@ public final class LegacyConversionEngine {
             builder.add(new LegacyBlockDropAnalysisPass());
             builder.add(new LegacyBlockHarvestMaterialProofPass());
             builder.add(new LegacyBlockDropRuntimeReadinessPass());
+            builder.add(new LegacyBlockDropRuntimeRulePass());
             builder.add(new LegacyBlockPlacementPass());
             builder.add(new LegacyBlockActivationPass());
             builder.add(new LegacyInertModelBlockPass());
