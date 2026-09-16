@@ -3,6 +3,7 @@ package dev.yinghuang.legacyforgebridge.convert;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.MethodNode;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -19,7 +20,7 @@ import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
 /**
- * Composes independently proven 1.7.x block-drop facts into complete runtime-safe plans.
+ * Composes independently proven 1.7.x block-drop facts into complete normal-drop result plans.
  *
  * <p>Missing source overrides are filled only with the verified vanilla {@code Block} defaults:
  * self BlockItem, quantity 1, damage 0, and {@code quantityDroppedWithBonus} delegating to
@@ -28,13 +29,51 @@ import java.util.jar.JarFile;
  * specialized vanilla/Forge block class, inherited drop behavior is unknown here and the block is
  * kept incomplete rather than guessed.</p>
  *
- * <p>Likewise, a source-owned {@code quantityDroppedWithBonus} override is an explicit safety gate:
- * this compiler does not currently translate fortune-dependent quantity behavior, so such a block
- * cannot receive a runtime drop plan.</p>
+ * <p>A plan is still not a complete modern harvest runtime. Source-owned overrides around the
+ * surrounding Forge harvest/drop path are rejected here, but harvest eligibility, silk-touch
+ * stacked-item semantics and explosion drop chance still require separate proof before a plan may
+ * drive modern gameplay drops.</p>
  */
 public final class LegacyBlockDropPlanCompiler {
     private static final String VANILLA_BLOCK = "net/minecraft/block/Block";
     private static final List<Integer> ZERO_DAMAGE = Collections.nCopies(16, 0);
+    private static final List<DropPathSpec> DROP_PATH_SPECS = List.of(
+            new DropPathSpec(
+                    "getDrops(World,...)",
+                    Set.of("getDrops"),
+                    "(Lnet/minecraft/world/World;IIIII)Ljava/util/ArrayList;"
+            ),
+            new DropPathSpec(
+                    "dropBlockAsItem",
+                    Set.of("dropBlockAsItem", "func_149697_b"),
+                    "(Lnet/minecraft/world/World;IIIII)V"
+            ),
+            new DropPathSpec(
+                    "dropBlockAsItemWithChance",
+                    Set.of("dropBlockAsItemWithChance", "func_149690_a"),
+                    "(Lnet/minecraft/world/World;IIIIFI)V"
+            ),
+            new DropPathSpec(
+                    "harvestBlock",
+                    Set.of("harvestBlock", "func_149636_a"),
+                    "(Lnet/minecraft/world/World;Lnet/minecraft/entity/player/EntityPlayer;IIII)V"
+            ),
+            new DropPathSpec(
+                    "canSilkHarvest",
+                    Set.of("canSilkHarvest", "func_149700_E"),
+                    "()Z"
+            ),
+            new DropPathSpec(
+                    "canSilkHarvest(World,...)",
+                    Set.of("canSilkHarvest"),
+                    "(Lnet/minecraft/world/World;Lnet/minecraft/entity/player/EntityPlayer;IIII)Z"
+            ),
+            new DropPathSpec(
+                    "createStackedBlock",
+                    Set.of("createStackedBlock", "func_149644_j"),
+                    "(I)Lnet/minecraft/item/ItemStack;"
+            )
+    );
 
     public enum ItemKind { SELF_BLOCK_ITEM, REGISTERED_ITEM, REGISTERED_BLOCK_ITEM, NONE }
 
@@ -62,7 +101,7 @@ public final class LegacyBlockDropPlanCompiler {
     ) {
         public Plan {
             itemDamageByBlockMeta = List.copyOf(itemDamageByBlockMeta);
-            platformDefaults = Set.copyOf(platformDefaults);
+            platformDefaults = Collections.unmodifiableSet(new LinkedHashSet<>(platformDefaults));
             if (quantity < 0) throw new IllegalArgumentException("Negative drop quantity");
             if (itemDamageByBlockMeta.size() != 16) throw new IllegalArgumentException("Expected 16 legacy metadata states");
         }
@@ -118,6 +157,7 @@ public final class LegacyBlockDropPlanCompiler {
             if (externalBase == null) {
                 reasons.add("source hierarchy could not prove its first external superclass");
             }
+            reasons.addAll(sourceOwnedDropPathOverrides(classes, registration.implementationClass()));
 
             if (callbacks.contains(LegacyBlockBehaviorAnalyzer.CallbackKind.QUANTITY_DROPPED_WITH_BONUS)) {
                 reasons.add("source overrides quantityDroppedWithBonus; fortune-dependent quantity is not compiled");
@@ -200,6 +240,30 @@ public final class LegacyBlockDropPlanCompiler {
         return new Analysis(plans, incomplete, List.copyOf(diagnostics));
     }
 
+    private static List<String> sourceOwnedDropPathOverrides(
+            Map<String, ClassNode> classes,
+            String implementationClass
+    ) {
+        if (implementationClass == null || implementationClass.isBlank()) return List.of();
+        LinkedHashSet<String> reasons = new LinkedHashSet<>();
+        String current = implementationClass;
+        Set<String> visited = new LinkedHashSet<>();
+        while (current != null && visited.add(current)) {
+            ClassNode node = classes.get(current);
+            if (node == null) break;
+            for (DropPathSpec spec : DROP_PATH_SPECS) {
+                for (MethodNode method : node.methods) {
+                    if (!spec.matches(method)) continue;
+                    reasons.add("source overrides " + spec.label()
+                            + "; surrounding harvest/drop path is not compiled");
+                    break;
+                }
+            }
+            current = node.superName;
+        }
+        return List.copyOf(reasons);
+    }
+
     private static String firstExternalSuperclass(Map<String, ClassNode> classes, String implementationClass) {
         if (implementationClass == null || implementationClass.isBlank()) return null;
         String current = implementationClass;
@@ -229,11 +293,20 @@ public final class LegacyBlockDropPlanCompiler {
                     classes.put(node.name, node);
                 } catch (RuntimeException ignored) {
                     // The constituent analyzers own malformed-class diagnostics. An unreadable
-                    // hierarchy cannot receive a default-backed runtime-safe plan.
+                    // hierarchy cannot receive a default-backed normal-drop plan.
                 }
             }
         }
         return classes;
+    }
+
+    private record DropPathSpec(String label, Set<String> names, String descriptor) {
+        boolean matches(MethodNode method) {
+            return method != null
+                    && (method.access & Opcodes.ACC_STATIC) == 0
+                    && names.contains(method.name)
+                    && descriptor.equals(method.desc);
+        }
     }
 
     private record BlockKey(String legacyNamespace, String registryName) { }
