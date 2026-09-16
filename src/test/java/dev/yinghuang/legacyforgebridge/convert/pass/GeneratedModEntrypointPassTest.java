@@ -68,6 +68,7 @@ class GeneratedModEntrypointPassTest {
         assertTrue(interfaces.contains("net/fabricmc/api/ClientModInitializer"));
         assertTrue(methods.contains("onInitialize()V"));
         assertTrue(methods.contains("onInitializeClient()V"));
+        assertTrue(clientCalls.contains("dev/yinghuang/legacyforgebridge/render/ConvertedSeatBedPresentationRuntime#initializeMod(Ljava/lang/String;)V"));
         assertTrue(clientCalls.contains("dev/yinghuang/legacyforgebridge/render/ConvertedPlantPresentationRuntime#initializeMod(Ljava/lang/String;)V"));
     }
 
