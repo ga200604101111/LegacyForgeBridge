@@ -47,15 +47,28 @@ instructions before `ClientRegistry.registerTileEntity(...)` to recover:
 Exact Bamboo registers several TileEntity renderers consecutively. A fixed backward window can see
 constants from the previous registration and falsely create multiple candidates.
 
-`LegacyDirectCallArguments` now evaluates the ASM source frame at the actual static invocation and
-accepts only three direct argument provenances:
+`LegacyDirectCallArguments` now first proves the canonical call-local javac sequence immediately
+before the target invocation:
 
 ```text
-Class literal + String literal + NEW renderer
+LDC TileEntity.class
+LDC "client-id"
+NEW Renderer
+DUP
+INVOKESPECIAL Renderer.<init>()V
+INVOKESTATIC ClientRegistry.registerTileEntity(...)
 ```
 
-Consecutive calls therefore cannot leak values into one another. Unknown/dataflow-heavy argument
-construction remains rejected.
+Labels, line numbers and frame nodes may appear between those executable instructions, but no other
+executable instruction may intervene. This local sequence cannot consume constants from a previous
+registration. For equivalent direct shapes that are not canonical, the helper retains an ASM
+`SourceInterpreter` frame proof as a fallback when complete verifier metadata is available.
+
+The canonical proof is also important for synthetic analyzer fixtures: hand-built ASM test methods
+do not necessarily carry production `maxStack`/frame metadata and therefore should not require a
+successful verifier analysis when their direct push sequence is already exact and local.
+
+Unknown/dataflow-heavy argument construction remains rejected.
 
 ## 3. Scoped Item.setHasSubtypes mutations
 
@@ -75,7 +88,7 @@ ItemBlock is still fail-closed unless separately compiled.
 
 ## Exact-corpus validation after the fixes
 
-Targeted analyzer execution against the checksum-pinned Bamboo JAR now proves:
+Targeted analyzer execution against the checksum-pinned Bamboo JAR proves:
 
 ```text
 MillStone processor rules = 1
@@ -104,6 +117,7 @@ other unresolved proof remain blocked.
 ## Regression coverage
 
 - consecutive direct call arguments cannot cross-contaminate;
+- canonical call-local proof works even for synthetic ASM methods without production verifier metadata;
 - raw `World.getTileEntity` GUI handoff is accepted only when the GUI constructor itself performs
   the concrete narrowing proof;
 - an unrelated constructor-local custom ItemBlock subtype mutation no longer invalidates default
@@ -114,7 +128,7 @@ other unresolved proof remain blocked.
 
 ```text
 VERSION = 0.2.0-alpha.27
-CONVERTER_REVISION = 2026-09-16.49
+CONVERTER_REVISION = 2026-09-16.50
 ```
 
 The whole Bamboo candidate remains `PARTIAL` and non-installable until the wider runtime semantics,
