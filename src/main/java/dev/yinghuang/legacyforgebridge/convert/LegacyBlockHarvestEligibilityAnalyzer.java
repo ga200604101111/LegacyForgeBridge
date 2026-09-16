@@ -20,15 +20,15 @@ import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
 /**
- * Proves whether a source-owned Minecraft/Forge 1.7.10 Block hierarchy customizes harvest
- * eligibility before LegacyForgeBridge attempts to reproduce the platform/tool decision.
+ * Proves source-owned Minecraft/Forge 1.7.10 Block harvest customization boundaries.
  *
- * <p>This analyzer deliberately does not claim complete harvest equivalence. Forge 1.7.10
- * {@code Block.canHarvestBlock(player, metadata)} delegates to {@code ForgeHooks.canHarvestBlock},
- * whose answer also depends on material, held-item tool classes/levels and the player fallback.
- * Those platform facts remain a separate runtime proof. This class only establishes that the
- * source mod did not replace the Block-side eligibility callbacks or mutate the per-metadata
- * harvest-tool table through {@code setHarvestLevel}.</p>
+ * <p>The complete tool/player route rejects source overrides of the Block harvest callbacks and
+ * source mutations of the per-metadata harvest-tool table. The Material fast-path is narrower:
+ * Forge 1.7.10 checks {@code block.getMaterial().isToolNotRequired()} before consulting
+ * {@code getHarvestTool}, {@code getHarvestLevel}, the held item or {@code player.canHarvestBlock}.
+ * Therefore the fast-path source proof only needs to exclude source overrides that can replace
+ * {@code canHarvestBlock} itself or change {@code getMaterial}. This distinction lets later proof
+ * stages admit exact no-tool-required Materials without pretending the tool route is compiled.</p>
  */
 public final class LegacyBlockHarvestEligibilityAnalyzer {
     private static final String VANILLA_BLOCK = "net/minecraft/block/Block";
@@ -36,27 +36,32 @@ public final class LegacyBlockHarvestEligibilityAnalyzer {
             new MethodSpec(
                     "canHarvestBlock",
                     Set.of("canHarvestBlock"),
-                    "(Lnet/minecraft/entity/player/EntityPlayer;I)Z"
+                    "(Lnet/minecraft/entity/player/EntityPlayer;I)Z",
+                    true
             ),
             new MethodSpec(
                     "getHarvestTool",
                     Set.of("getHarvestTool"),
-                    "(I)Ljava/lang/String;"
+                    "(I)Ljava/lang/String;",
+                    false
             ),
             new MethodSpec(
                     "getHarvestLevel",
                     Set.of("getHarvestLevel"),
-                    "(I)I"
+                    "(I)I",
+                    false
             ),
             new MethodSpec(
                     "isToolEffective",
                     Set.of("isToolEffective"),
-                    "(Ljava/lang/String;I)Z"
+                    "(Ljava/lang/String;I)Z",
+                    false
             ),
             new MethodSpec(
                     "getMaterial",
                     Set.of("getMaterial", "func_149688_o"),
-                    "()Lnet/minecraft/block/material/Material;"
+                    "()Lnet/minecraft/block/material/Material;",
+                    true
             )
     );
     private static final Set<String> SET_HARVEST_LEVEL_DESCRIPTORS = Set.of(
@@ -69,9 +74,14 @@ public final class LegacyBlockHarvestEligibilityAnalyzer {
             String legacyNamespace,
             String implementationClass,
             boolean sourceCustomizationFree,
-            List<String> reasons
+            List<String> reasons,
+            boolean materialFastPathSourceSafe,
+            List<String> materialFastPathReasons
     ) {
-        public Proof { reasons = List.copyOf(reasons); }
+        public Proof {
+            reasons = List.copyOf(reasons);
+            materialFastPathReasons = List.copyOf(materialFastPathReasons);
+        }
     }
 
     public record Analysis(List<Proof> proofs, List<String> diagnostics) {
@@ -88,13 +98,18 @@ public final class LegacyBlockHarvestEligibilityAnalyzer {
 
         for (LegacyRegistryAnalyzer.Registration block : registry.blocks()) {
             LinkedHashSet<String> reasons = new LinkedHashSet<>();
+            LinkedHashSet<String> fastPathReasons = new LinkedHashSet<>();
             String externalBase = firstExternalSuperclass(classes, block.implementationClass());
             boolean directBlockDefaults = VANILLA_BLOCK.equals(externalBase);
             if (externalBase == null) {
-                reasons.add("source hierarchy could not prove its first external superclass");
+                String reason = "source hierarchy could not prove its first external superclass";
+                reasons.add(reason);
+                fastPathReasons.add(reason);
             } else if (!directBlockDefaults) {
-                reasons.add("external superclass " + externalBase
-                        + " may customize harvest eligibility");
+                String reason = "external superclass " + externalBase
+                        + " may customize harvest eligibility";
+                reasons.add(reason);
+                fastPathReasons.add(reason);
             }
 
             String current = block.implementationClass();
@@ -105,10 +120,11 @@ public final class LegacyBlockHarvestEligibilityAnalyzer {
                 for (MethodNode method : node.methods) {
                     if ((method.access & Opcodes.ACC_STATIC) == 0) {
                         for (MethodSpec spec : HARVEST_CALLBACKS) {
-                            if (spec.matches(method)) {
-                                reasons.add("source overrides " + spec.label()
-                                        + "; harvest eligibility callback is not compiled");
-                            }
+                            if (!spec.matches(method)) continue;
+                            String reason = "source overrides " + spec.label()
+                                    + "; harvest eligibility callback is not compiled";
+                            reasons.add(reason);
+                            if (spec.materialFastPathRelevant()) fastPathReasons.add(reason);
                         }
                     }
                     for (AbstractInsnNode instruction : method.instructions) {
@@ -128,7 +144,9 @@ public final class LegacyBlockHarvestEligibilityAnalyzer {
                     block.legacyNamespace(),
                     block.implementationClass(),
                     directBlockDefaults && reasons.isEmpty(),
-                    List.copyOf(reasons)
+                    List.copyOf(reasons),
+                    directBlockDefaults && fastPathReasons.isEmpty(),
+                    List.copyOf(fastPathReasons)
             ));
         }
 
@@ -167,7 +185,12 @@ public final class LegacyBlockHarvestEligibilityAnalyzer {
         return classes;
     }
 
-    private record MethodSpec(String label, Set<String> names, String descriptor) {
+    private record MethodSpec(
+            String label,
+            Set<String> names,
+            String descriptor,
+            boolean materialFastPathRelevant
+    ) {
         boolean matches(MethodNode method) {
             return names.contains(method.name) && descriptor.equals(method.desc);
         }

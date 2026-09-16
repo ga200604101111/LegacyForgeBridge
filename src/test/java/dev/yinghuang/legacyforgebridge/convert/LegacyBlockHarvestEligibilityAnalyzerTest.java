@@ -22,7 +22,7 @@ class LegacyBlockHarvestEligibilityAnalyzerTest {
     @TempDir Path tempDir;
 
     @Test
-    void provesOnlyDirectBlockHierarchiesWithoutSourceHarvestCustomization() throws Exception {
+    void separatesMaterialFastPathSafetyFromTheGeneralToolRoute() throws Exception {
         Path jar = tempDir.resolve("HarvestEligibilityProof.jar");
         try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(jar))) {
             put(out, "foreign/harvestproof/Plain.class", directBlock("foreign/harvestproof/Plain", Kind.PLAIN));
@@ -34,6 +34,8 @@ class LegacyBlockHarvestEligibilityAnalyzerTest {
                     directBlock("foreign/harvestproof/CustomTool", Kind.HARVEST_TOOL));
             put(out, "foreign/harvestproof/HarvestLevelSetter.class",
                     directBlock("foreign/harvestproof/HarvestLevelSetter", Kind.SET_HARVEST_LEVEL));
+            put(out, "foreign/harvestproof/CustomMaterial.class",
+                    directBlock("foreign/harvestproof/CustomMaterial", Kind.GET_MATERIAL));
             put(out, "foreign/harvestproof/Specialized.class",
                     child("foreign/harvestproof/Specialized", "net/minecraft/block/BlockOre"));
             put(out, "foreign/harvestproof/Bootstrap.class", bootstrap());
@@ -44,27 +46,43 @@ class LegacyBlockHarvestEligibilityAnalyzerTest {
         Map<String, LegacyBlockHarvestEligibilityAnalyzer.Proof> proofs = analysis.proofs().stream()
                 .collect(Collectors.toMap(LegacyBlockHarvestEligibilityAnalyzer.Proof::registryName, value -> value));
 
-        assertEquals(5, proofs.size(), String.join("\n", analysis.diagnostics()));
+        assertEquals(6, proofs.size(), String.join("\n", analysis.diagnostics()));
 
         var plain = proofs.get("plain");
         assertTrue(plain.sourceCustomizationFree());
         assertTrue(plain.reasons().isEmpty());
+        assertTrue(plain.materialFastPathSourceSafe());
+        assertTrue(plain.materialFastPathReasons().isEmpty());
 
         var inherited = proofs.get("inherited_custom");
         assertFalse(inherited.sourceCustomizationFree());
+        assertFalse(inherited.materialFastPathSourceSafe());
         assertTrue(inherited.reasons().stream().anyMatch(reason -> reason.contains("canHarvestBlock")));
+        assertTrue(inherited.materialFastPathReasons().stream().anyMatch(reason -> reason.contains("canHarvestBlock")));
 
         var tool = proofs.get("custom_tool");
         assertFalse(tool.sourceCustomizationFree());
+        assertTrue(tool.materialFastPathSourceSafe());
         assertTrue(tool.reasons().stream().anyMatch(reason -> reason.contains("getHarvestTool")));
+        assertTrue(tool.materialFastPathReasons().isEmpty());
 
         var setter = proofs.get("harvest_level_setter");
         assertFalse(setter.sourceCustomizationFree());
+        assertTrue(setter.materialFastPathSourceSafe());
         assertTrue(setter.reasons().stream().anyMatch(reason -> reason.contains("setHarvestLevel")));
+        assertTrue(setter.materialFastPathReasons().isEmpty());
+
+        var material = proofs.get("custom_material");
+        assertFalse(material.sourceCustomizationFree());
+        assertFalse(material.materialFastPathSourceSafe());
+        assertTrue(material.reasons().stream().anyMatch(reason -> reason.contains("getMaterial")));
+        assertTrue(material.materialFastPathReasons().stream().anyMatch(reason -> reason.contains("getMaterial")));
 
         var specialized = proofs.get("specialized");
         assertFalse(specialized.sourceCustomizationFree());
+        assertFalse(specialized.materialFastPathSourceSafe());
         assertTrue(specialized.reasons().stream().anyMatch(reason -> reason.contains("BlockOre")));
+        assertTrue(specialized.materialFastPathReasons().stream().anyMatch(reason -> reason.contains("BlockOre")));
     }
 
     private static byte[] directBlock(String owner, Kind kind) {
@@ -94,6 +112,10 @@ class LegacyBlockHarvestEligibilityAnalyzerTest {
             MethodVisitor method = writer.visitMethod(Opcodes.ACC_PUBLIC, "getHarvestTool",
                     "(I)Ljava/lang/String;", null, null);
             method.visitCode(); method.visitLdcInsn("axe"); method.visitInsn(Opcodes.ARETURN); end(method);
+        } else if (kind == Kind.GET_MATERIAL) {
+            MethodVisitor method = writer.visitMethod(Opcodes.ACC_PUBLIC, "getMaterial",
+                    "()Lnet/minecraft/block/material/Material;", null, null);
+            method.visitCode(); method.visitInsn(Opcodes.ACONST_NULL); method.visitInsn(Opcodes.ARETURN); end(method);
         }
         writer.visitEnd();
         return writer.toByteArray();
@@ -120,6 +142,7 @@ class LegacyBlockHarvestEligibilityAnalyzerTest {
         register(method, "foreign/harvestproof/InheritedCustom", "inherited_custom");
         register(method, "foreign/harvestproof/CustomTool", "custom_tool");
         register(method, "foreign/harvestproof/HarvestLevelSetter", "harvest_level_setter");
+        register(method, "foreign/harvestproof/CustomMaterial", "custom_material");
         register(method, "foreign/harvestproof/Specialized", "specialized");
         method.visitInsn(Opcodes.RETURN); end(method); writer.visitEnd(); return writer.toByteArray();
     }
@@ -139,5 +162,5 @@ class LegacyBlockHarvestEligibilityAnalyzerTest {
         out.putNextEntry(new JarEntry(name)); out.write(bytes); out.closeEntry();
     }
 
-    private enum Kind { PLAIN, CAN_HARVEST, HARVEST_TOOL, SET_HARVEST_LEVEL }
+    private enum Kind { PLAIN, CAN_HARVEST, HARVEST_TOOL, SET_HARVEST_LEVEL, GET_MATERIAL }
 }
