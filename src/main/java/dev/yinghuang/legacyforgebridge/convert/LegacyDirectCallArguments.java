@@ -8,6 +8,13 @@ import org.objectweb.asm.tree.LdcInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.TypeInsnNode;
+import org.objectweb.asm.tree.LabelNode;
+import org.objectweb.asm.tree.JumpInsnNode;
+import org.objectweb.asm.tree.TableSwitchInsnNode;
+import org.objectweb.asm.tree.LookupSwitchInsnNode;
+
+import java.util.HashSet;
+import java.util.Set;
 import org.objectweb.asm.tree.analysis.Analyzer;
 import org.objectweb.asm.tree.analysis.AnalyzerException;
 import org.objectweb.asm.tree.analysis.Frame;
@@ -30,7 +37,9 @@ final class LegacyDirectCallArguments {
     static ClassStringNew classStringNew(ClassNode owner, MethodNode method, MethodInsnNode call) {
         if (owner == null || method == null || call == null || call.getOpcode() != Opcodes.INVOKESTATIC) return null;
 
-        ClassStringNew canonical = canonicalClassStringNew(call);
+        if (!method.instructions.contains(call)
+                || !"(Ljava/lang/Class;Ljava/lang/String;Lnet/minecraft/client/renderer/tileentity/TileEntitySpecialRenderer;)V".equals(call.desc)) return null;
+        ClassStringNew canonical = canonicalClassStringNew(method, call);
         if (canonical != null) return canonical;
 
         int instructionIndex = method.instructions.indexOf(call);
@@ -61,7 +70,7 @@ final class LegacyDirectCallArguments {
      * nodes are skipped, but no unrelated executable instruction may appear between the pushes and
      * the target invocation.
      */
-    private static ClassStringNew canonicalClassStringNew(MethodInsnNode call) {
+    private static ClassStringNew canonicalClassStringNew(MethodNode method, MethodInsnNode call) {
         AbstractInsnNode initInsn = previousReal(call);
         if (!(initInsn instanceof MethodInsnNode init)
                 || init.getOpcode() != Opcodes.INVOKESPECIAL
@@ -92,6 +101,21 @@ final class LegacyDirectCallArguments {
             return null;
         }
 
+        // Metadata labels are harmless only when no branch/handler can enter mid-expression.
+        Set<LabelNode> targets = new HashSet<>();
+        for (AbstractInsnNode insn : method.instructions) {
+            if (insn instanceof JumpInsnNode jump) targets.add(jump.label);
+            if (insn instanceof TableSwitchInsnNode table) {
+                targets.add(table.dflt); targets.addAll(table.labels);
+            }
+            if (insn instanceof LookupSwitchInsnNode lookup) {
+                targets.add(lookup.dflt); targets.addAll(lookup.labels);
+            }
+        }
+        for (var handler : method.tryCatchBlocks) targets.add(handler.handler);
+        for (AbstractInsnNode insn = classInsn.getNext(); insn != call; insn = insn.getNext()) {
+            if (insn == null || targets.contains(insn)) return null;
+        }
         return new ClassStringNew(type.getInternalName(), text, created.desc);
     }
 

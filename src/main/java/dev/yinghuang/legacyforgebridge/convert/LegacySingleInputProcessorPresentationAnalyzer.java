@@ -125,7 +125,7 @@ public final class LegacySingleInputProcessorPresentationAnalyzer {
         if(gui==null||!GUI_CONTAINER.equals(gui.superName))return false;
         MethodNode constructor=ownMethod(gui,Set.of("<init>"),
                 "(Lnet/minecraft/entity/player/InventoryPlayer;Lnet/minecraft/tileentity/TileEntity;)V");
-        if(constructor==null||!hasType(constructor,Opcodes.CHECKCAST,tileClass))return false;
+        if(!LegacyGuiTileHandoff.narrowsToField(gui,constructor,tileClass))return false;
         boolean container=false;
         for(AbstractInsnNode insn:constructor.instructions)if(insn instanceof TypeInsnNode type&&type.getOpcode()==Opcodes.NEW){
             // The exact class hierarchy is checked in findGuiClass; here only prove the GUI owns a source container.
@@ -184,25 +184,15 @@ public final class LegacySingleInputProcessorPresentationAnalyzer {
                 if(insn instanceof MethodInsnNode call&&call.getOpcode()==Opcodes.INVOKESPECIAL&&call.name.equals("<init>")
                         &&call.desc.equals("(Lnet/minecraft/entity/player/InventoryPlayer;Lnet/minecraft/tileentity/TileEntity;)V")
                         &&inherits(classes,call.owner,GUI_CONTAINER)
-                        &&hasCallBetween(start,insn,"net/minecraft/world/World",
-                        Set.of("func_147438_o","getTileEntity"),"(III)Lnet/minecraft/tileentity/TileEntity;")){
-                    // The handler may intentionally pass the generic TileEntity value through unchanged.
-                    // canonicalGui() separately proves that the GUI constructor narrows that exact value to
-                    // the source TileEntity class before storing/using it, so requiring a redundant cast in
-                    // the IGuiHandler case would reject valid Forge 1.7 bytecode such as Bamboo MillStone.
+                        &&LegacyGuiTileHandoff.fromWorld(owner,method,call,tileClass)){
+                    // Trace the actual operand, not just a lookup appearing somewhere in the case.
+                    // canonicalGui() independently proves constructor-argument-to-field narrowing.
                     candidates.add(call.owner);
                 }
                 if(insn.getOpcode()==Opcodes.ARETURN)break;
             }
         }
         return candidates.size()==1?candidates.iterator().next():null;
-    }
-
-    private static boolean hasCallBetween(AbstractInsnNode start,AbstractInsnNode end,String owner,Set<String> names,String descriptor){
-        for(AbstractInsnNode insn=start;insn!=null&&insn!=end;insn=insn.getNext())
-            if(insn instanceof MethodInsnNode call&&call.owner.equals(owner)&&names.contains(call.name)
-                    &&call.desc.equals(descriptor))return true;
-        return false;
     }
 
     private static RegisteredRenderer findRendererRegistration(Map<String,ClassNode> classes,String tileClass,String tileId){
@@ -215,7 +205,9 @@ public final class LegacySingleInputProcessorPresentationAnalyzer {
                         ||!call.desc.equals("(Ljava/lang/Class;Ljava/lang/String;Lnet/minecraft/client/renderer/tileentity/TileEntitySpecialRenderer;)V"))continue;
                 LegacyDirectCallArguments.ClassStringNew arguments=
                         LegacyDirectCallArguments.classStringNew(owner,method,call);
-                if(arguments!=null&&arguments.classInternalName().equals(tileClass)
+                // An unresolved registration could overwrite this tile's renderer; do not ignore it.
+                if(arguments==null)return null;
+                if(arguments.classInternalName().equals(tileClass)
                         &&arguments.stringValue().equals(tileId)
                         &&inherits(classes,arguments.newTypeInternalName(),TESR)){
                     renderers.add(arguments.newTypeInternalName());

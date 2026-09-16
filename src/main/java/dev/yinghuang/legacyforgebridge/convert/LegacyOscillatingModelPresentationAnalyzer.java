@@ -78,7 +78,9 @@ public final class LegacyOscillatingModelPresentationAnalyzer {
                         ||!call.desc.equals("(Ljava/lang/Class;Ljava/lang/String;Lnet/minecraft/client/renderer/tileentity/TileEntitySpecialRenderer;)V"))continue;
                 LegacyDirectCallArguments.ClassStringNew arguments=
                         LegacyDirectCallArguments.classStringNew(owner,method,call);
-                if(arguments!=null&&arguments.classInternalName().equals(tile)
+                // An unresolved registration could overwrite this tile's renderer; do not ignore it.
+                if(arguments==null)return null;
+                if(arguments.classInternalName().equals(tile)
                         &&inherits(classes,arguments.newTypeInternalName(),TESR)){
                     found.add(new Registration(arguments.newTypeInternalName(),arguments.stringValue()));
                 }
