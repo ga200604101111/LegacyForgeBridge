@@ -38,20 +38,25 @@ import java.util.jar.JarFile;
  *
  * <p>This analyzer therefore treats eligibility and stacked-item construction as separate proofs.
  * Source overrides of the silk callbacks, render-normal check, metadata tile-entity check or
- * stacked-item callback fail closed. A source class that directly implements
- * {@code ITileEntityProvider} is still fully provable: the Forge default simply disables silk
- * harvest for every metadata value.</p>
+ * stacked-item callback normally fail closed. One deliberately narrow render override is still
+ * provable: an effective {@code renderAsNormalBlock()} body that is exactly {@code false}. Forge's
+ * short-circuit {@code &&} then proves silk harvest disabled without needing tile-entity or stacked
+ * item metadata semantics. A source class that directly implements {@code ITileEntityProvider} is
+ * also fully provable through the ordinary default branch.</p>
  */
 public final class LegacyBlockSilkTouchAnalyzer {
     private static final String VANILLA_BLOCK = "net/minecraft/block/Block";
     private static final String ITEM = "net/minecraft/item/Item";
     private static final String ITEM_BLOCK = "net/minecraft/item/ItemBlock";
     private static final String TILE_PROVIDER = "net/minecraft/block/ITileEntityProvider";
+    private static final MethodSpec RENDER_NORMAL = new MethodSpec(
+            "renderAsNormalBlock", Set.of("renderAsNormalBlock", "func_149686_d"), "()Z"
+    );
     private static final List<MethodSpec> ELIGIBILITY_SPECS = List.of(
             new MethodSpec("canSilkHarvest", Set.of("canSilkHarvest", "func_149700_E"), "()Z"),
             new MethodSpec("canSilkHarvest(World,...)", Set.of("canSilkHarvest"),
                     "(Lnet/minecraft/world/World;Lnet/minecraft/entity/player/EntityPlayer;IIII)Z"),
-            new MethodSpec("renderAsNormalBlock", Set.of("renderAsNormalBlock", "func_149686_d"), "()Z"),
+            RENDER_NORMAL,
             new MethodSpec("hasTileEntity(metadata)", Set.of("hasTileEntity"), "(I)Z")
     );
     private static final MethodSpec STACKED = new MethodSpec(
@@ -114,6 +119,9 @@ public final class LegacyBlockSilkTouchAnalyzer {
                         + " may override createStackedBlock");
             }
 
+            MethodNode renderOverride = effectiveMethod(classes, block.implementationClass(), RENDER_NORMAL);
+            boolean renderProvenFalse = constantFalse(renderOverride);
+
             if (block.implementationClass() != null) {
                 String current = block.implementationClass();
                 Set<String> visited = new LinkedHashSet<>();
@@ -121,6 +129,9 @@ public final class LegacyBlockSilkTouchAnalyzer {
                     ClassNode node = classes.get(current);
                     if (node == null) break;
                     for (MethodSpec spec : ELIGIBILITY_SPECS) {
+                        if (renderProvenFalse && (spec == RENDER_NORMAL || "hasTileEntity(metadata)".equals(spec.label()))) {
+                            continue;
+                        }
                         if (declares(node, spec)) {
                             eligibilityReasons.add("source overrides " + spec.label()
                                     + "; Forge default silk eligibility is not proven");
@@ -134,7 +145,7 @@ public final class LegacyBlockSilkTouchAnalyzer {
             }
 
             InterfaceProof tileProvider = proveTileProvider(classes, block.implementationClass());
-            eligibilityReasons.addAll(tileProvider.reasons());
+            if (!renderProvenFalse) eligibilityReasons.addAll(tileProvider.reasons());
 
             if (block.itemBlockClass() != null && !ITEM_BLOCK.equals(block.itemBlockClass())) {
                 stackReasons.add("custom ItemBlock class " + block.itemBlockClass()
@@ -146,8 +157,11 @@ public final class LegacyBlockSilkTouchAnalyzer {
 
             eligibilityReasons = new ArrayList<>(new LinkedHashSet<>(eligibilityReasons));
             stackReasons = new ArrayList<>(new LinkedHashSet<>(stackReasons));
-            boolean eligibilityComplete = directBlockDefaults && eligibilityReasons.isEmpty() && tileProvider.complete();
-            Boolean silkEligible = eligibilityComplete ? !tileProvider.provider() : null;
+            boolean eligibilityComplete = directBlockDefaults && eligibilityReasons.isEmpty()
+                    && (renderProvenFalse || tileProvider.complete());
+            Boolean silkEligible = eligibilityComplete
+                    ? (renderProvenFalse ? Boolean.FALSE : !tileProvider.provider())
+                    : null;
             boolean stackComplete = directBlockDefaults && stackReasons.isEmpty();
             Integer stackedDamage = stackComplete ? 0 : null;
             proofs.add(new Proof(
@@ -270,6 +284,39 @@ public final class LegacyBlockSilkTouchAnalyzer {
             }
         }
         return new InterfaceResult(provider, List.copyOf(reasons));
+    }
+
+    private static MethodNode effectiveMethod(
+            Map<String, ClassNode> classes,
+            String implementationClass,
+            MethodSpec spec
+    ) {
+        String current = implementationClass;
+        Set<String> visited = new LinkedHashSet<>();
+        while (current != null && visited.add(current)) {
+            ClassNode node = classes.get(current);
+            if (node == null) return null;
+            for (MethodNode method : node.methods) {
+                if ((method.access & Opcodes.ACC_STATIC) == 0
+                        && spec.names().contains(method.name)
+                        && spec.descriptor().equals(method.desc)) return method;
+            }
+            current = node.superName;
+        }
+        return null;
+    }
+
+    private static boolean constantFalse(MethodNode method) {
+        if (method == null || (method.access & (Opcodes.ACC_STATIC | Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE)) != 0) {
+            return false;
+        }
+        List<AbstractInsnNode> real = new ArrayList<>();
+        for (AbstractInsnNode instruction : method.instructions) {
+            if (instruction.getOpcode() >= 0) real.add(instruction);
+        }
+        return real.size() == 2
+                && real.get(0).getOpcode() == Opcodes.ICONST_0
+                && real.get(1).getOpcode() == Opcodes.IRETURN;
     }
 
     private static boolean declares(ClassNode owner, MethodSpec spec) {
