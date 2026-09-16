@@ -2,6 +2,7 @@ package dev.yinghuang.legacyforgebridge.convert;
 
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.*;
 
 import java.io.IOException;
@@ -86,6 +87,7 @@ final class LegacySeatBedAsm {
 
     static boolean containsInt(MethodNode m, int expected) { return real(m).stream().anyMatch(i -> Objects.equals(intConstant(i), expected)); }
     static boolean containsFloat(MethodNode m, float expected) { return real(m).stream().anyMatch(i -> { Float v=floatConstant(i); return v!=null&&Float.compare(v,expected)==0; }); }
+    static boolean containsFloat(List<AbstractInsnNode> code, float expected) { return code != null && code.stream().anyMatch(i -> { Float v=floatConstant(i); return v!=null&&Float.compare(v,expected)==0; }); }
     static boolean containsDouble(MethodNode m, double expected) { return real(m).stream().anyMatch(i -> { Double v=doubleConstant(i); return v!=null&&Double.compare(v,expected)==0; }); }
     static boolean containsLong(MethodNode m, long expected) { return real(m).stream().anyMatch(i -> Objects.equals(longConstant(i), expected)); }
     static boolean containsOpcode(MethodNode m, int opcode) { return real(m).stream().anyMatch(i -> i.getOpcode() == opcode); }
@@ -97,6 +99,12 @@ final class LegacySeatBedAsm {
     static int countCallsByDescriptor(MethodNode m, String owner, String desc) { return countCalls(m, owner, desc); }
     static boolean callsName(MethodNode m, String owner, Set<String> names, String desc) {
         if(m!=null) for(AbstractInsnNode i:m.instructions) if(i instanceof MethodInsnNode c&&owner.equals(c.owner)&&desc.equals(c.desc)&&names.contains(c.name)) return true; return false;
+    }
+    static boolean callsName(List<AbstractInsnNode> code, String owner, String name) {
+        if(code!=null) for(AbstractInsnNode i:code) if(i instanceof MethodInsnNode c&&owner.equals(c.owner)&&name.equals(c.name)) return true; return false;
+    }
+    static boolean callsOwner(MethodNode m, String owner) {
+        if(m!=null) for(AbstractInsnNode i:m.instructions) if(i instanceof MethodInsnNode c&&owner.equals(c.owner)) return true; return false;
     }
     static boolean callsHierarchyName(MethodNode m, Map<String,ClassNode> classes, String target, Set<String> names, String desc) {
         if(m!=null) for(AbstractInsnNode i:m.instructions) if(i instanceof MethodInsnNode c&&desc.equals(c.desc)&&names.contains(c.name)&&(target.equals(c.owner)||inherits(classes,c.owner,target))) return true; return false;
@@ -144,6 +152,13 @@ final class LegacySeatBedAsm {
     static Map<String,LegacyRegistryAnalyzer.FieldBinding> bindingMap(LegacyRegistryAnalyzer.Analysis a){Map<String,LegacyRegistryAnalyzer.FieldBinding>m=new LinkedHashMap<>();for(var b:a.fieldBindings())m.put(key(b.owner(),b.name(),b.descriptor()),b);return m;}
     static LegacyRegistryAnalyzer.FieldBinding uniqueBinding(MethodNode m,Map<String,LegacyRegistryAnalyzer.FieldBinding>bindings,LegacyRegistryAnalyzer.Kind kind){Set<LegacyRegistryAnalyzer.FieldBinding>f=new LinkedHashSet<>();if(m!=null)for(AbstractInsnNode i:m.instructions)if(i instanceof FieldInsnNode x&&x.getOpcode()==Opcodes.GETSTATIC){var b=bindings.get(key(x.owner,x.name,x.desc));if(b!=null&&b.kind()==kind)f.add(b);}return f.size()==1?f.iterator().next():null;}
     private static String key(String owner,String name,String desc){return owner+"."+name+":"+desc;}
+
+    static String classConst(AbstractInsnNode i){
+        return i instanceof LdcInsnNode l&&l.cst instanceof Type t&&t.getSort()==Type.OBJECT?t.getInternalName():null;
+    }
+    static String newType(AbstractInsnNode i){
+        return i instanceof TypeInsnNode t&&t.getOpcode()==Opcodes.NEW?t.desc:null;
+    }
 
     private static Integer intConstant(AbstractInsnNode i){if(i==null)return null;return switch(i.getOpcode()){case Opcodes.ICONST_M1->-1;case Opcodes.ICONST_0->0;case Opcodes.ICONST_1->1;case Opcodes.ICONST_2->2;case Opcodes.ICONST_3->3;case Opcodes.ICONST_4->4;case Opcodes.ICONST_5->5;case Opcodes.BIPUSH,Opcodes.SIPUSH->((IntInsnNode)i).operand;case Opcodes.LDC->i instanceof LdcInsnNode l&&l.cst instanceof Integer v?v:null;default->null;};}
     private static Float floatConstant(AbstractInsnNode i){if(i==null)return null;return switch(i.getOpcode()){case Opcodes.FCONST_0->0F;case Opcodes.FCONST_1->1F;case Opcodes.FCONST_2->2F;case Opcodes.LDC->i instanceof LdcInsnNode l&&l.cst instanceof Float v?v:null;default->null;};}
