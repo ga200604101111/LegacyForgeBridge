@@ -24,5 +24,16 @@ class BambooSeatBedExactTest {
         var chair=lifecycle.of(LegacyLifecycleAnalyzer.Kind.ENTITY).stream().filter(reg->reg.arguments().size()>=3&&reg.arguments().get(0) instanceof LegacyLifecycleAnalyzer.TypeValue t&&huton.sourceSeatRuntimeClass().equals(t.internalName())).findFirst().orElseThrow();
         assertInstanceOf(LegacyLifecycleAnalyzer.TextValue.class,chair.arguments().get(1));assertEquals("DummyChair",((LegacyLifecycleAnalyzer.TextValue)chair.arguments().get(1)).value());
         assertInstanceOf(LegacyLifecycleAnalyzer.NumberValue.class,chair.arguments().get(2));assertEquals(23,((LegacyLifecycleAnalyzer.NumberValue)chair.arguments().get(2)).value().intValue());
+
+        LegacySeatBedPresentationAnalyzer.Analysis presentationAnalysis=new LegacySeatBedPresentationAnalyzer().analyze(source,huton);
+        assertTrue(presentationAnalysis.diagnostics().isEmpty(),presentationAnalysis.diagnostics().toString());
+        var presentation=presentationAnalysis.presentation().orElseThrow();
+        assertEquals("ruby/bamboo/render/tileentity/RenderHuton",presentation.sourceRendererClass());
+        assertEquals("ruby/bamboo/render/tileentity/ModelHuton",presentation.sourceModelClass());
+        assertEquals("bamboo:textures/entitys/huton.png",presentation.footTexture());assertEquals("bamboo:textures/entitys/makura.png",presentation.headTexture());
+        assertEquals(64,presentation.imageWidth());assertEquals(32,presentation.imageHeight());assertEquals(4,presentation.parts().size());
+        assertEquals(java.util.List.of("box1","box2"),presentation.footParts());assertEquals(java.util.List.of("box0","box3"),presentation.headParts());
+        assertEquals(java.util.List.of(.5F,0F,.5F,1F),presentation.translateXByDirection());assertEquals(java.util.List.of(1F,.5F,0F,.5F),presentation.translateZByDirection());
+        assertEquals(java.util.List.of(90F,0F,270F,180F),presentation.yawDegreesByDirection());assertTrue(presentation.expandedRenderBoundsProven());
     }
 }
