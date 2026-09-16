@@ -18,6 +18,7 @@ import dev.yinghuang.legacyforgebridge.convert.pass.LegacyBehaviorPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyBlockActivationPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyBlockBehaviorAnalysisPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyBlockDropAnalysisPass;
+import dev.yinghuang.legacyforgebridge.convert.pass.LegacyBlockMaterialProvenancePass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyBlockPlacementPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyBytecodeAuditPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyClassDependencyAnalysisPass;
@@ -119,6 +120,7 @@ public final class LegacyConversionEngine {
             builder.add(new LegacySnowballItemPass());
             builder.add(new LegacyLifecycleAnalysisPass());
             builder.add(new LegacyBlockBehaviorAnalysisPass());
+            builder.add(new LegacyBlockMaterialProvenancePass());
             builder.add(new LegacyBlockDropAnalysisPass());
             builder.add(new LegacyBlockPlacementPass());
             builder.add(new LegacyBlockActivationPass());
