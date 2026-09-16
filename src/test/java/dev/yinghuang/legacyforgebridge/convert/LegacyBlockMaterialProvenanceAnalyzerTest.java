@@ -68,7 +68,7 @@ class LegacyBlockMaterialProvenanceAnalyzerTest {
         var unknown = proofs.get("unknown");
         assertFalse(unknown.complete());
         assertNull(unknown.material());
-        assertTrue(unknown.reasons().stream().anyMatch(reason -> reason.contains("not one direct static Material field")));
+        assertTrue(unknown.reasons().stream().anyMatch(reason -> reason.contains("not one stable direct static Material field")));
 
         var mixed = proofs.get("mixed");
         assertFalse(mixed.complete());
