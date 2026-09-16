@@ -83,7 +83,7 @@ class LegacyBlockMaterialProvenancePassTest {
         assertFalse(unknown.has("material"));
         JsonArray reasons = unknown.getAsJsonArray("reasons");
         assertFalse(reasons.isEmpty());
-        assertTrue(reasons.get(0).getAsString().contains("not one direct static Material field"));
+        assertTrue(reasons.get(0).getAsString().contains("not one stable direct static Material field"));
     }
 
     private ConversionContext context(Path jar) throws Exception {
