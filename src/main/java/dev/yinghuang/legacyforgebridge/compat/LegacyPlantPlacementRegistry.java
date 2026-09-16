@@ -7,6 +7,7 @@ import com.google.gson.JsonParser;
 import dev.yinghuang.legacyforgebridge.LegacyForgeBridge;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyPlantPlacementProofPass;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.food.FoodProperties;
@@ -21,7 +22,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
-/** Runtime registry for source-proven inherited ItemSeeds / ItemSeedFood placement. */
+/** Runtime registry for source-proven inherited ItemSeeds / ItemSeedFood / ItemReed placement. */
 public final class LegacyPlantPlacementRegistry {
     public enum Adapter { SEEDS, SEED_FOOD, REED }
 
@@ -45,6 +46,7 @@ public final class LegacyPlantPlacementRegistry {
     }
 
     private static final Map<Identifier,Rule> RULES = new ConcurrentHashMap<>();
+    private static final Set<Identifier> PLANT_TARGETS = ConcurrentHashMap.newKeySet();
     private static final Set<Identifier> CROP_TARGETS = ConcurrentHashMap.newKeySet();
 
     private LegacyPlantPlacementRegistry() { }
@@ -59,10 +61,11 @@ public final class LegacyPlantPlacementRegistry {
             List<Rule> parsed = parseRules(modId, root, LegacyPlantRuntimeRegistry::rule);
             parsed.forEach(LegacyPlantPlacementRegistry::register);
             if (!parsed.isEmpty()) LegacyForgeBridge.LOGGER.info(
-                    "Loaded converted plant placement runtime: mod={}, seedItems={}, seedFoodItems={}, cropTargets={}",
+                    "Loaded converted plant placement runtime: mod={}, seedItems={}, seedFoodItems={}, reedItems={}, plantTargets={}",
                     modId,
                     parsed.stream().filter(rule -> rule.adapter() == Adapter.SEEDS).count(),
                     parsed.stream().filter(rule -> rule.adapter() == Adapter.SEED_FOOD).count(),
+                    parsed.stream().filter(rule -> rule.adapter() == Adapter.REED).count(),
                     parsed.stream().map(Rule::targetBlockId).distinct().count());
         } catch (Exception exception) {
             LegacyForgeBridge.LOGGER.error("Failed to load converted plant placement runtime for {}", modId, exception);
@@ -70,8 +73,21 @@ public final class LegacyPlantPlacementRegistry {
     }
 
     public static Rule rule(Identifier itemId) { return itemId == null ? null : RULES.get(itemId); }
-    public static boolean hasSeedRuntimeRule(Identifier itemId) { return rule(itemId) != null; }
-    public static boolean cropTargetRuntimeReady(Identifier blockId) { return blockId != null && CROP_TARGETS.contains(blockId); }
+    public static boolean hasRuntimeRule(Identifier itemId) { return rule(itemId) != null; }
+    public static boolean hasSeedRuntimeRule(Identifier itemId) {
+        Rule rule = rule(itemId);
+        return rule != null && isSeedAdapter(rule.adapter());
+    }
+    public static boolean hasReedRuntimeRule(Identifier itemId) {
+        Rule rule = rule(itemId);
+        return rule != null && rule.adapter() == Adapter.REED;
+    }
+    public static boolean plantTargetRuntimeReady(Identifier blockId) {
+        return blockId != null && PLANT_TARGETS.contains(blockId);
+    }
+    public static boolean cropTargetRuntimeReady(Identifier blockId) {
+        return blockId != null && CROP_TARGETS.contains(blockId);
+    }
 
     public static FoodProperties foodProperties(Rule rule) {
         if (rule == null || rule.adapter() != Adapter.SEED_FOOD)
@@ -87,6 +103,21 @@ public final class LegacyPlantPlacementRegistry {
                 && clickedFace == Direction.UP
                 && rule.soilBlockId().equals(clickedBlockId)
                 && aboveAir && canEditClicked && canEditAbove;
+    }
+
+    /**
+     * Exact 1.7 ItemReed target coordinate rule after its clicked-block replacement decision.
+     * Snow-layer side normalization is represented separately by {@link #reedPlacementFace}.
+     */
+    public static BlockPos reedPlacementPos(BlockPos clickedPos, Direction clickedFace, boolean replaceClicked) {
+        if (clickedPos == null || clickedFace == null) throw new IllegalArgumentException("Missing ItemReed hit geometry");
+        return replaceClicked ? clickedPos : clickedPos.relative(clickedFace);
+    }
+
+    /** 1.7 ItemReed forces side=UP only for the one-layer snow replacement case. */
+    public static Direction reedPlacementFace(Direction clickedFace, boolean thinSnowReplacement) {
+        if (clickedFace == null) throw new IllegalArgumentException("Missing ItemReed clicked face");
+        return thinSnowReplacement ? Direction.UP : clickedFace;
     }
 
     static List<Rule> parseRules(String modId, JsonObject root,
@@ -108,7 +139,7 @@ public final class LegacyPlantPlacementRegistry {
             String family = string(value, "family");
             String adapterValue = string(value, "placementAdapter");
             if (itemValue == null || targetValue == null || family == null || adapterValue == null) continue;
-            Identifier itemId, targetId, soilId;
+            Identifier itemId, targetId, soilId = null;
             Adapter adapter;
             Integer nutrition = null;
             Float saturation = null;
@@ -116,10 +147,13 @@ public final class LegacyPlantPlacementRegistry {
                 itemId = Identifier.parse(itemValue);
                 targetId = Identifier.parse(targetValue);
                 adapter = parseAdapter(adapterValue);
-                if (adapter == Adapter.REED) continue; // .35 deliberately does not materialize ItemReed.
                 String soilValue = string(value, "soilBlockId");
-                if (soilValue == null) continue;
-                soilId = Identifier.parse(soilValue);
+                if (adapter == Adapter.REED) {
+                    if (soilValue != null) continue;
+                } else {
+                    if (soilValue == null) continue;
+                    soilId = Identifier.parse(soilValue);
+                }
                 if (adapter == Adapter.SEED_FOOD) {
                     if (!bool(value, "seedFoodPropertiesProofComplete")) continue;
                     nutrition = integer(value, "nutrition");
@@ -128,7 +162,7 @@ public final class LegacyPlantPlacementRegistry {
             } catch (RuntimeException invalid) { continue; }
             if (!modId.equals(itemId.getNamespace()) || !familyMatches(family, adapter)) continue;
             LegacyPlantRuntimeRegistry.Rule plant = targetResolver.apply(targetId);
-            if (plant == null || plant.family() != LegacyPlantRuntimeRegistry.Family.CROPS) continue;
+            if (!targetFamilyMatches(plant, adapter)) continue;
             try { result.add(new Rule(itemId, adapter, targetId, soilId, nutrition, saturation)); }
             catch (IllegalArgumentException ignored) { }
         }
@@ -136,13 +170,14 @@ public final class LegacyPlantPlacementRegistry {
     }
 
     static void registerForTests(Rule rule) { register(rule); }
-    static void clearForTests() { RULES.clear(); CROP_TARGETS.clear(); }
+    static void clearForTests() { RULES.clear(); PLANT_TARGETS.clear(); CROP_TARGETS.clear(); }
 
     private static void register(Rule rule) {
         Rule previous = RULES.putIfAbsent(rule.itemId(), rule);
         if (previous != null && !previous.equals(rule))
             throw new IllegalStateException("Conflicting converted plant placement rule for " + rule.itemId());
-        CROP_TARGETS.add(rule.targetBlockId());
+        PLANT_TARGETS.add(rule.targetBlockId());
+        if (isSeedAdapter(rule.adapter())) CROP_TARGETS.add(rule.targetBlockId());
     }
 
     private static Adapter parseAdapter(String value) {
@@ -158,6 +193,13 @@ public final class LegacyPlantPlacementRegistry {
             case SEEDS -> "seeds".equals(family);
             case SEED_FOOD -> "seed_food".equals(family);
             case REED -> "reed".equals(family);
+        };
+    }
+    private static boolean targetFamilyMatches(LegacyPlantRuntimeRegistry.Rule plant, Adapter adapter) {
+        if (plant == null) return false;
+        return switch (adapter) {
+            case SEEDS, SEED_FOOD -> plant.family() == LegacyPlantRuntimeRegistry.Family.CROPS;
+            case REED -> plant.family() == LegacyPlantRuntimeRegistry.Family.REED;
         };
     }
     private static boolean isSeedAdapter(Adapter adapter) { return adapter == Adapter.SEEDS || adapter == Adapter.SEED_FOOD; }

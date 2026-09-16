@@ -2,6 +2,7 @@ package dev.yinghuang.legacyforgebridge.compat;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.AfterEach;
@@ -23,12 +24,12 @@ class LegacyPlantPlacementRegistryTest {
 
     @AfterEach void clear() { LegacyPlantPlacementRegistry.clearForTests(); }
 
-    @Test void parserEnablesOnlyRuntimeCompleteSeedFamiliesAndPreservesSeedFoodProperties() {
+    @Test void parserEnablesOnlyRuntimeCompletePlantFamiliesAndPreservesSeedFoodProperties() {
         JsonObject root = JsonParser.parseString("""
                 {"schemaVersion":2,"sourceSha256":"sha","sourceProofsAligned":true,"rules":[
                   {"id":"demo:seed","family":"seeds","targetBlockId":"demo:crop","soilBlockId":"minecraft:farmland","topologyProofComplete":true,"inheritedVanillaPlacement":true,"targetPlacementCallbacksInherited":true,"targetProofComplete":true,"soilPlacementProofComplete":true,"seedFoodPropertiesProofComplete":true,"placementProofComplete":true,"placementAdapter":"item_seeds_1_7_10","runtimeComplete":true},
                   {"id":"demo:seed_food","family":"seed_food","targetBlockId":"demo:crop","soilBlockId":"minecraft:farmland","nutrition":3,"saturationModifier":0.4,"topologyProofComplete":true,"inheritedVanillaPlacement":true,"targetPlacementCallbacksInherited":true,"targetProofComplete":true,"soilPlacementProofComplete":true,"seedFoodPropertiesProofComplete":true,"placementProofComplete":true,"placementAdapter":"item_seed_food_1_7_10","runtimeComplete":true},
-                  {"id":"demo:reed_item","family":"reed","targetBlockId":"demo:reed","topologyProofComplete":true,"inheritedVanillaPlacement":true,"targetPlacementCallbacksInherited":true,"targetProofComplete":true,"soilPlacementProofComplete":true,"seedFoodPropertiesProofComplete":true,"placementProofComplete":true,"placementAdapter":"item_reed_1_7_10","runtimeComplete":false},
+                  {"id":"demo:reed_item","family":"reed","targetBlockId":"demo:reed","topologyProofComplete":true,"inheritedVanillaPlacement":true,"targetPlacementCallbacksInherited":true,"targetProofComplete":true,"soilPlacementProofComplete":true,"seedFoodPropertiesProofComplete":true,"placementProofComplete":true,"placementAdapter":"item_reed_1_7_10","runtimeComplete":true},
                   {"id":"other:seed","family":"seeds","targetBlockId":"demo:crop","soilBlockId":"minecraft:farmland","topologyProofComplete":true,"inheritedVanillaPlacement":true,"targetPlacementCallbacksInherited":true,"targetProofComplete":true,"soilPlacementProofComplete":true,"seedFoodPropertiesProofComplete":true,"placementProofComplete":true,"placementAdapter":"item_seeds_1_7_10","runtimeComplete":true}
                 ]}
                 """).getAsJsonObject();
@@ -38,13 +39,17 @@ class LegacyPlantPlacementRegistryTest {
             if (REED.equals(id)) return reedRule();
             return null;
         });
-        assertEquals(2, rules.size());
+        assertEquals(3, rules.size());
         rules.forEach(LegacyPlantPlacementRegistry::registerForTests);
         assertTrue(LegacyPlantPlacementRegistry.hasSeedRuntimeRule(Identifier.parse("demo:seed")));
         assertTrue(LegacyPlantPlacementRegistry.hasSeedRuntimeRule(Identifier.parse("demo:seed_food")));
         assertFalse(LegacyPlantPlacementRegistry.hasSeedRuntimeRule(Identifier.parse("demo:reed_item")));
+        assertTrue(LegacyPlantPlacementRegistry.hasReedRuntimeRule(Identifier.parse("demo:reed_item")));
+        assertTrue(LegacyPlantPlacementRegistry.hasRuntimeRule(Identifier.parse("demo:reed_item")));
         assertTrue(LegacyPlantPlacementRegistry.cropTargetRuntimeReady(CROP));
         assertFalse(LegacyPlantPlacementRegistry.cropTargetRuntimeReady(REED));
+        assertTrue(LegacyPlantPlacementRegistry.plantTargetRuntimeReady(CROP));
+        assertTrue(LegacyPlantPlacementRegistry.plantTargetRuntimeReady(REED));
         var food = LegacyPlantPlacementRegistry.rule(Identifier.parse("demo:seed_food"));
         assertEquals(LegacyPlantPlacementRegistry.Adapter.SEED_FOOD, food.adapter());
         assertEquals(3, food.nutrition());
@@ -52,7 +57,7 @@ class LegacyPlantPlacementRegistryTest {
         assertNotNull(LegacyPlantPlacementRegistry.foodProperties(food));
     }
 
-    @Test void parserRejectsSchemaTargetFamilyAndIncompleteSeedFoodProperties() {
+    @Test void parserRejectsSchemaTargetFamilyReedSoilAndIncompleteSeedFoodProperties() {
         JsonObject wrongTarget = JsonParser.parseString("""
                 {"schemaVersion":2,"sourceProofsAligned":true,"rules":[
                   {"id":"demo:seed","family":"seeds","targetBlockId":"demo:reed","soilBlockId":"minecraft:farmland","topologyProofComplete":true,"inheritedVanillaPlacement":true,"targetPlacementCallbacksInherited":true,"targetProofComplete":true,"soilPlacementProofComplete":true,"seedFoodPropertiesProofComplete":true,"placementProofComplete":true,"placementAdapter":"item_seeds_1_7_10","runtimeComplete":true}
@@ -68,6 +73,13 @@ class LegacyPlantPlacementRegistryTest {
                 ]}
                 """).getAsJsonObject();
         assertTrue(LegacyPlantPlacementRegistry.parseRules("demo", missingFood, id -> cropRule()).isEmpty());
+
+        JsonObject inventedReedSoil = JsonParser.parseString("""
+                {"schemaVersion":2,"sourceProofsAligned":true,"rules":[
+                  {"id":"demo:reed_item","family":"reed","targetBlockId":"demo:reed","soilBlockId":"minecraft:dirt","topologyProofComplete":true,"inheritedVanillaPlacement":true,"targetPlacementCallbacksInherited":true,"targetProofComplete":true,"soilPlacementProofComplete":true,"seedFoodPropertiesProofComplete":true,"placementProofComplete":true,"placementAdapter":"item_reed_1_7_10","runtimeComplete":true}
+                ]}
+                """).getAsJsonObject();
+        assertTrue(LegacyPlantPlacementRegistry.parseRules("demo", inventedReedSoil, id -> reedRule()).isEmpty());
     }
 
     @Test void seedPreconditionsMatch1710ItemSeedsExactly() {
@@ -79,6 +91,15 @@ class LegacyPlantPlacementRegistryTest {
         assertFalse(LegacyPlantPlacementRegistry.canPlantSeed(rule, Direction.UP, FARMLAND, false, true, true));
         assertFalse(LegacyPlantPlacementRegistry.canPlantSeed(rule, Direction.UP, FARMLAND, true, false, true));
         assertFalse(LegacyPlantPlacementRegistry.canPlantSeed(rule, Direction.UP, FARMLAND, true, true, false));
+    }
+
+    @Test void reedHitGeometryMatches1710ItemReedExactly() {
+        BlockPos clicked = new BlockPos(10, 64, -3);
+        assertEquals(clicked, LegacyPlantPlacementRegistry.reedPlacementPos(clicked, Direction.NORTH, true));
+        assertEquals(clicked.north(), LegacyPlantPlacementRegistry.reedPlacementPos(clicked, Direction.NORTH, false));
+        assertEquals(clicked.below(), LegacyPlantPlacementRegistry.reedPlacementPos(clicked, Direction.DOWN, false));
+        assertEquals(Direction.UP, LegacyPlantPlacementRegistry.reedPlacementFace(Direction.NORTH, true));
+        assertEquals(Direction.NORTH, LegacyPlantPlacementRegistry.reedPlacementFace(Direction.NORTH, false));
     }
 
     private static LegacyPlantRuntimeRegistry.Rule cropRule() {

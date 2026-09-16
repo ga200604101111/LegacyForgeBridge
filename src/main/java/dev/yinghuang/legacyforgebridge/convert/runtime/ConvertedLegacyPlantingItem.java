@@ -12,16 +12,19 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.SnowLayerBlock;
+import net.minecraft.world.level.block.state.BlockState;
 
-/** Exact inherited Minecraft 1.7.10 ItemSeeds / ItemSeedFood planting path. */
+/** Exact inherited Minecraft 1.7.10 ItemSeeds / ItemSeedFood / ItemReed planting path. */
 public final class ConvertedLegacyPlantingItem extends Item {
     private final Identifier convertedId;
 
     public ConvertedLegacyPlantingItem(Identifier convertedId, Properties properties) {
         super(properties);
         this.convertedId = convertedId;
-        if (!LegacyPlantPlacementRegistry.hasSeedRuntimeRule(convertedId)) {
-            throw new IllegalStateException("Missing proven seed placement runtime rule for " + convertedId);
+        if (!LegacyPlantPlacementRegistry.hasRuntimeRule(convertedId)) {
+            throw new IllegalStateException("Missing proven plant placement runtime rule for " + convertedId);
         }
     }
 
@@ -36,8 +39,16 @@ public final class ConvertedLegacyPlantingItem extends Item {
         ItemStack stack = context.getItemInHand();
         BlockPos clicked = context.getClickedPos();
         Direction face = context.getClickedFace();
-        BlockPos above = clicked.above();
 
+        return switch (rule.adapter()) {
+            case SEEDS, SEED_FOOD -> useSeed(rule, level, player, stack, clicked, face);
+            case REED -> useReed(rule, level, player, stack, clicked, face);
+        };
+    }
+
+    private static InteractionResult useSeed(LegacyPlantPlacementRegistry.Rule rule, Level level, Player player,
+                                             ItemStack stack, BlockPos clicked, Direction face) {
+        BlockPos above = clicked.above();
         boolean canEditClicked = player.mayUseItemAt(clicked, face, stack);
         boolean canEditAbove = player.mayUseItemAt(above, face, stack);
         if (!canEditClicked || !canEditAbove) return InteractionResult.FAIL;
@@ -47,15 +58,51 @@ public final class ConvertedLegacyPlantingItem extends Item {
                 rule, face, clickedBlockId, level.isEmptyBlock(above), true, true)) {
             return InteractionResult.PASS;
         }
-        if (!BuiltInRegistries.BLOCK.containsKey(rule.targetBlockId())) return InteractionResult.FAIL;
-        Block target = BuiltInRegistries.BLOCK.getValue(rule.targetBlockId());
-        if (!(target instanceof ConvertedLegacyPlantBlock)) return InteractionResult.FAIL;
+        Block target = requiredTarget(rule);
+        if (target == null) return InteractionResult.FAIL;
 
-        // 1.7 ItemSeeds/ItemSeedFood always place raw metadata zero and decrement after the set call.
+        // 1.7 ItemSeeds/ItemSeedFood place raw metadata zero and consume after the set call.
         if (!level.isClientSide()) {
             level.setBlock(above, ConvertedLegacyBlock.withLegacyMeta(target.defaultBlockState(), 0), 3);
             stack.shrink(1);
         }
         return InteractionResult.SUCCESS;
+    }
+
+    private static InteractionResult useReed(LegacyPlantPlacementRegistry.Rule rule, Level level, Player player,
+                                             ItemStack stack, BlockPos clicked, Direction clickedFace) {
+        BlockState clickedState = level.getBlockState(clicked);
+        boolean thinSnow = clickedState.is(Blocks.SNOW)
+                && clickedState.hasProperty(SnowLayerBlock.LAYERS)
+                && clickedState.getValue(SnowLayerBlock.LAYERS) == 1;
+        boolean replaceClicked = thinSnow || clickedState.is(Blocks.VINE)
+                || clickedState.is(Blocks.SHORT_GRASS) || clickedState.is(Blocks.DEAD_BUSH);
+        Direction placementFace = LegacyPlantPlacementRegistry.reedPlacementFace(clickedFace, thinSnow);
+        BlockPos placementPos = LegacyPlantPlacementRegistry.reedPlacementPos(clicked, clickedFace, replaceClicked);
+
+        // ItemReed performs these checks after resolving the final target coordinate/side.
+        if (stack.isEmpty() || !player.mayUseItemAt(placementPos, placementFace, stack)) {
+            return InteractionResult.FAIL;
+        }
+        Block target = requiredTarget(rule);
+        if (target == null) return InteractionResult.FAIL;
+
+        BlockState current = level.getBlockState(placementPos);
+        boolean replaceable = replaceClicked || current.canBeReplaced();
+        BlockState placed = ConvertedLegacyBlock.withLegacyMeta(target.defaultBlockState(), 0);
+        boolean canPlace = replaceable && placed.canSurvive(level, placementPos);
+
+        // 1.7 ItemReed returns true after the edit/non-empty checks even when canPlaceEntityOnSide rejects placement.
+        // Only a successful set consumes the stack.
+        if (canPlace && !level.isClientSide() && level.setBlock(placementPos, placed, 3)) {
+            stack.shrink(1);
+        }
+        return InteractionResult.SUCCESS;
+    }
+
+    private static Block requiredTarget(LegacyPlantPlacementRegistry.Rule rule) {
+        if (!BuiltInRegistries.BLOCK.containsKey(rule.targetBlockId())) return null;
+        Block target = BuiltInRegistries.BLOCK.getValue(rule.targetBlockId());
+        return target instanceof ConvertedLegacyPlantBlock ? target : null;
     }
 }
