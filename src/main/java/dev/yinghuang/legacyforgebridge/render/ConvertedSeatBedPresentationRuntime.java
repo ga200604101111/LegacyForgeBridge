@@ -5,6 +5,7 @@ import dev.yinghuang.legacyforgebridge.compat.LegacySeatBedPresentationRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacySeatBedRegistry;
 import dev.yinghuang.legacyforgebridge.convert.runtime.ConvertedLegacySeatBedBlockEntity;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderers;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 
 import java.util.Set;
@@ -25,11 +26,12 @@ public final class ConvertedSeatBedPresentationRuntime {
                     LegacyForgeBridge.LOGGER.error("Seat-bed presentation {} has no proof-complete core rule",rule.id());
                     continue;
                 }
-                BlockEntityType<ConvertedLegacySeatBedBlockEntity> type=LegacySeatBedRegistry.type(rule.id());
-                if(type==null){
+                if(!BuiltInRegistries.BLOCK_ENTITY_TYPE.containsKey(rule.id())){
                     LegacyForgeBridge.LOGGER.error("Seat-bed presentation {} has no BlockEntityType",rule.id());
                     continue;
                 }
+                @SuppressWarnings("unchecked")
+                BlockEntityType<ConvertedLegacySeatBedBlockEntity> type=(BlockEntityType<ConvertedLegacySeatBedBlockEntity>)BuiltInRegistries.BLOCK_ENTITY_TYPE.getValue(rule.id());
                 BlockEntityRenderers.register(type,context->new ConvertedLegacySeatBedRenderer(context,rule));renderers++;
             }
         }catch(Exception e){
