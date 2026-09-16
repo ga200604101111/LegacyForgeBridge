@@ -50,7 +50,7 @@ class LegacyBlockDropExplosionGateTest {
         JsonObject root = JsonParser.parseString(Files.readString(
                 tempDir.resolve("staging/" + LegacyBlockDropAnalysisPass.PLAN_PATH),
                 StandardCharsets.UTF_8)).getAsJsonObject();
-        assertEquals(3, root.get("schemaVersion").getAsInt());
+        assertEquals(4, root.get("schemaVersion").getAsInt());
         assertEquals(2, root.get("normalDropProofCompletePlans").getAsInt());
         assertEquals(1, root.get("explosionDropProofCompletePlans").getAsInt());
         assertEquals(1, root.get("sourceExplosionDestructionOverrideFreePlans").getAsInt());
