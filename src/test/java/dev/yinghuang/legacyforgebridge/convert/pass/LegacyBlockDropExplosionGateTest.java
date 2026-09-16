@@ -31,7 +31,7 @@ class LegacyBlockDropExplosionGateTest {
     @TempDir Path tempDir;
 
     @Test
-    void explosionDropEligibilityAndDestructionCallbacksRemainIndependentOfNormalDropPlan() throws Exception {
+    void explosionDropAndDestructionRemainIndependentWhileDefaultSilkProofAlsoCompletes() throws Exception {
         Path jar = tempDir.resolve("ExplosionDropGate.jar");
         try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(jar))) {
             put(out, "foreign/explosionpass/NoDrop.class", block("foreign/explosionpass/NoDrop", Kind.NO_DROP));
@@ -50,8 +50,11 @@ class LegacyBlockDropExplosionGateTest {
         JsonObject root = JsonParser.parseString(Files.readString(
                 tempDir.resolve("staging/" + LegacyBlockDropAnalysisPass.PLAN_PATH),
                 StandardCharsets.UTF_8)).getAsJsonObject();
-        assertEquals(4, root.get("schemaVersion").getAsInt());
+        assertEquals(5, root.get("schemaVersion").getAsInt());
         assertEquals(2, root.get("normalDropProofCompletePlans").getAsInt());
+        assertEquals(2, root.get("sourceHarvestEligibilityProofCompletePlans").getAsInt());
+        assertEquals(0, root.get("harvestEligibilityProofCompletePlans").getAsInt());
+        assertEquals(2, root.get("silkTouchProofCompletePlans").getAsInt());
         assertEquals(1, root.get("explosionDropProofCompletePlans").getAsInt());
         assertEquals(1, root.get("sourceExplosionDestructionOverrideFreePlans").getAsInt());
 
@@ -63,6 +66,8 @@ class LegacyBlockDropExplosionGateTest {
 
         JsonObject noDrop = plans.get("no_drop");
         assertTrue(noDrop.get("normalDropProofComplete").getAsBoolean());
+        assertTrue(noDrop.get("sourceHarvestEligibilityProofComplete").getAsBoolean());
+        assertTrue(noDrop.get("silkTouchProofComplete").getAsBoolean());
         assertFalse(noDrop.get("sourceExplosionDropEligibilityProofComplete").getAsBoolean());
         assertTrue(noDrop.get("sourceExplosionDestructionOverrideFree").getAsBoolean());
         assertFalse(noDrop.get("explosionDropProofComplete").getAsBoolean());
@@ -71,6 +76,8 @@ class LegacyBlockDropExplosionGateTest {
 
         JsonObject exploded = plans.get("custom_exploded");
         assertTrue(exploded.get("normalDropProofComplete").getAsBoolean());
+        assertTrue(exploded.get("sourceHarvestEligibilityProofComplete").getAsBoolean());
+        assertTrue(exploded.get("silkTouchProofComplete").getAsBoolean());
         assertTrue(exploded.get("sourceExplosionDropEligibilityProofComplete").getAsBoolean());
         assertFalse(exploded.get("sourceExplosionDestructionOverrideFree").getAsBoolean());
         assertTrue(exploded.get("explosionDropProofComplete").getAsBoolean());
@@ -86,33 +93,44 @@ class LegacyBlockDropExplosionGateTest {
     }
 
     private ConversionContext context(Path jar) throws Exception {
-        Path staging = tempDir.resolve("staging"); Files.createDirectories(staging);
-        LegacyModMetadata metadata = new LegacyModMetadata("fixture.jar", "test",
+        Path staging = tempDir.resolve("staging");
+        Files.createDirectories(staging);
+        LegacyModMetadata metadata = new LegacyModMetadata(
+                "fixture.jar", "test",
                 List.of(new LegacyModMetadata.ModEntry("fixture", "Fixture", "1.0", "1.7.10", List.of())));
-        LegacyJarAnalyzer.Analysis jarAnalysis = new LegacyJarAnalyzer.Analysis(
+        LegacyJarAnalyzer.Analysis analysis = new LegacyJarAnalyzer.Analysis(
                 "fixture.jar", 0, 0, false, false, 0, 0, 0, 0, Set.of(), Set.of(), Set.of());
         return new ConversionContext(jar, staging, tempDir.resolve("candidate.jar"),
-                "sha", Files.size(jar), metadata, jarAnalysis, new DiagnosticCollector(), "generic-test");
+                "sha", Files.size(jar), metadata, analysis, new DiagnosticCollector(), "generic-test");
     }
 
     private static byte[] block(String owner, Kind kind) {
         ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
         writer.visit(Opcodes.V1_7, Opcodes.ACC_PUBLIC, owner, null, "net/minecraft/block/Block", null);
         MethodVisitor init = writer.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null);
-        init.visitCode(); init.visitVarInsn(Opcodes.ALOAD, 0); init.visitInsn(Opcodes.ACONST_NULL);
+        init.visitCode();
+        init.visitVarInsn(Opcodes.ALOAD, 0);
+        init.visitInsn(Opcodes.ACONST_NULL);
         init.visitMethodInsn(Opcodes.INVOKESPECIAL, "net/minecraft/block/Block", "<init>",
                 "(Lnet/minecraft/block/material/Material;)V", false);
-        init.visitInsn(Opcodes.RETURN); end(init);
+        init.visitInsn(Opcodes.RETURN);
+        end(init);
         if (kind == Kind.NO_DROP) {
             MethodVisitor method = writer.visitMethod(Opcodes.ACC_PUBLIC, "func_149659_a",
                     "(Lnet/minecraft/world/Explosion;)Z", null, null);
-            method.visitCode(); method.visitInsn(Opcodes.ICONST_0); method.visitInsn(Opcodes.IRETURN); end(method);
+            method.visitCode();
+            method.visitInsn(Opcodes.ICONST_0);
+            method.visitInsn(Opcodes.IRETURN);
+            end(method);
         } else {
             MethodVisitor method = writer.visitMethod(Opcodes.ACC_PUBLIC, "onBlockExploded",
                     "(Lnet/minecraft/world/World;IIILnet/minecraft/world/Explosion;)V", null, null);
-            method.visitCode(); method.visitInsn(Opcodes.RETURN); end(method);
+            method.visitCode();
+            method.visitInsn(Opcodes.RETURN);
+            end(method);
         }
-        writer.visitEnd(); return writer.toByteArray();
+        writer.visitEnd();
+        return writer.toByteArray();
     }
 
     private static byte[] bootstrap() {
@@ -122,22 +140,36 @@ class LegacyBlockDropExplosionGateTest {
         MethodVisitor method = writer.visitMethod(Opcodes.ACC_PUBLIC, "preInit",
                 "(Lcpw/mods/fml/common/event/FMLPreInitializationEvent;)V", null, null);
         AnnotationVisitor annotation = method.visitAnnotation("Lcpw/mods/fml/common/Mod$EventHandler;", true);
-        annotation.visitEnd(); method.visitCode();
+        annotation.visitEnd();
+        method.visitCode();
         register(method, "foreign/explosionpass/NoDrop", "no_drop");
         register(method, "foreign/explosionpass/CustomExploded", "custom_exploded");
-        method.visitInsn(Opcodes.RETURN); end(method); writer.visitEnd(); return writer.toByteArray();
+        method.visitInsn(Opcodes.RETURN);
+        end(method);
+        writer.visitEnd();
+        return writer.toByteArray();
     }
 
     private static void register(MethodVisitor method, String owner, String name) {
-        method.visitTypeInsn(Opcodes.NEW, owner); method.visitInsn(Opcodes.DUP);
+        method.visitTypeInsn(Opcodes.NEW, owner);
+        method.visitInsn(Opcodes.DUP);
         method.visitMethodInsn(Opcodes.INVOKESPECIAL, owner, "<init>", "()V", false);
         method.visitLdcInsn(name);
-        method.visitMethodInsn(Opcodes.INVOKESTATIC, "cpw/mods/fml/common/registry/GameRegistry", "registerBlock",
+        method.visitMethodInsn(Opcodes.INVOKESTATIC,
+                "cpw/mods/fml/common/registry/GameRegistry", "registerBlock",
                 "(Lnet/minecraft/block/Block;Ljava/lang/String;)V", false);
     }
-    private static void end(MethodVisitor method) { method.visitMaxs(0, 0); method.visitEnd(); }
-    private static void put(JarOutputStream out, String name, byte[] bytes) throws Exception {
-        out.putNextEntry(new JarEntry(name)); out.write(bytes); out.closeEntry();
+
+    private static void end(MethodVisitor method) {
+        method.visitMaxs(0, 0);
+        method.visitEnd();
     }
+
+    private static void put(JarOutputStream out, String name, byte[] bytes) throws Exception {
+        out.putNextEntry(new JarEntry(name));
+        out.write(bytes);
+        out.closeEntry();
+    }
+
     private enum Kind { NO_DROP, ON_EXPLODED }
 }

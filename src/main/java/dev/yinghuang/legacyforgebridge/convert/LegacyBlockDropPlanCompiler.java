@@ -29,10 +29,11 @@ import java.util.jar.JarFile;
  * specialized vanilla/Forge block class, inherited drop behavior is unknown here and the block is
  * kept incomplete rather than guessed.</p>
  *
- * <p>A plan is still not a complete modern harvest runtime. Source-owned overrides around the
- * surrounding Forge harvest/drop path are rejected here, but harvest eligibility, silk-touch
- * stacked-item semantics, Forge harvest events and explosion drop chance still require separate
- * proof before a plan may drive modern gameplay drops.</p>
+ * <p>This compiler is deliberately scoped to the ordinary non-silk drop route. Silk eligibility
+ * and stacked-item construction are proven by {@link LegacyBlockSilkTouchAnalyzer}; source
+ * overrides of those silk-only callbacks therefore no longer erase an otherwise complete normal
+ * drop plan. HarvestBlock/getDrops/dropBlockAsItem overrides still fail closed here because they can
+ * replace the ordinary route itself.</p>
  */
 public final class LegacyBlockDropPlanCompiler {
     private static final String VANILLA_BLOCK = "net/minecraft/block/Block";
@@ -62,21 +63,6 @@ public final class LegacyBlockDropPlanCompiler {
                     "harvestBlock",
                     Set.of("harvestBlock", "func_149636_a"),
                     "(Lnet/minecraft/world/World;Lnet/minecraft/entity/player/EntityPlayer;IIII)V"
-            ),
-            new DropPathSpec(
-                    "canSilkHarvest",
-                    Set.of("canSilkHarvest", "func_149700_E"),
-                    "()Z"
-            ),
-            new DropPathSpec(
-                    "canSilkHarvest(World,...)",
-                    Set.of("canSilkHarvest"),
-                    "(Lnet/minecraft/world/World;Lnet/minecraft/entity/player/EntityPlayer;IIII)Z"
-            ),
-            new DropPathSpec(
-                    "createStackedBlock",
-                    Set.of("createStackedBlock", "func_149644_j"),
-                    "(I)Lnet/minecraft/item/ItemStack;"
             )
     );
 
@@ -260,7 +246,7 @@ public final class LegacyBlockDropPlanCompiler {
                 for (MethodNode method : node.methods) {
                     if (!spec.matches(method)) continue;
                     reasons.add("source overrides " + spec.label()
-                            + "; surrounding harvest/drop path is not compiled");
+                            + "; ordinary harvest/drop path is not compiled");
                     break;
                 }
             }

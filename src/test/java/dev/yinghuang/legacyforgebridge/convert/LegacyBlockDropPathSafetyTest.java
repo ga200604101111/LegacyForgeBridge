@@ -21,7 +21,7 @@ class LegacyBlockDropPathSafetyTest {
     @TempDir Path tempDir;
 
     @Test
-    void sourceOwnedForgeDropHarvestAndSilkOverridesFailClosedBeforeNormalDropPlans() throws Exception {
+    void ordinaryDropOverridesFailClosedWhileSilkOnlyOverridesKeepNormalPlans() throws Exception {
         Path jar = tempDir.resolve("DropPathSafety.jar");
         try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(jar))) {
             put(out, "foreign/droppath/Plain.class", block("foreign/droppath/Plain", Kind.PLAIN));
@@ -43,25 +43,22 @@ class LegacyBlockDropPathSafetyTest {
         Map<String, LegacyBlockDropPlanCompiler.Incomplete> incomplete = analysis.incomplete().stream()
                 .collect(Collectors.toMap(LegacyBlockDropPlanCompiler.Incomplete::registryName, value -> value));
 
-        assertEquals(1, plans.size(), String.join("\n", analysis.diagnostics()));
-        assertEquals(8, incomplete.size());
+        assertEquals(4, plans.size(), String.join("\n", analysis.diagnostics()));
+        assertEquals(5, incomplete.size());
         assertTrue(plans.containsKey("plain"));
+        assertTrue(plans.containsKey("silk"));
+        assertTrue(plans.containsKey("context_silk"));
+        assertTrue(plans.containsKey("stacked"));
 
         assertReason(incomplete, "full_drops", "getDrops(World,...)");
         assertReason(incomplete, "meta_fortune_quantity", "quantityDropped(metadata,fortune,random)");
         assertReason(incomplete, "drop_direct", "dropBlockAsItem");
         assertReason(incomplete, "drop_chance", "dropBlockAsItemWithChance");
         assertReason(incomplete, "harvest", "harvestBlock");
-        assertReason(incomplete, "silk", "canSilkHarvest");
-        assertReason(incomplete, "context_silk", "canSilkHarvest(World,...)");
-        assertReason(incomplete, "stacked", "createStackedBlock");
     }
 
-    private static void assertReason(
-            Map<String, LegacyBlockDropPlanCompiler.Incomplete> incomplete,
-            String registryName,
-            String fragment
-    ) {
+    private static void assertReason(Map<String, LegacyBlockDropPlanCompiler.Incomplete> incomplete,
+                                     String registryName, String fragment) {
         assertTrue(incomplete.get(registryName).reasons().stream().anyMatch(value -> value.contains(fragment)),
                 () -> registryName + ": " + incomplete.get(registryName).reasons());
     }
@@ -70,95 +67,46 @@ class LegacyBlockDropPathSafetyTest {
         ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
         writer.visit(Opcodes.V1_7, Opcodes.ACC_PUBLIC, owner, null, "net/minecraft/block/Block", null);
         MethodVisitor init = writer.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null);
-        init.visitCode();
-        init.visitVarInsn(Opcodes.ALOAD, 0);
-        init.visitInsn(Opcodes.ACONST_NULL);
+        init.visitCode(); init.visitVarInsn(Opcodes.ALOAD, 0); init.visitInsn(Opcodes.ACONST_NULL);
         init.visitMethodInsn(Opcodes.INVOKESPECIAL, "net/minecraft/block/Block", "<init>",
                 "(Lnet/minecraft/block/material/Material;)V", false);
-        init.visitInsn(Opcodes.RETURN);
-        end(init);
-
+        init.visitInsn(Opcodes.RETURN); end(init);
         switch (kind) {
             case PLAIN -> { }
-            case FULL_DROPS -> {
-                MethodVisitor method = writer.visitMethod(Opcodes.ACC_PUBLIC, "getDrops",
-                        "(Lnet/minecraft/world/World;IIIII)Ljava/util/ArrayList;", null, null);
-                method.visitCode();
-                method.visitInsn(Opcodes.ACONST_NULL);
-                method.visitInsn(Opcodes.ARETURN);
-                end(method);
-            }
-            case META_FORTUNE_QUANTITY -> {
-                MethodVisitor method = writer.visitMethod(Opcodes.ACC_PUBLIC, "quantityDropped",
-                        "(IILjava/util/Random;)I", null, null);
-                method.visitCode();
-                method.visitInsn(Opcodes.ICONST_4);
-                method.visitInsn(Opcodes.IRETURN);
-                end(method);
-            }
-            case DROP_DIRECT -> {
-                MethodVisitor method = writer.visitMethod(Opcodes.ACC_PUBLIC, "func_149697_b",
-                        "(Lnet/minecraft/world/World;IIIII)V", null, null);
-                method.visitCode();
-                method.visitInsn(Opcodes.RETURN);
-                end(method);
-            }
-            case DROP_CHANCE -> {
-                MethodVisitor method = writer.visitMethod(Opcodes.ACC_PUBLIC, "func_149690_a",
-                        "(Lnet/minecraft/world/World;IIIIFI)V", null, null);
-                method.visitCode();
-                method.visitInsn(Opcodes.RETURN);
-                end(method);
-            }
-            case HARVEST -> {
-                MethodVisitor method = writer.visitMethod(Opcodes.ACC_PUBLIC, "func_149636_a",
-                        "(Lnet/minecraft/world/World;Lnet/minecraft/entity/player/EntityPlayer;IIII)V",
-                        null, null);
-                method.visitCode();
-                method.visitInsn(Opcodes.RETURN);
-                end(method);
-            }
-            case SILK -> {
-                MethodVisitor method = writer.visitMethod(Opcodes.ACC_PROTECTED, "func_149700_E",
-                        "()Z", null, null);
-                method.visitCode();
-                method.visitInsn(Opcodes.ICONST_1);
-                method.visitInsn(Opcodes.IRETURN);
-                end(method);
-            }
-            case CONTEXT_SILK -> {
-                MethodVisitor method = writer.visitMethod(Opcodes.ACC_PUBLIC, "canSilkHarvest",
-                        "(Lnet/minecraft/world/World;Lnet/minecraft/entity/player/EntityPlayer;IIII)Z",
-                        null, null);
-                method.visitCode();
-                method.visitInsn(Opcodes.ICONST_1);
-                method.visitInsn(Opcodes.IRETURN);
-                end(method);
-            }
-            case STACKED -> {
-                MethodVisitor method = writer.visitMethod(Opcodes.ACC_PROTECTED, "func_149644_j",
-                        "(I)Lnet/minecraft/item/ItemStack;", null, null);
-                method.visitCode();
-                method.visitInsn(Opcodes.ACONST_NULL);
-                method.visitInsn(Opcodes.ARETURN);
-                end(method);
-            }
+            case FULL_DROPS -> objectReturn(writer, "getDrops", "(Lnet/minecraft/world/World;IIIII)Ljava/util/ArrayList;");
+            case META_FORTUNE_QUANTITY -> intReturn(writer, "quantityDropped", "(IILjava/util/Random;)I", 4);
+            case DROP_DIRECT -> voidReturn(writer, "func_149697_b", "(Lnet/minecraft/world/World;IIIII)V");
+            case DROP_CHANCE -> voidReturn(writer, "func_149690_a", "(Lnet/minecraft/world/World;IIIIFI)V");
+            case HARVEST -> voidReturn(writer, "func_149636_a",
+                    "(Lnet/minecraft/world/World;Lnet/minecraft/entity/player/EntityPlayer;IIII)V");
+            case SILK -> intReturn(writer, "func_149700_E", "()Z", 1);
+            case CONTEXT_SILK -> intReturn(writer, "canSilkHarvest",
+                    "(Lnet/minecraft/world/World;Lnet/minecraft/entity/player/EntityPlayer;IIII)Z", 1);
+            case STACKED -> objectReturn(writer, "func_149644_j", "(I)Lnet/minecraft/item/ItemStack;");
         }
+        writer.visitEnd(); return writer.toByteArray();
+    }
 
-        writer.visitEnd();
-        return writer.toByteArray();
+    private static void objectReturn(ClassWriter writer, String name, String descriptor) {
+        MethodVisitor method = writer.visitMethod(Opcodes.ACC_PUBLIC, name, descriptor, null, null);
+        method.visitCode(); method.visitInsn(Opcodes.ACONST_NULL); method.visitInsn(Opcodes.ARETURN); end(method);
+    }
+    private static void intReturn(ClassWriter writer, String name, String descriptor, int value) {
+        MethodVisitor method = writer.visitMethod(Opcodes.ACC_PUBLIC, name, descriptor, null, null);
+        method.visitCode(); method.visitInsn(value == 0 ? Opcodes.ICONST_0 : Opcodes.ICONST_1); method.visitInsn(Opcodes.IRETURN); end(method);
+    }
+    private static void voidReturn(ClassWriter writer, String name, String descriptor) {
+        MethodVisitor method = writer.visitMethod(Opcodes.ACC_PUBLIC, name, descriptor, null, null);
+        method.visitCode(); method.visitInsn(Opcodes.RETURN); end(method);
     }
 
     private static byte[] bootstrap() {
         ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
-        writer.visit(Opcodes.V1_7, Opcodes.ACC_PUBLIC, "foreign/droppath/Bootstrap", null,
-                "java/lang/Object", null);
+        writer.visit(Opcodes.V1_7, Opcodes.ACC_PUBLIC, "foreign/droppath/Bootstrap", null, "java/lang/Object", null);
         MethodVisitor method = writer.visitMethod(Opcodes.ACC_PUBLIC, "preInit",
                 "(Lcpw/mods/fml/common/event/FMLPreInitializationEvent;)V", null, null);
         AnnotationVisitor annotation = method.visitAnnotation("Lcpw/mods/fml/common/Mod$EventHandler;", true);
-        annotation.visitEnd();
-        method.visitCode();
-
+        annotation.visitEnd(); method.visitCode();
         register(method, "foreign/droppath/Plain", "plain");
         register(method, "foreign/droppath/FullDrops", "full_drops");
         register(method, "foreign/droppath/MetaFortuneQuantity", "meta_fortune_quantity");
@@ -168,45 +116,19 @@ class LegacyBlockDropPathSafetyTest {
         register(method, "foreign/droppath/Silk", "silk");
         register(method, "foreign/droppath/ContextSilk", "context_silk");
         register(method, "foreign/droppath/Stacked", "stacked");
-
-        method.visitInsn(Opcodes.RETURN);
-        end(method);
-        writer.visitEnd();
-        return writer.toByteArray();
+        method.visitInsn(Opcodes.RETURN); end(method); writer.visitEnd(); return writer.toByteArray();
     }
 
     private static void register(MethodVisitor method, String owner, String registryName) {
-        method.visitTypeInsn(Opcodes.NEW, owner);
-        method.visitInsn(Opcodes.DUP);
+        method.visitTypeInsn(Opcodes.NEW, owner); method.visitInsn(Opcodes.DUP);
         method.visitMethodInsn(Opcodes.INVOKESPECIAL, owner, "<init>", "()V", false);
         method.visitLdcInsn(registryName);
-        method.visitMethodInsn(Opcodes.INVOKESTATIC,
-                "cpw/mods/fml/common/registry/GameRegistry",
-                "registerBlock",
-                "(Lnet/minecraft/block/Block;Ljava/lang/String;)V",
-                false);
+        method.visitMethodInsn(Opcodes.INVOKESTATIC, "cpw/mods/fml/common/registry/GameRegistry", "registerBlock",
+                "(Lnet/minecraft/block/Block;Ljava/lang/String;)V", false);
     }
-
-    private static void end(MethodVisitor method) {
-        method.visitMaxs(0, 0);
-        method.visitEnd();
-    }
-
+    private static void end(MethodVisitor method) { method.visitMaxs(0, 0); method.visitEnd(); }
     private static void put(JarOutputStream out, String name, byte[] bytes) throws Exception {
-        out.putNextEntry(new JarEntry(name));
-        out.write(bytes);
-        out.closeEntry();
+        out.putNextEntry(new JarEntry(name)); out.write(bytes); out.closeEntry();
     }
-
-    private enum Kind {
-        PLAIN,
-        FULL_DROPS,
-        META_FORTUNE_QUANTITY,
-        DROP_DIRECT,
-        DROP_CHANCE,
-        HARVEST,
-        SILK,
-        CONTEXT_SILK,
-        STACKED
-    }
+    private enum Kind { PLAIN, FULL_DROPS, META_FORTUNE_QUANTITY, DROP_DIRECT, DROP_CHANCE, HARVEST, SILK, CONTEXT_SILK, STACKED }
 }
