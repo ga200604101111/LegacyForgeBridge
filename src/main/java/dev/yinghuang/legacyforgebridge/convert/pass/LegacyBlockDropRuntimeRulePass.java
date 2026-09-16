@@ -16,13 +16,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
- * Compiles proof-complete static block-drop readiness into a minimal runtime-rule sidecar.
+ * Compiles proof-complete static block-drop readiness into the runtime-rule sidecar consumed by
+ * {@code ConvertedLegacyBlock}.
  *
- * <p>This pass deliberately does not wire gameplay behavior. It selects only entries whose normal
- * and silk results are the same metadata-independent self BlockItem and whose per-affected-block
- * explosion source/formula/event/destruction proof is complete. A later runtime slice consumes the
- * rules and resolves the modern non-decay interaction by overriding the converted Block's explosion
- * hook directly.</p>
+ * <p>Only entries whose normal and silk results are the same metadata-independent self BlockItem
+ * and whose per-affected-block explosion source/formula/event/destruction proof is complete become
+ * executable rules. Runtime still revalidates the exact rule shape and fails closed for every other
+ * entry.</p>
  */
 public final class LegacyBlockDropRuntimeRulePass implements ConversionPass {
     public static final String OUTPUT_PATH = "legacyforgebridge/block-drop-runtime-rules.json";
@@ -52,7 +52,7 @@ public final class LegacyBlockDropRuntimeRulePass implements ConversionPass {
         root.addProperty("schemaVersion", 1);
         root.addProperty("sourceSha256", context.sourceHash());
         root.addProperty("sourceReadinessSchemaVersion", READINESS_SCHEMA);
-        root.addProperty("runtimeImplementationWired", false);
+        root.addProperty("runtimeImplementationWired", true);
 
         JsonArray rules = new JsonArray();
         JsonArray ready = readiness.getAsJsonArray("ready");
@@ -92,7 +92,7 @@ public final class LegacyBlockDropRuntimeRulePass implements ConversionPass {
         context.diagnostics().info(
                 "LFB-CONVERT-BLOCK-DROP-RULES-0001",
                 SupportLevel.RUNTIME_BRIDGE,
-                "Materialized proof-gated block-drop runtime rules without wiring gameplay behavior: rules="
+                "Materialized proof-gated block-drop runtime rules for ConvertedLegacyBlock: rules="
                         + rules.size() + "."
         );
     }

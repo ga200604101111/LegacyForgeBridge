@@ -2,19 +2,28 @@ package dev.yinghuang.legacyforgebridge.convert.runtime;
 
 import dev.yinghuang.legacyforgebridge.compat.LegacyBlockActivationEffectsRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyBlockActivationRegistry;
+import dev.yinghuang.legacyforgebridge.compat.LegacyBlockDropRuntimeRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyBlockPlacementRegistry;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.BlockPlaceContext;
+import net.minecraft.world.level.Explosion;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.IntegerProperty;
+import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.phys.BlockHitResult;
+
+import java.util.List;
+import java.util.function.BiConsumer;
 
 /**
  * Neutral modern Block carrier for Minecraft 1.7.x raw metadata and proven source behavior.
@@ -45,6 +54,43 @@ public class ConvertedLegacyBlock extends Block {
         if (base == null) return null;
         Integer legacyMeta = LegacyBlockPlacementRegistry.placementMeta(convertedId, context);
         return legacyMeta == null ? base : withLegacyMeta(base, legacyMeta);
+    }
+
+    /**
+     * Proof-gated static normal/silk drop runtime. Only rules compiled as metadata-independent
+     * count=1 self BlockItems are admitted by {@link LegacyBlockDropRuntimeRegistry}.
+     */
+    @Override
+    protected List<ItemStack> getDrops(BlockState state, LootParams.Builder params) {
+        if (!LegacyBlockDropRuntimeRegistry.hasRule(convertedId)) {
+            return super.getDrops(state, params);
+        }
+        return List.of(new ItemStack(this));
+    }
+
+    /**
+     * Replays the proven Forge 1.7.10 per-affected-block explosion path without inheriting modern
+     * DESTROY versus DESTROY_WITH_DECAY loot semantics. KEEP/TRIGGER_BLOCK remain modern because
+     * they are not destructive counterparts of the admitted legacy path.
+     */
+    @Override
+    protected void onExplosionHit(BlockState state, ServerLevel level, BlockPos pos, Explosion explosion,
+                                  BiConsumer<ItemStack, BlockPos> dropConsumer) {
+        if (!LegacyBlockDropRuntimeRegistry.hasRule(convertedId)
+                || (explosion.getBlockInteraction() != Explosion.BlockInteraction.DESTROY
+                && explosion.getBlockInteraction() != Explosion.BlockInteraction.DESTROY_WITH_DECAY)) {
+            super.onExplosionHit(state, level, pos, explosion, dropConsumer);
+            return;
+        }
+
+        if (LegacyBlockDropRuntimeRegistry.shouldDropFromExplosion(
+                convertedId, level.getRandom().nextFloat(), explosion.radius())) {
+            dropConsumer.accept(new ItemStack(this), pos);
+        }
+
+        // Forge/Minecraft 1.7.10 Block#onBlockExploded removes the block with update flags 3.
+        // Source destruction callbacks are proven absent before a rule can reach this runtime.
+        level.setBlock(pos, Blocks.AIR.defaultBlockState(), 3);
     }
 
     /**

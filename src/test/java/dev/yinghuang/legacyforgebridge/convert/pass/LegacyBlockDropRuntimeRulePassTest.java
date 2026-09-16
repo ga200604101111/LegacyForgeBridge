@@ -18,7 +18,6 @@ import java.util.Set;
 import java.util.jar.JarOutputStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LegacyBlockDropRuntimeRulePassTest {
@@ -55,7 +54,7 @@ class LegacyBlockDropRuntimeRulePassTest {
                 StandardCharsets.UTF_8)).getAsJsonObject();
         assertEquals(1, output.get("schemaVersion").getAsInt());
         assertEquals(2, output.get("sourceReadinessSchemaVersion").getAsInt());
-        assertFalse(output.get("runtimeImplementationWired").getAsBoolean());
+        assertTrue(output.get("runtimeImplementationWired").getAsBoolean());
         assertEquals(1, output.get("runtimeRuleCount").getAsInt());
         JsonObject rule = output.getAsJsonArray("rules").get(0).getAsJsonObject();
         assertEquals("fixture:good", rule.get("id").getAsString());

@@ -35,7 +35,7 @@ class BlockDropCandidateIntegrationTest {
     @TempDir Path tempDir;
 
     @Test
-    void fullConversionEmbedsProofGatedRuntimeRuleWithoutWiringGameplayYet() throws Exception {
+    void fullConversionEmbedsProofGatedExecutableRuntimeRule() throws Exception {
         Path source = tempDir.resolve("HarvestFastPathLegacy.jar");
         String metadata = "[{\"modid\":\"harvestfast\",\"name\":\"Harvest Fast\",\"version\":\"1.0\",\"mcversion\":\"1.7.10\",\"dependencies\":[]}]";
         try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(source))) {
@@ -104,7 +104,7 @@ class BlockDropCandidateIntegrationTest {
             JsonObject rules = read(jar, rulesEntry);
             assertEquals(1, rules.get("schemaVersion").getAsInt());
             assertEquals(1, rules.get("runtimeRuleCount").getAsInt());
-            assertFalse(rules.get("runtimeImplementationWired").getAsBoolean());
+            assertTrue(rules.get("runtimeImplementationWired").getAsBoolean());
             JsonObject rule = rules.getAsJsonArray("rules").get(0).getAsJsonObject();
             assertEquals("harvestfast:wood", rule.get("id").getAsString());
             assertEquals(LegacyBlockDropRuntimeRulePass.MODE, rule.get("mode").getAsString());
