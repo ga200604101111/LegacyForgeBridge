@@ -30,7 +30,7 @@ class LegacyBlockDropPlanSidecarTest {
     @TempDir Path tempDir;
 
     @Test
-    void writesCompleteNormalDropPlansButKeepsGameplayRuntimeGated() throws Exception {
+    void writesEventFreeNormalDropPlansButKeepsGameplayRuntimeGated() throws Exception {
         Path jar = tempDir.resolve("fixture.jar");
         try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(jar))) {
             put(out, "foreign/dropplanpass/Plain.class", plainBlock());
@@ -52,8 +52,13 @@ class LegacyBlockDropPlanSidecarTest {
                 Files.readString(sidecar, StandardCharsets.UTF_8)
         ).getAsJsonObject();
 
-        assertEquals(1, root.get("schemaVersion").getAsInt());
+        assertEquals(2, root.get("schemaVersion").getAsInt());
         assertEquals("sha", root.get("sourceSha256").getAsString());
+        assertTrue(root.get("sourceHarvestDropsEventFree").getAsBoolean());
+        assertEquals(0, root.get("harvestDropsEventHandlerCount").getAsInt());
+        assertEquals(0, root.getAsJsonArray("harvestDropsEventHandlers").size());
+        assertEquals(0, root.getAsJsonArray("eventAnalysisDiagnostics").size());
+        assertEquals(1, root.get("preHarvestEventDropProofCompletePlans").getAsInt());
         assertEquals(1, root.get("normalDropProofCompletePlans").getAsInt());
         assertEquals(0, root.get("runtimeCompletePlans").getAsInt());
         assertEquals(1, root.get("incompletePlans").getAsInt());
@@ -64,6 +69,8 @@ class LegacyBlockDropPlanSidecarTest {
         assertEquals("plain", plan.get("legacyRegistryName").getAsString());
         assertEquals("fixture:plain", plan.get("id").getAsString());
         assertEquals("foreign/dropplanpass/Plain", plan.get("sourceClass").getAsString());
+        assertTrue(plan.get("preHarvestEventDropProofComplete").getAsBoolean());
+        assertTrue(plan.get("forgeHarvestEventProofComplete").getAsBoolean());
         assertTrue(plan.get("normalDropProofComplete").getAsBoolean());
         assertTrue(plan.get("sourceDropPathOverrideFree").getAsBoolean());
         assertFalse(plan.get("runtimeComplete").getAsBoolean());
@@ -97,6 +104,8 @@ class LegacyBlockDropPlanSidecarTest {
         assertEquals(1, incomplete.size());
         JsonObject silk = incomplete.get(0).getAsJsonObject();
         assertEquals("silk", silk.get("legacyRegistryName").getAsString());
+        assertFalse(silk.get("preHarvestEventDropProofComplete").getAsBoolean());
+        assertFalse(silk.get("forgeHarvestEventProofComplete").getAsBoolean());
         assertFalse(silk.get("normalDropProofComplete").getAsBoolean());
         assertFalse(silk.get("runtimeComplete").getAsBoolean());
         boolean silkReasonFound = false;

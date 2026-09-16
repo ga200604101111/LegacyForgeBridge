@@ -21,11 +21,13 @@ class LegacyBlockDropPathSafetyTest {
     @TempDir Path tempDir;
 
     @Test
-    void sourceOwnedHarvestAndSilkOverridesFailClosedBeforeNormalDropPlans() throws Exception {
+    void sourceOwnedForgeDropHarvestAndSilkOverridesFailClosedBeforeNormalDropPlans() throws Exception {
         Path jar = tempDir.resolve("DropPathSafety.jar");
         try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(jar))) {
             put(out, "foreign/droppath/Plain.class", block("foreign/droppath/Plain", Kind.PLAIN));
             put(out, "foreign/droppath/FullDrops.class", block("foreign/droppath/FullDrops", Kind.FULL_DROPS));
+            put(out, "foreign/droppath/MetaFortuneQuantity.class",
+                    block("foreign/droppath/MetaFortuneQuantity", Kind.META_FORTUNE_QUANTITY));
             put(out, "foreign/droppath/DropDirect.class", block("foreign/droppath/DropDirect", Kind.DROP_DIRECT));
             put(out, "foreign/droppath/DropChance.class", block("foreign/droppath/DropChance", Kind.DROP_CHANCE));
             put(out, "foreign/droppath/Harvest.class", block("foreign/droppath/Harvest", Kind.HARVEST));
@@ -42,10 +44,11 @@ class LegacyBlockDropPathSafetyTest {
                 .collect(Collectors.toMap(LegacyBlockDropPlanCompiler.Incomplete::registryName, value -> value));
 
         assertEquals(1, plans.size(), String.join("\n", analysis.diagnostics()));
-        assertEquals(7, incomplete.size());
+        assertEquals(8, incomplete.size());
         assertTrue(plans.containsKey("plain"));
 
         assertReason(incomplete, "full_drops", "getDrops(World,...)");
+        assertReason(incomplete, "meta_fortune_quantity", "quantityDropped(metadata,fortune,random)");
         assertReason(incomplete, "drop_direct", "dropBlockAsItem");
         assertReason(incomplete, "drop_chance", "dropBlockAsItemWithChance");
         assertReason(incomplete, "harvest", "harvestBlock");
@@ -83,6 +86,14 @@ class LegacyBlockDropPathSafetyTest {
                 method.visitCode();
                 method.visitInsn(Opcodes.ACONST_NULL);
                 method.visitInsn(Opcodes.ARETURN);
+                end(method);
+            }
+            case META_FORTUNE_QUANTITY -> {
+                MethodVisitor method = writer.visitMethod(Opcodes.ACC_PUBLIC, "quantityDropped",
+                        "(IILjava/util/Random;)I", null, null);
+                method.visitCode();
+                method.visitInsn(Opcodes.ICONST_4);
+                method.visitInsn(Opcodes.IRETURN);
                 end(method);
             }
             case DROP_DIRECT -> {
@@ -150,6 +161,7 @@ class LegacyBlockDropPathSafetyTest {
 
         register(method, "foreign/droppath/Plain", "plain");
         register(method, "foreign/droppath/FullDrops", "full_drops");
+        register(method, "foreign/droppath/MetaFortuneQuantity", "meta_fortune_quantity");
         register(method, "foreign/droppath/DropDirect", "drop_direct");
         register(method, "foreign/droppath/DropChance", "drop_chance");
         register(method, "foreign/droppath/Harvest", "harvest");
@@ -189,6 +201,7 @@ class LegacyBlockDropPathSafetyTest {
     private enum Kind {
         PLAIN,
         FULL_DROPS,
+        META_FORTUNE_QUANTITY,
         DROP_DIRECT,
         DROP_CHANCE,
         HARVEST,

@@ -31,8 +31,8 @@ import java.util.jar.JarFile;
  *
  * <p>A plan is still not a complete modern harvest runtime. Source-owned overrides around the
  * surrounding Forge harvest/drop path are rejected here, but harvest eligibility, silk-touch
- * stacked-item semantics and explosion drop chance still require separate proof before a plan may
- * drive modern gameplay drops.</p>
+ * stacked-item semantics, Forge harvest events and explosion drop chance still require separate
+ * proof before a plan may drive modern gameplay drops.</p>
  */
 public final class LegacyBlockDropPlanCompiler {
     private static final String VANILLA_BLOCK = "net/minecraft/block/Block";
@@ -42,6 +42,11 @@ public final class LegacyBlockDropPlanCompiler {
                     "getDrops(World,...)",
                     Set.of("getDrops"),
                     "(Lnet/minecraft/world/World;IIIII)Ljava/util/ArrayList;"
+            ),
+            new DropPathSpec(
+                    "quantityDropped(metadata,fortune,random)",
+                    Set.of("quantityDropped"),
+                    "(IILjava/util/Random;)I"
             ),
             new DropPathSpec(
                     "dropBlockAsItem",
