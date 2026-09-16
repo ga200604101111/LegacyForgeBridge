@@ -2,7 +2,7 @@
 
 ## Scope
 
-This slice continues the generic two-part legacy bed/seat family after source proof, core gameplay runtime and proof-gated FML seat entity spawn bridging. It does not add a Bamboo-specific production branch.
+This slice continues the generic two-part legacy bed/seat family after source proof, core gameplay runtime, and proof-gated FML seat entity spawn bridging. It does not add a Bamboo-specific production branch and does not change the already-green seat-bed gameplay sidecar schema 3.
 
 Exact corpus used for validation:
 
@@ -10,6 +10,20 @@ Exact corpus used for validation:
 - SHA-256 `bcceb588950f911398cfc94856a45527b4aa17b6e130927b2e0516fdf059b402`
 
 Converter revision: `2026-09-16.59`.
+
+## Separate presentation layer
+
+The stable gameplay sidecar remains:
+
+- `legacyforgebridge/seat-bed-rules.json`
+- schema version 3
+
+Special client presentation is intentionally isolated in a new sidecar:
+
+- `legacyforgebridge/seat-bed-presentation-rules.json`
+- schema version 1
+
+This separation means a rendering change cannot silently widen or invalidate the already-tested gameplay/remote-spawn admission boundary.
 
 ## Source presentation proof
 
@@ -44,35 +58,37 @@ The checksum-pinned Bamboo corpus proves one Huton presentation rule with zero p
 - source-direction Y yaw: `[90, 0, 270, 180]` degrees
 - source expanded render bounds: proven
 
-The same proof shape is covered by an unrelated-namespace synthetic regression so the production analyzer is not keyed to Bamboo class names, registry IDs or mod IDs.
+The same proof shape is covered by an unrelated-namespace synthetic regression, so the production analyzer is not keyed to Bamboo class names, registry IDs or mod IDs.
 
 ## Modern runtime
 
-Seat-bed sidecar schema is advanced to version 4. A presentation payload is admitted only when the complete source proof above succeeds.
+`LegacySeatBedPresentationPass` materializes only proof-complete presentation payloads into the independent schema-1 sidecar.
 
-`LegacySeatBedRegistry` validates the payload again at runtime before exposing it to the client renderer. It rejects malformed part geometry, overlapping or incomplete render groups, invalid transforms, missing texture identities, and presentation runtime claims without proof.
+`LegacySeatBedPresentationRegistry` validates that sidecar again on the client before exposing it to rendering. It rejects malformed geometry, duplicate parts, overlapping/incomplete render groups, invalid transform arrays, missing texture identities, non-finite values, or non-proven expanded bounds.
 
 `ConvertedLegacySeatBedRenderer` rebuilds the four proven cuboids as modern `ModelPart` geometry, preserves source pivots/rotations, applies the proven direction translation/yaw table, and submits the proven foot/head groups with their distinct textures.
 
-The source renderer expanded its culling AABB to cover a 3x3 horizontal neighborhood. Minecraft 1.21.11's BlockEntityRenderer boundary does not expose an equivalent custom per-renderer AABB hook, so the admitted renderer conservatively opts into off-screen rendering only when that expanded-bounds proof is present. This preserves visibility rather than replacing the source culling extent with a smaller, guessed box.
+The source renderer expanded its culling AABB to cover a 3x3 horizontal neighborhood. Minecraft 1.21.11's BlockEntityRenderer boundary used here does not expose an equivalent source-defined per-renderer AABB payload, so the admitted renderer conservatively opts into off-screen rendering only when that expanded-bounds proof is present. This preserves visibility instead of replacing the source extent with a smaller guessed box.
 
-Generated converted clients now call `ConvertedSeatBedPresentationRuntime.initializeMod(modId)` during client initialization; rules without complete presentation proof remain unregistered and fail closed.
+Generated converted clients call `ConvertedSeatBedPresentationRuntime.initializeMod(modId)` during client initialization. The bootstrap cross-checks that an already-admitted seat-bed gameplay rule exists for the same modern block ID before registering the renderer. Presentation rules without the corresponding proven gameplay family remain fail closed.
 
 ## Authority boundary
 
-Huton `TimeAccel` remains source-proven but **not client-executed**. On a real Forge 1.7.10 server that world-time/weather mutation is server-authoritative. Replaying it locally would duplicate or desynchronize authoritative state. Therefore:
+Huton `TimeAccel` remains source-proven but **not client-executed**. On a real Forge 1.7.10 server the world-time/weather mutation is server-authoritative. Replaying it locally would duplicate or desynchronize authoritative state.
 
-- `timeAccelerationSourceProven = true`
-- `timeAccelerationRuntimeComplete = false`
-- `presentationRuntimeComplete = true` only for proof-complete presentation rules
-- overall seat-bed `runtimeComplete` remains false until the broader authority/standalone-conversion boundary is deliberately resolved
+Therefore:
 
-This slice must not be cited as proof that the full Bamboo JAR is already installable or fully converted.
+- source time acceleration remains inventoried/proven by the gameplay analyzer;
+- local client time-acceleration execution remains closed;
+- presentation completion does not change the gameplay authority boundary;
+- the full Bamboo candidate remains partial until its remaining families and loader/dependency closure are complete.
+
+This slice must not be cited as proof that the entire Bamboo JAR is already installable or fully converted.
 
 ## Regression coverage
 
 - checksum-pinned `BambooSeatBedExactTest` validates the exact Huton presentation proof;
 - `LegacySeatBedPresentationAnalyzerTest` validates the same source shape under unrelated names;
-- `LegacySeatBedRegistryTest` validates schema-4 fail-closed parsing and presentation invariants;
+- `LegacySeatBedPresentationRegistryTest` validates schema-1 fail-closed parsing and presentation invariants;
 - `GeneratedModEntrypointPassTest` requires the generated client entrypoint to invoke the seat-bed presentation bootstrap;
 - `ConvertedLegacySeatBedRendererBytecodeTest` requires the modern renderer to retain ModelPart creation, texture render-type creation, render-queue submission and the source-expanded culling intent.
