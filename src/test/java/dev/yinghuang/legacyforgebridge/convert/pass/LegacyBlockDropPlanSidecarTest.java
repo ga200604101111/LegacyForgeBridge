@@ -51,17 +51,23 @@ class LegacyBlockDropPlanSidecarTest {
                 StandardCharsets.UTF_8
         )).getAsJsonObject();
 
-        assertEquals(3, root.get("schemaVersion").getAsInt());
+        assertEquals(4, root.get("schemaVersion").getAsInt());
         assertEquals("sha", root.get("sourceSha256").getAsString());
         assertTrue(root.get("sourceHarvestDropsEventFree").getAsBoolean());
         assertEquals(0, root.get("harvestDropsEventHandlerCount").getAsInt());
+        assertTrue(root.get("sourceHarvestCheckEventFree").getAsBoolean());
+        assertEquals(0, root.get("harvestCheckEventHandlerCount").getAsInt());
         assertEquals("inverse_explosion_size_1_7_10", root.get("legacyExplosionChanceMode").getAsString());
         assertEquals(0, root.get("legacyExplosionFortune").getAsInt());
         assertEquals(0, root.getAsJsonArray("harvestDropsEventHandlers").size());
+        assertEquals(0, root.getAsJsonArray("harvestCheckEventHandlers").size());
         assertEquals(0, root.getAsJsonArray("eventAnalysisDiagnostics").size());
+        assertEquals(0, root.getAsJsonArray("harvestEligibilityAnalysisDiagnostics").size());
         assertEquals(0, root.getAsJsonArray("explosionAnalysisDiagnostics").size());
         assertEquals(1, root.get("preHarvestEventDropProofCompletePlans").getAsInt());
         assertEquals(1, root.get("normalDropProofCompletePlans").getAsInt());
+        assertEquals(1, root.get("sourceHarvestEligibilityProofCompletePlans").getAsInt());
+        assertEquals(0, root.get("harvestEligibilityProofCompletePlans").getAsInt());
         assertEquals(1, root.get("explosionDropProofCompletePlans").getAsInt());
         assertEquals(1, root.get("sourceExplosionDestructionOverrideFreePlans").getAsInt());
         assertEquals(0, root.get("runtimeCompletePlans").getAsInt());
@@ -77,6 +83,11 @@ class LegacyBlockDropPlanSidecarTest {
         assertTrue(plan.get("forgeHarvestEventProofComplete").getAsBoolean());
         assertTrue(plan.get("normalDropProofComplete").getAsBoolean());
         assertTrue(plan.get("sourceDropPathOverrideFree").getAsBoolean());
+        assertTrue(plan.get("sourceHarvestEligibilityCustomizationFree").getAsBoolean());
+        assertTrue(plan.get("sourceHarvestCheckEventFree").getAsBoolean());
+        assertTrue(plan.get("sourceHarvestEligibilityProofComplete").getAsBoolean());
+        assertFalse(plan.get("harvestEligibilityProofComplete").getAsBoolean());
+        assertEquals(0, plan.getAsJsonArray("harvestEligibilityReasons").size());
         assertTrue(plan.get("sourceExplosionDropEligibilityProofComplete").getAsBoolean());
         assertTrue(plan.get("sourceExplosionDestructionOverrideFree").getAsBoolean());
         assertTrue(plan.get("explosionDropProofComplete").getAsBoolean());
@@ -115,6 +126,8 @@ class LegacyBlockDropPlanSidecarTest {
         assertFalse(silk.get("preHarvestEventDropProofComplete").getAsBoolean());
         assertFalse(silk.get("forgeHarvestEventProofComplete").getAsBoolean());
         assertFalse(silk.get("normalDropProofComplete").getAsBoolean());
+        assertFalse(silk.get("sourceHarvestEligibilityProofComplete").getAsBoolean());
+        assertFalse(silk.get("harvestEligibilityProofComplete").getAsBoolean());
         assertFalse(silk.get("explosionDropProofComplete").getAsBoolean());
         assertFalse(silk.get("runtimeComplete").getAsBoolean());
         boolean silkReasonFound = false;

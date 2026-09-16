@@ -9,6 +9,7 @@ import dev.yinghuang.legacyforgebridge.convert.LegacyBlockDropMetadataCompiler;
 import dev.yinghuang.legacyforgebridge.convert.LegacyBlockDropPlanCompiler;
 import dev.yinghuang.legacyforgebridge.convert.LegacyBlockDropQuantityCompiler;
 import dev.yinghuang.legacyforgebridge.convert.LegacyBlockExplosionAnalyzer;
+import dev.yinghuang.legacyforgebridge.convert.LegacyBlockHarvestEligibilityAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.LegacyEventAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.api.ConversionContext;
 import dev.yinghuang.legacyforgebridge.convert.api.ConversionPass;
@@ -33,6 +34,11 @@ import java.util.Map;
  * result is a separate proof because {@code HarvestDropsEvent} may mutate both the stack list and
  * drop chance after {@code getDrops(...)} returns.</p>
  *
+ * <p>Harvest eligibility is split into source and platform proof. The source proof rejects custom
+ * Block-side harvest callbacks, {@code setHarvestLevel} mutations and registered
+ * {@code PlayerEvent.HarvestCheck} handlers. Material/tool/player equivalence is intentionally kept
+ * as a later platform-runtime boundary instead of being guessed from incomplete source evidence.</p>
+ *
  * <p>Explosion proof is deliberately narrower than complete explosion semantics: for a block that
  * the legacy explosion has already selected, the sidecar can prove the 1.7.10 drop eligibility,
  * fortune=0 and {@code 1/explosionSize} base chance. Custom destruction callbacks and the global
@@ -44,10 +50,20 @@ public final class LegacyBlockDropAnalysisPass implements ConversionPass {
     public static final String PLAN_PATH = "legacyforgebridge/block-drop-plans.json";
     private static final String HARVEST_DROPS_EVENT =
             "net/minecraftforge/event/world/BlockEvent$HarvestDropsEvent";
+    private static final String HARVEST_CHECK_EVENT =
+            "net/minecraftforge/event/entity/player/PlayerEvent$HarvestCheck";
     private static final String HARVEST_EVENT_RUNTIME_BLOCKER =
             "harvest-drops-event-runtime-pending";
     private static final String HARVEST_EVENT_ABSENCE_BLOCKER =
             "harvest-drops-event-absence-unproven";
+    private static final String HARVEST_CHECK_RUNTIME_BLOCKER =
+            "harvest-check-event-runtime-pending";
+    private static final String HARVEST_CHECK_ABSENCE_BLOCKER =
+            "harvest-check-event-absence-unproven";
+    private static final String HARVEST_SOURCE_PROOF_BLOCKER =
+            "harvest-eligibility-source-proof-missing";
+    private static final String HARVEST_SOURCE_CUSTOMIZATION_BLOCKER =
+            "harvest-eligibility-source-customization-runtime-pending";
     private static final String EXPLOSION_CAN_DROP_BLOCKER =
             "explosion-can-drop-callback-runtime-pending";
     private static final String EXPLOSION_SOURCE_PROOF_BLOCKER =
@@ -72,9 +88,12 @@ public final class LegacyBlockDropAnalysisPass implements ConversionPass {
         LegacyBlockDropQuantityCompiler.Analysis quantities = new LegacyBlockDropQuantityCompiler().compile(context.sourceJar());
         LegacyBlockDropMetadataCompiler.Analysis metadata = new LegacyBlockDropMetadataCompiler().compile(context.sourceJar());
         LegacyBlockDropPlanCompiler.Analysis plans = new LegacyBlockDropPlanCompiler().compile(context.sourceJar());
+        LegacyBlockHarvestEligibilityAnalyzer.Analysis harvestEligibility =
+                new LegacyBlockHarvestEligibilityAnalyzer().analyze(context.sourceJar());
         LegacyBlockExplosionAnalyzer.Analysis explosions = new LegacyBlockExplosionAnalyzer().analyze(context.sourceJar());
         LegacyEventAnalyzer.Analysis events = new LegacyEventAnalyzer().analyze(context.sourceJar());
-        HarvestEventGate harvestEvents = harvestEventGate(events);
+        EventGate harvestEvents = eventGate(events, HARVEST_DROPS_EVENT);
+        EventGate harvestChecks = eventGate(events, HARVEST_CHECK_EVENT);
         if (items.rules().isEmpty() && quantities.rules().isEmpty() && metadata.rules().isEmpty()
                 && plans.plans().isEmpty() && plans.incomplete().isEmpty()) return;
 
@@ -151,62 +170,60 @@ public final class LegacyBlockDropAnalysisPass implements ConversionPass {
                         + ", quantityRules=" + quantities.rules().size()
                         + ", damageRules=" + metadata.rules().size() + ".");
 
-        writePlanSidecar(context, plans, explosions, harvestEvents);
+        writePlanSidecar(context, plans, harvestEligibility, explosions, harvestEvents, harvestChecks);
     }
 
-    private static HarvestEventGate harvestEventGate(LegacyEventAnalyzer.Analysis analysis) {
-        List<LegacyEventAnalyzer.Binding> handlers = analysis.forEvent(HARVEST_DROPS_EVENT);
+    private static EventGate eventGate(LegacyEventAnalyzer.Analysis analysis, String eventType) {
+        List<LegacyEventAnalyzer.Binding> handlers = analysis.forEvent(eventType);
         List<String> diagnostics = analysis.diagnostics();
-        return new HarvestEventGate(handlers, diagnostics, handlers.isEmpty() && diagnostics.isEmpty());
+        return new EventGate(handlers, diagnostics, handlers.isEmpty() && diagnostics.isEmpty());
     }
 
     private static void writePlanSidecar(
             ConversionContext context,
             LegacyBlockDropPlanCompiler.Analysis analysis,
+            LegacyBlockHarvestEligibilityAnalyzer.Analysis harvestEligibility,
             LegacyBlockExplosionAnalyzer.Analysis explosions,
-            HarvestEventGate harvestEvents
+            EventGate harvestEvents,
+            EventGate harvestChecks
     ) throws IOException {
         if (analysis.plans().isEmpty() && analysis.incomplete().isEmpty()) return;
 
+        Map<BlockKey, LegacyBlockHarvestEligibilityAnalyzer.Proof> harvestProofs = new LinkedHashMap<>();
+        for (LegacyBlockHarvestEligibilityAnalyzer.Proof proof : harvestEligibility.proofs()) {
+            harvestProofs.put(new BlockKey(proof.legacyNamespace(), proof.registryName()), proof);
+        }
         Map<BlockKey, LegacyBlockExplosionAnalyzer.Proof> explosionProofs = new LinkedHashMap<>();
         for (LegacyBlockExplosionAnalyzer.Proof proof : explosions.proofs()) {
             explosionProofs.put(new BlockKey(proof.legacyNamespace(), proof.registryName()), proof);
         }
 
         JsonObject root = new JsonObject();
-        root.addProperty("schemaVersion", 3);
+        root.addProperty("schemaVersion", 4);
         root.addProperty("sourceSha256", context.sourceHash());
         root.addProperty("sourceHarvestDropsEventFree", harvestEvents.absenceProven());
         root.addProperty("harvestDropsEventHandlerCount", harvestEvents.handlers().size());
+        root.addProperty("sourceHarvestCheckEventFree", harvestChecks.absenceProven());
+        root.addProperty("harvestCheckEventHandlerCount", harvestChecks.handlers().size());
         root.addProperty("legacyExplosionChanceMode", EXPLOSION_CHANCE_MODE);
         root.addProperty("legacyExplosionFortune", 0);
 
-        JsonArray eventHandlers = new JsonArray();
-        for (LegacyEventAnalyzer.Binding binding : harvestEvents.handlers()) {
-            JsonObject value = new JsonObject();
-            value.addProperty("handlerClass", binding.handlerClass());
-            value.addProperty("method", binding.method());
-            value.addProperty("descriptor", binding.descriptor());
-            value.addProperty("bus", binding.bus().name());
-            value.addProperty("side", binding.side().name());
-            value.addProperty("priority", binding.priority());
-            value.addProperty("receiveCanceled", binding.receiveCanceled());
-            value.addProperty("registrationOwner", binding.registrationOwner());
-            value.addProperty("registrationMethod", binding.registrationMethod());
-            value.addProperty("registrationDescriptor", binding.registrationDescriptor());
-            eventHandlers.add(value);
-        }
-        root.add("harvestDropsEventHandlers", eventHandlers);
+        root.add("harvestDropsEventHandlers", eventHandlers(harvestEvents.handlers()));
+        root.add("harvestCheckEventHandlers", eventHandlers(harvestChecks.handlers()));
 
         JsonArray eventDiagnostics = new JsonArray();
         harvestEvents.diagnostics().forEach(eventDiagnostics::add);
         root.add("eventAnalysisDiagnostics", eventDiagnostics);
+        JsonArray harvestEligibilityDiagnostics = new JsonArray();
+        harvestEligibility.diagnostics().forEach(harvestEligibilityDiagnostics::add);
+        root.add("harvestEligibilityAnalysisDiagnostics", harvestEligibilityDiagnostics);
         JsonArray explosionDiagnostics = new JsonArray();
         explosions.diagnostics().forEach(explosionDiagnostics::add);
         root.add("explosionAnalysisDiagnostics", explosionDiagnostics);
 
         JsonArray plans = new JsonArray();
         int normalDropProofComplete = 0;
+        int sourceHarvestEligibilityProofComplete = 0;
         int explosionDropProofComplete = 0;
         int sourceExplosionDestructionOverrideFree = 0;
         for (LegacyBlockDropPlanCompiler.Plan plan : analysis.plans()) {
@@ -255,6 +272,19 @@ public final class LegacyBlockDropAnalysisPass implements ConversionPass {
             value.addProperty("normalDropProofComplete", finalNormalDropProof);
             value.addProperty("sourceDropPathOverrideFree", true);
 
+            LegacyBlockHarvestEligibilityAnalyzer.Proof harvest = harvestProofs.get(
+                    new BlockKey(plan.legacyNamespace(), plan.registryName()));
+            boolean sourceHarvestCustomizationFree = harvest != null && harvest.sourceCustomizationFree();
+            boolean sourceHarvestProof = sourceHarvestCustomizationFree && harvestChecks.absenceProven();
+            if (sourceHarvestProof) sourceHarvestEligibilityProofComplete++;
+            value.addProperty("sourceHarvestEligibilityCustomizationFree", sourceHarvestCustomizationFree);
+            value.addProperty("sourceHarvestCheckEventFree", harvestChecks.absenceProven());
+            value.addProperty("sourceHarvestEligibilityProofComplete", sourceHarvestProof);
+            value.addProperty("harvestEligibilityProofComplete", false);
+            JsonArray harvestReasons = new JsonArray();
+            if (harvest != null) harvest.reasons().forEach(harvestReasons::add);
+            value.add("harvestEligibilityReasons", harvestReasons);
+
             LegacyBlockExplosionAnalyzer.Proof explosion = explosionProofs.get(
                     new BlockKey(plan.legacyNamespace(), plan.registryName()));
             boolean sourceExplosionDropEligibility = explosion != null
@@ -281,6 +311,16 @@ public final class LegacyBlockDropAnalysisPass implements ConversionPass {
 
             JsonArray blockers = new JsonArray();
             RUNTIME_BLOCKERS.forEach(blockers::add);
+            if (harvest == null) {
+                blockers.add(HARVEST_SOURCE_PROOF_BLOCKER);
+            } else if (!harvest.sourceCustomizationFree()) {
+                blockers.add(HARVEST_SOURCE_CUSTOMIZATION_BLOCKER);
+            }
+            if (!harvestChecks.absenceProven()) {
+                blockers.add(harvestChecks.handlers().isEmpty()
+                        ? HARVEST_CHECK_ABSENCE_BLOCKER
+                        : HARVEST_CHECK_RUNTIME_BLOCKER);
+            }
             if (!harvestEvents.absenceProven()) {
                 blockers.add(harvestEvents.handlers().isEmpty()
                         ? HARVEST_EVENT_ABSENCE_BLOCKER
@@ -311,6 +351,8 @@ public final class LegacyBlockDropAnalysisPass implements ConversionPass {
             value.addProperty("preHarvestEventDropProofComplete", false);
             value.addProperty("forgeHarvestEventProofComplete", false);
             value.addProperty("normalDropProofComplete", false);
+            value.addProperty("sourceHarvestEligibilityProofComplete", false);
+            value.addProperty("harvestEligibilityProofComplete", false);
             value.addProperty("explosionDropProofComplete", false);
             value.addProperty("runtimeComplete", false);
             incomplete.add(value);
@@ -322,6 +364,8 @@ public final class LegacyBlockDropAnalysisPass implements ConversionPass {
         root.add("diagnostics", diagnostics);
         root.addProperty("preHarvestEventDropProofCompletePlans", plans.size());
         root.addProperty("normalDropProofCompletePlans", normalDropProofComplete);
+        root.addProperty("sourceHarvestEligibilityProofCompletePlans", sourceHarvestEligibilityProofComplete);
+        root.addProperty("harvestEligibilityProofCompletePlans", 0);
         root.addProperty("explosionDropProofCompletePlans", explosionDropProofComplete);
         root.addProperty("sourceExplosionDestructionOverrideFreePlans", sourceExplosionDestructionOverrideFree);
         root.addProperty("runtimeCompletePlans", 0);
@@ -336,9 +380,10 @@ public final class LegacyBlockDropAnalysisPass implements ConversionPass {
                 SupportLevel.RUNTIME_BRIDGE,
                 "Materialized Forge block-drop plans without enabling gameplay drops: preEventComplete="
                         + plans.size() + ", finalNormalComplete=" + normalDropProofComplete
+                        + ", sourceHarvestEligibilityComplete=" + sourceHarvestEligibilityProofComplete
                         + ", explosionDropComplete=" + explosionDropProofComplete
                         + ", incomplete=" + incomplete.size()
-                        + ". Harvest eligibility and silk-touch stacked-item semantics remain gated."
+                        + ". Material/tool/player harvest equivalence and silk-touch stacked-item semantics remain gated."
         );
         if (!harvestEvents.handlers().isEmpty()) {
             context.diagnostics().info(
@@ -355,6 +400,40 @@ public final class LegacyBlockDropAnalysisPass implements ConversionPass {
                             + harvestEvents.diagnostics().size() + " unresolved diagnostic(s)."
             );
         }
+        if (!harvestChecks.handlers().isEmpty()) {
+            context.diagnostics().info(
+                    "LFB-CONVERT-BLOCK-DROP-0007",
+                    SupportLevel.RUNTIME_BRIDGE,
+                    "Source registers PlayerEvent.HarvestCheck handlers=" + harvestChecks.handlers().size()
+                            + "; harvest eligibility runtime remains gated until those event effects are migrated."
+            );
+        } else if (!harvestChecks.diagnostics().isEmpty()) {
+            context.diagnostics().info(
+                    "LFB-CONVERT-BLOCK-DROP-0008",
+                    SupportLevel.RUNTIME_BRIDGE,
+                    "PlayerEvent.HarvestCheck absence could not be proven because event analysis reported "
+                            + harvestChecks.diagnostics().size() + " unresolved diagnostic(s)."
+            );
+        }
+    }
+
+    private static JsonArray eventHandlers(List<LegacyEventAnalyzer.Binding> handlers) {
+        JsonArray values = new JsonArray();
+        for (LegacyEventAnalyzer.Binding binding : handlers) {
+            JsonObject value = new JsonObject();
+            value.addProperty("handlerClass", binding.handlerClass());
+            value.addProperty("method", binding.method());
+            value.addProperty("descriptor", binding.descriptor());
+            value.addProperty("bus", binding.bus().name());
+            value.addProperty("side", binding.side().name());
+            value.addProperty("priority", binding.priority());
+            value.addProperty("receiveCanceled", binding.receiveCanceled());
+            value.addProperty("registrationOwner", binding.registrationOwner());
+            value.addProperty("registrationMethod", binding.registrationMethod());
+            value.addProperty("registrationDescriptor", binding.registrationDescriptor());
+            values.add(value);
+        }
+        return values;
     }
 
     private static JsonObject block(Map<BlockKey, JsonObject> blocks, ConversionContext context,
@@ -400,12 +479,12 @@ public final class LegacyBlockDropAnalysisPass implements ConversionPass {
         value.addProperty("sourceDescriptor", descriptor);
     }
 
-    private record HarvestEventGate(
+    private record EventGate(
             List<LegacyEventAnalyzer.Binding> handlers,
             List<String> diagnostics,
             boolean absenceProven
     ) {
-        private HarvestEventGate {
+        private EventGate {
             handlers = List.copyOf(handlers);
             diagnostics = List.copyOf(diagnostics);
         }

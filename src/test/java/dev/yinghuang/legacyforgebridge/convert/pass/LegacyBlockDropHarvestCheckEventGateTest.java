@@ -26,16 +26,16 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class LegacyBlockDropHarvestEventGateTest {
+class LegacyBlockDropHarvestCheckEventGateTest {
     @TempDir Path tempDir;
 
     @Test
-    void provenHarvestDropsEventHandlerKeepsPreEventPlanButGatesFinalNormalAndExplosionDropProof() throws Exception {
-        Path jar = tempDir.resolve("HarvestEventGate.jar");
+    void provenHarvestCheckHandlerGatesSourceHarvestEligibilityWithoutChangingDropStackProof() throws Exception {
+        Path jar = tempDir.resolve("HarvestCheckGate.jar");
         try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(jar))) {
-            put(out, "foreign/dropevent/Plain.class", plainBlock());
-            put(out, "foreign/dropevent/HarvestListener.class", harvestListener());
-            put(out, "foreign/dropevent/Bootstrap.class", bootstrap());
+            put(out, "foreign/harvestcheck/Plain.class", plainBlock());
+            put(out, "foreign/harvestcheck/HarvestCheckListener.class", harvestCheckListener());
+            put(out, "foreign/harvestcheck/Bootstrap.class", bootstrap());
         }
 
         ConversionContext context = context(jar);
@@ -48,55 +48,45 @@ class LegacyBlockDropHarvestEventGateTest {
                 StandardCharsets.UTF_8)).getAsJsonObject();
 
         assertEquals(4, root.get("schemaVersion").getAsInt());
-        assertFalse(root.get("sourceHarvestDropsEventFree").getAsBoolean());
-        assertEquals(1, root.get("harvestDropsEventHandlerCount").getAsInt());
-        assertTrue(root.get("sourceHarvestCheckEventFree").getAsBoolean());
-        assertEquals(0, root.get("harvestCheckEventHandlerCount").getAsInt());
-        assertEquals(1, root.get("preHarvestEventDropProofCompletePlans").getAsInt());
-        assertEquals(0, root.get("normalDropProofCompletePlans").getAsInt());
-        assertEquals(1, root.get("sourceHarvestEligibilityProofCompletePlans").getAsInt());
+        assertTrue(root.get("sourceHarvestDropsEventFree").getAsBoolean());
+        assertEquals(0, root.get("harvestDropsEventHandlerCount").getAsInt());
+        assertFalse(root.get("sourceHarvestCheckEventFree").getAsBoolean());
+        assertEquals(1, root.get("harvestCheckEventHandlerCount").getAsInt());
+        assertEquals(1, root.get("normalDropProofCompletePlans").getAsInt());
+        assertEquals(0, root.get("sourceHarvestEligibilityProofCompletePlans").getAsInt());
         assertEquals(0, root.get("harvestEligibilityProofCompletePlans").getAsInt());
-        assertEquals(0, root.get("explosionDropProofCompletePlans").getAsInt());
-        assertEquals(1, root.get("sourceExplosionDestructionOverrideFreePlans").getAsInt());
-        assertEquals("inverse_explosion_size_1_7_10", root.get("legacyExplosionChanceMode").getAsString());
-        assertEquals(0, root.get("legacyExplosionFortune").getAsInt());
+        assertEquals(1, root.get("explosionDropProofCompletePlans").getAsInt());
         assertEquals(0, root.getAsJsonArray("eventAnalysisDiagnostics").size());
         assertEquals(0, root.getAsJsonArray("harvestEligibilityAnalysisDiagnostics").size());
-        assertEquals(0, root.getAsJsonArray("explosionAnalysisDiagnostics").size());
-        assertEquals(0, root.getAsJsonArray("harvestCheckEventHandlers").size());
 
-        JsonArray handlers = root.getAsJsonArray("harvestDropsEventHandlers");
+        JsonArray handlers = root.getAsJsonArray("harvestCheckEventHandlers");
         assertEquals(1, handlers.size());
         JsonObject handler = handlers.get(0).getAsJsonObject();
-        assertEquals("foreign/dropevent/HarvestListener", handler.get("handlerClass").getAsString());
-        assertEquals("onHarvest", handler.get("method").getAsString());
+        assertEquals("foreign/harvestcheck/HarvestCheckListener", handler.get("handlerClass").getAsString());
+        assertEquals("onHarvestCheck", handler.get("method").getAsString());
         assertEquals("FORGE", handler.get("bus").getAsString());
         assertEquals("COMMON", handler.get("side").getAsString());
         assertEquals("NORMAL", handler.get("priority").getAsString());
         assertFalse(handler.get("receiveCanceled").getAsBoolean());
 
         JsonObject plan = root.getAsJsonArray("plans").get(0).getAsJsonObject();
-        assertTrue(plan.get("preHarvestEventDropProofComplete").getAsBoolean());
-        assertFalse(plan.get("forgeHarvestEventProofComplete").getAsBoolean());
-        assertFalse(plan.get("normalDropProofComplete").getAsBoolean());
+        assertTrue(plan.get("normalDropProofComplete").getAsBoolean());
         assertTrue(plan.get("sourceHarvestEligibilityCustomizationFree").getAsBoolean());
-        assertTrue(plan.get("sourceHarvestCheckEventFree").getAsBoolean());
-        assertTrue(plan.get("sourceHarvestEligibilityProofComplete").getAsBoolean());
+        assertFalse(plan.get("sourceHarvestCheckEventFree").getAsBoolean());
+        assertFalse(plan.get("sourceHarvestEligibilityProofComplete").getAsBoolean());
         assertFalse(plan.get("harvestEligibilityProofComplete").getAsBoolean());
-        assertTrue(plan.get("sourceExplosionDropEligibilityProofComplete").getAsBoolean());
-        assertTrue(plan.get("sourceExplosionDestructionOverrideFree").getAsBoolean());
-        assertFalse(plan.get("explosionDropProofComplete").getAsBoolean());
+        assertTrue(plan.get("explosionDropProofComplete").getAsBoolean());
         assertFalse(plan.get("runtimeComplete").getAsBoolean());
         assertEquals(3, plan.getAsJsonArray("runtimeBlockers").size());
 
-        boolean eventBlocker = false;
+        boolean harvestCheckBlocker = false;
         for (var blocker : plan.getAsJsonArray("runtimeBlockers")) {
-            if ("harvest-drops-event-runtime-pending".equals(blocker.getAsString())) {
-                eventBlocker = true;
+            if ("harvest-check-event-runtime-pending".equals(blocker.getAsString())) {
+                harvestCheckBlocker = true;
                 break;
             }
         }
-        assertTrue(eventBlocker);
+        assertTrue(harvestCheckBlocker);
     }
 
     private ConversionContext context(Path jar) throws Exception {
@@ -110,7 +100,8 @@ class LegacyBlockDropHarvestEventGateTest {
     }
 
     private static byte[] plainBlock() {
-        String owner = "foreign/dropevent/Plain"; ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        String owner = "foreign/harvestcheck/Plain";
+        ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
         writer.visit(Opcodes.V1_7, Opcodes.ACC_PUBLIC, owner, null, "net/minecraft/block/Block", null);
         MethodVisitor init = writer.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null);
         init.visitCode(); init.visitVarInsn(Opcodes.ALOAD, 0); init.visitInsn(Opcodes.ACONST_NULL);
@@ -119,34 +110,36 @@ class LegacyBlockDropHarvestEventGateTest {
         init.visitInsn(Opcodes.RETURN); end(init); writer.visitEnd(); return writer.toByteArray();
     }
 
-    private static byte[] harvestListener() {
-        String owner = "foreign/dropevent/HarvestListener"; ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+    private static byte[] harvestCheckListener() {
+        String owner = "foreign/harvestcheck/HarvestCheckListener";
+        ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
         writer.visit(Opcodes.V1_7, Opcodes.ACC_PUBLIC, owner, null, "java/lang/Object", null);
         constructor(writer, "java/lang/Object");
-        MethodVisitor method = writer.visitMethod(Opcodes.ACC_PUBLIC, "onHarvest",
-                "(Lnet/minecraftforge/event/world/BlockEvent$HarvestDropsEvent;)V", null, null);
+        MethodVisitor method = writer.visitMethod(Opcodes.ACC_PUBLIC, "onHarvestCheck",
+                "(Lnet/minecraftforge/event/entity/player/PlayerEvent$HarvestCheck;)V", null, null);
         AnnotationVisitor subscribe = method.visitAnnotation("Lcpw/mods/fml/common/eventhandler/SubscribeEvent;", true);
         subscribe.visitEnd(); method.visitCode(); method.visitInsn(Opcodes.RETURN); end(method);
         writer.visitEnd(); return writer.toByteArray();
     }
 
     private static byte[] bootstrap() {
-        String owner = "foreign/dropevent/Bootstrap"; ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        String owner = "foreign/harvestcheck/Bootstrap";
+        ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
         writer.visit(Opcodes.V1_7, Opcodes.ACC_PUBLIC, owner, null, "java/lang/Object", null);
         constructor(writer, "java/lang/Object");
         MethodVisitor method = writer.visitMethod(Opcodes.ACC_PUBLIC, "preInit",
                 "(Lcpw/mods/fml/common/event/FMLPreInitializationEvent;)V", null, null);
         AnnotationVisitor annotation = method.visitAnnotation("Lcpw/mods/fml/common/Mod$EventHandler;", true);
         annotation.visitEnd(); method.visitCode();
-        method.visitTypeInsn(Opcodes.NEW, "foreign/dropevent/Plain"); method.visitInsn(Opcodes.DUP);
-        method.visitMethodInsn(Opcodes.INVOKESPECIAL, "foreign/dropevent/Plain", "<init>", "()V", false);
+        method.visitTypeInsn(Opcodes.NEW, "foreign/harvestcheck/Plain"); method.visitInsn(Opcodes.DUP);
+        method.visitMethodInsn(Opcodes.INVOKESPECIAL, "foreign/harvestcheck/Plain", "<init>", "()V", false);
         method.visitLdcInsn("plain");
         method.visitMethodInsn(Opcodes.INVOKESTATIC, "cpw/mods/fml/common/registry/GameRegistry", "registerBlock",
                 "(Lnet/minecraft/block/Block;Ljava/lang/String;)V", false);
         method.visitFieldInsn(Opcodes.GETSTATIC, "net/minecraftforge/common/MinecraftForge", "EVENT_BUS",
                 "Lcpw/mods/fml/common/eventhandler/EventBus;");
-        method.visitTypeInsn(Opcodes.NEW, "foreign/dropevent/HarvestListener"); method.visitInsn(Opcodes.DUP);
-        method.visitMethodInsn(Opcodes.INVOKESPECIAL, "foreign/dropevent/HarvestListener", "<init>", "()V", false);
+        method.visitTypeInsn(Opcodes.NEW, "foreign/harvestcheck/HarvestCheckListener"); method.visitInsn(Opcodes.DUP);
+        method.visitMethodInsn(Opcodes.INVOKESPECIAL, "foreign/harvestcheck/HarvestCheckListener", "<init>", "()V", false);
         method.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "cpw/mods/fml/common/eventhandler/EventBus", "register",
                 "(Ljava/lang/Object;)V", false);
         method.visitInsn(Opcodes.RETURN); end(method); writer.visitEnd(); return writer.toByteArray();
@@ -158,6 +151,7 @@ class LegacyBlockDropHarvestEventGateTest {
         init.visitMethodInsn(Opcodes.INVOKESPECIAL, parent, "<init>", "()V", false);
         init.visitInsn(Opcodes.RETURN); end(init);
     }
+
     private static void end(MethodVisitor method) { method.visitMaxs(0, 0); method.visitEnd(); }
     private static void put(JarOutputStream out, String name, byte[] bytes) throws Exception {
         out.putNextEntry(new JarEntry(name)); out.write(bytes); out.closeEntry();
