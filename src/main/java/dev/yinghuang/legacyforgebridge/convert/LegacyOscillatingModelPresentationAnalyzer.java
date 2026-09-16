@@ -71,18 +71,19 @@ public final class LegacyOscillatingModelPresentationAnalyzer {
 
     private static Registration registration(Map<String,ClassNode> classes,String tile){
         Set<Registration> found=new LinkedHashSet<>();
-        for(ClassNode owner:classes.values())for(MethodNode method:owner.methods){List<AbstractInsnNode> code=real(method);for(int i=0;i<code.size();i++){
-            if(!(code.get(i) instanceof MethodInsnNode call)||call.getOpcode()!=Opcodes.INVOKESTATIC
-                    ||!call.owner.equals("cpw/mods/fml/client/registry/ClientRegistry")||!call.name.equals("registerTileEntity")
-                    ||!call.desc.equals("(Ljava/lang/Class;Ljava/lang/String;Lnet/minecraft/client/renderer/tileentity/TileEntitySpecialRenderer;)V"))continue;
-            boolean sameTile=false;String id=null,renderer=null;
-            for(int j=Math.max(0,i-12);j<i;j++){AbstractInsnNode value=code.get(j);
-                if(value instanceof LdcInsnNode ldc&&ldc.cst instanceof Type type&&type.getSort()==Type.OBJECT&&type.getInternalName().equals(tile))sameTile=true;
-                if(value instanceof LdcInsnNode ldc&&ldc.cst instanceof String text)id=text;
-                if(value instanceof TypeInsnNode type&&type.getOpcode()==Opcodes.NEW&&inherits(classes,type.desc,TESR))renderer=type.desc;
+        for(ClassNode owner:classes.values())for(MethodNode method:owner.methods){
+            for(AbstractInsnNode insn:method.instructions){
+                if(!(insn instanceof MethodInsnNode call)||call.getOpcode()!=Opcodes.INVOKESTATIC
+                        ||!call.owner.equals("cpw/mods/fml/client/registry/ClientRegistry")||!call.name.equals("registerTileEntity")
+                        ||!call.desc.equals("(Ljava/lang/Class;Ljava/lang/String;Lnet/minecraft/client/renderer/tileentity/TileEntitySpecialRenderer;)V"))continue;
+                LegacyDirectCallArguments.ClassStringNew arguments=
+                        LegacyDirectCallArguments.classStringNew(owner,method,call);
+                if(arguments!=null&&arguments.classInternalName().equals(tile)
+                        &&inherits(classes,arguments.newTypeInternalName(),TESR)){
+                    found.add(new Registration(arguments.newTypeInternalName(),arguments.stringValue()));
+                }
             }
-            if(sameTile&&id!=null&&renderer!=null)found.add(new Registration(renderer,id));
-        }}
+        }
         return found.size()==1?found.iterator().next():null;
     }
     private static String modelOwner(ClassNode renderer,Map<String,ClassNode> classes){

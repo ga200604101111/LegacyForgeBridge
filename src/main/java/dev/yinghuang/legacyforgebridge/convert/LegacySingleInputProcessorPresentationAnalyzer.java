@@ -182,8 +182,15 @@ public final class LegacySingleInputProcessorPresentationAnalyzer {
             for(AbstractInsnNode insn=start.getNext();insn!=null;insn=insn.getNext()){
                 if(insn instanceof LabelNode label&&boundaries.contains(label))break;
                 if(insn instanceof MethodInsnNode call&&call.getOpcode()==Opcodes.INVOKESPECIAL&&call.name.equals("<init>")
-                        &&call.desc.contains("Lnet/minecraft/tileentity/TileEntity;")&&inherits(classes,call.owner,GUI_CONTAINER)){
-                    if(hasTypeBetween(start,insn,Opcodes.CHECKCAST,tileClass))candidates.add(call.owner);
+                        &&call.desc.equals("(Lnet/minecraft/entity/player/InventoryPlayer;Lnet/minecraft/tileentity/TileEntity;)V")
+                        &&inherits(classes,call.owner,GUI_CONTAINER)
+                        &&hasCallBetween(start,insn,"net/minecraft/world/World",
+                        Set.of("func_147438_o","getTileEntity"),"(III)Lnet/minecraft/tileentity/TileEntity;")){
+                    // The handler may intentionally pass the generic TileEntity value through unchanged.
+                    // canonicalGui() separately proves that the GUI constructor narrows that exact value to
+                    // the source TileEntity class before storing/using it, so requiring a redundant cast in
+                    // the IGuiHandler case would reject valid Forge 1.7 bytecode such as Bamboo MillStone.
+                    candidates.add(call.owner);
                 }
                 if(insn.getOpcode()==Opcodes.ARETURN)break;
             }
@@ -191,29 +198,28 @@ public final class LegacySingleInputProcessorPresentationAnalyzer {
         return candidates.size()==1?candidates.iterator().next():null;
     }
 
-    private static boolean hasTypeBetween(AbstractInsnNode start,AbstractInsnNode end,int opcode,String type){
+    private static boolean hasCallBetween(AbstractInsnNode start,AbstractInsnNode end,String owner,Set<String> names,String descriptor){
         for(AbstractInsnNode insn=start;insn!=null&&insn!=end;insn=insn.getNext())
-            if(insn instanceof TypeInsnNode value&&value.getOpcode()==opcode&&value.desc.equals(type))return true;
+            if(insn instanceof MethodInsnNode call&&call.owner.equals(owner)&&names.contains(call.name)
+                    &&call.desc.equals(descriptor))return true;
         return false;
     }
 
     private static RegisteredRenderer findRendererRegistration(Map<String,ClassNode> classes,String tileClass,String tileId){
         Set<String> renderers=new LinkedHashSet<>();
         for(ClassNode owner:classes.values())for(MethodNode method:owner.methods){
-            List<AbstractInsnNode> code=real(method);
-            for(int i=0;i<code.size();i++){
-                if(!(code.get(i) instanceof MethodInsnNode call)||call.getOpcode()!=Opcodes.INVOKESTATIC
+            for(AbstractInsnNode insn:method.instructions){
+                if(!(insn instanceof MethodInsnNode call)||call.getOpcode()!=Opcodes.INVOKESTATIC
                         ||!call.owner.equals("cpw/mods/fml/client/registry/ClientRegistry")
                         ||!call.name.equals("registerTileEntity")
                         ||!call.desc.equals("(Ljava/lang/Class;Ljava/lang/String;Lnet/minecraft/client/renderer/tileentity/TileEntitySpecialRenderer;)V"))continue;
-                String renderer=null;boolean tile=false,id=false;
-                for(int j=Math.max(0,i-10);j<i;j++){
-                    AbstractInsnNode value=code.get(j);
-                    if(value instanceof LdcInsnNode ldc&&ldc.cst instanceof Type type&&type.getSort()==Type.OBJECT&&type.getInternalName().equals(tileClass))tile=true;
-                    if(value instanceof LdcInsnNode ldc&&tileId.equals(ldc.cst))id=true;
-                    if(value instanceof TypeInsnNode type&&type.getOpcode()==Opcodes.NEW&&inherits(classes,type.desc,TESR))renderer=type.desc;
+                LegacyDirectCallArguments.ClassStringNew arguments=
+                        LegacyDirectCallArguments.classStringNew(owner,method,call);
+                if(arguments!=null&&arguments.classInternalName().equals(tileClass)
+                        &&arguments.stringValue().equals(tileId)
+                        &&inherits(classes,arguments.newTypeInternalName(),TESR)){
+                    renderers.add(arguments.newTypeInternalName());
                 }
-                if(tile&&id&&renderer!=null)renderers.add(renderer);
             }
         }
         return renderers.size()==1?new RegisteredRenderer(renderers.iterator().next()):null;

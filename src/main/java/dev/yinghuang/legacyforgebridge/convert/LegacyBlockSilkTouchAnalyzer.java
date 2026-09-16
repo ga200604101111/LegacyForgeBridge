@@ -177,7 +177,7 @@ public final class LegacyBlockSilkTouchAnalyzer {
                 for (AbstractInsnNode instruction : method.instructions) {
                     if (instruction instanceof MethodInsnNode call && isSubtypeSetter(call)) {
                         if (frames == null || index >= frames.length || frames[index] == null
-                                || !receiverIsScopedOrdinaryItem(classes, owner, method, frames[index], ordinaryItemFields)) {
+                                || !receiverMutationIsObjectScoped(owner, method, frames[index], ordinaryItemFields)) {
                             return true;
                         }
                     }
@@ -188,8 +188,7 @@ public final class LegacyBlockSilkTouchAnalyzer {
         return false;
     }
 
-    private static boolean receiverIsScopedOrdinaryItem(
-            Map<String, ClassNode> classes,
+    private static boolean receiverMutationIsObjectScoped(
             ClassNode owner,
             MethodNode method,
             Frame<SourceValue> frame,
@@ -199,12 +198,21 @@ public final class LegacyBlockSilkTouchAnalyzer {
         SourceValue receiver = frame.getStack(frame.getStackSize() - 2);
         if (receiver == null || receiver.insns == null || receiver.insns.size() != 1) return false;
         AbstractInsnNode source = receiver.insns.iterator().next();
+
+        // The invokevirtual owner/descriptor already proves that the receiver must be an Item at
+        // bytecode-verification time. When the source is exactly ALOAD 0, the mutation is therefore
+        // scoped to this source Item/ItemBlock instance even when its first external superclass is
+        // ItemFood, ItemSnowball, ItemBlock, or another vanilla/Forge Item subclass that is not in
+        // the input JAR. Do not let that local constructor mutation poison every generated BlockItem.
         if (source instanceof VarInsnNode variable && variable.getOpcode() == Opcodes.ALOAD && variable.var == 0
-                && (method.access & Opcodes.ACC_STATIC) == 0 && isSubclass(classes, owner.name, ITEM)) {
+                && (method.access & Opcodes.ACC_STATIC) == 0) {
             return true;
         }
-        if (source instanceof TypeInsnNode type && type.getOpcode() == Opcodes.NEW
-                && isSubclass(classes, type.desc, ITEM) && !isSubclass(classes, type.desc, ITEM_BLOCK)) {
+
+        // Likewise a directly constructed receiver is object-local. A custom ItemBlock remains
+        // fail-closed for the block that actually uses it via the per-registration itemBlockClass
+        // gate above; it is no longer treated as an unscoped mutation affecting unrelated blocks.
+        if (source instanceof TypeInsnNode type && type.getOpcode() == Opcodes.NEW) {
             return true;
         }
         if (source instanceof FieldInsnNode field && field.getOpcode() == Opcodes.GETSTATIC
