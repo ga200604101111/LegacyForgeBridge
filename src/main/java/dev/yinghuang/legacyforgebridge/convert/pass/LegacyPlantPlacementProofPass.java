@@ -22,8 +22,8 @@ import java.util.Set;
 
 /**
  * Intersects source item behavior, constructor bindings and proven plant target semantics before a
- * planting item may be materialized. ItemSeeds and ItemSeedFood are runtime-complete here; the
- * more general ItemReed BlockItem-style placement path intentionally remains gated.
+ * planting item may be materialized. ItemSeeds, ItemSeedFood and ItemReed remain fail-closed until
+ * their family-specific source/runtime proofs are complete.
  */
 public final class LegacyPlantPlacementProofPass implements ConversionPass {
     public static final String OUTPUT = "legacyforgebridge/plant-placement-proof.json";
@@ -88,8 +88,8 @@ public final class LegacyPlantPlacementProofPass implements ConversionPass {
             boolean seedFoodProperties = !seedFoodRequired || nutrition != null && nutrition >= 0
                     && saturation != null && Float.isFinite(saturation) && saturation >= 0F;
             boolean complete = sourceAligned && topology && inherited && targetProof && soilProofComplete && seedFoodProperties;
-            boolean seedAdapter = "seeds".equals(itemFamily) || "seed_food".equals(itemFamily);
-            boolean runtime = complete && seedAdapter;
+            boolean supportedFamily = "seeds".equals(itemFamily) || "seed_food".equals(itemFamily) || "reed".equals(itemFamily);
+            boolean runtime = complete && supportedFamily;
 
             JsonObject value = new JsonObject();
             copy(binding, value, "id"); copy(binding, value, "legacyRegistryName");
@@ -120,10 +120,9 @@ public final class LegacyPlantPlacementProofPass implements ConversionPass {
             if (!inherited) reasons.add("source-item-placement-override-or-lineage-unproven");
             if (!familyMatch) reasons.add("item-target-plant-family-mismatch");
             if (!plantRuntime) reasons.add("target-plant-runtime-proof-incomplete");
-            if (!targetCallbacks) reasons.add("item-reed-target-placement-callbacks-pending");
+            if (!targetCallbacks) reasons.add("item-reed-target-placement-callbacks-unproven");
             if (!soilProofComplete) reasons.add("seed-placement-soil-proof-incomplete");
             if (!seedFoodProperties) reasons.add("seed-food-properties-incomplete");
-            if (complete && !runtime) reasons.add("item-reed-runtime-materialization-pending");
             value.add("reasons", reasons);
             output.add(value);
             if (inherited) inheritedItems++;
@@ -151,7 +150,7 @@ public final class LegacyPlantPlacementProofPass implements ConversionPass {
                 "Intersected source-proven plant item placement evidence: items=" + output.size()
                         + ", inherited=" + inheritedItems + ", target=" + targetComplete
                         + ", placement-proof=" + placementComplete + ", runtime=" + runtimeComplete
-                        + "; ItemReed remains gated behind its full BlockItem-style placement bridge.");
+                        + "; ItemReed requires inherited target placement callbacks before materialization.");
         behaviorAnalysis.diagnostics().forEach(message -> context.diagnostics().warning(
                 "LFB-CONVERT-PLANT-PLACEMENT-0002", SupportLevel.MANUAL_REQUIRED, message));
     }

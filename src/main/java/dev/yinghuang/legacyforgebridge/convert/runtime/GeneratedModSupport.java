@@ -71,8 +71,7 @@ public final class GeneratedModSupport {
         boolean storage=LegacyStorageBlockRegistry.hasRule(id);
         boolean processor=LegacySingleInputProcessorRegistry.hasRule(id);
         var plantRule=LegacyPlantRuntimeRegistry.rule(id);
-        boolean plant=plantRule!=null&&plantRule.family()==LegacyPlantRuntimeRegistry.Family.CROPS
-                &&LegacyPlantPlacementRegistry.cropTargetRuntimeReady(id);
+        boolean plant=plantRule!=null&&LegacyPlantPlacementRegistry.plantTargetRuntimeReady(id);
         int families=(inert?1:0)+(storage?1:0)+(processor?1:0)+(plant?1:0);
         if(families>1)throw new IllegalStateException("Converted block has conflicting specialized runtime rules: "+id);
         Block block=inert?new ConvertedLegacyInertModelBlock(id,blockProperties)
@@ -135,10 +134,10 @@ public final class GeneratedModSupport {
                     .add(Attributes.ARMOR,new AttributeModifier(modifier,armor,AttributeModifier.Operation.ADD_VALUE),group).build());
         }
         if(durability>0)properties.durability(durability);
-        boolean planting=LegacyPlantPlacementRegistry.hasSeedRuntimeRule(id);
-        if(planting&&"snowball".equals(kind))throw new IllegalStateException("Converted item has conflicting snowball and seed placement runtimes: "+id);
+        boolean planting=LegacyPlantPlacementRegistry.hasRuntimeRule(id);
+        if(planting&&"snowball".equals(kind))throw new IllegalStateException("Converted item has conflicting snowball and plant placement runtimes: "+id);
         if(planting&&source!=null&&source.hooks().stream().anyMatch(hook->!"identity".equals(hook)))
-            throw new IllegalStateException("Source callback unexpectedly survived strict seed placement proof for "+id+": "+source.hooks());
+            throw new IllegalStateException("Source callback unexpectedly survived strict plant placement proof for "+id+": "+source.hooks());
         Item item="snowball".equals(kind)?new SnowballItem(properties)
                 :planting?new ConvertedLegacyPlantingItem(id,properties)
                 :new ConvertedBehaviorItem(properties);
