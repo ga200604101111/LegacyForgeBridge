@@ -4,6 +4,7 @@ import dev.yinghuang.legacyforgebridge.convert.api.ConversionPlan;
 import dev.yinghuang.legacyforgebridge.convert.api.LegacyModMetadata;
 import dev.yinghuang.legacyforgebridge.convert.api.LegacyModProfile;
 import dev.yinghuang.legacyforgebridge.convert.pass.GenericContentPass;
+import dev.yinghuang.legacyforgebridge.convert.pass.LegacyEntityDataWatcherAccessPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyEntityDataWatcherPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacySeatBedPresentationPass;
 
@@ -13,6 +14,7 @@ public final class GenericLegacyModProfile implements LegacyModProfile {
     @Override public void configure(ConversionPlan.Builder plan){
         plan.add(new GenericContentPass());
         plan.add(new LegacyEntityDataWatcherPass());
+        plan.add(new LegacyEntityDataWatcherAccessPass());
         plan.add(new LegacySeatBedPresentationPass());
     }
 }
