@@ -4,6 +4,7 @@ import dev.yinghuang.legacyforgebridge.compat.LegacyStackComponents;
 import dev.yinghuang.legacyforgebridge.convert.LegacyConversionManager;
 import dev.yinghuang.legacyforgebridge.convert.runtime.ConvertedContentRuntime;
 import dev.yinghuang.legacyforgebridge.convert.runtime.LegacyProcessorMenuSupport;
+import dev.yinghuang.legacyforgebridge.convert.runtime.LegacySeatEntityRuntime;
 import dev.yinghuang.legacyforgebridge.network.FmlConnectionTrace;
 import net.fabricmc.api.ModInitializer;
 import org.slf4j.Logger;
@@ -29,9 +30,10 @@ public final class LegacyForgeBridge implements ModInitializer {
         }
         LOGGER.info("Initializing LegacyForgeBridge {}", BuildInfo.VERSION);
 
-        // Register shared LFB-owned state and menu types before converted content is constructed.
+        // Register shared LFB-owned state/menu/entity types before converted content is constructed.
         LegacyStackComponents.bootstrap();
         LegacyProcessorMenuSupport.bootstrap();
+        LegacySeatEntityRuntime.bootstrap();
 
         // Forge/FML tracing shares the same dedicated launch log instead of opening a second writer.
         FmlConnectionTrace.INSTANCE.initializeForLaunch();

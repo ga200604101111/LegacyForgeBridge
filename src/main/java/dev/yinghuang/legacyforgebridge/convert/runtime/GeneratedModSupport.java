@@ -12,6 +12,7 @@ import dev.yinghuang.legacyforgebridge.compat.LegacyGridPotBlockRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyInertModelBlockRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyPlantPlacementRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyPlantRuntimeRegistry;
+import dev.yinghuang.legacyforgebridge.compat.LegacySeatBedRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacySingleInputProcessorRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyStackComponents;
 import dev.yinghuang.legacyforgebridge.compat.LegacyStorageBlockRegistry;
@@ -61,6 +62,7 @@ public final class GeneratedModSupport {
         LegacyStorageBlockRegistry.loadMod(modId);
         LegacySingleInputProcessorRegistry.loadMod(modId);
         LegacyGridPotBlockRegistry.loadMod(modId);
+        LegacySeatBedRegistry.loadMod(modId);
         if(ACTIVE_MODS.add(modId))COUNTS.put(modId,new int[3]);
     }
 
@@ -69,16 +71,18 @@ public final class GeneratedModSupport {
         if(BuiltInRegistries.BLOCK.containsKey(id)){BLOCKS.put(id,BuiltInRegistries.BLOCK.getValue(id));return;}
         ResourceKey<Block> blockKey=ResourceKey.create(Registries.BLOCK,id);
         boolean gridPot=LegacyGridPotBlockRegistry.hasRule(id);
+        boolean seatBed=LegacySeatBedRegistry.hasBlockRule(id);
         BlockBehaviour.Properties blockProperties=BlockBehaviour.Properties.of().setId(blockKey).overrideDescription(descriptionKey);
-        if(gridPot)blockProperties=blockProperties.dynamicShape().noOcclusion();
+        if(gridPot||seatBed)blockProperties=blockProperties.dynamicShape().noOcclusion();
         boolean inert=LegacyInertModelBlockRegistry.hasRule(id);
         boolean storage=LegacyStorageBlockRegistry.hasRule(id);
         boolean processor=LegacySingleInputProcessorRegistry.hasRule(id);
         var plantRule=LegacyPlantRuntimeRegistry.rule(id);
         boolean plant=plantRule!=null&&LegacyPlantPlacementRegistry.plantTargetRuntimeReady(id);
-        int families=(gridPot?1:0)+(inert?1:0)+(storage?1:0)+(processor?1:0)+(plant?1:0);
+        int families=(gridPot?1:0)+(seatBed?1:0)+(inert?1:0)+(storage?1:0)+(processor?1:0)+(plant?1:0);
         if(families>1)throw new IllegalStateException("Converted block has conflicting specialized runtime rules: "+id);
         Block block=gridPot?new ConvertedLegacyGridPotBlock(id,blockProperties)
+                :seatBed?new ConvertedLegacySeatBedBlock(id,blockProperties)
                 :inert?new ConvertedLegacyInertModelBlock(id,blockProperties)
                 :storage?new ConvertedLegacyStorageBlock(id,blockProperties)
                 :processor?new ConvertedLegacyProcessorBlock(id,blockProperties)
@@ -87,6 +91,7 @@ public final class GeneratedModSupport {
         Registry.register(BuiltInRegistries.BLOCK,blockKey,block);
         BLOCKS.put(id,block);
         if(gridPot)LegacyGridPotBlockRegistry.registerType(id,block);
+        if(seatBed)LegacySeatBedRegistry.registerType(id,block);
         if(inert)LegacyInertModelBlockRegistry.registerType(id,block);
         if(storage)LegacyStorageBlockRegistry.registerType(id,block);
         if(processor)LegacySingleInputProcessorRegistry.registerType(id,block);
@@ -111,6 +116,7 @@ public final class GeneratedModSupport {
                 .component(LegacyStackComponents.legacyMeta(),0);
         if("snowball".equals(kind))properties.stacksTo(16);
         var plantingRule=LegacyPlantPlacementRegistry.rule(id);
+        var seatBedRule=LegacySeatBedRegistry.placementItemRule(id);
         var food=LegacyFoodItemRegistry.rule(id);
         if(plantingRule!=null&&plantingRule.adapter()==LegacyPlantPlacementRegistry.Adapter.SEED_FOOD){
             if(food!=null&&(food.nutrition()!=plantingRule.nutrition()
@@ -125,6 +131,7 @@ public final class GeneratedModSupport {
             if(count>=1&&count<=99)properties.stacksTo(count);
             if(source.item().durability>0)durability=source.item().durability;
         }
+        if(seatBedRule!=null)properties.stacksTo(1);
         if("sword".equals(kind)){
             properties.sword(ToolMaterial.DIAMOND,attackDamage-ToolMaterial.DIAMOND.attackDamageBonus(),attackSpeed);
             properties.attributes(legacyWeaponAttributes(attackDamage,attackSpeed));
@@ -141,12 +148,20 @@ public final class GeneratedModSupport {
         }
         if(durability>0)properties.durability(durability);
         boolean planting=LegacyPlantPlacementRegistry.hasRuntimeRule(id);
+        boolean seatBedPlacement=seatBedRule!=null;
         if(planting&&"snowball".equals(kind))throw new IllegalStateException("Converted item has conflicting snowball and plant placement runtimes: "+id);
+        if(seatBedPlacement&&(planting||"snowball".equals(kind)))throw new IllegalStateException("Converted item has conflicting seat-bed placement runtime: "+id);
         if(planting&&source!=null&&source.hooks().stream().anyMatch(hook->!"identity".equals(hook)))
             throw new IllegalStateException("Source callback unexpectedly survived strict plant placement proof for "+id+": "+source.hooks());
-        Item item="snowball".equals(kind)?new SnowballItem(properties)
-                :planting?new ConvertedLegacyPlantingItem(id,properties)
-                :new ConvertedBehaviorItem(properties);
+        Item item;
+        if("snowball".equals(kind))item=new SnowballItem(properties);
+        else if(planting)item=new ConvertedLegacyPlantingItem(id,properties);
+        else if(seatBedPlacement){
+            Block target=BLOCKS.get(seatBedRule.id());
+            if(!(target instanceof ConvertedLegacySeatBedBlock seatBlock))
+                throw new IllegalStateException("Seat-bed placement item registered before specialized target block: "+id+" -> "+seatBedRule.id());
+            item=new ConvertedLegacySeatBedItem(seatBlock,properties);
+        }else item=new ConvertedBehaviorItem(properties);
         Registry.register(BuiltInRegistries.ITEM,key,item);
         ITEMS.put(id,item);
         int[] counts=COUNTS.get(id.getNamespace());if(counts!=null)counts[0]++;
