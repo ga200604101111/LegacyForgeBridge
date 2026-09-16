@@ -25,7 +25,7 @@ class LegacyBlockDropRuntimeReadinessPassTest {
     @TempDir Path tempDir;
 
     @Test
-    void admitsOnlyMetadataIndependentNormalAndSilkSelfDropsAndKeepsExplosionMappingGated() throws Exception {
+    void admitsOnlyMetadataIndependentNormalAndSilkSelfDropsAndSeparatesExplosionProofLayers() throws Exception {
         Path sourceJar = tempDir.resolve("fixture.jar");
         try (JarOutputStream ignored = new JarOutputStream(Files.newOutputStream(sourceJar))) { }
         ConversionContext context = context(sourceJar);
@@ -33,6 +33,7 @@ class LegacyBlockDropRuntimeReadinessPassTest {
         JsonObject root = new JsonObject();
         root.addProperty("schemaVersion", 6);
         root.addProperty("sourceSha256", "sha");
+        root.addProperty("legacyExplosionChanceMode", "inverse_explosion_size_1_7_10");
         JsonArray plans = new JsonArray();
         plans.add(plan("ready", true, true, zeros(), true, true));
         plans.add(plan("metadata", true, true, metadataDamage(), true, true));
@@ -51,10 +52,22 @@ class LegacyBlockDropRuntimeReadinessPassTest {
         JsonObject output = JsonParser.parseString(Files.readString(
                 tempDir.resolve("staging/" + LegacyBlockDropRuntimeReadinessPass.OUTPUT_PATH),
                 StandardCharsets.UTF_8)).getAsJsonObject();
-        assertEquals(1, output.get("schemaVersion").getAsInt());
+        assertEquals(2, output.get("schemaVersion").getAsInt());
         assertEquals(6, output.get("sourcePlanSchemaVersion").getAsInt());
         assertFalse(output.get("lootRuntimeGenerated").getAsBoolean());
+        assertTrue(output.get("explosionDecayFormulaProofComplete").getAsBoolean());
+        assertEquals(LegacyBlockDropRuntimeReadinessPass.EXPLOSION_FORMULA_PROOF_VERSION,
+                output.get("explosionDecayFormulaProofVersion").getAsString());
+        assertEquals("minecraft:survives_explosion", output.get("modernExplosionDecayCondition").getAsString());
+        assertTrue(output.get("sourceExplosionEventFree").getAsBoolean());
+        assertEquals(0, output.get("explosionEventHandlerCount").getAsInt());
+        assertTrue(output.get("explosionAffectedSetSourceProofComplete").getAsBoolean());
+        assertEquals(0, output.getAsJsonArray("explosionEventHandlers").size());
+        assertEquals(0, output.getAsJsonArray("eventAnalysisDiagnostics").size());
+        assertFalse(output.get("explosionInteractionCoverageComplete").getAsBoolean());
         assertFalse(output.get("explosionRuntimeMappingReady").getAsBoolean());
+        assertEquals(LegacyBlockDropRuntimeReadinessPass.EXPLOSION_INTERACTION_BLOCKER,
+                output.get("explosionRuntimeBlocker").getAsString());
         assertEquals(1, output.get("normalSilkStaticSelfDropReadyPlans").getAsInt());
         assertEquals(3, output.get("blockedPlans").getAsInt());
 
@@ -63,6 +76,10 @@ class LegacyBlockDropRuntimeReadinessPassTest {
         assertEquals("fixture:ready", ready.get("id").getAsString());
         assertTrue(ready.get("normalSilkStaticSelfDropReady").getAsBoolean());
         assertTrue(ready.get("explosionSourceProofComplete").getAsBoolean());
+        assertTrue(ready.get("sourceExplosionDestructionOverrideFree").getAsBoolean());
+        assertTrue(ready.get("explosionDecayFormulaProofComplete").getAsBoolean());
+        assertTrue(ready.get("explosionAffectedSetSourceProofComplete").getAsBoolean());
+        assertFalse(ready.get("explosionInteractionCoverageComplete").getAsBoolean());
         assertFalse(ready.get("explosionRuntimeMappingReady").getAsBoolean());
         assertFalse(ready.get("lootRuntimeGenerated").getAsBoolean());
         assertEquals("SELF_BLOCK_ITEM", ready.get("dropKind").getAsString());
@@ -89,6 +106,7 @@ class LegacyBlockDropRuntimeReadinessPassTest {
         plan.addProperty("normalDropProofComplete", true);
         plan.addProperty("harvestEligibilityProofComplete", harvestComplete);
         plan.addProperty("explosionDropProofComplete", explosionComplete);
+        plan.addProperty("sourceExplosionDestructionOverrideFree", true);
         plan.addProperty("quantity", 1);
         JsonObject item = new JsonObject();
         item.addProperty("kind", "SELF_BLOCK_ITEM");

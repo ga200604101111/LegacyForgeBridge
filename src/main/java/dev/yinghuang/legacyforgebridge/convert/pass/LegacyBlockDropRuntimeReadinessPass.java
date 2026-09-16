@@ -6,6 +6,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import dev.yinghuang.legacyforgebridge.convert.LegacyEventAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.api.ConversionContext;
 import dev.yinghuang.legacyforgebridge.convert.api.ConversionPass;
 import dev.yinghuang.legacyforgebridge.convert.api.SupportLevel;
@@ -15,20 +16,39 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Classifies a deliberately narrow block-drop subset that can later be mapped to a static modern
  * self-drop runtime without interpreting unresolved tool or explosion semantics.
  *
  * <p>This pass is proof-only. It does not generate loot tables or override modern block drops.
- * Explosion runtime mapping remains explicitly false even when the source-side explosion proof is
- * complete, because Minecraft 1.7.10's {@code 1/explosionSize} chance has not yet been proven
- * equivalent to a Minecraft 1.21.11 loot condition.</p>
+ * The exact 1.7.10 and 1.21.11 decay formulas are recorded separately from full explosion runtime
+ * readiness: modern non-decay explosion interactions omit the explosion-radius loot parameter, and
+ * source Forge ExplosionEvent handlers may alter/cancel the affected-block set.</p>
  */
 public final class LegacyBlockDropRuntimeReadinessPass implements ConversionPass {
     public static final String OUTPUT_PATH = "legacyforgebridge/block-drop-runtime-readiness.json";
     public static final int INPUT_SCHEMA = 6;
+    public static final String EXPLOSION_FORMULA_PROOF_VERSION =
+            "mcp908-1.7.10-to-minecraft-1.21.11-survives-explosion";
+    public static final String EXPLOSION_INTERACTION_BLOCKER =
+            "modern-explosion-destroy-without-decay-context-proof-pending";
+
+    private static final String EXPLOSION_EVENT = "net/minecraftforge/event/world/ExplosionEvent";
+    private static final String EXPLOSION_START_EVENT =
+            "net/minecraftforge/event/world/ExplosionEvent$Start";
+    private static final String EXPLOSION_DETONATE_EVENT =
+            "net/minecraftforge/event/world/ExplosionEvent$Detonate";
+    private static final String FML_EVENT = "cpw/mods/fml/common/eventhandler/Event";
+    private static final Set<String> EXPLOSION_EVENT_TYPES = Set.of(
+            EXPLOSION_EVENT,
+            EXPLOSION_START_EVENT,
+            EXPLOSION_DETONATE_EVENT,
+            FML_EVENT
+    );
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     @Override
@@ -48,14 +68,30 @@ public final class LegacyBlockDropRuntimeReadinessPass implements ConversionPass
                     + "; runtime readiness expects " + INPUT_SCHEMA);
         }
 
+        LegacyEventAnalyzer.Analysis eventAnalysis = new LegacyEventAnalyzer().analyze(context.sourceJar());
+        List<LegacyEventAnalyzer.Binding> explosionHandlers = explosionHandlers(eventAnalysis);
+        boolean explosionEventProofComplete = explosionHandlers.isEmpty() && eventAnalysis.diagnostics().isEmpty();
+        boolean decayFormulaProofComplete = "inverse_explosion_size_1_7_10".equals(
+                string(source, "legacyExplosionChanceMode"));
+
         JsonObject root = new JsonObject();
-        root.addProperty("schemaVersion", 1);
+        root.addProperty("schemaVersion", 2);
         root.addProperty("sourceSha256", context.sourceHash());
         root.addProperty("sourcePlanSchemaVersion", INPUT_SCHEMA);
         root.addProperty("lootRuntimeGenerated", false);
+        root.addProperty("explosionDecayFormulaProofVersion", EXPLOSION_FORMULA_PROOF_VERSION);
+        root.addProperty("explosionDecayFormulaProofComplete", decayFormulaProofComplete);
+        root.addProperty("modernExplosionDecayCondition", "minecraft:survives_explosion");
+        root.addProperty("sourceExplosionEventFree", explosionEventProofComplete);
+        root.addProperty("explosionEventHandlerCount", explosionHandlers.size());
+        root.addProperty("explosionAffectedSetSourceProofComplete", explosionEventProofComplete);
+        root.addProperty("explosionInteractionCoverageComplete", false);
         root.addProperty("explosionRuntimeMappingReady", false);
-        root.addProperty("explosionRuntimeBlocker",
-                "legacy-1.7.10-explosion-chance-to-modern-loot-condition-proof-pending");
+        root.addProperty("explosionRuntimeBlocker", EXPLOSION_INTERACTION_BLOCKER);
+        root.add("explosionEventHandlers", eventHandlers(explosionHandlers));
+        JsonArray eventDiagnostics = new JsonArray();
+        eventAnalysis.diagnostics().forEach(eventDiagnostics::add);
+        root.add("eventAnalysisDiagnostics", eventDiagnostics);
 
         JsonArray ready = new JsonArray();
         JsonArray blocked = new JsonArray();
@@ -67,6 +103,11 @@ public final class LegacyBlockDropRuntimeReadinessPass implements ConversionPass
                 JsonObject result = identity(plan);
                 result.addProperty("normalSilkStaticSelfDropReady", reasons.isEmpty());
                 result.addProperty("explosionSourceProofComplete", bool(plan, "explosionDropProofComplete"));
+                result.addProperty("sourceExplosionDestructionOverrideFree",
+                        bool(plan, "sourceExplosionDestructionOverrideFree"));
+                result.addProperty("explosionDecayFormulaProofComplete", decayFormulaProofComplete);
+                result.addProperty("explosionAffectedSetSourceProofComplete", explosionEventProofComplete);
+                result.addProperty("explosionInteractionCoverageComplete", false);
                 result.addProperty("explosionRuntimeMappingReady", false);
                 result.addProperty("lootRuntimeGenerated", false);
                 JsonArray reasonArray = new JsonArray();
@@ -96,8 +137,39 @@ public final class LegacyBlockDropRuntimeReadinessPass implements ConversionPass
                 SupportLevel.RUNTIME_BRIDGE,
                 "Classified static self-drop runtime readiness without enabling drops: ready="
                         + ready.size() + ", blocked=" + blocked.size()
-                        + "; explosion runtime mapping remains gated."
+                        + ", explosionHandlers=" + explosionHandlers.size()
+                        + ". 1.7.10/1.21.11 decay formulas are separately proven; full explosion runtime remains gated."
         );
+    }
+
+    private static List<LegacyEventAnalyzer.Binding> explosionHandlers(LegacyEventAnalyzer.Analysis analysis) {
+        List<LegacyEventAnalyzer.Binding> result = new ArrayList<>();
+        for (LegacyEventAnalyzer.Binding binding : analysis.bindings()) {
+            if (!EXPLOSION_EVENT_TYPES.contains(binding.eventType())) continue;
+            if (binding.bus() == LegacyEventAnalyzer.Bus.FML) continue;
+            result.add(binding);
+        }
+        return List.copyOf(result);
+    }
+
+    private static JsonArray eventHandlers(List<LegacyEventAnalyzer.Binding> handlers) {
+        JsonArray values = new JsonArray();
+        for (LegacyEventAnalyzer.Binding binding : handlers) {
+            JsonObject value = new JsonObject();
+            value.addProperty("handlerClass", binding.handlerClass());
+            value.addProperty("method", binding.method());
+            value.addProperty("descriptor", binding.descriptor());
+            value.addProperty("eventType", binding.eventType());
+            value.addProperty("bus", binding.bus().name());
+            value.addProperty("side", binding.side().name());
+            value.addProperty("priority", binding.priority());
+            value.addProperty("receiveCanceled", binding.receiveCanceled());
+            value.addProperty("registrationOwner", binding.registrationOwner());
+            value.addProperty("registrationMethod", binding.registrationMethod());
+            value.addProperty("registrationDescriptor", binding.registrationDescriptor());
+            values.add(value);
+        }
+        return values;
     }
 
     private static List<String> readinessReasons(JsonObject plan) {

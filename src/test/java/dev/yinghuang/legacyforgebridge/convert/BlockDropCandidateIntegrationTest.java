@@ -34,7 +34,7 @@ class BlockDropCandidateIntegrationTest {
     @TempDir Path tempDir;
 
     @Test
-    void fullConversionEmbedsSchemaSixHarvestProofAndStaticDropReadinessWithoutRuntime() throws Exception {
+    void fullConversionEmbedsHarvestAndExplosionReadinessProofsWithoutRuntime() throws Exception {
         Path source = tempDir.resolve("HarvestFastPathLegacy.jar");
         String metadata = "[{\"modid\":\"harvestfast\",\"name\":\"Harvest Fast\",\"version\":\"1.0\",\"mcversion\":\"1.7.10\",\"dependencies\":[]}]";
         try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(source))) {
@@ -78,15 +78,24 @@ class BlockDropCandidateIntegrationTest {
             JarEntry readinessEntry = jar.getJarEntry(LegacyBlockDropRuntimeReadinessPass.OUTPUT_PATH);
             assertNotNull(readinessEntry);
             JsonObject readiness = read(jar, readinessEntry);
+            assertEquals(2, readiness.get("schemaVersion").getAsInt());
             assertEquals(6, readiness.get("sourcePlanSchemaVersion").getAsInt());
             assertEquals(1, readiness.get("normalSilkStaticSelfDropReadyPlans").getAsInt());
             assertEquals(0, readiness.get("blockedPlans").getAsInt());
             assertFalse(readiness.get("lootRuntimeGenerated").getAsBoolean());
+            assertTrue(readiness.get("explosionDecayFormulaProofComplete").getAsBoolean());
+            assertTrue(readiness.get("sourceExplosionEventFree").getAsBoolean());
+            assertEquals(0, readiness.get("explosionEventHandlerCount").getAsInt());
+            assertTrue(readiness.get("explosionAffectedSetSourceProofComplete").getAsBoolean());
+            assertFalse(readiness.get("explosionInteractionCoverageComplete").getAsBoolean());
             assertFalse(readiness.get("explosionRuntimeMappingReady").getAsBoolean());
             JsonObject ready = readiness.getAsJsonArray("ready").get(0).getAsJsonObject();
             assertEquals("harvestfast:wood", ready.get("id").getAsString());
             assertTrue(ready.get("normalSilkStaticSelfDropReady").getAsBoolean());
             assertTrue(ready.get("metadataIndependent").getAsBoolean());
+            assertTrue(ready.get("explosionDecayFormulaProofComplete").getAsBoolean());
+            assertTrue(ready.get("explosionAffectedSetSourceProofComplete").getAsBoolean());
+            assertFalse(ready.get("explosionRuntimeMappingReady").getAsBoolean());
         }
     }
 
