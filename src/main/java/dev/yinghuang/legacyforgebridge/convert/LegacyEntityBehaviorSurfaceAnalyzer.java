@@ -19,11 +19,7 @@ import java.util.Set;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
-/**
- * Non-executing inventory of source-owned legacy Entity behavior surfaces for entity registrations
- * that already have a proven DataWatcher definition. This stage classifies common 1.7.x callbacks
- * while retaining every declared source instance method so unknown behavior is never hidden.
- */
+/** Non-executing inventory of source-owned legacy Entity behavior surfaces. */
 public final class LegacyEntityBehaviorSurfaceAnalyzer {
     public enum CallbackKind {
         ENTITY_INIT,
@@ -33,6 +29,7 @@ public final class LegacyEntityBehaviorSurfaceAnalyzer {
         WRITE_NBT,
         HURT,
         INTERACT,
+        CAN_ATTACK_WITH_ITEM,
         CAN_COLLIDE,
         CAN_PUSH,
         COLLIDE_PLAYER,
@@ -88,6 +85,7 @@ public final class LegacyEntityBehaviorSurfaceAnalyzer {
             spec(CallbackKind.WRITE_NBT, "(Lnet/minecraft/nbt/NBTTagCompound;)V", "writeEntityToNBT", "func_70014_b"),
             spec(CallbackKind.HURT, "(Lnet/minecraft/util/DamageSource;F)Z", "attackEntityFrom", "func_70097_a"),
             spec(CallbackKind.INTERACT, "(Lnet/minecraft/entity/player/EntityPlayer;)Z", "interact", "interactFirst", "func_70085_c"),
+            spec(CallbackKind.CAN_ATTACK_WITH_ITEM, "()Z", "canAttackWithItem", "func_70075_an"),
             spec(CallbackKind.CAN_COLLIDE, "()Z", "canBeCollidedWith", "func_70067_L"),
             spec(CallbackKind.CAN_PUSH, "()Z", "canBePushed", "func_70104_M"),
             spec(CallbackKind.COLLIDE_PLAYER, "(Lnet/minecraft/entity/player/EntityPlayer;)V", "onCollideWithPlayer", "func_70100_b_"),
