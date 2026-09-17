@@ -27,12 +27,14 @@ class LegacyEntityRuntimePlanPassTest {
         ConversionContext context = context(staging, "mapping.jar");
         writeDefinitions(staging);
         writeAccesses(staging, false);
+        writeGlobalClosure(staging, true);
 
         new LegacyEntityRuntimePlanPass().apply(context);
 
         JsonObject root = JsonParser.parseString(Files.readString(
                 staging.resolve(LegacyEntityRuntimePlanPass.OUTPUT), StandardCharsets.UTF_8)).getAsJsonObject();
         assertEquals(1, root.get("schemaVersion").getAsInt());
+        assertTrue(root.get("sourceWideDataWatcherCallClosureComplete").getAsBoolean());
         assertFalse(root.get("runtimeAdmissionReady").getAsBoolean());
         assertFalse(root.get("runtimeImplementationWired").getAsBoolean());
         assertEquals(1, root.get("mappedRegistrations").getAsInt());
@@ -43,9 +45,12 @@ class LegacyEntityRuntimePlanPassTest {
         assertTrue(rule.get("synchedDataMappingComplete").getAsBoolean());
         assertTrue(rule.get("reachableExactDispatchHelperClosureComplete").getAsBoolean());
         assertFalse(rule.get("reachableHelperClosureComplete").getAsBoolean());
+        assertTrue(rule.get("sourceWideDataWatcherCallClosureComplete").getAsBoolean());
         assertFalse(rule.get("runtimeAdmissionReady").getAsBoolean());
+        assertFalse(rule.getAsJsonArray("runtimeBlockers").asList().stream()
+                .anyMatch(value -> value.getAsString().equals("source-wide-datawatcher-call-closure-incomplete")));
         assertTrue(rule.getAsJsonArray("runtimeBlockers").asList().stream()
-                .anyMatch(value -> value.getAsString().equals("reachable-helper-closure-incomplete")));
+                .anyMatch(value -> value.getAsString().equals("entitytype-syncheddata-runtime-not-materialized")));
         assertEquals(5, rule.get("synchedDataEntryCount").getAsInt());
 
         JsonArray entries = rule.getAsJsonArray("synchedDataEntries");
@@ -56,11 +61,30 @@ class LegacyEntityRuntimePlanPassTest {
         assertMapping(entries, 14, "string", "string", "STRING", "identity", 0, 0);
     }
 
+    @Test void sourceWideClosureGapStaysAnExplicitRuntimeBlocker() throws Exception {
+        Path staging = tempDir.resolve("closure-gap-staging");
+        ConversionContext context = context(staging, "closure-gap.jar");
+        writeDefinitions(staging);
+        writeAccesses(staging, false);
+        writeGlobalClosure(staging, false);
+
+        new LegacyEntityRuntimePlanPass().apply(context);
+
+        JsonObject rule = JsonParser.parseString(Files.readString(
+                staging.resolve(LegacyEntityRuntimePlanPass.OUTPUT), StandardCharsets.UTF_8)).getAsJsonObject()
+                .getAsJsonArray("rules").get(0).getAsJsonObject();
+        assertFalse(rule.get("sourceWideDataWatcherCallClosureComplete").getAsBoolean());
+        assertTrue(rule.getAsJsonArray("runtimeBlockers").asList().stream()
+                .anyMatch(value -> value.getAsString().equals("source-wide-datawatcher-call-closure-incomplete")));
+        assertFalse(rule.get("runtimeAdmissionReady").getAsBoolean());
+    }
+
     @Test void accessKindMismatchFailsClosedBeforeRuntimePlanAdmission() throws Exception {
         Path staging = tempDir.resolve("mismatch-staging");
         ConversionContext context = context(staging, "mismatch.jar");
         writeDefinitions(staging);
         writeAccesses(staging, true);
+        writeGlobalClosure(staging, true);
 
         new LegacyEntityRuntimePlanPass().apply(context);
 
@@ -141,6 +165,17 @@ class LegacyEntityRuntimePlanPassTest {
                   "skipped": []
                 }
                 """.formatted(byteKind, byteKind), StandardCharsets.UTF_8);
+    }
+
+    private static void writeGlobalClosure(Path staging, boolean complete) throws Exception {
+        Files.writeString(staging.resolve(LegacyEntityDataWatcherGlobalClosurePass.OUTPUT), """
+                {
+                  "schemaVersion": 1,
+                  "sourceSha256": "sha",
+                  "sourceWideDataWatcherCallClosureComplete": %s,
+                  "runtimeImplementationWired": false
+                }
+                """.formatted(Boolean.toString(complete)), StandardCharsets.UTF_8);
     }
 
     private static void assertMapping(JsonArray entries, int index, String sourceKind, String modernKind,

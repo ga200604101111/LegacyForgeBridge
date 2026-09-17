@@ -16,7 +16,6 @@ import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -49,9 +48,11 @@ public final class LegacyEntityRuntimePlanPass implements ConversionPass {
             return;
         }
 
+        boolean sourceWideClosure = sourceWideClosure(context);
         JsonObject root = new JsonObject();
         root.addProperty("schemaVersion", 1);
         root.addProperty("sourceSha256", context.sourceHash());
+        root.addProperty("sourceWideDataWatcherCallClosureComplete", sourceWideClosure);
         root.addProperty("runtimeAdmissionReady", false);
         root.addProperty("runtimeImplementationWired", false);
 
@@ -176,12 +177,13 @@ public final class LegacyEntityRuntimePlanPass implements ConversionPass {
             plan.addProperty("reachableStaticHelperClosureComplete", true);
             plan.addProperty("reachableExactDispatchHelperClosureComplete", true);
             plan.addProperty("reachableHelperClosureComplete", generalHelperClosure);
+            plan.addProperty("sourceWideDataWatcherCallClosureComplete", sourceWideClosure);
             plan.addProperty("synchedDataMappingComplete", true);
             plan.addProperty("runtimeAdmissionReady", false);
             plan.addProperty("runtimeImplementationWired", false);
 
             JsonArray blockers = new JsonArray();
-            if (!generalHelperClosure) blockers.add("reachable-helper-closure-incomplete");
+            if (!sourceWideClosure) blockers.add("source-wide-datawatcher-call-closure-incomplete");
             blockers.add("entitytype-syncheddata-runtime-not-materialized");
             plan.add("runtimeBlockers", blockers);
 
@@ -227,7 +229,17 @@ public final class LegacyEntityRuntimePlanPass implements ConversionPass {
         }
         if (!rules.isEmpty()) context.diagnostics().info("LFB-CONVERT-ENTITY-PLAN-0001", SupportLevel.RUNTIME_BRIDGE,
                 "Mapped legacy primitive/string DataWatcher schemas to modern synchronized-data plan IR for "
-                        + rules.size() + " entity registration(s); runtime admission remains closed until general helper closure and EntityType/SynchedEntityData materialization are proven.");
+                        + rules.size() + " entity registration(s); source-wide watcher closure=" + sourceWideClosure
+                        + ", while EntityType/SynchedEntityData runtime materialization remains intentionally closed.");
+    }
+
+    private static boolean sourceWideClosure(ConversionContext context) throws Exception {
+        Path path = context.stagingDir().resolve(LegacyEntityDataWatcherGlobalClosurePass.OUTPUT);
+        if (!Files.isRegularFile(path)) return false;
+        JsonObject root = read(path);
+        if (intValue(root, "schemaVersion", -1) != 1) return false;
+        if (!context.sourceHash().equals(stringValue(root, "sourceSha256", ""))) return false;
+        return booleanValue(root, "sourceWideDataWatcherCallClosureComplete", false);
     }
 
     private static Mapping mapping(String sourceKind) {
