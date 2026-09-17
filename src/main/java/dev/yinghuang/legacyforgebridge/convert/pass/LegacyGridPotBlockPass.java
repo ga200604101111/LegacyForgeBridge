@@ -24,7 +24,7 @@ public final class LegacyGridPotBlockPass implements ConversionPass {
         LegacyRegisteredBlockRenderTypeAnalyzer.Analysis renderTypes=new LegacyRegisteredBlockRenderTypeAnalyzer().analyze(context.sourceJar());
         JsonObject root=new JsonObject();root.addProperty("schemaVersion",1);root.addProperty("sourceSha256",context.sourceHash());
         root.addProperty("sourceProvenModInsertionEligibilityWired",true);root.addProperty("sourceProvenSymbolicRenderIdentityMatchingWired",true);
-        root.addProperty("platformVanilla1710InsertionEligibilityWired",true);
+        root.addProperty("platformVanilla1710InsertionEligibilityWired",true);root.addProperty("platformVanilla1710MetadataDemultiplexWired",true);
         JsonArray rules=new JsonArray();int coreRuntime=0,insertionBlocked=0,insertionSubset=0,modSubset=0,vanillaSubset=0,unmapped=0;
         for(LegacyGridPotBlockAnalyzer.Rule rule:analysis.rules()){
             String id=ids.get(rule.sourceBlockClass());if(id==null){unmapped++;continue;}
@@ -46,58 +46,28 @@ public final class LegacyGridPotBlockPass implements ConversionPass {
             List<String> modEligibleIds=rule.contentInsertionPredicateProven()?eligibleGeneratedIds(renderTypes,ids,symbolicSet):List.of();
             List<String> vanillaEligibleIds=rule.contentInsertionPredicateProven()?eligibleVanilla1710Ids(Set.of(1,13,40)):List.of();
             TreeSet<String> combined=new TreeSet<>();combined.addAll(modEligibleIds);combined.addAll(vanillaEligibleIds);
-
-            JsonArray modEligible=new JsonArray();modEligibleIds.forEach(modEligible::add);
-            JsonArray vanillaEligible=new JsonArray();vanillaEligibleIds.forEach(vanillaEligible::add);
-            JsonArray eligible=new JsonArray();combined.forEach(eligible::add);
-            boolean positiveSubset=core&&rule.contentInsertionPredicateProven()&&!combined.isEmpty();
-            boolean modWired=core&&rule.contentInsertionPredicateProven()&&!modEligibleIds.isEmpty();
-            boolean vanillaWired=core&&rule.contentInsertionPredicateProven()&&!vanillaEligibleIds.isEmpty();
+            JsonArray modEligible=new JsonArray();modEligibleIds.forEach(modEligible::add);JsonArray vanillaEligible=new JsonArray();vanillaEligibleIds.forEach(vanillaEligible::add);JsonArray eligible=new JsonArray();combined.forEach(eligible::add);
+            boolean positiveSubset=core&&rule.contentInsertionPredicateProven()&&!combined.isEmpty();boolean modWired=core&&rule.contentInsertionPredicateProven()&&!modEligibleIds.isEmpty();boolean vanillaWired=core&&rule.contentInsertionPredicateProven()&&!vanillaEligibleIds.isEmpty();
             value.add("sourceProvenModInsertionBlockIds",modEligible);value.addProperty("sourceProvenModInsertionBlockCount",modEligibleIds.size());
             value.add("platformVanilla1710InsertionBlockIds",vanillaEligible);value.addProperty("platformVanilla1710InsertionBlockCount",vanillaEligibleIds.size());
-            value.addProperty("positiveContentInsertionSubsetWired",positiveSubset);
-            value.addProperty("platformVanilla1710ContentInsertionWired",vanillaWired);
+            value.addProperty("positiveContentInsertionSubsetWired",positiveSubset);value.addProperty("platformVanilla1710ContentInsertionWired",vanillaWired);
+            value.addProperty("platformVanilla1710MetadataDemultiplexWired",vanillaWired&&!LegacyGridPotVanillaInsertion1710.variantFamilies().isEmpty());
             // schema-1 compatibility: this historical field remains the runtime master switch.
             value.addProperty("sourceProvenModContentInsertionWired",positiveSubset);
             value.add("sourceProvenInsertionBlockIds",eligible);value.addProperty("sourceProvenInsertionBlockCount",combined.size());
             value.addProperty("contentInsertionRuntimeComplete",false);value.addProperty("presentationRuntimeComplete",false);value.addProperty("runtimeComplete",false);
             if(core)coreRuntime++;if(rule.contentInsertionPredicateProven())insertionBlocked++;if(positiveSubset)insertionSubset++;if(modWired)modSubset++;if(vanillaWired)vanillaSubset++;rules.add(value);
         }
-        root.add("rules",rules);JsonArray skipped=new JsonArray();
-        for(LegacyGridPotBlockAnalyzer.Skipped item:analysis.skipped()){JsonObject value=new JsonObject();value.addProperty("registryName",item.registryName());value.addProperty("sourceBlockClass",item.sourceBlockClass());value.addProperty("reason",item.reason());skipped.add(value);}root.add("skipped",skipped);
-        root.addProperty("coreRuntimeCompleteRules",coreRuntime);root.addProperty("positiveContentInsertionSubsetRules",insertionSubset);
-        root.addProperty("sourceProvenModContentInsertionRules",modSubset);root.addProperty("platformVanilla1710InsertionRules",vanillaSubset);
-        root.addProperty("legacyInsertionPredicateProvenButRuntimeClosedRules",insertionBlocked);root.addProperty("runtimeCompleteRules",0);
+        root.add("rules",rules);JsonArray skipped=new JsonArray();for(LegacyGridPotBlockAnalyzer.Skipped item:analysis.skipped()){JsonObject value=new JsonObject();value.addProperty("registryName",item.registryName());value.addProperty("sourceBlockClass",item.sourceBlockClass());value.addProperty("reason",item.reason());skipped.add(value);}root.add("skipped",skipped);
+        root.addProperty("coreRuntimeCompleteRules",coreRuntime);root.addProperty("positiveContentInsertionSubsetRules",insertionSubset);root.addProperty("sourceProvenModContentInsertionRules",modSubset);root.addProperty("platformVanilla1710InsertionRules",vanillaSubset);root.addProperty("legacyInsertionPredicateProvenButRuntimeClosedRules",insertionBlocked);root.addProperty("runtimeCompleteRules",0);
         Path output=context.stagingDir().resolve(OUTPUT);Files.createDirectories(output.getParent());Files.writeString(output,GSON.toJson(root)+"\n",StandardCharsets.UTF_8);
         analysis.diagnostics().forEach(message->context.diagnostics().warning("LFB-CONVERT-GRIDPOT-0002",SupportLevel.MANUAL_REQUIRED,message));
         if(unmapped>0)context.diagnostics().warning("LFB-CONVERT-GRIDPOT-0003",SupportLevel.MANUAL_REQUIRED,"Source-proven grid-pot blocks without generated block identity: "+unmapped+".");
-        if(coreRuntime>0)context.diagnostics().info("LFB-CONVERT-GRIDPOT-0001",SupportLevel.ADAPTED,"Proof-complete grid-pot core runtimes: "+coreRuntime
-                +"; source/symbolic mod plus metadata-independent vanilla 1.7.10 positive insertion subsets wired for "+insertionSubset
-                +" rule(s), while metadata-ambiguous vanilla, negative-branch and presentation coverage remain fail-closed.");
+        if(coreRuntime>0)context.diagnostics().info("LFB-CONVERT-GRIDPOT-0001",SupportLevel.ADAPTED,"Proof-complete grid-pot core runtimes: "+coreRuntime+"; source/symbolic mod plus metadata-demultiplexed vanilla 1.7.10 positive insertion subsets wired for "+insertionSubset+" rule(s), while negative-branch and presentation coverage remain fail-closed.");
     }
 
     static List<String> eligibleGeneratedIds(LegacyRegisteredBlockRenderTypeAnalyzer.Analysis analysis,Map<String,String> generatedIds){return eligibleGeneratedIds(analysis,generatedIds,Set.of());}
-    static List<String> eligibleGeneratedIds(LegacyRegisteredBlockRenderTypeAnalyzer.Analysis analysis,Map<String,String> generatedIds,Set<String> symbolicFields){
-        List<String> output=new ArrayList<>();Set<String> symbols=symbolicFields==null?Set.of():Set.copyOf(symbolicFields);
-        for(LegacyRegisteredBlockRenderTypeAnalyzer.Rule rule:analysis.rules()){
-            var identity=rule.renderIdentity();boolean eligible=identity.isConstant(1)||identity.isConstant(13)||identity.isConstant(40)
-                    ||(identity.fieldOwner()!=null&&symbols.contains(identity.fieldOwner()+"#"+identity.fieldName()));
-            if(!eligible)continue;String id=generatedIds.get(rule.sourceBlockClass());if(id!=null&&!output.contains(id))output.add(id);
-        }
-        output.sort(Comparator.naturalOrder());return List.copyOf(output);
-    }
-
-    static List<String> eligibleVanilla1710Ids(Set<Integer> provenRenderTypes){
-        Set<Integer> accepted=provenRenderTypes==null?Set.of():Set.copyOf(provenRenderTypes);
-        return LegacyGridPotVanillaInsertion1710.rules().stream()
-                .filter(rule->accepted.contains(rule.legacyRenderType()))
-                .map(LegacyGridPotVanillaInsertion1710.Rule::modernId)
-                .sorted().toList();
-    }
-
-    private static Map<String,String> generatedBlockIds(Path staging)throws Exception{
-        Path path=staging.resolve("legacyforgebridge/converted-content.json");if(!Files.isRegularFile(path))return Map.of();Map<String,String> result=new LinkedHashMap<>();
-        try(Reader reader=Files.newBufferedReader(path,StandardCharsets.UTF_8)){JsonObject content=JsonParser.parseReader(reader).getAsJsonObject();JsonArray blocks=content.getAsJsonArray("blocks");if(blocks!=null)for(var element:blocks){if(!element.isJsonObject())continue;JsonObject block=element.getAsJsonObject();if(block.has("sourceClass")&&block.has("id"))result.put(block.get("sourceClass").getAsString(),block.get("id").getAsString());}}
-        return result;
-    }
+    static List<String> eligibleGeneratedIds(LegacyRegisteredBlockRenderTypeAnalyzer.Analysis analysis,Map<String,String> generatedIds,Set<String> symbolicFields){List<String> output=new ArrayList<>();Set<String> symbols=symbolicFields==null?Set.of():Set.copyOf(symbolicFields);for(LegacyRegisteredBlockRenderTypeAnalyzer.Rule rule:analysis.rules()){var identity=rule.renderIdentity();boolean eligible=identity.isConstant(1)||identity.isConstant(13)||identity.isConstant(40)||(identity.fieldOwner()!=null&&symbols.contains(identity.fieldOwner()+"#"+identity.fieldName()));if(!eligible)continue;String id=generatedIds.get(rule.sourceBlockClass());if(id!=null&&!output.contains(id))output.add(id);}output.sort(Comparator.naturalOrder());return List.copyOf(output);}
+    static List<String> eligibleVanilla1710Ids(Set<Integer> provenRenderTypes){return LegacyGridPotVanillaInsertion1710.modernIdsForRenderTypes(provenRenderTypes);}
+    private static Map<String,String> generatedBlockIds(Path staging)throws Exception{Path path=staging.resolve("legacyforgebridge/converted-content.json");if(!Files.isRegularFile(path))return Map.of();Map<String,String> result=new LinkedHashMap<>();try(Reader reader=Files.newBufferedReader(path,StandardCharsets.UTF_8)){JsonObject content=JsonParser.parseReader(reader).getAsJsonObject();JsonArray blocks=content.getAsJsonArray("blocks");if(blocks!=null)for(var element:blocks){if(!element.isJsonObject())continue;JsonObject block=element.getAsJsonObject();if(block.has("sourceClass")&&block.has("id"))result.put(block.get("sourceClass").getAsString(),block.get("id").getAsString());}}return result;}
 }
