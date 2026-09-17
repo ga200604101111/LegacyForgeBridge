@@ -72,20 +72,17 @@ public final class ConvertedLegacyGridPotBlock extends ConvertedLegacyBlock impl
                 (float)(hitResult.getLocation().z-pos.getZ()), hitResult.getDirection().getOpposite());
         if (!grid.isEnabled(slot)) return InteractionResult.SUCCESS;
 
-        boolean positive = false;
-        boolean negative = false;
+        LegacyGridPotBlockRegistry.InsertionRoute route;
         if (stack.getItem() instanceof BlockItem blockItem) {
             Identifier blockId = BuiltInRegistries.BLOCK.getKey(blockItem.getBlock());
-            positive = rule.insertionEligible(blockId);
-            negative = rule.negativeInsertionEligible(blockId);
-            if (!positive && !negative) return InteractionResult.SUCCESS; // unresolved BlockItem stays fail-closed
+            route = rule.insertionRoute(blockId, true);
         } else {
-            negative = rule.negativeNonBlockItemRuntimeWired();
-            if (!negative) return InteractionResult.SUCCESS;
+            route = rule.insertionRoute(null, false);
         }
+        if (route == LegacyGridPotBlockRegistry.InsertionRoute.FAIL_CLOSED) return InteractionResult.SUCCESS;
 
         if (level.isClientSide()) return InteractionResult.SUCCESS;
-        if (positive) {
+        if (route == LegacyGridPotBlockRegistry.InsertionRoute.POSITIVE) {
             ItemStack old = grid.removeItem(slot);
             if (!player.hasInfiniteMaterials() && !old.isEmpty())
                 Containers.dropItemStack(level,pos.getX(),pos.getY(),pos.getZ(),old);
