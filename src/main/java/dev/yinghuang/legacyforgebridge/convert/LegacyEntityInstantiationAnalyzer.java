@@ -149,11 +149,26 @@ public final class LegacyEntityInstantiationAnalyzer {
                         ? registeredEntityType(context, frame.getStack(frame.getStackSize() - 1), depth, guard) : null;
             }
         }
-        if (producer instanceof VarInsnNode variable && variable.getOpcode() == Opcodes.ALOAD) {
+        // SourceInterpreter intentionally makes copy instructions (notably DUP and ALOAD) their
+        // own source producers. Follow only exact stack/local copies so NEW provenance survives the
+        // ordinary NEW -> DUP -> <init> -> ASTORE -> ALOAD entity construction shape.
+        if (producer instanceof InsnNode insn && insn.getOpcode() == Opcodes.DUP) {
             Integer index = context.indices().get(producer);
             Frame<SourceValue> frame = index == null ? null : context.frames()[index];
-            return frame != null && variable.var < frame.getLocals()
-                    ? registeredEntityType(context, frame.getLocal(variable.var), depth, guard) : null;
+            return frame != null && frame.getStackSize() > 0
+                    ? registeredEntityType(context, frame.getStack(frame.getStackSize() - 1), depth, guard) : null;
+        }
+        if (producer instanceof VarInsnNode variable) {
+            Integer index = context.indices().get(producer);
+            Frame<SourceValue> frame = index == null ? null : context.frames()[index];
+            if (variable.getOpcode() == Opcodes.ALOAD) {
+                return frame != null && variable.var < frame.getLocals()
+                        ? registeredEntityType(context, frame.getLocal(variable.var), depth, guard) : null;
+            }
+            if (variable.getOpcode() == Opcodes.ASTORE) {
+                return frame != null && frame.getStackSize() > 0
+                        ? registeredEntityType(context, frame.getStack(frame.getStackSize() - 1), depth, guard) : null;
+            }
         }
         if (producer instanceof FieldInsnNode field
                 && (field.getOpcode() == Opcodes.GETFIELD || field.getOpcode() == Opcodes.GETSTATIC)) {
