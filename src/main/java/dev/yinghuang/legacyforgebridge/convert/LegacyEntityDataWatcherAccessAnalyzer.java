@@ -20,9 +20,9 @@ import java.util.jar.JarFile;
 /**
  * Proves the source-owned DataWatcher read/write surface for registrations already admitted by
  * {@link LegacyEntityDataWatcherAnalyzer}. The result is still proof IR: it does not execute or
- * rewrite entity methods. Every custom watcher call in the source entity lineage must use a
- * constant source-owned index and a type compatible with the proven definition, otherwise that
- * entity's access surface remains closed.
+ * rewrite entity methods. Every custom watcher call in the source entity lineage or a statically
+ * reachable helper must use a constant source-owned index and a type compatible with the proven
+ * definition, otherwise that entity's access surface remains closed.
  */
 public final class LegacyEntityDataWatcherAccessAnalyzer {
     private static final String DATA_WATCHER = "net/minecraft/entity/DataWatcher";
@@ -57,6 +57,11 @@ public final class LegacyEntityDataWatcherAccessAnalyzer {
 
     private record MethodContext(ClassNode owner, MethodNode method, Frame<SourceValue>[] frames,
                                  Map<AbstractInsnNode,Integer> indices) { }
+    private record MethodTarget(String owner, String name, String descriptor, Set<Integer> entityLocals) {
+        MethodTarget {
+            entityLocals = Set.copyOf(entityLocals);
+        }
+    }
     private record Scan(List<Access> accesses, String error) { }
 
     private final Map<String,ClassNode> classes = new LinkedHashMap<>();
@@ -81,52 +86,110 @@ public final class LegacyEntityDataWatcherAccessAnalyzer {
 
     private Scan scanLineage(String sourceClass, Map<Integer,String> schema) {
         List<Access> accesses = new ArrayList<>();
+        Deque<MethodTarget> pending = new ArrayDeque<>();
+        Set<MethodTarget> seenMethods = new LinkedHashSet<>();
+
         String current = sourceClass;
-        Set<String> seen = new HashSet<>();
-        while (current != null && seen.add(current)) {
+        Set<String> seenOwners = new HashSet<>();
+        while (current != null && seenOwners.add(current)) {
             ClassNode node = classes.get(current);
             if (node == null) break;
             for (MethodNode method : node.methods) {
                 if ("<init>".equals(method.name) || "<clinit>".equals(method.name) || ENTITY_INIT_NAMES.contains(method.name)) continue;
-                MethodContext context;
-                try { context = context(node, method); }
-                catch (AnalyzerException error) {
-                    return new Scan(List.of(), "Could not prove DataWatcher access dataflow in " + node.name + "." + method.name + method.desc + ": " + error.getMessage());
-                }
-                for (int i = 0; i < method.instructions.size(); i++) {
-                    AbstractInsnNode instruction = method.instructions.get(i);
-                    if (!(instruction instanceof MethodInsnNode call) || !DATA_WATCHER.equals(call.owner)) continue;
-                    if (ADD_NAMES.contains(call.name))
-                        return new Scan(List.of(), "DataWatcher definition outside entityInit is unsupported in " + node.name + "." + method.name + method.desc + ".");
-                    if (FORCE_DIRTY_NAMES.contains(call.name))
-                        return new Scan(List.of(), "DataWatcher.setObjectWatched/force-dirty semantics are not mapped yet in " + node.name + "." + method.name + method.desc + ".");
-                    String getterKind = GETTERS.get(call.name + call.desc);
-                    if (getterKind != null) {
-                        String error = readAccess(context, i, call, getterKind, schema, accesses);
-                        if (error != null) return new Scan(List.of(), error);
-                        continue;
-                    }
-                    if (UNSUPPORTED_TYPED_GETTERS.contains(call.name + call.desc))
-                        return new Scan(List.of(), "ItemStack DataWatcher access is outside the current primitive/string mapping in " + node.name + "." + method.name + method.desc + ".");
-                    if (UPDATE_NAMES.contains(call.name) && "(ILjava/lang/Object;)V".equals(call.desc)) {
-                        String error = writeAccess(context, i, call, schema, accesses);
-                        if (error != null) return new Scan(List.of(), error);
-                        continue;
-                    }
-                    return new Scan(List.of(), "Unsupported DataWatcher call " + call.name + call.desc + " in " + node.name + "." + method.name + method.desc + ".");
-                }
+                if ((method.access & (Opcodes.ACC_STATIC | Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE)) != 0) continue;
+                pending.addLast(new MethodTarget(node.name, method.name, method.desc, Set.of(0)));
             }
             current = node.superName;
+        }
+
+        while (!pending.isEmpty()) {
+            MethodTarget target = pending.removeFirst();
+            if (!seenMethods.add(target)) continue;
+            ClassNode owner = classes.get(target.owner());
+            MethodNode method = findMethod(owner, target.name(), target.descriptor());
+            if (owner == null || method == null) continue;
+
+            MethodContext context;
+            try { context = context(owner, method); }
+            catch (AnalyzerException error) {
+                return new Scan(List.of(), "Could not prove DataWatcher access dataflow in "
+                        + owner.name + "." + method.name + method.desc + ": " + error.getMessage());
+            }
+
+            String error = scanMethod(context, target.entityLocals(), schema, accesses, pending);
+            if (error != null) return new Scan(List.of(), error);
         }
         return new Scan(List.copyOf(accesses), null);
     }
 
-    private String readAccess(MethodContext context, int instructionIndex, MethodInsnNode call,
-                              String getterKind, Map<Integer,String> schema, List<Access> accesses) {
+    private String scanMethod(MethodContext context, Set<Integer> entityLocals, Map<Integer,String> schema,
+                              List<Access> accesses, Deque<MethodTarget> pending) {
+        MethodNode method = context.method();
+        for (int i = 0; i < method.instructions.size(); i++) {
+            AbstractInsnNode instruction = method.instructions.get(i);
+            if (!(instruction instanceof MethodInsnNode call)) continue;
+
+            if (DATA_WATCHER.equals(call.owner)) {
+                if (ADD_NAMES.contains(call.name))
+                    return "DataWatcher definition outside entityInit is unsupported in " + source(context) + ".";
+                if (FORCE_DIRTY_NAMES.contains(call.name))
+                    return "DataWatcher.setObjectWatched/force-dirty semantics are not mapped yet in " + source(context) + ".";
+                String getterKind = GETTERS.get(call.name + call.desc);
+                if (getterKind != null) {
+                    String error = readAccess(context, i, getterKind, schema, accesses, entityLocals);
+                    if (error != null) return error;
+                    continue;
+                }
+                if (UNSUPPORTED_TYPED_GETTERS.contains(call.name + call.desc))
+                    return "ItemStack DataWatcher access is outside the current primitive/string mapping in " + source(context) + ".";
+                if (UPDATE_NAMES.contains(call.name) && "(ILjava/lang/Object;)V".equals(call.desc)) {
+                    String error = writeAccess(context, i, schema, accesses, entityLocals);
+                    if (error != null) return error;
+                    continue;
+                }
+                return "Unsupported DataWatcher call " + call.name + call.desc + " in " + source(context) + ".";
+            }
+
+            if (call.getOpcode() == Opcodes.INVOKESTATIC) {
+                MethodTarget helper = staticHelperTarget(context, i, call, entityLocals);
+                if (helper != null) pending.addLast(helper);
+            }
+        }
+        return null;
+    }
+
+    private MethodTarget staticHelperTarget(MethodContext context, int instructionIndex, MethodInsnNode call,
+                                            Set<Integer> entityLocals) {
+        ClassNode helperOwner = classes.get(call.owner);
+        MethodNode helper = findMethod(helperOwner, call.name, call.desc);
+        if (helperOwner == null || helper == null || (helper.access & Opcodes.ACC_STATIC) == 0) return null;
+
+        Type[] argumentTypes = Type.getArgumentTypes(call.desc);
+        Frame<SourceValue> frame = context.frames()[instructionIndex];
+        if (frame == null || frame.getStackSize() < argumentTypes.length) return null;
+
+        int stackStart = frame.getStackSize() - argumentTypes.length;
+        int local = 0;
+        LinkedHashSet<Integer> boundLocals = new LinkedHashSet<>();
+        for (int argument = 0; argument < argumentTypes.length; argument++) {
+            Type type = argumentTypes[argument];
+            if ((type.getSort() == Type.OBJECT || type.getSort() == Type.ARRAY)
+                    && isEntityValue(context, frame.getStack(stackStart + argument), entityLocals, 0, new HashSet<>())) {
+                boundLocals.add(local);
+            }
+            local += type.getSize();
+        }
+        if (boundLocals.isEmpty()) return null;
+        return new MethodTarget(call.owner, call.name, call.desc, boundLocals);
+    }
+
+    private String readAccess(MethodContext context, int instructionIndex, String getterKind,
+                              Map<Integer,String> schema, List<Access> accesses, Set<Integer> entityLocals) {
         Frame<SourceValue> frame = context.frames()[instructionIndex];
         if (frame == null || frame.getStackSize() < 2) return "Missing DataWatcher getter frame in " + source(context) + ".";
         int start = frame.getStackSize() - 2;
-        if (!isThisWatcher(context, frame.getStack(start))) return "DataWatcher getter receiver is not proven as this.dataWatcher in " + source(context) + ".";
+        if (!isEntityWatcher(context, frame.getStack(start), entityLocals))
+            return "DataWatcher getter receiver is not proven as the source entity DataWatcher in " + source(context) + ".";
         Integer index = scalarInt(context, frame.getStack(start + 1), 0, new HashSet<>());
         if (index == null) return "Dynamic/unproven DataWatcher read index in " + source(context) + ".";
         String definedKind = schema.get(index);
@@ -136,12 +199,13 @@ public final class LegacyEntityDataWatcherAccessAnalyzer {
         return null;
     }
 
-    private String writeAccess(MethodContext context, int instructionIndex, MethodInsnNode call,
-                               Map<Integer,String> schema, List<Access> accesses) {
+    private String writeAccess(MethodContext context, int instructionIndex, Map<Integer,String> schema,
+                               List<Access> accesses, Set<Integer> entityLocals) {
         Frame<SourceValue> frame = context.frames()[instructionIndex];
         if (frame == null || frame.getStackSize() < 3) return "Missing DataWatcher update frame in " + source(context) + ".";
         int start = frame.getStackSize() - 3;
-        if (!isThisWatcher(context, frame.getStack(start))) return "DataWatcher update receiver is not proven as this.dataWatcher in " + source(context) + ".";
+        if (!isEntityWatcher(context, frame.getStack(start), entityLocals))
+            return "DataWatcher update receiver is not proven as the source entity DataWatcher in " + source(context) + ".";
         Integer index = scalarInt(context, frame.getStack(start + 1), 0, new HashSet<>());
         if (index == null) return "Dynamic/unproven DataWatcher write index in " + source(context) + ".";
         String definedKind = schema.get(index);
@@ -213,24 +277,46 @@ public final class LegacyEntityDataWatcherAccessAnalyzer {
         return result;
     }
 
-    private boolean isThisWatcher(MethodContext context, SourceValue receiver) {
+    private boolean isEntityWatcher(MethodContext context, SourceValue receiver, Set<Integer> entityLocals) {
         if (receiver == null || receiver.insns == null || receiver.insns.size() != 1) return false;
         AbstractInsnNode producer = receiver.insns.iterator().next();
         Integer index = context.indices().get(producer);
         if (index == null) return false;
         Frame<SourceValue> frame = context.frames()[index];
         if (producer instanceof FieldInsnNode field && field.getOpcode() == Opcodes.GETFIELD && DATA_WATCHER_DESC.equals(field.desc))
-            return frame != null && frame.getStackSize() > 0 && isThis(frame.getStack(frame.getStackSize() - 1));
+            return frame != null && frame.getStackSize() > 0
+                    && isEntityValue(context, frame.getStack(frame.getStackSize() - 1), entityLocals, 0, new HashSet<>());
         if (producer instanceof MethodInsnNode call && call.getOpcode() != Opcodes.INVOKESTATIC
                 && WATCHER_ACCESSOR_NAMES.contains(call.name) && ("()" + DATA_WATCHER_DESC).equals(call.desc))
-            return frame != null && frame.getStackSize() > 0 && isThis(frame.getStack(frame.getStackSize() - 1));
+            return frame != null && frame.getStackSize() > 0
+                    && isEntityValue(context, frame.getStack(frame.getStackSize() - 1), entityLocals, 0, new HashSet<>());
         return false;
     }
 
-    private static boolean isThis(SourceValue value) {
-        if (value == null || value.insns == null || value.insns.size() != 1) return false;
-        AbstractInsnNode producer = value.insns.iterator().next();
-        return producer instanceof VarInsnNode variable && variable.getOpcode() == Opcodes.ALOAD && variable.var == 0;
+    private boolean isEntityValue(MethodContext context, SourceValue value, Set<Integer> entityLocals,
+                                  int depth, Set<AbstractInsnNode> guard) {
+        if (value == null || depth > 24 || value.insns == null || value.insns.isEmpty()) return false;
+        for (AbstractInsnNode producer : value.insns) {
+            if (!guard.add(producer)) return false;
+            boolean proven = isEntityProducer(context, producer, entityLocals, depth + 1, guard);
+            guard.remove(producer);
+            if (!proven) return false;
+        }
+        return true;
+    }
+
+    private boolean isEntityProducer(MethodContext context, AbstractInsnNode producer, Set<Integer> entityLocals,
+                                     int depth, Set<AbstractInsnNode> guard) {
+        if (producer instanceof VarInsnNode variable && variable.getOpcode() == Opcodes.ALOAD)
+            return entityLocals.contains(variable.var);
+        if (producer instanceof TypeInsnNode type && type.getOpcode() == Opcodes.CHECKCAST) {
+            Integer index = context.indices().get(producer);
+            if (index == null) return false;
+            Frame<SourceValue> frame = context.frames()[index];
+            return frame != null && frame.getStackSize() > 0
+                    && isEntityValue(context, frame.getStack(frame.getStackSize() - 1), entityLocals, depth, guard);
+        }
+        return false;
     }
 
     private Integer scalarInt(MethodContext context, SourceValue value, int depth, Set<AbstractInsnNode> guard) {
@@ -258,6 +344,13 @@ public final class LegacyEntityDataWatcherAccessAnalyzer {
             FieldNode source = owner.fields.stream().filter(f -> f.name.equals(field.name) && f.desc.equals(field.desc)).findFirst().orElse(null);
             return source != null && source.value instanceof Integer value ? value : null;
         }
+        return null;
+    }
+
+    private static MethodNode findMethod(ClassNode owner, String name, String descriptor) {
+        if (owner == null) return null;
+        for (MethodNode method : owner.methods)
+            if (method.name.equals(name) && method.desc.equals(descriptor)) return method;
         return null;
     }
 

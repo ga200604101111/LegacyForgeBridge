@@ -27,7 +27,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class LegacyEntityDataWatcherAccessPassTest {
     @TempDir Path tempDir;
 
-    @Test void materializesTypedLineageAccessInventoryAndKeepsRuntimeAndHelperClosureClosed() throws Exception {
+    @Test void materializesTypedAccessInventoryAndMarksOnlyStaticHelperClosureComplete() throws Exception {
         Path source = tempDir.resolve("entity-access.jar");
         try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(source))) {
             put(out, "unrelated/Carrier.class", entity());
@@ -51,6 +51,7 @@ class LegacyEntityDataWatcherAccessPassTest {
         JsonObject rule = root.getAsJsonArray("rules").get(0).getAsJsonObject();
         assertEquals("foreign:carrier", rule.get("id").getAsString());
         assertTrue(rule.get("sourceLineageAccessSurfaceComplete").getAsBoolean());
+        assertTrue(rule.get("reachableStaticHelperClosureComplete").getAsBoolean());
         assertFalse(rule.get("reachableHelperClosureComplete").getAsBoolean());
         assertFalse(rule.get("runtimeImplementationWired").getAsBoolean());
         assertEquals(2, rule.get("accessCount").getAsInt());

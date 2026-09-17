@@ -16,7 +16,7 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/** Adds a fail-closed direct source-lineage read/write inventory to proven entity watcher schemas. */
+/** Adds a fail-closed source-lineage plus statically reachable-helper read/write inventory to proven entity watcher schemas. */
 public final class LegacyEntityDataWatcherAccessPass implements ConversionPass {
     public static final String OUTPUT = "legacyforgebridge/entity-datawatcher-access.json";
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -52,6 +52,7 @@ public final class LegacyEntityDataWatcherAccessPass implements ConversionPass {
             value.addProperty("legacyRegistryName", rule.registryName());
             value.addProperty("sourceClass", rule.sourceClass());
             value.addProperty("sourceLineageAccessSurfaceComplete", true);
+            value.addProperty("reachableStaticHelperClosureComplete", true);
             value.addProperty("reachableHelperClosureComplete", false);
             value.addProperty("runtimeImplementationWired", false);
             JsonArray accesses = new JsonArray();
@@ -79,7 +80,7 @@ public final class LegacyEntityDataWatcherAccessPass implements ConversionPass {
             value.addProperty("reason", item.reason());
             skipped.add(value);
             context.diagnostics().warning("LFB-CONVERT-ENTITY-ACCESS-0002", SupportLevel.RUNTIME_BRIDGE,
-                    "Entity DataWatcher direct source-lineage access proof remains closed for "
+                    "Entity DataWatcher source-lineage/static-helper access proof remains closed for "
                             + (item.registryName() == null ? "<unknown>" : item.registryName()) + ": " + item.reason());
         }
         root.add("skipped", skipped);
@@ -92,8 +93,8 @@ public final class LegacyEntityDataWatcherAccessPass implements ConversionPass {
         for (String diagnostic : analysis.diagnostics())
             context.diagnostics().warning("LFB-CONVERT-ENTITY-ACCESS-0003", SupportLevel.MANUAL_REQUIRED, diagnostic);
         if (!rules.isEmpty()) context.diagnostics().info("LFB-CONVERT-ENTITY-ACCESS-0001", SupportLevel.RUNTIME_BRIDGE,
-                "Proved direct source-lineage primitive/string DataWatcher read/write surfaces for " + rules.size()
-                        + " entity registration(s); reachable-helper closure and SynchedEntityData runtime generation remain intentionally closed.");
+                "Proved source-lineage plus reachable static-helper primitive/string DataWatcher read/write surfaces for "
+                        + rules.size() + " entity registration(s); virtual/interface helper closure and SynchedEntityData runtime generation remain intentionally closed.");
     }
 
     private static String key(String registryName, String sourceClass) { return registryName + '\u0000' + sourceClass; }

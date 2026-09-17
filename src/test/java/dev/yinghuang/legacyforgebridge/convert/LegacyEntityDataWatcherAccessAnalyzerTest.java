@@ -50,6 +50,48 @@ class LegacyEntityDataWatcherAccessAnalyzerTest {
         }
     }
 
+    @Test void followsOnlyReachableStaticHelpersBoundToTheSourceEntity() throws Exception {
+        Path jar = tempDir.resolve("StaticHelpers.jar");
+        try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(jar))) {
+            put(out, "third/entity/Orb.class", helperEntity(false));
+            put(out, "third/entity/WatcherHelpers.class", watcherHelpers());
+            put(out, "third/entity/WatcherLeaf.class", watcherLeaf());
+            put(out, "third/entity/Bootstrap.class", bootstrap());
+        }
+
+        var analysis = new LegacyEntityDataWatcherAccessAnalyzer().analyze(jar);
+        assertTrue(analysis.skipped().isEmpty(), analysis.skipped().toString());
+        assertEquals(1, analysis.rules().size());
+        var accesses = analysis.rules().getFirst().accesses();
+        assertEquals(2, accesses.size(), accesses.toString());
+        assertTrue(accesses.stream().anyMatch(a -> a.operation().equals("write")
+                && a.sourceOwner().equals("third/entity/WatcherHelpers")
+                && a.sourceMethod().equals("set")));
+        assertTrue(accesses.stream().anyMatch(a -> a.operation().equals("read")
+                && a.sourceOwner().equals("third/entity/WatcherLeaf")
+                && a.sourceMethod().equals("read")));
+        assertFalse(accesses.stream().anyMatch(a -> a.sourceMethod().equals("unreachable")),
+                "an uncalled helper must not contaminate the source entity access surface");
+    }
+
+    @Test void dynamicIndexInsideReachableStaticHelperFailsClosed() throws Exception {
+        Path jar = tempDir.resolve("DynamicHelper.jar");
+        try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(jar))) {
+            put(out, "third/entity/Orb.class", helperEntity(true));
+            put(out, "third/entity/WatcherHelpers.class", watcherHelpers());
+            put(out, "third/entity/WatcherLeaf.class", watcherLeaf());
+            put(out, "third/entity/Bootstrap.class", bootstrap());
+        }
+
+        var analysis = new LegacyEntityDataWatcherAccessAnalyzer().analyze(jar);
+        assertTrue(analysis.rules().isEmpty());
+        assertEquals(1, analysis.skipped().size());
+        assertTrue(analysis.skipped().getFirst().reason().contains("Dynamic/unproven DataWatcher read index"),
+                analysis.skipped().getFirst().reason());
+        assertTrue(analysis.skipped().getFirst().reason().contains("WatcherHelpers.dynamic"),
+                analysis.skipped().getFirst().reason());
+    }
+
     private enum Mode { SAFE, DYNAMIC_READ, WRONG_WRITE_TYPE }
 
     private static byte[] entity(Mode mode) {
@@ -109,6 +151,122 @@ class LegacyEntityDataWatcherAccessAnalyzerTest {
         return w.toByteArray();
     }
 
+    private static byte[] helperEntity(boolean dynamicHelper) {
+        ClassWriter w = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7, Opcodes.ACC_PUBLIC, "third/entity/Orb", null, "net/minecraft/entity/Entity", null);
+
+        MethodVisitor init = w.visitMethod(Opcodes.ACC_PROTECTED, "func_70088_a", "()V", null, null);
+        init.visitCode();
+        init.visitVarInsn(Opcodes.ALOAD, 0);
+        init.visitMethodInsn(Opcodes.INVOKESPECIAL, "net/minecraft/entity/Entity", "func_70088_a", "()V", false);
+        addByte(init, 12, 0);
+        init.visitInsn(Opcodes.RETURN);
+        init.visitMaxs(0, 0);
+        init.visitEnd();
+
+        MethodVisitor set = w.visitMethod(Opcodes.ACC_PUBLIC, "setThroughHelper", "(Z)V", null, null);
+        set.visitCode();
+        set.visitVarInsn(Opcodes.ALOAD, 0);
+        set.visitVarInsn(Opcodes.ILOAD, 1);
+        set.visitMethodInsn(Opcodes.INVOKESTATIC, "third/entity/WatcherHelpers", "set",
+                "(Lthird/entity/Orb;Z)V", false);
+        set.visitInsn(Opcodes.RETURN);
+        set.visitMaxs(0, 0);
+        set.visitEnd();
+
+        MethodVisitor read;
+        if (dynamicHelper) {
+            read = w.visitMethod(Opcodes.ACC_PUBLIC, "readThroughHelper", "(I)B", null, null);
+            read.visitCode();
+            read.visitVarInsn(Opcodes.ALOAD, 0);
+            read.visitVarInsn(Opcodes.ILOAD, 1);
+            read.visitMethodInsn(Opcodes.INVOKESTATIC, "third/entity/WatcherHelpers", "dynamic",
+                    "(Lthird/entity/Orb;I)B", false);
+        } else {
+            read = w.visitMethod(Opcodes.ACC_PUBLIC, "readThroughHelper", "()B", null, null);
+            read.visitCode();
+            read.visitVarInsn(Opcodes.ALOAD, 0);
+            read.visitMethodInsn(Opcodes.INVOKESTATIC, "third/entity/WatcherHelpers", "read",
+                    "(Lthird/entity/Orb;)B", false);
+        }
+        read.visitInsn(Opcodes.IRETURN);
+        read.visitMaxs(0, 0);
+        read.visitEnd();
+
+        w.visitEnd();
+        return w.toByteArray();
+    }
+
+    private static byte[] watcherHelpers() {
+        ClassWriter w = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7, Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL, "third/entity/WatcherHelpers", null, "java/lang/Object", null);
+
+        MethodVisitor set = w.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, "set",
+                "(Lthird/entity/Orb;Z)V", null, null);
+        set.visitCode();
+        watcher(set, 0);
+        set.visitIntInsn(Opcodes.BIPUSH, 12);
+        set.visitVarInsn(Opcodes.ILOAD, 1);
+        set.visitInsn(Opcodes.I2B);
+        set.visitMethodInsn(Opcodes.INVOKESTATIC, "java/lang/Byte", "valueOf", "(B)Ljava/lang/Byte;", false);
+        set.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "net/minecraft/entity/DataWatcher", "func_75692_b",
+                "(ILjava/lang/Object;)V", false);
+        set.visitInsn(Opcodes.RETURN);
+        set.visitMaxs(0, 0);
+        set.visitEnd();
+
+        MethodVisitor read = w.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, "read",
+                "(Lthird/entity/Orb;)B", null, null);
+        read.visitCode();
+        read.visitVarInsn(Opcodes.ALOAD, 0);
+        read.visitMethodInsn(Opcodes.INVOKESTATIC, "third/entity/WatcherLeaf", "read",
+                "(Lthird/entity/Orb;)B", false);
+        read.visitInsn(Opcodes.IRETURN);
+        read.visitMaxs(0, 0);
+        read.visitEnd();
+
+        MethodVisitor dynamic = w.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, "dynamic",
+                "(Lthird/entity/Orb;I)B", null, null);
+        dynamic.visitCode();
+        watcher(dynamic, 0);
+        dynamic.visitVarInsn(Opcodes.ILOAD, 1);
+        dynamic.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "net/minecraft/entity/DataWatcher", "func_75683_a", "(I)B", false);
+        dynamic.visitInsn(Opcodes.IRETURN);
+        dynamic.visitMaxs(0, 0);
+        dynamic.visitEnd();
+
+        MethodVisitor unreachable = w.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, "unreachable",
+                "(Lthird/entity/Orb;I)B", null, null);
+        unreachable.visitCode();
+        watcher(unreachable, 0);
+        unreachable.visitVarInsn(Opcodes.ILOAD, 1);
+        unreachable.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "net/minecraft/entity/DataWatcher", "func_75683_a", "(I)B", false);
+        unreachable.visitInsn(Opcodes.IRETURN);
+        unreachable.visitMaxs(0, 0);
+        unreachable.visitEnd();
+
+        w.visitEnd();
+        return w.toByteArray();
+    }
+
+    private static byte[] watcherLeaf() {
+        ClassWriter w = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7, Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL, "third/entity/WatcherLeaf", null, "java/lang/Object", null);
+        MethodVisitor read = w.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, "read",
+                "(Lthird/entity/Orb;)B", null, null);
+        read.visitCode();
+        read.visitVarInsn(Opcodes.ALOAD, 0);
+        read.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "net/minecraft/entity/Entity", "func_70096_w",
+                "()Lnet/minecraft/entity/DataWatcher;", false);
+        read.visitIntInsn(Opcodes.BIPUSH, 12);
+        read.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "net/minecraft/entity/DataWatcher", "func_75683_a", "(I)B", false);
+        read.visitInsn(Opcodes.IRETURN);
+        read.visitMaxs(0, 0);
+        read.visitEnd();
+        w.visitEnd();
+        return w.toByteArray();
+    }
+
     private static void addByte(MethodVisitor m, int index, int value) {
         watcher(m); m.visitIntInsn(Opcodes.BIPUSH, index); m.visitIntInsn(Opcodes.BIPUSH, value); m.visitInsn(Opcodes.I2B);
         m.visitMethodInsn(Opcodes.INVOKESTATIC, "java/lang/Byte", "valueOf", "(B)Ljava/lang/Byte;", false);
@@ -120,7 +278,10 @@ class LegacyEntityDataWatcherAccessAnalyzerTest {
         m.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "net/minecraft/entity/DataWatcher", "func_75682_a", "(ILjava/lang/Object;)V", false);
     }
     private static void watcher(MethodVisitor m) {
-        m.visitVarInsn(Opcodes.ALOAD, 0);
+        watcher(m, 0);
+    }
+    private static void watcher(MethodVisitor m, int entityLocal) {
+        m.visitVarInsn(Opcodes.ALOAD, entityLocal);
         m.visitFieldInsn(Opcodes.GETFIELD, "net/minecraft/entity/Entity", "field_70180_af", "Lnet/minecraft/entity/DataWatcher;");
     }
 
