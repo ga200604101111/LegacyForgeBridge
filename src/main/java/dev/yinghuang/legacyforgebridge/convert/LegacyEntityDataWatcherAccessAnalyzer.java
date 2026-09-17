@@ -20,9 +20,9 @@ import java.util.jar.JarFile;
 /**
  * Proves the source-owned DataWatcher read/write surface for registrations already admitted by
  * {@link LegacyEntityDataWatcherAnalyzer}. The result is still proof IR: it does not execute or
- * rewrite entity methods. Every custom watcher call in the source entity lineage or a statically
- * reachable helper must use a constant source-owned index and a type compatible with the proven
- * definition, otherwise that entity's access surface remains closed.
+ * rewrite entity methods. Every custom watcher call in the source entity lineage or an exactly
+ * dispatchable reachable helper must use a constant source-owned index and a type compatible with
+ * the proven definition, otherwise that entity's access surface remains closed.
  */
 public final class LegacyEntityDataWatcherAccessAnalyzer {
     private static final String DATA_WATCHER = "net/minecraft/entity/DataWatcher";
@@ -150,31 +150,47 @@ public final class LegacyEntityDataWatcherAccessAnalyzer {
                 return "Unsupported DataWatcher call " + call.name + call.desc + " in " + source(context) + ".";
             }
 
-            if (call.getOpcode() == Opcodes.INVOKESTATIC) {
-                MethodTarget helper = staticHelperTarget(context, i, call, entityLocals);
-                if (helper != null) pending.addLast(helper);
-            }
+            MethodTarget helper = exactHelperTarget(context, i, call, entityLocals);
+            if (helper != null) pending.addLast(helper);
         }
         return null;
     }
 
-    private MethodTarget staticHelperTarget(MethodContext context, int instructionIndex, MethodInsnNode call,
-                                            Set<Integer> entityLocals) {
+    private MethodTarget exactHelperTarget(MethodContext context, int instructionIndex, MethodInsnNode call,
+                                           Set<Integer> entityLocals) {
         ClassNode helperOwner = classes.get(call.owner);
         MethodNode helper = findMethod(helperOwner, call.name, call.desc);
-        if (helperOwner == null || helper == null || (helper.access & Opcodes.ACC_STATIC) == 0) return null;
+        if (helperOwner == null || helper == null) return null;
+
+        boolean targetStatic = (helper.access & Opcodes.ACC_STATIC) != 0;
+        int opcode = call.getOpcode();
+        boolean exact = switch (opcode) {
+            case Opcodes.INVOKESTATIC -> targetStatic;
+            case Opcodes.INVOKESPECIAL -> !targetStatic;
+            case Opcodes.INVOKEVIRTUAL -> !targetStatic
+                    && (((helper.access & Opcodes.ACC_FINAL) != 0) || ((helperOwner.access & Opcodes.ACC_FINAL) != 0));
+            default -> false;
+        };
+        if (!exact) return null;
 
         Type[] argumentTypes = Type.getArgumentTypes(call.desc);
         Frame<SourceValue> frame = context.frames()[instructionIndex];
-        if (frame == null || frame.getStackSize() < argumentTypes.length) return null;
+        int requiredStack = argumentTypes.length + (targetStatic ? 0 : 1);
+        if (frame == null || frame.getStackSize() < requiredStack) return null;
 
-        int stackStart = frame.getStackSize() - argumentTypes.length;
-        int local = 0;
+        int argumentStart = frame.getStackSize() - argumentTypes.length;
         LinkedHashSet<Integer> boundLocals = new LinkedHashSet<>();
+        int local = targetStatic ? 0 : 1;
+        if (!targetStatic) {
+            int receiverIndex = argumentStart - 1;
+            if (receiverIndex < 0) return null;
+            if (isEntityValue(context, frame.getStack(receiverIndex), entityLocals, 0, new HashSet<>()))
+                boundLocals.add(0);
+        }
         for (int argument = 0; argument < argumentTypes.length; argument++) {
             Type type = argumentTypes[argument];
             if ((type.getSort() == Type.OBJECT || type.getSort() == Type.ARRAY)
-                    && isEntityValue(context, frame.getStack(stackStart + argument), entityLocals, 0, new HashSet<>())) {
+                    && isEntityValue(context, frame.getStack(argumentStart + argument), entityLocals, 0, new HashSet<>())) {
                 boundLocals.add(local);
             }
             local += type.getSize();
