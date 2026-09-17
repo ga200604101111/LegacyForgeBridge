@@ -4,6 +4,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import dev.yinghuang.legacyforgebridge.convert.LegacyJarAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.VariantSnowballFixture;
+import dev.yinghuang.legacyforgebridge.convert.VariantSnowballImpactFixture;
 import dev.yinghuang.legacyforgebridge.convert.VariantSnowballMapBindingFixture;
 import dev.yinghuang.legacyforgebridge.convert.api.ConversionContext;
 import dev.yinghuang.legacyforgebridge.convert.api.DiagnosticCollector;
@@ -23,18 +24,27 @@ class LegacyVariantSnowballPassTest {
 
     @Test void materializesLookupProofWithoutClaimingUnprovenMetadataBindingOrRuntime()throws Exception{
         JsonObject root=run(VariantSnowballFixture.write(tempDir.resolve("variant.jar")),tempDir.resolve("staging-unbound"));
-        assertEquals(3,root.get("schemaVersion").getAsInt());assertFalse(root.get("runtimeImplementationWired").getAsBoolean());assertFalse(root.get("impactCompilerWired").getAsBoolean());
-        assertEquals(1,root.get("proofCompleteFamilies").getAsInt());assertEquals(0,root.get("metadataBindingFamilies").getAsInt());
+        assertEquals(4,root.get("schemaVersion").getAsInt());assertFalse(root.get("runtimeImplementationWired").getAsBoolean());assertFalse(root.get("impactCompilerWired").getAsBoolean());
+        assertEquals(1,root.get("proofCompleteFamilies").getAsInt());assertEquals(0,root.get("metadataBindingFamilies").getAsInt());assertEquals(0,root.get("commonImpactFamilies").getAsInt());
         JsonObject rule=root.getAsJsonArray("rules").get(0).getAsJsonObject();assertTrue(rule.get("metadataSelectorLookupProven").getAsBoolean());assertFalse(rule.get("metadataSelectorBindingProven").getAsBoolean());
-        assertTrue(rule.get("projectileSelectorStorageProven").getAsBoolean());assertTrue(rule.get("selectorEnumConstantsProven").getAsBoolean());assertFalse(rule.get("impactSemanticsComplete").getAsBoolean());assertFalse(rule.get("runtimeImplementationWired").getAsBoolean());
+        assertTrue(rule.get("projectileSelectorStorageProven").getAsBoolean());assertTrue(rule.get("selectorEnumConstantsProven").getAsBoolean());assertFalse(rule.get("commonImpactSemanticsProven").getAsBoolean());
+        assertFalse(rule.get("selectorSpecificImpactSemanticsComplete").getAsBoolean());assertFalse(rule.get("impactSemanticsComplete").getAsBoolean());assertFalse(rule.get("runtimeImplementationWired").getAsBoolean());
         JsonObject first=rule.getAsJsonArray("variants").get(0).getAsJsonObject();assertEquals(0,first.get("selectorId").getAsInt());assertFalse(first.has("legacyMeta"));assertEquals("UNCOMPILED",first.get("impactEffect").getAsString());
     }
 
     @Test void exposesLegacyMetadataOnlyAfterCanonicalMapBindingProof()throws Exception{
         JsonObject root=run(VariantSnowballMapBindingFixture.write(tempDir.resolve("bound.jar")),tempDir.resolve("staging-bound"));
-        assertEquals(1,root.get("metadataBindingFamilies").getAsInt());JsonObject rule=root.getAsJsonArray("rules").get(0).getAsJsonObject();
-        assertTrue(rule.get("metadataSelectorBindingProven").getAsBoolean());assertFalse(rule.has("metadataSelectorBindingBlocker"));
+        assertEquals(1,root.get("metadataBindingFamilies").getAsInt());assertEquals(0,root.get("commonImpactFamilies").getAsInt());JsonObject rule=root.getAsJsonArray("rules").get(0).getAsJsonObject();
+        assertTrue(rule.get("metadataSelectorBindingProven").getAsBoolean());assertFalse(rule.has("metadataSelectorBindingBlocker"));assertFalse(rule.get("commonImpactSemanticsProven").getAsBoolean());
         JsonObject first=rule.getAsJsonArray("variants").get(0).getAsJsonObject();assertEquals(0,first.get("selectorId").getAsInt());assertEquals(0,first.get("legacyMeta").getAsInt());
+    }
+
+    @Test void materializesCommonImpactShellWithoutOpeningSelectorSwitchCompiler()throws Exception{
+        JsonObject root=run(VariantSnowballImpactFixture.write(tempDir.resolve("impact.jar")),tempDir.resolve("staging-impact"));
+        assertEquals(1,root.get("metadataBindingFamilies").getAsInt());assertEquals(1,root.get("commonImpactFamilies").getAsInt());
+        JsonObject rule=root.getAsJsonArray("rules").get(0).getAsJsonObject();assertTrue(rule.get("selectorNullImpactGuardProven").getAsBoolean());assertTrue(rule.get("selectorBaseDamageAttackProven").getAsBoolean());
+        assertTrue(rule.get("snowballPoofLoopProven").getAsBoolean());assertTrue(rule.get("serverTerminationProven").getAsBoolean());assertTrue(rule.get("commonImpactSemanticsProven").getAsBoolean());
+        assertFalse(rule.get("selectorSpecificImpactSemanticsComplete").getAsBoolean());assertFalse(rule.get("impactSemanticsComplete").getAsBoolean());assertFalse(root.get("impactCompilerWired").getAsBoolean());
     }
 
     private JsonObject run(Path source,Path staging)throws Exception{

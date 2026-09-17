@@ -5,6 +5,7 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import dev.yinghuang.legacyforgebridge.convert.LegacyVariantSnowballAnalyzer;
+import dev.yinghuang.legacyforgebridge.convert.LegacyVariantSnowballImpactAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.LegacyVariantSnowballMapBindingAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.api.ConversionContext;
 import dev.yinghuang.legacyforgebridge.convert.api.ConversionPass;
@@ -24,13 +25,17 @@ public final class LegacyVariantSnowballPass implements ConversionPass {
         var analysis=new LegacyVariantSnowballAnalyzer().analyze(context.sourceJar());
         if(analysis.rules().isEmpty()&&analysis.skipped().isEmpty())return;
         var bindings=new LegacyVariantSnowballMapBindingAnalyzer().analyze(context.sourceJar());
-        JsonObject root=new JsonObject();root.addProperty("schemaVersion",3);root.addProperty("sourceSha256",context.sourceHash());
+        var impacts=new LegacyVariantSnowballImpactAnalyzer().analyze(context.sourceJar());
+        JsonObject root=new JsonObject();root.addProperty("schemaVersion",4);root.addProperty("sourceSha256",context.sourceHash());
         root.addProperty("runtimeImplementationWired",false);root.addProperty("impactCompilerWired",false);
-        JsonArray rules=new JsonArray();int boundFamilies=0;
+        JsonArray rules=new JsonArray();int boundFamilies=0,commonImpactFamilies=0;
         for(var rule:analysis.rules()){
             var binding=bindings.proofs().stream().filter(p->p.registryName().equals(rule.registryName())&&p.itemClass().equals(rule.itemClass())
                     &&p.mapOwner().equals(rule.selectorMapOwner())&&p.mapField().equals(rule.selectorMapField())).findFirst().orElse(null);
             boolean bindingProven=binding!=null&&binding.bindingProven();if(bindingProven)boundFamilies++;
+            var impact=impacts.proofs().stream().filter(p->p.registryName().equals(rule.registryName())&&p.itemClass().equals(rule.itemClass())
+                    &&p.projectileClass().equals(rule.projectileClass())&&p.selectorClass().equals(rule.selectorClass())).findFirst().orElse(null);
+            boolean commonImpact=impact!=null&&impact.commonImpactSemanticsProven();if(commonImpact)commonImpactFamilies++;
             JsonObject value=new JsonObject();value.addProperty("legacyRegistryName",rule.registryName());value.addProperty("sourceItemClass",rule.itemClass());
             value.addProperty("sourceProjectileClass",rule.projectileClass());value.addProperty("selectorClass",rule.selectorClass());
             value.addProperty("selectorMapOwner",rule.selectorMapOwner());value.addProperty("selectorMapField",rule.selectorMapField());
@@ -39,17 +44,25 @@ public final class LegacyVariantSnowballPass implements ConversionPass {
             value.addProperty("metadataSelectorLookupProven",true);value.addProperty("metadataSelectorBindingProven",bindingProven);
             if(!bindingProven&&binding!=null&&binding.blocker()!=null)value.addProperty("metadataSelectorBindingBlocker",binding.blocker());
             value.addProperty("projectileSelectorStorageProven",true);value.addProperty("selectorEnumConstantsProven",true);
-            value.addProperty("impactSemanticsComplete",false);value.addProperty("runtimeImplementationWired",false);
+            value.addProperty("selectorNullImpactGuardProven",impact!=null&&impact.selectorNullGuardProven());
+            value.addProperty("selectorBaseDamageAttackProven",impact!=null&&impact.selectorBaseDamageAttackProven());
+            value.addProperty("snowballPoofLoopProven",impact!=null&&impact.snowballPoofLoopProven());
+            value.addProperty("serverTerminationProven",impact!=null&&impact.serverTerminationProven());
+            value.addProperty("commonImpactSemanticsProven",commonImpact);
+            if(impact!=null&&!commonImpact&&!impact.blockers().isEmpty()){JsonArray blockers=new JsonArray();for(String blocker:impact.blockers())blockers.add(blocker);value.add("commonImpactBlockers",blockers);}
+            value.addProperty("selectorSpecificImpactSemanticsComplete",false);value.addProperty("impactSemanticsComplete",false);value.addProperty("runtimeImplementationWired",false);
             JsonArray variants=new JsonArray();for(var variant:rule.variants()){JsonObject entry=new JsonObject();entry.addProperty("enumField",variant.enumField());entry.addProperty("selectorId",variant.id());if(bindingProven)entry.addProperty("legacyMeta",variant.id());entry.addProperty("baseDamage",variant.damage());entry.addProperty("impactEffect","UNCOMPILED");variants.add(entry);}value.add("variants",variants);value.addProperty("variantCount",variants.size());rules.add(value);
         }
         root.add("rules",rules);JsonArray skipped=new JsonArray();for(var item:analysis.skipped()){JsonObject value=new JsonObject();value.addProperty("legacyRegistryName",item.registryName());if(item.itemClass()!=null)value.addProperty("sourceItemClass",item.itemClass());value.addProperty("reason",item.reason());skipped.add(value);}root.add("skipped",skipped);
-        root.addProperty("proofCompleteFamilies",rules.size());root.addProperty("metadataBindingFamilies",boundFamilies);root.addProperty("skippedFamilies",skipped.size());
+        root.addProperty("proofCompleteFamilies",rules.size());root.addProperty("metadataBindingFamilies",boundFamilies);root.addProperty("commonImpactFamilies",commonImpactFamilies);root.addProperty("skippedFamilies",skipped.size());
         Path output=context.stagingDir().resolve(OUTPUT);Files.createDirectories(output.getParent());Files.writeString(output,GSON.toJson(root)+"\n",StandardCharsets.UTF_8);
         for(String diagnostic:analysis.diagnostics())context.diagnostics().warning("LFB-CONVERT-VARIANT-SNOWBALL-0003",SupportLevel.MANUAL_REQUIRED,diagnostic);
         if(!rules.isEmpty())context.diagnostics().warning("LFB-CONVERT-VARIANT-SNOWBALL-0001",SupportLevel.RUNTIME_BRIDGE,
-                "Proved metadata-indexed custom snowball lookup shape for family/families: "+rules.size()+"; source map binding is proven for "+boundFamilies+", while custom impact semantics and runtime generation remain intentionally closed.");
+                "Proved metadata-indexed custom snowball lookup shape for family/families: "+rules.size()+"; source map binding is proven for "+boundFamilies+" and the common impact shell for "+commonImpactFamilies+", while selector-specific impact semantics and runtime generation remain intentionally closed.");
         if(boundFamilies<rules.size())context.diagnostics().warning("LFB-CONVERT-VARIANT-SNOWBALL-0004",SupportLevel.RUNTIME_BRIDGE,
                 "Variant snowball families with metadata lookup but without bounded metadata-to-selector map binding: "+(rules.size()-boundFamilies)+".");
+        if(commonImpactFamilies<rules.size())context.diagnostics().warning("LFB-CONVERT-VARIANT-SNOWBALL-0005",SupportLevel.RUNTIME_BRIDGE,
+                "Variant snowball families without the complete bounded selector-independent impact shell: "+(rules.size()-commonImpactFamilies)+".");
         if(!skipped.isEmpty())context.diagnostics().warning("LFB-CONVERT-VARIANT-SNOWBALL-0002",SupportLevel.RUNTIME_BRIDGE,
                 "Custom ItemSnowball families still outside the bounded projectile proof: "+skipped.size()+".");
     }
