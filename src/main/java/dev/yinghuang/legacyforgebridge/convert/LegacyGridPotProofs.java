@@ -4,6 +4,7 @@ import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.*;
 
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -83,14 +84,9 @@ final class LegacyGridPotProofs {
                 &&calls(a,"net/minecraft/item/Item","func_150898_a","(Lnet/minecraft/block/Block;)Lnet/minecraft/item/Item;")&&directBooleanReturn(a,true);
     }
 
-    /**
-     * Proves the executable positive insertion branch: exact render-id comparisons plus a proven
-     * TileEntity setter directly fed from one held ItemStack local's item/damage identity.
-     */
     static boolean canonicalContentInsertionPredicate(MethodNode a,String tileClass,TileShape s){
         if(a==null||s==null||!calls(a,"net/minecraft/block/Block","func_149634_a","(Lnet/minecraft/item/Item;)Lnet/minecraft/block/Block;"))return false;
-        if(!canonicalHeldItemSetterCall(a,tileClass,s.setItem())
-                ||!calls(a,tileClass,s.removeItem().name,s.removeItem().desc))return false;
+        if(!canonicalHeldItemSetterCall(a,tileClass,s.setItem())||!calls(a,tileClass,s.removeItem().name,s.removeItem().desc))return false;
         Set<Integer> constants=new HashSet<>();int symbolic=0,comparisons=0;
         for(AbstractInsnNode insn:a.instructions){
             if(!(insn instanceof MethodInsnNode call)||!"net/minecraft/block/Block".equals(call.owner)
@@ -99,11 +95,23 @@ final class LegacyGridPotProofs {
             if(!(branch instanceof JumpInsnNode jump)||!integerComparison(jump.getOpcode()))continue;
             Integer value=intConstant(identity);
             if(value!=null){constants.add(value);comparisons++;continue;}
-            if(identity instanceof FieldInsnNode field&&field.getOpcode()==Opcodes.GETSTATIC&&"I".equals(field.desc)){
-                symbolic++;comparisons++;
-            }
+            if(identity instanceof FieldInsnNode field&&field.getOpcode()==Opcodes.GETSTATIC&&"I".equals(field.desc)){symbolic++;comparisons++;}
         }
         return comparisons>=4&&constants.contains(1)&&constants.contains(13)&&constants.contains(40)&&symbolic>=1;
+    }
+
+    /** Canonical owner#field keys for symbolic render identities compared directly by the admitted predicate. */
+    static Set<String> symbolicContentInsertionRenderFields(MethodNode method){
+        if(method==null)return Set.of();
+        LinkedHashSet<String> result=new LinkedHashSet<>();
+        for(AbstractInsnNode insn:method.instructions){
+            if(!(insn instanceof MethodInsnNode call)||!"net/minecraft/block/Block".equals(call.owner)
+                    ||!"func_149645_b".equals(call.name)||!"()I".equals(call.desc))continue;
+            AbstractInsnNode identity=nextReal(call);AbstractInsnNode branch=nextReal(identity);
+            if(identity instanceof FieldInsnNode field&&field.getOpcode()==Opcodes.GETSTATIC&&"I".equals(field.desc)
+                    &&branch instanceof JumpInsnNode jump&&integerComparison(jump.getOpcode()))result.add(field.owner+"#"+field.name);
+        }
+        return Set.copyOf(result);
     }
 
     private static boolean canonicalHeldItemSetterCall(MethodNode method,String tileClass,MethodNode setter){
@@ -111,53 +119,28 @@ final class LegacyGridPotProofs {
         for(AbstractInsnNode insn:method.instructions){
             if(!(insn instanceof MethodInsnNode call)||call.getOpcode()!=Opcodes.INVOKEVIRTUAL||!tileClass.equals(call.owner)
                     ||!setter.name.equals(call.name)||!setter.desc.equals(call.desc))continue;
-            AbstractInsnNode damageCall=previousReal(call);
-            AbstractInsnNode damageReceiver=previousReal(damageCall);
-            AbstractInsnNode itemCall=previousReal(damageReceiver);
-            AbstractInsnNode itemReceiver=previousReal(itemCall);
-            if(!(damageCall instanceof MethodInsnNode damage)||!ITEM_STACK.equals(damage.owner)
-                    ||!"func_77960_j".equals(damage.name)||!"()I".equals(damage.desc))continue;
-            if(!(itemCall instanceof MethodInsnNode item)||!ITEM_STACK.equals(item.owner)
-                    ||!"func_77973_b".equals(item.name)||!"()Lnet/minecraft/item/Item;".equals(item.desc))continue;
+            AbstractInsnNode damageCall=previousReal(call),damageReceiver=previousReal(damageCall),itemCall=previousReal(damageReceiver),itemReceiver=previousReal(itemCall);
+            if(!(damageCall instanceof MethodInsnNode damage)||!ITEM_STACK.equals(damage.owner)||!"func_77960_j".equals(damage.name)||!"()I".equals(damage.desc))continue;
+            if(!(itemCall instanceof MethodInsnNode item)||!ITEM_STACK.equals(item.owner)||!"func_77973_b".equals(item.name)||!"()Lnet/minecraft/item/Item;".equals(item.desc))continue;
             if(damageReceiver instanceof VarInsnNode damageVar&&damageVar.getOpcode()==Opcodes.ALOAD
-                    &&itemReceiver instanceof VarInsnNode itemVar&&itemVar.getOpcode()==Opcodes.ALOAD
-                    &&damageVar.var==itemVar.var)return true;
+                    &&itemReceiver instanceof VarInsnNode itemVar&&itemVar.getOpcode()==Opcodes.ALOAD&&damageVar.var==itemVar.var)return true;
         }
         return false;
     }
 
-    private static AbstractInsnNode previousReal(AbstractInsnNode insn){
-        for(AbstractInsnNode previous=insn==null?null:insn.getPrevious();previous!=null;previous=previous.getPrevious())
-            if(previous.getOpcode()>=0)return previous;
-        return null;
-    }
-
-    private static boolean integerComparison(int opcode){
-        return opcode==Opcodes.IF_ICMPEQ||opcode==Opcodes.IF_ICMPNE||opcode==Opcodes.IF_ICMPLT
-                ||opcode==Opcodes.IF_ICMPGE||opcode==Opcodes.IF_ICMPGT||opcode==Opcodes.IF_ICMPLE;
-    }
+    private static AbstractInsnNode previousReal(AbstractInsnNode insn){for(AbstractInsnNode p=insn==null?null:insn.getPrevious();p!=null;p=p.getPrevious())if(p.getOpcode()>=0)return p;return null;}
+    private static boolean integerComparison(int opcode){return opcode==Opcodes.IF_ICMPEQ||opcode==Opcodes.IF_ICMPNE||opcode==Opcodes.IF_ICMPLT||opcode==Opcodes.IF_ICMPGE||opcode==Opcodes.IF_ICMPGT||opcode==Opcodes.IF_ICMPLE;}
 
     static boolean canonicalDynamicCellShape(Map<String,ClassNode> classes,String blockClass,String tileClass,TileShape s,Float baseHeight,Float cellHeight){
         if(baseHeight==null||cellHeight==null)return false;
-        MethodNode collision=method(classes,blockClass,Set.of("addCollisionBoxesToList","func_149743_a"),
-                "(Lnet/minecraft/world/World;IIILnet/minecraft/util/AxisAlignedBB;Ljava/util/List;Lnet/minecraft/entity/Entity;)V");
-        MethodNode ray=method(classes,blockClass,Set.of("collisionRayTrace","func_149731_a"),
-                "(Lnet/minecraft/world/World;IIILnet/minecraft/util/Vec3;Lnet/minecraft/util/Vec3;)Lnet/minecraft/util/MovingObjectPosition;");
-        MethodNode base=method(classes,blockClass,Set.of("getCollisionBoundingBoxFromPool","func_149633_g"),
-                "(Lnet/minecraft/world/World;III)Lnet/minecraft/util/AxisAlignedBB;");
-        return dynamicCellMethod(collision,tileClass,s.enabledGetter(),"func_149743_a",
-                "(Lnet/minecraft/world/World;IIILnet/minecraft/util/AxisAlignedBB;Ljava/util/List;Lnet/minecraft/entity/Entity;)V",baseHeight,cellHeight)
-                &&dynamicCellMethod(ray,tileClass,s.enabledGetter(),"func_149731_a",
-                "(Lnet/minecraft/world/World;IIILnet/minecraft/util/Vec3;Lnet/minecraft/util/Vec3;)Lnet/minecraft/util/MovingObjectPosition;",baseHeight,cellHeight)
+        MethodNode collision=method(classes,blockClass,Set.of("addCollisionBoxesToList","func_149743_a"),"(Lnet/minecraft/world/World;IIILnet/minecraft/util/AxisAlignedBB;Ljava/util/List;Lnet/minecraft/entity/Entity;)V");
+        MethodNode ray=method(classes,blockClass,Set.of("collisionRayTrace","func_149731_a"),"(Lnet/minecraft/world/World;IIILnet/minecraft/util/Vec3;Lnet/minecraft/util/Vec3;)Lnet/minecraft/util/MovingObjectPosition;");
+        MethodNode base=method(classes,blockClass,Set.of("getCollisionBoundingBoxFromPool","func_149633_g"),"(Lnet/minecraft/world/World;III)Lnet/minecraft/util/AxisAlignedBB;");
+        return dynamicCellMethod(collision,tileClass,s.enabledGetter(),"func_149743_a","(Lnet/minecraft/world/World;IIILnet/minecraft/util/AxisAlignedBB;Ljava/util/List;Lnet/minecraft/entity/Entity;)V",baseHeight,cellHeight)
+                &&dynamicCellMethod(ray,tileClass,s.enabledGetter(),"func_149731_a","(Lnet/minecraft/world/World;IIILnet/minecraft/util/Vec3;Lnet/minecraft/util/Vec3;)Lnet/minecraft/util/MovingObjectPosition;",baseHeight,cellHeight)
                 &&base!=null&&containsFloat(base,baseHeight)&&callsNamed(base,"func_149676_a","(FFFFFF)V");
     }
-    private static boolean dynamicCellMethod(MethodNode m,String tileClass,MethodNode getter,String superName,String superDesc,float base,float cell){
-        return m!=null&&calls(m,"net/minecraft/world/World","func_147438_o","(III)Lnet/minecraft/tileentity/TileEntity;")
-                &&typed(m,Opcodes.CHECKCAST,tileClass)&&calls(m,tileClass,getter.name,getter.desc)&&callsNamed(m,superName,superDesc)
-                &&callsNamed(m,"func_149676_a","(FFFFFF)V")&&containsFloat(m,base)&&containsFloat(m,cell)
-                &&field(m,tileClass,"SQ","I")&&opcode(m,Opcodes.FDIV)&&opcode(m,Opcodes.FMUL)&&opcode(m,Opcodes.IMUL)&&opcode(m,Opcodes.IADD);
-    }
+    private static boolean dynamicCellMethod(MethodNode m,String tileClass,MethodNode getter,String superName,String superDesc,float base,float cell){return m!=null&&calls(m,"net/minecraft/world/World","func_147438_o","(III)Lnet/minecraft/tileentity/TileEntity;")&&typed(m,Opcodes.CHECKCAST,tileClass)&&calls(m,tileClass,getter.name,getter.desc)&&callsNamed(m,superName,superDesc)&&callsNamed(m,"func_149676_a","(FFFFFF)V")&&containsFloat(m,base)&&containsFloat(m,cell)&&field(m,tileClass,"SQ","I")&&opcode(m,Opcodes.FDIV)&&opcode(m,Opcodes.FMUL)&&opcode(m,Opcodes.IMUL)&&opcode(m,Opcodes.IADD);}
     static boolean constantFalse(MethodNode m){return Boolean.FALSE.equals(returnedBoolean(m));}
-    private static boolean slotMapper(MethodNode m){return m!=null&&field(m,FORGE_DIRECTION,"offsetX","I")&&field(m,FORGE_DIRECTION,"offsetZ","I")
-            &&hasInt(m,9)&&hasInt(m,8)&&opcode(m,Opcodes.FMUL)&&opcode(m,Opcodes.F2I)&&opcode(m,Opcodes.IMUL)&&opcode(m,Opcodes.IADD);}
+    private static boolean slotMapper(MethodNode m){return m!=null&&field(m,FORGE_DIRECTION,"offsetX","I")&&field(m,FORGE_DIRECTION,"offsetZ","I")&&hasInt(m,9)&&hasInt(m,8)&&opcode(m,Opcodes.FMUL)&&opcode(m,Opcodes.F2I)&&opcode(m,Opcodes.IMUL)&&opcode(m,Opcodes.IADD);}
 }
