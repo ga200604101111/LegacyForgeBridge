@@ -44,6 +44,7 @@ class GeneratedModEntrypointPassTest {
 
         Set<String> interfaces = new HashSet<>();
         Set<String> methods = new HashSet<>();
+        Set<String> mainCalls = new HashSet<>();
         Set<String> clientCalls = new HashSet<>();
         new ClassReader(Files.readAllBytes(classFile)).accept(new ClassVisitor(Opcodes.ASM9) {
             @Override
@@ -54,11 +55,13 @@ class GeneratedModEntrypointPassTest {
             @Override
             public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
                 methods.add(name + descriptor);
-                if (!"onInitializeClient".equals(name)) return null;
+                Set<String> calls = "onInitialize".equals(name) ? mainCalls
+                        : "onInitializeClient".equals(name) ? clientCalls : null;
+                if (calls == null) return null;
                 return new MethodVisitor(Opcodes.ASM9) {
                     @Override
                     public void visitMethodInsn(int opcode, String owner, String methodName, String methodDescriptor, boolean isInterface) {
-                        clientCalls.add(owner + "#" + methodName + methodDescriptor);
+                        calls.add(owner + "#" + methodName + methodDescriptor);
                     }
                 };
             }
@@ -68,6 +71,8 @@ class GeneratedModEntrypointPassTest {
         assertTrue(interfaces.contains("net/fabricmc/api/ClientModInitializer"));
         assertTrue(methods.contains("onInitialize()V"));
         assertTrue(methods.contains("onInitializeClient()V"));
+        assertTrue(mainCalls.contains("dev/yinghuang/legacyforgebridge/compat/LegacyPlainEntityRegistry#loadMod(Ljava/lang/String;)V"));
+        assertTrue(clientCalls.contains("dev/yinghuang/legacyforgebridge/render/ConvertedPlainEntityPresentationRuntime#initializeMod(Ljava/lang/String;)V"));
         assertTrue(clientCalls.contains("dev/yinghuang/legacyforgebridge/render/ConvertedSeatBedPresentationRuntime#initializeMod(Ljava/lang/String;)V"));
         assertTrue(clientCalls.contains("dev/yinghuang/legacyforgebridge/render/ConvertedPlantPresentationRuntime#initializeMod(Ljava/lang/String;)V"));
     }
