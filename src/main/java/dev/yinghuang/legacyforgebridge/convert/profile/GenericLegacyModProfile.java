@@ -22,12 +22,14 @@ import dev.yinghuang.legacyforgebridge.convert.pass.LegacyPlainEntityRendererReg
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyPlainEntityRuntimeCandidatePass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyPlainEntityRuntimePass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacySeatBedPresentationPass;
+import dev.yinghuang.legacyforgebridge.convert.pass.LegacyVariantSnowballPass;
 
 public final class GenericLegacyModProfile implements LegacyModProfile {
     @Override public String id(){ return "generic-forge-1.7.10"; }
     @Override public boolean matches(LegacyModMetadata metadata,String sourceHash){ return true; }
     @Override public void configure(ConversionPlan.Builder plan){
         plan.add(new GenericContentPass());
+        plan.add(new LegacyVariantSnowballPass());
         plan.add(new LegacyGridPotPresentationProofPass());
         plan.add(new LegacyEntityDataWatcherPass());
         plan.add(new LegacyEntityDataWatcherAccessPass());
