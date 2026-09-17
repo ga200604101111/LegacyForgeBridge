@@ -85,6 +85,10 @@ public final class LegacyClassDependencyAnalysisPass implements ConversionPass {
                         + ", capabilities=" + analysis.capabilities().size()
                         + ". This inventory does not authorize deleting any source class."
         );
+
+        // This runs here, after generated semantic/entrypoint bytecode exists, so retirement readiness
+        // can inspect the final staged candidate reference graph rather than the original source graph.
+        LegacyPlainEntityRetirementReadiness.materialize(context, analysis);
     }
 
     private static JsonArray strings(Iterable<String> values) {
