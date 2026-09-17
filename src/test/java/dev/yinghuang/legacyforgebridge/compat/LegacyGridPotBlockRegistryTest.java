@@ -7,17 +7,24 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Set;
 
+import static dev.yinghuang.legacyforgebridge.compat.LegacyGridPotBlockRegistry.InsertionRoute.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 class LegacyGridPotBlockRegistryTest {
     @Test
     void parserAdmitsPositiveAndSourceProvenNegativeSubsetsWithoutClaimingFullClosure() {
         JsonObject value=valid();var rule=LegacyGridPotBlockRegistry.parseForTests(value);assertNotNull(rule);
-        assertEquals("fixture:grid",rule.id().toString());assertTrue(rule.insertionEligible(Identifier.parse("fixture:flower")));
-        assertTrue(rule.negativeInsertionEligible(Identifier.parse("fixture:stone")));
+        Identifier flower=Identifier.parse("fixture:flower"),stone=Identifier.parse("fixture:stone"),unknown=Identifier.parse("fixture:unknown");
+        assertEquals("fixture:grid",rule.id().toString());assertTrue(rule.insertionEligible(flower));
+        assertTrue(rule.negativeInsertionEligible(stone));
         assertTrue(rule.negativeNonBlockItemRuntimeWired());
-        assertFalse(rule.insertionEligible(Identifier.parse("fixture:unknown")));
-        assertFalse(rule.negativeInsertionEligible(Identifier.parse("fixture:unknown")));
+        assertFalse(rule.insertionEligible(unknown));
+        assertFalse(rule.negativeInsertionEligible(unknown));
+        assertEquals(POSITIVE,rule.insertionRoute(flower,true));
+        assertEquals(NEGATIVE,rule.insertionRoute(stone,true));
+        assertEquals(FAIL_CLOSED,rule.insertionRoute(unknown,true));
+        assertEquals(FAIL_CLOSED,rule.insertionRoute(null,true));
+        assertEquals(NEGATIVE,rule.insertionRoute(null,false));
         assertFalse(rule.contentInsertionRuntimeComplete());assertFalse(rule.presentationRuntimeComplete());
     }
 
@@ -27,6 +34,9 @@ class LegacyGridPotBlockRegistryTest {
         value.remove("sourceNegativeInsertionBranchProven");value.remove("negativeContentInsertionRuntimeWired");
         value.remove("negativeNonBlockItemRuntimeWired");value.remove("sourceProvenNegativeBlockIds");
         var rule=LegacyGridPotBlockRegistry.parseForTests(value);assertNotNull(rule);assertFalse(rule.negativeNonBlockItemRuntimeWired());
+        assertEquals(POSITIVE,rule.insertionRoute(Identifier.parse("fixture:flower"),true));
+        assertEquals(FAIL_CLOSED,rule.insertionRoute(Identifier.parse("fixture:unknown"),true));
+        assertEquals(FAIL_CLOSED,rule.insertionRoute(null,false));
     }
 
     @Test
