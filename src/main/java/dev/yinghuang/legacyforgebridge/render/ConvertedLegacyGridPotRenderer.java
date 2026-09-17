@@ -17,6 +17,8 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.List;
+
 /**
  * Adapted 1.21.11 renderer for source-proven legacy GridPot stored contents.
  *
@@ -58,7 +60,7 @@ public final class ConvertedLegacyGridPotRenderer
 
     @Override
     public void submit(State state, PoseStack poseStack, SubmitNodeCollector submitNodeCollector, CameraRenderState camera) {
-        ListView offsets = presentation.offsets();
+        List<Float> offsets = presentation.gridOffsets();
         for (int slot = 0; slot < state.items.length; slot++) {
             ItemStackRenderState itemState = state.items[slot];
             if (itemState == null || itemState.isEmpty()) continue;
@@ -75,11 +77,6 @@ public final class ConvertedLegacyGridPotRenderer
             itemState.submit(poseStack, submitNodeCollector, state.lightCoords, OverlayTexture.NO_OVERLAY, 0);
             poseStack.popPose();
         }
-    }
-
-    /** Tiny allocation-free view over the immutable three offsets stored in the runtime rule. */
-    public interface ListView {
-        float get(int index);
     }
 
     public static final class State extends BlockEntityRenderState {
