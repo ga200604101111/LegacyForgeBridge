@@ -112,6 +112,7 @@ public final class LegacyGridPotBlockRegistry {
 
     public static boolean hasRule(Identifier id) { return id != null && RULES.containsKey(id); }
     public static Rule rule(Identifier id) { return id == null ? null : RULES.get(id); }
+    public static BlockEntityType<ConvertedLegacyGridPotBlockEntity> type(Identifier id) { return id == null ? null : TYPES.get(id); }
 
     public static Rule requireRule(Block block) {
         Identifier id = BuiltInRegistries.BLOCK.getKey(block);
