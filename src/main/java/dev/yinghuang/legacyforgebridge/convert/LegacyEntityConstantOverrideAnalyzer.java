@@ -46,14 +46,19 @@ public final class LegacyEntityConstantOverrideAnalyzer {
         if (opcodes.size() != 2 || opcodes.get(1).getOpcode() != Opcodes.FRETURN)
             return new FloatProof(false, null, "float-callback-not-exact-constant-return");
         AbstractInsnNode constant = opcodes.get(0);
-        Float value = switch (constant.getOpcode()) {
-            case Opcodes.FCONST_0 -> 0.0F;
-            case Opcodes.FCONST_1 -> 1.0F;
-            case Opcodes.FCONST_2 -> 2.0F;
-            default -> constant instanceof LdcInsnNode ldc && ldc.cst instanceof Float number ? number : null;
-        };
-        if (value == null || !Float.isFinite(value))
-            return new FloatProof(false, null, "float-callback-not-exact-finite-constant-return");
+        Float value;
+        switch (constant.getOpcode()) {
+            case Opcodes.FCONST_0 -> value = 0.0F;
+            case Opcodes.FCONST_1 -> value = 1.0F;
+            case Opcodes.FCONST_2 -> value = 2.0F;
+            default -> {
+                if (!(constant instanceof LdcInsnNode ldc) || !(ldc.cst instanceof Float number))
+                    return new FloatProof(false, null, "float-callback-not-exact-constant-return");
+                value = number;
+            }
+        }
+        if (!Float.isFinite(value))
+            return new FloatProof(false, null, "float-callback-constant-not-finite");
         return new FloatProof(true, value, "exact-float-constant-return");
     }
 
