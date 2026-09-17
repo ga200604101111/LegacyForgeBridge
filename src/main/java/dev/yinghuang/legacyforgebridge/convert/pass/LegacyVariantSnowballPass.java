@@ -8,6 +8,7 @@ import dev.yinghuang.legacyforgebridge.convert.LegacyVariantSnowballAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.LegacyVariantSnowballImpactAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.LegacyVariantSnowballMapBindingAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.LegacyVariantSnowballSelectorEffectAnalyzer;
+import dev.yinghuang.legacyforgebridge.convert.LegacyVariantSnowballTeleportWrapperAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.api.ConversionContext;
 import dev.yinghuang.legacyforgebridge.convert.api.ConversionPass;
 import dev.yinghuang.legacyforgebridge.convert.api.SupportLevel;
@@ -28,9 +29,10 @@ public final class LegacyVariantSnowballPass implements ConversionPass {
         var bindings=new LegacyVariantSnowballMapBindingAnalyzer().analyze(context.sourceJar());
         var impacts=new LegacyVariantSnowballImpactAnalyzer().analyze(context.sourceJar());
         var selectorEffects=new LegacyVariantSnowballSelectorEffectAnalyzer().analyze(context.sourceJar());
-        JsonObject root=new JsonObject();root.addProperty("schemaVersion",5);root.addProperty("sourceSha256",context.sourceHash());
+        var teleports=new LegacyVariantSnowballTeleportWrapperAnalyzer().analyze(context.sourceJar());
+        JsonObject root=new JsonObject();root.addProperty("schemaVersion",6);root.addProperty("sourceSha256",context.sourceHash());
         root.addProperty("runtimeImplementationWired",false);root.addProperty("impactCompilerWired",false);
-        JsonArray rules=new JsonArray();int boundFamilies=0,commonImpactFamilies=0,effectDispatchFamilies=0,selectorCompleteFamilies=0;
+        JsonArray rules=new JsonArray();int boundFamilies=0,commonImpactFamilies=0,effectDispatchFamilies=0,selectorCompleteFamilies=0,teleportWrapperFamilies=0;
         for(var rule:analysis.rules()){
             var binding=bindings.proofs().stream().filter(p->p.registryName().equals(rule.registryName())&&p.itemClass().equals(rule.itemClass())
                     &&p.mapOwner().equals(rule.selectorMapOwner())&&p.mapField().equals(rule.selectorMapField())).findFirst().orElse(null);
@@ -42,6 +44,9 @@ public final class LegacyVariantSnowballPass implements ConversionPass {
                     &&p.projectileClass().equals(rule.projectileClass())&&p.selectorClass().equals(rule.selectorClass())).findFirst().orElse(null);
             boolean effectDispatch=effects!=null&&effects.selectorDispatchProven()&&effects.selectorEffectEdgesProven();if(effectDispatch)effectDispatchFamilies++;
             boolean selectorComplete=effectDispatch&&effects.selectorSpecificImpactSemanticsComplete();if(selectorComplete)selectorCompleteFamilies++;
+            var familyTeleports=teleports.proofs().stream().filter(p->p.registryName().equals(rule.registryName())&&p.itemClass().equals(rule.itemClass())
+                    &&p.projectileClass().equals(rule.projectileClass())&&p.selectorClass().equals(rule.selectorClass())).toList();
+            boolean teleportWrapper=familyTeleports.stream().anyMatch(LegacyVariantSnowballTeleportWrapperAnalyzer.Proof::wrapperProven);if(teleportWrapper)teleportWrapperFamilies++;
             boolean impactComplete=commonImpact&&selectorComplete;
 
             JsonObject value=new JsonObject();value.addProperty("legacyRegistryName",rule.registryName());value.addProperty("sourceItemClass",rule.itemClass());
@@ -58,36 +63,37 @@ public final class LegacyVariantSnowballPass implements ConversionPass {
             value.addProperty("serverTerminationProven",impact!=null&&impact.serverTerminationProven());
             value.addProperty("commonImpactSemanticsProven",commonImpact);
             if(impact!=null&&!commonImpact&&!impact.blockers().isEmpty()){JsonArray blockers=new JsonArray();for(String blocker:impact.blockers())blockers.add(blocker);value.add("commonImpactBlockers",blockers);}
-            value.addProperty("selectorEffectDispatchProven",effectDispatch);
-            value.addProperty("selectorPotionEffectBranchCount",effects==null?0:effects.potionBranchesProven());
+            value.addProperty("selectorEffectDispatchProven",effectDispatch);value.addProperty("selectorPotionEffectBranchCount",effects==null?0:effects.potionBranchesProven());
             if(effects!=null&&!effectDispatch&&!effects.blockers().isEmpty()){JsonArray blockers=new JsonArray();for(String blocker:effects.blockers())blockers.add(blocker);value.add("selectorEffectBlockers",blockers);}
+            value.addProperty("randomTeleportWrapperProven",teleportWrapper);value.addProperty("randomTeleportWrapperCount",familyTeleports.stream().filter(LegacyVariantSnowballTeleportWrapperAnalyzer.Proof::wrapperProven).count());
             value.addProperty("selectorSpecificImpactSemanticsComplete",selectorComplete);value.addProperty("impactSemanticsComplete",impactComplete);value.addProperty("runtimeImplementationWired",false);
 
             JsonArray variants=new JsonArray();for(var variant:rule.variants()){
                 JsonObject entry=new JsonObject();entry.addProperty("enumField",variant.enumField());entry.addProperty("selectorId",variant.id());if(bindingProven)entry.addProperty("legacyMeta",variant.id());entry.addProperty("baseDamage",variant.damage());
                 var effect=effects==null?null:effects.effects().stream().filter(e->e.enumField().equals(variant.enumField())&&e.selectorId()==variant.id()).findFirst().orElse(null);
+                var teleport=familyTeleports.stream().filter(p->p.enumField().equals(variant.enumField())&&p.selectorId()==variant.id()).findFirst().orElse(null);
                 if(effect==null){entry.addProperty("impactEffect","UNCOMPILED");}
-                else{
+                else if(teleport!=null&&teleport.wrapperProven()){
+                    entry.addProperty("impactEffect","RANDOM_TELEPORT_WRAPPER_PROVEN");entry.addProperty("sourceImpactHelper",teleport.wrapperMethod());entry.addProperty("sourceTeleportHelper",teleport.teleportMethod());entry.addProperty("horizontalRandomRadius",16.0D);entry.addProperty("verticalRandomRadius",4);
+                }else{
                     entry.addProperty("impactEffect",effect.impactEffect());
                     if(effect.potion()!=null){entry.addProperty("potion",effect.potion());entry.addProperty("duration",effect.duration());entry.addProperty("amplifier",effect.amplifier());}
                     if(effect.helperMethod()!=null)entry.addProperty("sourceImpactHelper",effect.helperMethod());
+                    if(teleport!=null&&!teleport.wrapperProven()&&!teleport.blockers().isEmpty()){JsonArray blockers=new JsonArray();for(String blocker:teleport.blockers())blockers.add(blocker);entry.add("teleportWrapperBlockers",blockers);}
                 }
                 variants.add(entry);
             }value.add("variants",variants);value.addProperty("variantCount",variants.size());rules.add(value);
         }
         root.add("rules",rules);JsonArray skipped=new JsonArray();for(var item:analysis.skipped()){JsonObject value=new JsonObject();value.addProperty("legacyRegistryName",item.registryName());if(item.itemClass()!=null)value.addProperty("sourceItemClass",item.itemClass());value.addProperty("reason",item.reason());skipped.add(value);}root.add("skipped",skipped);
-        root.addProperty("proofCompleteFamilies",rules.size());root.addProperty("metadataBindingFamilies",boundFamilies);root.addProperty("commonImpactFamilies",commonImpactFamilies);root.addProperty("selectorEffectDispatchFamilies",effectDispatchFamilies);root.addProperty("selectorSpecificCompleteFamilies",selectorCompleteFamilies);root.addProperty("skippedFamilies",skipped.size());
+        root.addProperty("proofCompleteFamilies",rules.size());root.addProperty("metadataBindingFamilies",boundFamilies);root.addProperty("commonImpactFamilies",commonImpactFamilies);root.addProperty("selectorEffectDispatchFamilies",effectDispatchFamilies);root.addProperty("selectorSpecificCompleteFamilies",selectorCompleteFamilies);root.addProperty("randomTeleportWrapperFamilies",teleportWrapperFamilies);root.addProperty("skippedFamilies",skipped.size());
         Path output=context.stagingDir().resolve(OUTPUT);Files.createDirectories(output.getParent());Files.writeString(output,GSON.toJson(root)+"\n",StandardCharsets.UTF_8);
         for(String diagnostic:analysis.diagnostics())context.diagnostics().warning("LFB-CONVERT-VARIANT-SNOWBALL-0003",SupportLevel.MANUAL_REQUIRED,diagnostic);
         if(!rules.isEmpty())context.diagnostics().warning("LFB-CONVERT-VARIANT-SNOWBALL-0001",SupportLevel.RUNTIME_BRIDGE,
-                "Proved metadata-indexed custom snowball family/families: "+rules.size()+"; source map binding="+boundFamilies+", common impact shell="+commonImpactFamilies+", selector effect dispatch="+effectDispatchFamilies+", selector-complete="+selectorCompleteFamilies+"; runtime generation remains intentionally closed.");
-        if(boundFamilies<rules.size())context.diagnostics().warning("LFB-CONVERT-VARIANT-SNOWBALL-0004",SupportLevel.RUNTIME_BRIDGE,
-                "Variant snowball families with metadata lookup but without bounded metadata-to-selector map binding: "+(rules.size()-boundFamilies)+".");
-        if(commonImpactFamilies<rules.size())context.diagnostics().warning("LFB-CONVERT-VARIANT-SNOWBALL-0005",SupportLevel.RUNTIME_BRIDGE,
-                "Variant snowball families without the complete bounded selector-independent impact shell: "+(rules.size()-commonImpactFamilies)+".");
-        if(effectDispatchFamilies<rules.size())context.diagnostics().warning("LFB-CONVERT-VARIANT-SNOWBALL-0006",SupportLevel.RUNTIME_BRIDGE,
-                "Variant snowball families without bounded selector-specific switch dispatch/effect edges: "+(rules.size()-effectDispatchFamilies)+".");
-        if(!skipped.isEmpty())context.diagnostics().warning("LFB-CONVERT-VARIANT-SNOWBALL-0002",SupportLevel.RUNTIME_BRIDGE,
-                "Custom ItemSnowball families still outside the bounded projectile proof: "+skipped.size()+".");
+                "Proved metadata-indexed custom snowball family/families: "+rules.size()+"; source map binding="+boundFamilies+", common impact shell="+commonImpactFamilies+", selector effect dispatch="+effectDispatchFamilies+", random teleport wrapper="+teleportWrapperFamilies+", selector-complete="+selectorCompleteFamilies+"; runtime generation remains intentionally closed.");
+        if(boundFamilies<rules.size())context.diagnostics().warning("LFB-CONVERT-VARIANT-SNOWBALL-0004",SupportLevel.RUNTIME_BRIDGE,"Variant snowball families with metadata lookup but without bounded metadata-to-selector map binding: "+(rules.size()-boundFamilies)+".");
+        if(commonImpactFamilies<rules.size())context.diagnostics().warning("LFB-CONVERT-VARIANT-SNOWBALL-0005",SupportLevel.RUNTIME_BRIDGE,"Variant snowball families without the complete bounded selector-independent impact shell: "+(rules.size()-commonImpactFamilies)+".");
+        if(effectDispatchFamilies<rules.size())context.diagnostics().warning("LFB-CONVERT-VARIANT-SNOWBALL-0006",SupportLevel.RUNTIME_BRIDGE,"Variant snowball families without bounded selector-specific switch dispatch/effect edges: "+(rules.size()-effectDispatchFamilies)+".");
+        if(!teleports.proofs().isEmpty()&&teleports.proofs().stream().anyMatch(p->!p.wrapperProven()))context.diagnostics().warning("LFB-CONVERT-VARIANT-SNOWBALL-0007",SupportLevel.RUNTIME_BRIDGE,"One or more source-mapped custom snowball impact helpers are not the bounded random-teleport wrapper family.");
+        if(!skipped.isEmpty())context.diagnostics().warning("LFB-CONVERT-VARIANT-SNOWBALL-0002",SupportLevel.RUNTIME_BRIDGE,"Custom ItemSnowball families still outside the bounded projectile proof: "+skipped.size()+".");
     }
 }
