@@ -39,7 +39,7 @@ class LegacyRegisteredBlockRenderTypeAnalyzerTest {
 
     @Test void ambiguousConstructorAllocationsFailClosed() {
         ClassNode block=blockClass();MethodNode render=block.methods.stream().filter(m->m.name.equals("func_149645_b")).findFirst().orElseThrow();
-        ClassNode caller=allocationClass("cross");appendAllocation(caller.methods.getFirst(),"other");
+        ClassNode caller=allocationClass("cross","other");
         Map<String,ClassNode> classes=Map.of(BLOCK,block,"foreign/render/Bootstrap",caller);
         var symbolic=registration(List.of(arg(9),new LegacyRegistryAnalyzer.ConstructorArgument("I",null),arg(1)));
         assertNull(LegacyRegisteredBlockRenderTypeAnalyzer.constructorBoundRenderIdentity(classes,symbolic,render));
@@ -59,9 +59,11 @@ class LegacyRegisteredBlockRenderTypeAnalyzerTest {
         MethodNode ctor=new MethodNode(Opcodes.ASM9,Opcodes.ACC_PUBLIC,"<init>","(III)V",null,null);ctor.instructions.add(new VarInsnNode(Opcodes.ALOAD,0));ctor.instructions.add(new VarInsnNode(Opcodes.ILOAD,2));ctor.instructions.add(new FieldInsnNode(Opcodes.PUTFIELD,BLOCK,"renderType","I"));ctor.instructions.add(new InsnNode(Opcodes.RETURN));ctor.maxLocals=4;ctor.maxStack=2;c.methods.add(ctor);
         MethodNode render=renderMethod();render.instructions.add(new VarInsnNode(Opcodes.ALOAD,0));render.instructions.add(new FieldInsnNode(Opcodes.GETFIELD,BLOCK,"renderType","I"));render.instructions.add(new InsnNode(Opcodes.IRETURN));render.maxLocals=1;render.maxStack=1;c.methods.add(render);return c;
     }
-    private static ClassNode allocationClass(String field){
+    private static ClassNode allocationClass(String... fields){
         ClassNode c=new ClassNode(Opcodes.ASM9);c.name="foreign/render/Bootstrap";c.superName="java/lang/Object";
-        MethodNode m=new MethodNode(Opcodes.ASM9,Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"preInit","()V",null,null);appendAllocation(m,field);m.instructions.add(new InsnNode(Opcodes.RETURN));m.maxLocals=0;m.maxStack=5;c.methods.add(m);return c;
+        MethodNode m=new MethodNode(Opcodes.ASM9,Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"preInit","()V",null,null);
+        for(String field:fields)appendAllocation(m,field);
+        m.instructions.add(new InsnNode(Opcodes.RETURN));m.maxLocals=0;m.maxStack=5;c.methods.add(m);return c;
     }
     private static void appendAllocation(MethodNode m,String field){
         m.instructions.add(new TypeInsnNode(Opcodes.NEW,BLOCK));m.instructions.add(new InsnNode(Opcodes.DUP));m.instructions.add(new IntInsnNode(Opcodes.BIPUSH,9));m.instructions.add(new FieldInsnNode(Opcodes.GETSTATIC,IDS,field,"I"));m.instructions.add(new InsnNode(Opcodes.ICONST_1));m.instructions.add(new MethodInsnNode(Opcodes.INVOKESPECIAL,BLOCK,"<init>","(III)V",false));m.instructions.add(new InsnNode(Opcodes.POP));
