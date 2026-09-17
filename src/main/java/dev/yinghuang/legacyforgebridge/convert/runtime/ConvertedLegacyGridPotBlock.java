@@ -26,7 +26,7 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 
 import java.util.List;
 
-/** Executable core plus a source-proven positive insertion subset of a legacy 3x3 grid-pot block. */
+/** Executable core of a source-proven 3x3 legacy grid-pot block. */
 public final class ConvertedLegacyGridPotBlock extends ConvertedLegacyBlock implements EntityBlock {
     private final LegacyGridPotBlockRegistry.Rule rule;
 
@@ -37,8 +37,6 @@ public final class ConvertedLegacyGridPotBlock extends ConvertedLegacyBlock impl
     }
 
     @Override public BlockEntity newBlockEntity(BlockPos pos, BlockState state) { return new ConvertedLegacyGridPotBlockEntity(pos, state); }
-
-    /** The source block explicitly returns null from getItemDropped; enabled cells own all drops. */
     @Override protected List<ItemStack> getDrops(BlockState state, LootParams.Builder params) { return List.of(); }
 
     @Override
@@ -46,27 +44,10 @@ public final class ConvertedLegacyGridPotBlock extends ConvertedLegacyBlock impl
                                                 BlockHitResult hitResult) {
         if (!(level.getBlockEntity(pos) instanceof ConvertedLegacyGridPotBlockEntity grid)) return InteractionResult.PASS;
         if (level.isClientSide()) return InteractionResult.SUCCESS;
-
-        float hitX = (float) (hitResult.getLocation().x - pos.getX());
-        float hitZ = (float) (hitResult.getLocation().z - pos.getZ());
-        int slot = slotForHit(hitX, hitZ, hitResult.getDirection().getOpposite());
+        int slot = slotForHit((float)(hitResult.getLocation().x-pos.getX()),
+                (float)(hitResult.getLocation().z-pos.getZ()), hitResult.getDirection().getOpposite());
         if (!grid.isEnabled(slot)) return InteractionResult.SUCCESS;
-
-        ItemStack stored = grid.item(slot);
-        if (!stored.isEmpty()) {
-            ItemStack removed = grid.removeItem(slot);
-            if (!player.hasInfiniteMaterials() && !removed.isEmpty())
-                Containers.dropItemStack(level, pos.getX(), pos.getY(), pos.getZ(), removed);
-            return InteractionResult.SUCCESS;
-        }
-
-        ItemStack removed = grid.removeCell(slot);
-        if (!player.hasInfiniteMaterials()) {
-            if (!removed.isEmpty()) Containers.dropItemStack(level, pos.getX(), pos.getY(), pos.getZ(), removed);
-            Containers.dropItemStack(level, pos.getX(), pos.getY(), pos.getZ(), new ItemStack(this));
-        }
-        if (grid.isGridEmpty()) level.removeBlock(pos, false);
-        return InteractionResult.SUCCESS;
+        return removeStoredOrCell(level,pos,player,grid,slot);
     }
 
     @Override
@@ -75,14 +56,11 @@ public final class ConvertedLegacyGridPotBlock extends ConvertedLegacyBlock impl
         if (hand != InteractionHand.MAIN_HAND) return InteractionResult.PASS;
         if (!(level.getBlockEntity(pos) instanceof ConvertedLegacyGridPotBlockEntity grid)) return InteractionResult.PASS;
 
-        float hitX = (float) (hitResult.getLocation().x - pos.getX());
-        float hitZ = (float) (hitResult.getLocation().z - pos.getZ());
-
-        // The source has a second slot lookup without getOpposite() specifically for adding another
-        // copy of the grid-pot item to the existing block.
+        // Source uses the non-opposite face only for adding another copy of the GridPot itself.
         if (stack.is(asItem())) {
             if (level.isClientSide()) return InteractionResult.SUCCESS;
-            int slot = slotForHit(hitX, hitZ, hitResult.getDirection());
+            int slot = slotForHit((float)(hitResult.getLocation().x-pos.getX()),
+                    (float)(hitResult.getLocation().z-pos.getZ()), hitResult.getDirection());
             if (!grid.isEnabled(slot)) {
                 grid.enable(slot);
                 if (!player.hasInfiniteMaterials()) stack.shrink(1);
@@ -90,28 +68,49 @@ public final class ConvertedLegacyGridPotBlock extends ConvertedLegacyBlock impl
             return InteractionResult.SUCCESS;
         }
 
-        // Positive source-proven subset of the legacy render-type predicate. Only converted mod
-        // BlockItems whose source getRenderType() is an exact constant 1/13/40 are admitted here.
-        // Vanilla members and coordinateCrossUID remain closed, so absence from this set is not
-        // interpreted as proof of the legacy negative branch.
+        int slot = slotForHit((float)(hitResult.getLocation().x-pos.getX()),
+                (float)(hitResult.getLocation().z-pos.getZ()), hitResult.getDirection().getOpposite());
+        if (!grid.isEnabled(slot)) return InteractionResult.SUCCESS;
+
+        boolean positive = false;
+        boolean negative = false;
         if (stack.getItem() instanceof BlockItem blockItem) {
             Identifier blockId = BuiltInRegistries.BLOCK.getKey(blockItem.getBlock());
-            if (rule.insertionEligible(blockId)) {
-                if (level.isClientSide()) return InteractionResult.SUCCESS;
-                int slot = slotForHit(hitX, hitZ, hitResult.getDirection().getOpposite());
-                if (!grid.isEnabled(slot)) return InteractionResult.SUCCESS;
-
-                ItemStack previous = grid.removeItem(slot);
-                if (!player.hasInfiniteMaterials() && !previous.isEmpty())
-                    Containers.dropItemStack(level, pos.getX(), pos.getY(), pos.getZ(), previous);
-                grid.setItem(slot, stack);
-                if (!player.hasInfiniteMaterials()) stack.shrink(1);
-                return InteractionResult.SUCCESS;
-            }
+            positive = rule.insertionEligible(blockId);
+            negative = rule.negativeInsertionEligible(blockId);
+            if (!positive && !negative) return InteractionResult.SUCCESS; // unresolved BlockItem stays fail-closed
+        } else {
+            negative = rule.negativeNonBlockItemRuntimeWired();
+            if (!negative) return InteractionResult.SUCCESS;
         }
 
-        // Full negative-branch behavior is intentionally not guessed while vanilla and symbolic
-        // custom-render identities remain outside the portable eligibility table.
+        if (level.isClientSide()) return InteractionResult.SUCCESS;
+        if (positive) {
+            ItemStack old = grid.removeItem(slot);
+            if (!player.hasInfiniteMaterials() && !old.isEmpty())
+                Containers.dropItemStack(level,pos.getX(),pos.getY(),pos.getZ(),old);
+            grid.setItem(slot,stack);
+            if (!player.hasInfiniteMaterials()) stack.shrink(1);
+            return InteractionResult.SUCCESS;
+        }
+        return removeStoredOrCell(level,pos,player,grid,slot);
+    }
+
+    private InteractionResult removeStoredOrCell(Level level, BlockPos pos, Player player,
+                                                  ConvertedLegacyGridPotBlockEntity grid, int slot) {
+        ItemStack stored = grid.item(slot);
+        if (!stored.isEmpty()) {
+            ItemStack removed = grid.removeItem(slot);
+            if (!player.hasInfiniteMaterials() && !removed.isEmpty())
+                Containers.dropItemStack(level,pos.getX(),pos.getY(),pos.getZ(),removed);
+            return InteractionResult.SUCCESS;
+        }
+        ItemStack removed = grid.removeCell(slot);
+        if (!player.hasInfiniteMaterials()) {
+            if (!removed.isEmpty()) Containers.dropItemStack(level,pos.getX(),pos.getY(),pos.getZ(),removed);
+            Containers.dropItemStack(level,pos.getX(),pos.getY(),pos.getZ(),new ItemStack(this));
+        }
+        if (grid.isGridEmpty()) level.removeBlock(pos,false);
         return InteractionResult.SUCCESS;
     }
 
@@ -119,33 +118,27 @@ public final class ConvertedLegacyGridPotBlock extends ConvertedLegacyBlock impl
     protected void affectNeighborsAfterRemoval(BlockState state, ServerLevel level, BlockPos pos, boolean movedByPiston) {
         BlockEntity blockEntity = level.getBlockEntity(pos);
         if (blockEntity instanceof ConvertedLegacyGridPotBlockEntity grid && !grid.isGridEmpty())
-            grid.dropAll(level, pos, new ItemStack(this));
-        super.affectNeighborsAfterRemoval(state, level, pos, movedByPiston);
+            grid.dropAll(level,pos,new ItemStack(this));
+        super.affectNeighborsAfterRemoval(state,level,pos,movedByPiston);
     }
 
-    @Override protected VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) { return gridShape(level, pos); }
-    @Override protected VoxelShape getCollisionShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) { return gridShape(level, pos); }
+    @Override protected VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) { return gridShape(level,pos); }
+    @Override protected VoxelShape getCollisionShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) { return gridShape(level,pos); }
 
     private VoxelShape gridShape(BlockGetter level, BlockPos pos) {
-        VoxelShape shape = box(0D, 0D, 0D, 16D, rule.baseHeight() * 16D, 16D);
+        VoxelShape shape=box(0D,0D,0D,16D,rule.baseHeight()*16D,16D);
         if (!(level.getBlockEntity(pos) instanceof ConvertedLegacyGridPotBlockEntity grid)) return shape;
-        double width = 16D / rule.gridWidth();
-        double height = rule.cellHeight() * 16D;
-        for (int slot = 0; slot < rule.cells(); slot++) {
-            if (!grid.isEnabled(slot)) continue;
-            int x = slot % rule.gridWidth();
-            int z = slot / rule.gridWidth();
-            shape = Shapes.or(shape, box(x * width, 0D, z * width, (x + 1) * width, height, (z + 1) * width));
+        double width=16D/rule.gridWidth(),height=rule.cellHeight()*16D;
+        for(int slot=0;slot<rule.cells();slot++)if(grid.isEnabled(slot)){
+            int x=slot%rule.gridWidth(),z=slot/rule.gridWidth();
+            shape=Shapes.or(shape,box(x*width,0D,z*width,(x+1)*width,height,(z+1)*width));
         }
         return shape;
     }
 
     /** Exact 1.7 source formula: int(3*(x+dx/6)) + int(3*(z+dz/6))*3, upper-clamped to 8. */
-    public static int slotForHit(float hitX, float hitZ, Direction direction) {
-        float halfCell = 1F / 3F / 2F;
-        hitX += direction.getStepX() * halfCell;
-        hitZ += direction.getStepZ() * halfCell;
-        int slot = (int) (3F * hitX) + (int) (3F * hitZ) * 3;
-        return slot >= 9 ? 8 : slot;
+    public static int slotForHit(float hitX,float hitZ,Direction direction) {
+        float halfCell=1F/3F/2F;hitX+=direction.getStepX()*halfCell;hitZ+=direction.getStepZ()*halfCell;
+        int slot=(int)(3F*hitX)+(int)(3F*hitZ)*3;return slot>=9?8:slot;
     }
 }

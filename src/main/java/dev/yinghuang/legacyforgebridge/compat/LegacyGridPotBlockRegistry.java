@@ -39,10 +39,15 @@ public final class LegacyGridPotBlockRegistry {
                        boolean legacyInsertionPredicateProven,
                        boolean sourceProvenModContentInsertionWired,
                        Set<Identifier> sourceProvenInsertionBlockIds,
+                       boolean sourceNegativeInsertionBranchProven,
+                       boolean negativeContentInsertionRuntimeWired,
+                       boolean negativeNonBlockItemRuntimeWired,
+                       Set<Identifier> sourceProvenNegativeBlockIds,
                        boolean contentInsertionRuntimeComplete,
                        boolean presentationRuntimeComplete) {
         public Rule {
             sourceProvenInsertionBlockIds = Set.copyOf(sourceProvenInsertionBlockIds == null ? Set.of() : sourceProvenInsertionBlockIds);
+            sourceProvenNegativeBlockIds = Set.copyOf(sourceProvenNegativeBlockIds == null ? Set.of() : sourceProvenNegativeBlockIds);
             if (id == null || cells != 9 || gridWidth != 3
                     || !(baseHeight > 0F && baseHeight <= 1F)
                     || !(cellHeight > baseHeight && cellHeight <= 1F)
@@ -56,15 +61,24 @@ public final class LegacyGridPotBlockRegistry {
                 throw new IllegalArgumentException("Grid-pot positive insertion subset lacks source predicate/eligible identities");
             }
             if (!sourceProvenModContentInsertionWired && !sourceProvenInsertionBlockIds.isEmpty()) {
-                throw new IllegalArgumentException("Grid-pot insertion identities present without runtime wiring");
+                throw new IllegalArgumentException("Grid-pot insertion identities present without positive runtime wiring");
             }
-            if (contentInsertionRuntimeComplete || presentationRuntimeComplete) {
+            for (Identifier positive : sourceProvenInsertionBlockIds)
+                if (sourceProvenNegativeBlockIds.contains(positive))
+                    throw new IllegalArgumentException("Grid-pot identity appears in both positive and negative sets: " + positive);
+            if (negativeContentInsertionRuntimeWired && !sourceNegativeInsertionBranchProven)
+                throw new IllegalArgumentException("Grid-pot negative runtime lacks source fallback proof");
+            if (negativeNonBlockItemRuntimeWired && !negativeContentInsertionRuntimeWired)
+                throw new IllegalArgumentException("Grid-pot non-BlockItem negative runtime lacks master negative runtime wiring");
+            if (contentInsertionRuntimeComplete || presentationRuntimeComplete)
                 throw new IllegalArgumentException("Full grid-pot insertion/presentation runtime not admitted by schema 1");
-            }
         }
 
         public boolean insertionEligible(Identifier blockId) {
             return sourceProvenModContentInsertionWired && blockId != null && sourceProvenInsertionBlockIds.contains(blockId);
+        }
+        public boolean negativeInsertionEligible(Identifier blockId) {
+            return negativeContentInsertionRuntimeWired && blockId != null && sourceProvenNegativeBlockIds.contains(blockId);
         }
     }
 
@@ -90,8 +104,7 @@ public final class LegacyGridPotBlockRegistry {
                     throw new IllegalStateException("Conflicting converted grid-pot rule for " + rule.id());
                 loaded++;
             }
-            if (loaded > 0) LegacyForgeBridge.LOGGER.info(
-                    "Loaded converted grid-pot core rules: mod={}, rules={}", modId, loaded);
+            if (loaded > 0) LegacyForgeBridge.LOGGER.info("Loaded converted grid-pot core rules: mod={}, rules={}", modId, loaded);
         } catch (Exception exception) {
             LegacyForgeBridge.LOGGER.error("Failed to load converted grid-pot rules for {}", modId, exception);
         }
@@ -139,6 +152,7 @@ public final class LegacyGridPotBlockRegistry {
             if (idValue == null) return null;
             boolean subset = bool(value, "sourceProvenModContentInsertionWired");
             Set<Identifier> eligible = identifiers(value.get("sourceProvenInsertionBlockIds"));
+            Set<Identifier> negative = identifiers(value.get("sourceProvenNegativeBlockIds"));
             return new Rule(
                     Identifier.parse(idValue),
                     integer(value, "cells", 0), integer(value, "gridWidth", 0),
@@ -148,6 +162,9 @@ public final class LegacyGridPotBlockRegistry {
                     bool(value, "normalBlockDropDisabled"), bool(value, "persistenceProven"),
                     bool(value, "dynamicCellShapeProven"), bool(value, "nonOpaqueProven"),
                     bool(value, "legacyInsertionPredicateProven"), subset, eligible,
+                    bool(value, "sourceNegativeInsertionBranchProven"),
+                    bool(value, "negativeContentInsertionRuntimeWired"),
+                    bool(value, "negativeNonBlockItemRuntimeWired"), negative,
                     bool(value, "contentInsertionRuntimeComplete"), bool(value, "presentationRuntimeComplete")
             );
         } catch (RuntimeException invalid) {
@@ -165,20 +182,8 @@ public final class LegacyGridPotBlockRegistry {
         return Set.copyOf(values);
     }
 
-    private static String string(JsonObject object, String key) {
-        JsonElement value = object.get(key);
-        return value != null && value.isJsonPrimitive() ? value.getAsString() : null;
-    }
-    private static int integer(JsonObject object, String key, int fallback) {
-        JsonElement value = object.get(key);
-        return value != null && value.isJsonPrimitive() ? value.getAsInt() : fallback;
-    }
-    private static float decimal(JsonObject object, String key, float fallback) {
-        JsonElement value = object.get(key);
-        return value != null && value.isJsonPrimitive() ? value.getAsFloat() : fallback;
-    }
-    private static boolean bool(JsonObject object, String key) {
-        JsonElement value = object.get(key);
-        return value != null && value.isJsonPrimitive() && value.getAsBoolean();
-    }
+    private static String string(JsonObject object, String key) { JsonElement value=object.get(key);return value!=null&&value.isJsonPrimitive()?value.getAsString():null; }
+    private static int integer(JsonObject object, String key, int fallback) { JsonElement value=object.get(key);return value!=null&&value.isJsonPrimitive()?value.getAsInt():fallback; }
+    private static float decimal(JsonObject object, String key, float fallback) { JsonElement value=object.get(key);return value!=null&&value.isJsonPrimitive()?value.getAsFloat():fallback; }
+    private static boolean bool(JsonObject object, String key) { JsonElement value=object.get(key);return value!=null&&value.isJsonPrimitive()&&value.getAsBoolean(); }
 }
