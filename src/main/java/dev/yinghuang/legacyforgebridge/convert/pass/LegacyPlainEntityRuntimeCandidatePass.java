@@ -47,6 +47,7 @@ public final class LegacyPlainEntityRuntimeCandidatePass implements ConversionPa
         root.addProperty("sourceSha256", context.sourceHash());
         root.addProperty("modernNoOpRendererAdapterAvailable", true);
         root.addProperty("legacyWatcherBridgeRequired", true);
+        root.addProperty("constantBehaviorOverrideCodegenRequired", true);
         root.addProperty("entityTypeRegistrationWired", false);
         root.addProperty("clientRendererRegistrationWired", false);
         root.addProperty("runtimeImplementationWired", false);
@@ -66,6 +67,7 @@ public final class LegacyPlainEntityRuntimeCandidatePass implements ConversionPa
             if (!bool(source, "classGenerated", false)) blockers.add("generated-entity-class-missing");
             if (!bool(source, "legacyWatcherBridgeWired", false)) blockers.add("legacy-watcher-bridge-missing");
             if (!bool(source, "legacyBaseHurtSemanticsMapped", false)) blockers.add("legacy-base-hurt-semantics-unmapped");
+            if (!bool(source, "constantBehaviorOverrideCodegenComplete", false)) blockers.add("constant-behavior-override-codegen-incomplete");
             String generatedClass = string(source, "generatedClass", null);
             if (generatedClass == null || generatedClass.isBlank()) blockers.add("generated-entity-class-identity-missing");
             if (integer(source, "legacyNumericId", -1) < 0) blockers.add("legacy-mod-entity-type-id-missing");
@@ -89,6 +91,9 @@ public final class LegacyPlainEntityRuntimeCandidatePass implements ConversionPa
             copy(source, rule, "trackingRange"); copy(source, rule, "updateFrequency"); copy(source, rule, "velocityUpdates");
             copy(source, rule, "width"); copy(source, rule, "height"); copy(source, rule, "synchedDataAccessorCount");
             copy(source, rule, "legacyWatcherBridgeWired");
+            copy(source, rule, "constantBehaviorOverrideCodegenComplete");
+            copy(source, rule, "constantBehaviorOverrideCount");
+            if (source.has("constantBehaviorOverrides")) rule.add("constantBehaviorOverrides", source.get("constantBehaviorOverrides").deepCopy());
             if (source.has("synchedDataEntries")) rule.add("synchedDataEntries", source.get("synchedDataEntries").deepCopy());
             rule.addProperty("presentationAdapter", PRESENTATION_ADAPTER_NOOP);
             rule.addProperty("modernNoOpRendererAdapterAvailable", true);
@@ -122,42 +127,18 @@ public final class LegacyPlainEntityRuntimeCandidatePass implements ConversionPa
         Files.writeString(output, GSON.toJson(root) + "\n", StandardCharsets.UTF_8);
 
         if (readyCount > 0) context.diagnostics().info("LFB-CONVERT-ENTITY-CANDIDATE-0001", SupportLevel.RUNTIME_BRIDGE,
-                "Prepared " + readyCount + " plain Entity runtime candidate(s) with isolated generated classes, legacy watcher bridges, and proven source no-op renderer presentation; EntityType/client renderer registration remain unwired.");
+                "Prepared " + readyCount + " plain Entity runtime candidate(s) with isolated generated classes, watcher bridges, completed constant-override codegen, and proven source no-op renderer presentation.");
         if (readyCount < rules.size()) context.diagnostics().warning("LFB-CONVERT-ENTITY-CANDIDATE-0002", SupportLevel.RUNTIME_BRIDGE,
-                "Blocked " + (rules.size() - readyCount) + " generated plain entity class(es) from runtime candidacy because class/network/dimension/presentation proof remained incomplete.");
+                "Blocked " + (rules.size() - readyCount) + " generated plain entity class(es) from runtime candidacy because class/network/dimension/constant-override/presentation proof remained incomplete.");
     }
 
-    private static JsonObject read(Path path) throws Exception {
-        return JsonParser.parseString(Files.readString(path, StandardCharsets.UTF_8)).getAsJsonObject();
-    }
-    private static boolean valid(JsonObject root, String hash) {
-        return integer(root, "schemaVersion", -1) == 1 && hash.equals(string(root, "sourceSha256", ""));
-    }
-    private static JsonArray array(JsonObject root, String name) {
-        JsonElement value = root.get(name);
-        return value != null && value.isJsonArray() ? value.getAsJsonArray() : new JsonArray();
-    }
-    private static boolean bool(JsonObject root, String name, boolean fallback) {
-        JsonElement value = root.get(name);
-        return value != null && value.isJsonPrimitive() ? value.getAsBoolean() : fallback;
-    }
-    private static int integer(JsonObject root, String name, int fallback) {
-        JsonElement value = root.get(name);
-        return value != null && value.isJsonPrimitive() ? value.getAsInt() : fallback;
-    }
-    private static float decimal(JsonObject root, String name, float fallback) {
-        JsonElement value = root.get(name);
-        return value != null && value.isJsonPrimitive() ? value.getAsFloat() : fallback;
-    }
-    private static String string(JsonObject root, String name, String fallback) {
-        JsonElement value = root.get(name);
-        return value != null && value.isJsonPrimitive() ? value.getAsString() : fallback;
-    }
-    private static String key(String id, String sourceClass) {
-        return id == null || sourceClass == null ? null : id + '\u0000' + sourceClass;
-    }
-    private static void copy(JsonObject source, JsonObject target, String name) {
-        JsonElement value = source.get(name);
-        if (value != null) target.add(name, value.deepCopy());
-    }
+    private static JsonObject read(Path path) throws Exception { return JsonParser.parseString(Files.readString(path, StandardCharsets.UTF_8)).getAsJsonObject(); }
+    private static boolean valid(JsonObject root, String hash) { return integer(root, "schemaVersion", -1) == 1 && hash.equals(string(root, "sourceSha256", "")); }
+    private static JsonArray array(JsonObject root, String name) { JsonElement value = root.get(name); return value != null && value.isJsonArray() ? value.getAsJsonArray() : new JsonArray(); }
+    private static boolean bool(JsonObject root, String name, boolean fallback) { JsonElement value = root.get(name); return value != null && value.isJsonPrimitive() ? value.getAsBoolean() : fallback; }
+    private static int integer(JsonObject root, String name, int fallback) { JsonElement value = root.get(name); return value != null && value.isJsonPrimitive() ? value.getAsInt() : fallback; }
+    private static float decimal(JsonObject root, String name, float fallback) { JsonElement value = root.get(name); return value != null && value.isJsonPrimitive() ? value.getAsFloat() : fallback; }
+    private static String string(JsonObject root, String name, String fallback) { JsonElement value = root.get(name); return value != null && value.isJsonPrimitive() ? value.getAsString() : fallback; }
+    private static String key(String id, String sourceClass) { return id == null || sourceClass == null ? null : id + '\u0000' + sourceClass; }
+    private static void copy(JsonObject source, JsonObject target, String name) { JsonElement value = source.get(name); if (value != null) target.add(name, value.deepCopy()); }
 }

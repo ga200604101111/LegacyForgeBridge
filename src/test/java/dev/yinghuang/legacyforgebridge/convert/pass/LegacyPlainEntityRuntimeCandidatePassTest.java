@@ -21,89 +21,41 @@ import static org.junit.jupiter.api.Assertions.*;
 class LegacyPlainEntityRuntimeCandidatePassTest {
     @TempDir Path tempDir;
 
-    @Test void admitsOnlyGeneratedPlainEntitiesWithRemoteIdentityWatcherBridgeAndProvenNoOpPresentation() throws Exception {
-        Path staging = tempDir.resolve("staging");
-        ConversionContext context = context(staging);
-        writeGenerated(staging);
-        writePresentation(staging);
-
+    @Test void admitsOnlyGeneratedPlainEntitiesWithCompletedConstantCodegenRemoteIdentityWatcherBridgeAndNoOpPresentation() throws Exception {
+        Path staging = tempDir.resolve("staging"); ConversionContext context = context(staging); writeGenerated(staging); writePresentation(staging);
         new LegacyPlainEntityRuntimeCandidatePass().apply(context);
-
-        JsonObject root = JsonParser.parseString(Files.readString(
-                staging.resolve(LegacyPlainEntityRuntimeCandidatePass.OUTPUT), StandardCharsets.UTF_8)).getAsJsonObject();
-        assertTrue(root.get("modernNoOpRendererAdapterAvailable").getAsBoolean());
-        assertTrue(root.get("legacyWatcherBridgeRequired").getAsBoolean());
-        assertFalse(root.get("entityTypeRegistrationWired").getAsBoolean());
-        assertFalse(root.get("clientRendererRegistrationWired").getAsBoolean());
-        assertEquals(1, root.get("runtimeCandidateReadyCount").getAsInt());
-        assertEquals(1, root.get("blockedRuntimeCandidateCount").getAsInt());
-
-        JsonObject ready = root.getAsJsonArray("rules").get(0).getAsJsonObject();
-        assertTrue(ready.get("runtimeCandidateReady").getAsBoolean());
-        assertTrue(ready.get("legacyWatcherBridgeWired").getAsBoolean());
-        assertEquals(23, ready.get("legacyNumericId").getAsInt());
-        assertEquals(LegacyPlainEntityRuntimeCandidatePass.PRESENTATION_ADAPTER_NOOP,
-                ready.get("presentationAdapter").getAsString());
-        assertEquals("third/client/RenderEmpty", ready.get("rendererClass").getAsString());
-        assertTrue(ready.getAsJsonArray("blockers").isEmpty());
-
-        JsonObject blocked = root.getAsJsonArray("rules").get(1).getAsJsonObject();
-        assertFalse(blocked.get("runtimeCandidateReady").getAsBoolean());
-        assertTrue(blocked.getAsJsonArray("blockers").asList().stream()
-                .anyMatch(value -> value.getAsString().equals("source-renderer-not-proven-noop")));
+        JsonObject root = JsonParser.parseString(Files.readString(staging.resolve(LegacyPlainEntityRuntimeCandidatePass.OUTPUT), StandardCharsets.UTF_8)).getAsJsonObject();
+        assertTrue(root.get("modernNoOpRendererAdapterAvailable").getAsBoolean());assertTrue(root.get("legacyWatcherBridgeRequired").getAsBoolean());assertTrue(root.get("constantBehaviorOverrideCodegenRequired").getAsBoolean());
+        assertFalse(root.get("entityTypeRegistrationWired").getAsBoolean());assertFalse(root.get("clientRendererRegistrationWired").getAsBoolean());assertEquals(1, root.get("runtimeCandidateReadyCount").getAsInt());assertEquals(1, root.get("blockedRuntimeCandidateCount").getAsInt());
+        JsonObject ready = root.getAsJsonArray("rules").get(0).getAsJsonObject();assertTrue(ready.get("runtimeCandidateReady").getAsBoolean());assertTrue(ready.get("legacyWatcherBridgeWired").getAsBoolean());assertTrue(ready.get("constantBehaviorOverrideCodegenComplete").getAsBoolean());assertEquals(1,ready.get("constantBehaviorOverrideCount").getAsInt());assertEquals(23, ready.get("legacyNumericId").getAsInt());assertEquals("third/client/RenderEmpty", ready.get("rendererClass").getAsString());assertTrue(ready.getAsJsonArray("blockers").isEmpty());
+        JsonObject blocked = root.getAsJsonArray("rules").get(1).getAsJsonObject();assertFalse(blocked.get("runtimeCandidateReady").getAsBoolean());assertTrue(blocked.getAsJsonArray("blockers").asList().stream().anyMatch(value -> value.getAsString().equals("constant-behavior-override-codegen-incomplete")));
     }
 
     private ConversionContext context(Path staging) throws Exception {
-        Files.createDirectories(staging.resolve("legacyforgebridge"));
-        Path source = tempDir.resolve("candidate.jar");
-        try (JarOutputStream ignored = new JarOutputStream(Files.newOutputStream(source))) { }
-        LegacyModMetadata metadata = new LegacyModMetadata("candidate.jar", "test",
-                List.of(new LegacyModMetadata.ModEntry("foreign", "Foreign", "1.0", "1.7.10", List.of())));
-        LegacyJarAnalyzer.Analysis jarAnalysis = new LegacyJarAnalyzer.Analysis("candidate.jar", 0, 0, false, false,
-                0, 0, 0, 0, Set.of(), Set.of(), Set.of());
-        return new ConversionContext(source, staging, tempDir.resolve("candidate-lfb.jar"), "sha",
-                Files.size(source), metadata, jarAnalysis, new DiagnosticCollector(), "generic-test");
+        Files.createDirectories(staging.resolve("legacyforgebridge")); Path source = tempDir.resolve("candidate.jar"); try (JarOutputStream ignored = new JarOutputStream(Files.newOutputStream(source))) { }
+        LegacyModMetadata metadata = new LegacyModMetadata("candidate.jar", "test", List.of(new LegacyModMetadata.ModEntry("foreign", "Foreign", "1.0", "1.7.10", List.of())));
+        LegacyJarAnalyzer.Analysis jarAnalysis = new LegacyJarAnalyzer.Analysis("candidate.jar", 0, 0, false, false, 0, 0, 0, 0, Set.of(), Set.of(), Set.of());
+        return new ConversionContext(source, staging, tempDir.resolve("candidate-lfb.jar"), "sha", Files.size(source), metadata, jarAnalysis, new DiagnosticCollector(), "generic-test");
     }
 
     private static void writeGenerated(Path staging) throws Exception {
         Files.writeString(staging.resolve(LegacyPlainEntityCodegenPass.OUTPUT), """
                 {
-                  "schemaVersion":1,
-                  "sourceSha256":"sha",
-                  "generatedClasses":[
+                  "schemaVersion":1,"sourceSha256":"sha","generatedClasses":[
                     {
-                      "id":"foreign:orb",
-                      "legacyRegistryName":"orb",
-                      "sourceClass":"third/entity/Orb",
-                      "legacyNumericId":23,
-                      "generatedClass":"dev.yinghuang.legacyforgebridge.generated.foreign.entity.PlainEntity_orb_a",
-                      "generatedInternalName":"dev/yinghuang/legacyforgebridge/generated/foreign/entity/PlainEntity_orb_a",
-                      "classGenerated":true,
-                      "synchedDataAccessorCount":1,
-                      "legacyWatcherBridgeWired":true,
-                      "legacyBaseHurtSemanticsMapped":true,
-                      "trackingRange":80,
-                      "updateFrequency":2,
-                      "velocityUpdates":true,
-                      "width":0.5,
-                      "height":0.75
+                      "id":"foreign:orb","legacyRegistryName":"orb","sourceClass":"third/entity/Orb","legacyNumericId":23,
+                      "generatedClass":"dev.yinghuang.legacyforgebridge.generated.foreign.entity.PlainEntity_orb_a","generatedInternalName":"dev/yinghuang/legacyforgebridge/generated/foreign/entity/PlainEntity_orb_a",
+                      "classGenerated":true,"synchedDataAccessorCount":1,"legacyWatcherBridgeWired":true,"legacyBaseHurtSemanticsMapped":true,
+                      "constantBehaviorOverrideCodegenComplete":true,"constantBehaviorOverrideCount":1,
+                      "constantBehaviorOverrides":[{"sourceKind":"CAN_PUSH","targetMethod":"isPushable","targetDescriptor":"()Z","constantBoolean":false}],
+                      "trackingRange":80,"updateFrequency":2,"velocityUpdates":true,"width":0.5,"height":0.75
                     },
                     {
-                      "id":"foreign:visible",
-                      "legacyRegistryName":"visible",
-                      "sourceClass":"third/entity/Visible",
-                      "legacyNumericId":24,
-                      "generatedClass":"dev.yinghuang.legacyforgebridge.generated.foreign.entity.PlainEntity_visible_b",
-                      "generatedInternalName":"dev/yinghuang/legacyforgebridge/generated/foreign/entity/PlainEntity_visible_b",
-                      "classGenerated":true,
-                      "synchedDataAccessorCount":0,
-                      "legacyWatcherBridgeWired":true,
-                      "legacyBaseHurtSemanticsMapped":true,
-                      "trackingRange":64,
-                      "updateFrequency":3,
-                      "velocityUpdates":true,
-                      "width":1.0,
-                      "height":1.0
+                      "id":"foreign:visible","legacyRegistryName":"visible","sourceClass":"third/entity/Visible","legacyNumericId":24,
+                      "generatedClass":"dev.yinghuang.legacyforgebridge.generated.foreign.entity.PlainEntity_visible_b","generatedInternalName":"dev/yinghuang/legacyforgebridge/generated/foreign/entity/PlainEntity_visible_b",
+                      "classGenerated":true,"synchedDataAccessorCount":0,"legacyWatcherBridgeWired":true,"legacyBaseHurtSemanticsMapped":true,
+                      "constantBehaviorOverrideCodegenComplete":false,"constantBehaviorOverrideCount":1,
+                      "trackingRange":64,"updateFrequency":3,"velocityUpdates":true,"width":1.0,"height":1.0
                     }
                   ]
                 }
@@ -113,29 +65,9 @@ class LegacyPlainEntityRuntimeCandidatePassTest {
     private static void writePresentation(Path staging) throws Exception {
         Files.writeString(staging.resolve(LegacyEntityPresentationPass.OUTPUT), """
                 {
-                  "schemaVersion":1,
-                  "sourceSha256":"sha",
-                  "rules":[
-                    {
-                      "id":"foreign:orb",
-                      "legacyRegistryName":"orb",
-                      "sourceClass":"third/entity/Orb",
-                      "sourceNoOpRendererProven":true,
-                      "presentationBlockers":["modern-noop-renderer-runtime-not-materialized"],
-                      "registrations":[
-                        {"rendererClass":"third/client/RenderEmpty","renderOwner":"third/client/RenderEmpty","renderMethod":"doRender","renderDescriptor":"(Lthird/entity/Orb;DDDFF)V"}
-                      ]
-                    },
-                    {
-                      "id":"foreign:visible",
-                      "legacyRegistryName":"visible",
-                      "sourceClass":"third/entity/Visible",
-                      "sourceNoOpRendererProven":false,
-                      "presentationBlockers":["source-renderer-not-proven-noop"],
-                      "registrations":[
-                        {"rendererClass":"third/client/RenderVisible"}
-                      ]
-                    }
+                  "schemaVersion":1,"sourceSha256":"sha","rules":[
+                    {"id":"foreign:orb","legacyRegistryName":"orb","sourceClass":"third/entity/Orb","sourceNoOpRendererProven":true,"presentationBlockers":[],"registrations":[{"rendererClass":"third/client/RenderEmpty","renderOwner":"third/client/RenderEmpty","renderMethod":"doRender","renderDescriptor":"(Lthird/entity/Orb;DDDFF)V"}]},
+                    {"id":"foreign:visible","legacyRegistryName":"visible","sourceClass":"third/entity/Visible","sourceNoOpRendererProven":true,"presentationBlockers":[],"registrations":[{"rendererClass":"third/client/RenderEmpty2"}]}
                   ]
                 }
                 """, StandardCharsets.UTF_8);
