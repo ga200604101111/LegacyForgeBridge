@@ -46,6 +46,7 @@ public final class LegacyEntityRuntimeAdmissionPass implements ConversionPass {
         JsonObject root = new JsonObject();
         root.addProperty("schemaVersion", 1);
         root.addProperty("sourceSha256", context.sourceHash());
+        root.addProperty("postInitWatcherMutationGateWired", true);
         root.addProperty("runtimeImplementationWired", false);
 
         JsonArray rules = new JsonArray();
@@ -64,6 +65,9 @@ public final class LegacyEntityRuntimeAdmissionPass implements ConversionPass {
 
             if (!bool(runtimeRule, "synchedDataMappingComplete", false)) blockers.add("synched-data-mapping-incomplete");
             if (!bool(runtimeRule, "sourceWideDataWatcherCallClosureComplete", false)) blockers.add("source-wide-datawatcher-call-closure-incomplete");
+            if (!bool(runtimeRule, "postInitSourceDataWatcherMutationFree", false)
+                    || number(runtimeRule, "sourceOwnedDataWatcherWriteCount", -1) != 0)
+                blockers.add("post-init-datawatcher-writes-require-runtime-sync");
             // 1.21.11 EntityType exposes trackDeltas/alwaysUpdateVelocity, but the currently admitted
             // builder surface has no proven way to represent the legacy registerModEntity false case.
             // Keep the first runtime family exact by admitting only legacy velocityUpdates=true.
@@ -114,6 +118,9 @@ public final class LegacyEntityRuntimeAdmissionPass implements ConversionPass {
             copy(runtimeRule, rule, "trackingRange");
             copy(runtimeRule, rule, "updateFrequency");
             copy(runtimeRule, rule, "velocityUpdates");
+            copy(runtimeRule, rule, "sourceOwnedDataWatcherReadCount");
+            copy(runtimeRule, rule, "sourceOwnedDataWatcherWriteCount");
+            copy(runtimeRule, rule, "postInitSourceDataWatcherMutationFree");
             rule.addProperty("family", FAMILY_PLAIN_SYNCHED_DATA_ONLY);
             rule.addProperty("admitted", admitted);
             rule.addProperty("runtimeImplementationWired", false);
@@ -136,9 +143,9 @@ public final class LegacyEntityRuntimeAdmissionPass implements ConversionPass {
         Files.writeString(output, GSON.toJson(root) + "\n", StandardCharsets.UTF_8);
 
         if (admittedCount > 0) context.diagnostics().info("LFB-CONVERT-ENTITY-ADMISSION-0001", SupportLevel.RUNTIME_BRIDGE,
-                "Admitted " + admittedCount + " plain Entity synchronized-data-only registration(s) to the runtime candidate family; runtime code generation remains unwired.");
+                "Admitted " + admittedCount + " write-free plain Entity synchronized-data registration(s) to the runtime candidate family; post-spawn DataWatcher mutation remains outside this family.");
         if (admittedCount < rules.size()) context.diagnostics().warning("LFB-CONVERT-ENTITY-ADMISSION-0002", SupportLevel.RUNTIME_BRIDGE,
-                "Blocked " + (rules.size() - admittedCount) + " entity registration(s) from the first runtime family because behavior/construction/watcher/velocity proof gates remain incomplete or unsupported.");
+                "Blocked " + (rules.size() - admittedCount) + " entity registration(s) from the first runtime family because behavior/construction/watcher/velocity/post-spawn-mutation proof gates remain incomplete or unsupported.");
     }
 
     private static boolean trivialNoOpMethod(JsonObject behaviorRule, JsonObject callback) {

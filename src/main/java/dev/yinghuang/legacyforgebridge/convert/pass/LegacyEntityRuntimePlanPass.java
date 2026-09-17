@@ -53,6 +53,7 @@ public final class LegacyEntityRuntimePlanPass implements ConversionPass {
         root.addProperty("schemaVersion", 1);
         root.addProperty("sourceSha256", context.sourceHash());
         root.addProperty("sourceWideDataWatcherCallClosureComplete", sourceWideClosure);
+        root.addProperty("postInitWatcherMutationGateWired", true);
         root.addProperty("runtimeAdmissionReady", false);
         root.addProperty("runtimeImplementationWired", false);
 
@@ -163,6 +164,13 @@ public final class LegacyEntityRuntimePlanPass implements ConversionPass {
                 continue;
             }
 
+            int sourceOwnedReadCount = 0;
+            int sourceOwnedWriteCount = 0;
+            for (int[] count : counts.values()) {
+                sourceOwnedReadCount += count[0];
+                sourceOwnedWriteCount += count[1];
+            }
+            boolean postInitMutationFree = sourceOwnedWriteCount == 0;
             boolean generalHelperClosure = booleanValue(accessRule, "reachableHelperClosureComplete", false);
             JsonObject plan = new JsonObject();
             copyPrimitive(definition, plan, "id");
@@ -179,11 +187,15 @@ public final class LegacyEntityRuntimePlanPass implements ConversionPass {
             plan.addProperty("reachableHelperClosureComplete", generalHelperClosure);
             plan.addProperty("sourceWideDataWatcherCallClosureComplete", sourceWideClosure);
             plan.addProperty("synchedDataMappingComplete", true);
+            plan.addProperty("sourceOwnedDataWatcherReadCount", sourceOwnedReadCount);
+            plan.addProperty("sourceOwnedDataWatcherWriteCount", sourceOwnedWriteCount);
+            plan.addProperty("postInitSourceDataWatcherMutationFree", postInitMutationFree);
             plan.addProperty("runtimeAdmissionReady", false);
             plan.addProperty("runtimeImplementationWired", false);
 
             JsonArray blockers = new JsonArray();
             if (!sourceWideClosure) blockers.add("source-wide-datawatcher-call-closure-incomplete");
+            if (!postInitMutationFree) blockers.add("post-init-datawatcher-writes-require-runtime-sync");
             blockers.add("entitytype-syncheddata-runtime-not-materialized");
             plan.add("runtimeBlockers", blockers);
 
@@ -230,7 +242,7 @@ public final class LegacyEntityRuntimePlanPass implements ConversionPass {
         if (!rules.isEmpty()) context.diagnostics().info("LFB-CONVERT-ENTITY-PLAN-0001", SupportLevel.RUNTIME_BRIDGE,
                 "Mapped legacy primitive/string DataWatcher schemas to modern synchronized-data plan IR for "
                         + rules.size() + " entity registration(s); source-wide watcher closure=" + sourceWideClosure
-                        + ", while EntityType/SynchedEntityData runtime materialization remains intentionally closed.");
+                        + "; post-init source watcher writes remain admission-gated until a dedicated metadata synchronization runtime exists.");
     }
 
     private static boolean sourceWideClosure(ConversionContext context) throws Exception {

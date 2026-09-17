@@ -26,7 +26,7 @@ class LegacyEntityRuntimePlanPassTest {
         Path staging = tempDir.resolve("mapping-staging");
         ConversionContext context = context(staging, "mapping.jar");
         writeDefinitions(staging);
-        writeAccesses(staging, false);
+        writeAccesses(staging, false, true);
         writeGlobalClosure(staging, true);
 
         new LegacyEntityRuntimePlanPass().apply(context);
@@ -35,6 +35,7 @@ class LegacyEntityRuntimePlanPassTest {
                 staging.resolve(LegacyEntityRuntimePlanPass.OUTPUT), StandardCharsets.UTF_8)).getAsJsonObject();
         assertEquals(1, root.get("schemaVersion").getAsInt());
         assertTrue(root.get("sourceWideDataWatcherCallClosureComplete").getAsBoolean());
+        assertTrue(root.get("postInitWatcherMutationGateWired").getAsBoolean());
         assertFalse(root.get("runtimeAdmissionReady").getAsBoolean());
         assertFalse(root.get("runtimeImplementationWired").getAsBoolean());
         assertEquals(1, root.get("mappedRegistrations").getAsInt());
@@ -46,9 +47,14 @@ class LegacyEntityRuntimePlanPassTest {
         assertTrue(rule.get("reachableExactDispatchHelperClosureComplete").getAsBoolean());
         assertFalse(rule.get("reachableHelperClosureComplete").getAsBoolean());
         assertTrue(rule.get("sourceWideDataWatcherCallClosureComplete").getAsBoolean());
+        assertEquals(2, rule.get("sourceOwnedDataWatcherReadCount").getAsInt());
+        assertEquals(1, rule.get("sourceOwnedDataWatcherWriteCount").getAsInt());
+        assertFalse(rule.get("postInitSourceDataWatcherMutationFree").getAsBoolean());
         assertFalse(rule.get("runtimeAdmissionReady").getAsBoolean());
         assertFalse(rule.getAsJsonArray("runtimeBlockers").asList().stream()
                 .anyMatch(value -> value.getAsString().equals("source-wide-datawatcher-call-closure-incomplete")));
+        assertTrue(rule.getAsJsonArray("runtimeBlockers").asList().stream()
+                .anyMatch(value -> value.getAsString().equals("post-init-datawatcher-writes-require-runtime-sync")));
         assertTrue(rule.getAsJsonArray("runtimeBlockers").asList().stream()
                 .anyMatch(value -> value.getAsString().equals("entitytype-syncheddata-runtime-not-materialized")));
         assertEquals(5, rule.get("synchedDataEntryCount").getAsInt());
@@ -61,11 +67,30 @@ class LegacyEntityRuntimePlanPassTest {
         assertMapping(entries, 14, "string", "string", "STRING", "identity", 0, 0);
     }
 
+    @Test void zeroWriteAccessSurfaceIsMarkedPostInitMutationFree() throws Exception {
+        Path staging = tempDir.resolve("write-free-staging");
+        ConversionContext context = context(staging, "write-free.jar");
+        writeDefinitions(staging);
+        writeAccesses(staging, false, false);
+        writeGlobalClosure(staging, true);
+
+        new LegacyEntityRuntimePlanPass().apply(context);
+
+        JsonObject rule = JsonParser.parseString(Files.readString(
+                staging.resolve(LegacyEntityRuntimePlanPass.OUTPUT), StandardCharsets.UTF_8)).getAsJsonObject()
+                .getAsJsonArray("rules").get(0).getAsJsonObject();
+        assertEquals(2, rule.get("sourceOwnedDataWatcherReadCount").getAsInt());
+        assertEquals(0, rule.get("sourceOwnedDataWatcherWriteCount").getAsInt());
+        assertTrue(rule.get("postInitSourceDataWatcherMutationFree").getAsBoolean());
+        assertFalse(rule.getAsJsonArray("runtimeBlockers").asList().stream()
+                .anyMatch(value -> value.getAsString().equals("post-init-datawatcher-writes-require-runtime-sync")));
+    }
+
     @Test void sourceWideClosureGapStaysAnExplicitRuntimeBlocker() throws Exception {
         Path staging = tempDir.resolve("closure-gap-staging");
         ConversionContext context = context(staging, "closure-gap.jar");
         writeDefinitions(staging);
-        writeAccesses(staging, false);
+        writeAccesses(staging, false, false);
         writeGlobalClosure(staging, false);
 
         new LegacyEntityRuntimePlanPass().apply(context);
@@ -74,6 +99,7 @@ class LegacyEntityRuntimePlanPassTest {
                 staging.resolve(LegacyEntityRuntimePlanPass.OUTPUT), StandardCharsets.UTF_8)).getAsJsonObject()
                 .getAsJsonArray("rules").get(0).getAsJsonObject();
         assertFalse(rule.get("sourceWideDataWatcherCallClosureComplete").getAsBoolean());
+        assertTrue(rule.get("postInitSourceDataWatcherMutationFree").getAsBoolean());
         assertTrue(rule.getAsJsonArray("runtimeBlockers").asList().stream()
                 .anyMatch(value -> value.getAsString().equals("source-wide-datawatcher-call-closure-incomplete")));
         assertFalse(rule.get("runtimeAdmissionReady").getAsBoolean());
@@ -83,7 +109,7 @@ class LegacyEntityRuntimePlanPassTest {
         Path staging = tempDir.resolve("mismatch-staging");
         ConversionContext context = context(staging, "mismatch.jar");
         writeDefinitions(staging);
-        writeAccesses(staging, true);
+        writeAccesses(staging, true, true);
         writeGlobalClosure(staging, true);
 
         new LegacyEntityRuntimePlanPass().apply(context);
@@ -138,8 +164,11 @@ class LegacyEntityRuntimePlanPassTest {
                 """, StandardCharsets.UTF_8);
     }
 
-    private static void writeAccesses(Path staging, boolean mismatch) throws Exception {
+    private static void writeAccesses(Path staging, boolean mismatch, boolean includeWrite) throws Exception {
         String byteKind = mismatch ? "int" : "byte";
+        String writeAccess = includeWrite
+                ? ",\n                        {\"index\":10,\"operation\":\"write\",\"valueKind\":\"" + byteKind + "\",\"sourceOwner\":\"foreign/Orb\",\"sourceMethod\":\"setByte\",\"sourceDescriptor\":\"(B)V\"}"
+                : "";
         Files.writeString(staging.resolve(LegacyEntityDataWatcherAccessPass.OUTPUT), """
                 {
                   "schemaVersion": 1,
@@ -156,15 +185,14 @@ class LegacyEntityRuntimePlanPassTest {
                       "reachableHelperClosureComplete": false,
                       "runtimeImplementationWired": false,
                       "accesses": [
-                        {"index":10,"operation":"read","valueKind":"%s","sourceOwner":"foreign/Orb","sourceMethod":"getByte","sourceDescriptor":"()B"},
-                        {"index":10,"operation":"write","valueKind":"%s","sourceOwner":"foreign/Orb","sourceMethod":"setByte","sourceDescriptor":"(B)V"},
+                        {"index":10,"operation":"read","valueKind":"%s","sourceOwner":"foreign/Orb","sourceMethod":"getByte","sourceDescriptor":"()B"}%s,
                         {"index":11,"operation":"read","valueKind":"short","sourceOwner":"foreign/Orb","sourceMethod":"getShort","sourceDescriptor":"()S"}
                       ]
                     }
                   ],
                   "skipped": []
                 }
-                """.formatted(byteKind, byteKind), StandardCharsets.UTF_8);
+                """.formatted(byteKind, writeAccess), StandardCharsets.UTF_8);
     }
 
     private static void writeGlobalClosure(Path staging, boolean complete) throws Exception {
