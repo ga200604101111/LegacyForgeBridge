@@ -2,6 +2,7 @@ package dev.yinghuang.legacyforgebridge.convert;
 
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.MethodNode;
 
@@ -52,7 +53,7 @@ public final class LegacyEntityBehaviorSurfaceAnalyzer {
 
     public record Callback(CallbackKind kind, String owner, String method, String descriptor) { }
     public record SourceMethod(String owner, String method, String descriptor, int access,
-                               CallbackKind callbackKind) { }
+                               CallbackKind callbackKind, boolean trivialNoOp) { }
     public record EntitySurface(String registryName, String sourceClass, String externalBaseClass,
                                 List<String> sourceLineage, List<Callback> callbacks,
                                 List<SourceMethod> sourceMethods) {
@@ -127,7 +128,7 @@ public final class LegacyEntityBehaviorSurfaceAnalyzer {
                     if ("<init>".equals(method.name) || "<clinit>".equals(method.name)) continue;
                     if ((method.access & (Opcodes.ACC_STATIC | Opcodes.ACC_SYNTHETIC | Opcodes.ACC_BRIDGE)) != 0) continue;
                     CallbackKind kind = callbackKind(method);
-                    sourceMethods.add(new SourceMethod(node.name, method.name, method.desc, method.access, kind));
+                    sourceMethods.add(new SourceMethod(node.name, method.name, method.desc, method.access, kind, trivialNoOp(method)));
                     if (kind != null && !effective.containsKey(kind))
                         effective.put(kind, new Callback(kind, node.name, method.name, method.desc));
                 }
@@ -144,6 +145,17 @@ public final class LegacyEntityBehaviorSurfaceAnalyzer {
         }
 
         return new Analysis(output, List.copyOf(new LinkedHashSet<>(diagnostics)));
+    }
+
+    private static boolean trivialNoOp(MethodNode method) {
+        int executable = 0;
+        for (AbstractInsnNode instruction : method.instructions) {
+            int opcode = instruction.getOpcode();
+            if (opcode < 0) continue;
+            executable++;
+            if (opcode != Opcodes.RETURN) return false;
+        }
+        return executable == 1;
     }
 
     private static CallbackKind callbackKind(MethodNode method) {

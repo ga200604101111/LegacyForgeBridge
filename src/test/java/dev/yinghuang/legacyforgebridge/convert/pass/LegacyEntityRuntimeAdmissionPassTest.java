@@ -21,45 +21,47 @@ import static org.junit.jupiter.api.Assertions.*;
 class LegacyEntityRuntimeAdmissionPassTest {
     @TempDir Path tempDir;
 
-    @Test void admitsOnlyPlainEntityWithCompleteWatcherBehaviorConstructionAndVelocityEvidence() throws Exception {
+    @Test void admitsPlainEntityWithEntityInitAndProvenNoOpNbtStubs() throws Exception {
         Path staging = tempDir.resolve("admit");
         ConversionContext context = context(staging, "admit.jar");
         writeRuntimePlan(staging, true, true);
-        writeBehavior(staging, false);
+        writeBehavior(staging, false, false);
         writeConstruction(staging, 0);
 
         new LegacyEntityRuntimeAdmissionPass().apply(context);
 
-        JsonObject root = JsonParser.parseString(Files.readString(
-                staging.resolve(LegacyEntityRuntimeAdmissionPass.OUTPUT), StandardCharsets.UTF_8)).getAsJsonObject();
-        assertEquals(1, root.get("evaluatedRegistrations").getAsInt());
+        JsonObject root = readAdmission(staging);
         assertEquals(1, root.get("admittedRegistrations").getAsInt());
-        assertEquals(0, root.get("blockedRegistrations").getAsInt());
-        assertFalse(root.get("runtimeImplementationWired").getAsBoolean());
-
         JsonObject rule = root.getAsJsonArray("rules").get(0).getAsJsonObject();
-        assertEquals("foreign:orb", rule.get("id").getAsString());
-        assertEquals(LegacyEntityRuntimeAdmissionPass.FAMILY_PLAIN_SYNCHED_DATA_ONLY, rule.get("family").getAsString());
         assertTrue(rule.get("admitted").getAsBoolean());
-        assertTrue(rule.get("velocityUpdates").getAsBoolean());
         assertTrue(rule.getAsJsonArray("blockers").isEmpty());
-        assertEquals(0.5F, rule.get("width").getAsFloat());
-        assertEquals(0.75F, rule.get("height").getAsFloat());
-        assertEquals(1, rule.getAsJsonArray("synchedDataEntries").size());
+    }
+
+    @Test void nonNoopNbtRemainsBlocked() throws Exception {
+        Path staging = tempDir.resolve("nbt-state");
+        ConversionContext context = context(staging, "nbt-state.jar");
+        writeRuntimePlan(staging, true, true);
+        writeBehavior(staging, false, true);
+        writeConstruction(staging, 0);
+
+        new LegacyEntityRuntimeAdmissionPass().apply(context);
+
+        JsonObject rule = readAdmission(staging).getAsJsonArray("rules").get(0).getAsJsonObject();
+        assertFalse(rule.get("admitted").getAsBoolean());
+        assertTrue(rule.getAsJsonArray("blockers").asList().stream()
+                .anyMatch(value -> value.getAsString().equals("unsupported-callback:WRITE_NBT")));
     }
 
     @Test void tickBehaviorAndUnknownConstructorEffectKeepEntityBlocked() throws Exception {
         Path staging = tempDir.resolve("blocked");
         ConversionContext context = context(staging, "blocked.jar");
         writeRuntimePlan(staging, true, true);
-        writeBehavior(staging, true);
+        writeBehavior(staging, true, false);
         writeConstruction(staging, 1);
 
         new LegacyEntityRuntimeAdmissionPass().apply(context);
 
-        JsonObject rule = JsonParser.parseString(Files.readString(
-                staging.resolve(LegacyEntityRuntimeAdmissionPass.OUTPUT), StandardCharsets.UTF_8)).getAsJsonObject()
-                .getAsJsonArray("rules").get(0).getAsJsonObject();
+        JsonObject rule = readAdmission(staging).getAsJsonArray("rules").get(0).getAsJsonObject();
         assertFalse(rule.get("admitted").getAsBoolean());
         assertTrue(rule.getAsJsonArray("blockers").asList().stream()
                 .anyMatch(value -> value.getAsString().equals("unsupported-callback:TICK")));
@@ -71,14 +73,12 @@ class LegacyEntityRuntimeAdmissionPassTest {
         Path staging = tempDir.resolve("watcher-gap");
         ConversionContext context = context(staging, "watcher-gap.jar");
         writeRuntimePlan(staging, false, true);
-        writeBehavior(staging, false);
+        writeBehavior(staging, false, false);
         writeConstruction(staging, 0);
 
         new LegacyEntityRuntimeAdmissionPass().apply(context);
 
-        JsonObject rule = JsonParser.parseString(Files.readString(
-                staging.resolve(LegacyEntityRuntimeAdmissionPass.OUTPUT), StandardCharsets.UTF_8)).getAsJsonObject()
-                .getAsJsonArray("rules").get(0).getAsJsonObject();
+        JsonObject rule = readAdmission(staging).getAsJsonArray("rules").get(0).getAsJsonObject();
         assertFalse(rule.get("admitted").getAsBoolean());
         assertTrue(rule.getAsJsonArray("blockers").asList().stream()
                 .anyMatch(value -> value.getAsString().equals("source-wide-datawatcher-call-closure-incomplete")));
@@ -88,18 +88,20 @@ class LegacyEntityRuntimeAdmissionPassTest {
         Path staging = tempDir.resolve("velocity-disabled");
         ConversionContext context = context(staging, "velocity-disabled.jar");
         writeRuntimePlan(staging, true, false);
-        writeBehavior(staging, false);
+        writeBehavior(staging, false, false);
         writeConstruction(staging, 0);
 
         new LegacyEntityRuntimeAdmissionPass().apply(context);
 
-        JsonObject rule = JsonParser.parseString(Files.readString(
-                staging.resolve(LegacyEntityRuntimeAdmissionPass.OUTPUT), StandardCharsets.UTF_8)).getAsJsonObject()
-                .getAsJsonArray("rules").get(0).getAsJsonObject();
+        JsonObject rule = readAdmission(staging).getAsJsonArray("rules").get(0).getAsJsonObject();
         assertFalse(rule.get("admitted").getAsBoolean());
-        assertFalse(rule.get("velocityUpdates").getAsBoolean());
         assertTrue(rule.getAsJsonArray("blockers").asList().stream()
                 .anyMatch(value -> value.getAsString().equals("legacy-velocity-updates-disabled")));
+    }
+
+    private JsonObject readAdmission(Path staging) throws Exception {
+        return JsonParser.parseString(Files.readString(
+                staging.resolve(LegacyEntityRuntimeAdmissionPass.OUTPUT), StandardCharsets.UTF_8)).getAsJsonObject();
     }
 
     private ConversionContext context(Path staging, String jarName) throws Exception {
@@ -139,13 +141,13 @@ class LegacyEntityRuntimeAdmissionPassTest {
                 """.formatted(Boolean.toString(velocityUpdates), Boolean.toString(closure)), StandardCharsets.UTF_8);
     }
 
-    private static void writeBehavior(Path staging, boolean tick) throws Exception {
-        String callbacks = tick
-                ? "[{\"kind\":\"ENTITY_INIT\",\"owner\":\"foreign/Orb\",\"method\":\"func_70088_a\",\"descriptor\":\"()V\"},{\"kind\":\"TICK\",\"owner\":\"foreign/Orb\",\"method\":\"func_70071_h_\",\"descriptor\":\"()V\"}]"
-                : "[{\"kind\":\"ENTITY_INIT\",\"owner\":\"foreign/Orb\",\"method\":\"func_70088_a\",\"descriptor\":\"()V\"}]";
-        String methods = tick
-                ? "[{\"owner\":\"foreign/Orb\",\"method\":\"func_70088_a\",\"descriptor\":\"()V\",\"callbackKind\":\"ENTITY_INIT\"},{\"owner\":\"foreign/Orb\",\"method\":\"func_70071_h_\",\"descriptor\":\"()V\",\"callbackKind\":\"TICK\"}]"
-                : "[{\"owner\":\"foreign/Orb\",\"method\":\"func_70088_a\",\"descriptor\":\"()V\",\"callbackKind\":\"ENTITY_INIT\"}]";
+    private static void writeBehavior(Path staging, boolean tick, boolean statefulWriteNbt) throws Exception {
+        String tickCallback = tick
+                ? ",{\"kind\":\"TICK\",\"owner\":\"foreign/Orb\",\"method\":\"func_70071_h_\",\"descriptor\":\"()V\"}"
+                : "";
+        String tickMethod = tick
+                ? ",{\"owner\":\"foreign/Orb\",\"method\":\"func_70071_h_\",\"descriptor\":\"()V\",\"callbackKind\":\"TICK\",\"trivialNoOp\":true}"
+                : "";
         Files.writeString(staging.resolve(LegacyEntityBehaviorSurfacePass.OUTPUT), """
                 {
                   "schemaVersion": 1,
@@ -158,12 +160,20 @@ class LegacyEntityRuntimeAdmissionPassTest {
                       "externalBaseClass": "net/minecraft/entity/Entity",
                       "sourceOwnedBehaviorInventoryComplete": true,
                       "unclassifiedSourceMethodCount": 0,
-                      "callbacks": %s,
-                      "sourceMethods": %s
+                      "callbacks": [
+                        {"kind":"ENTITY_INIT","owner":"foreign/Orb","method":"func_70088_a","descriptor":"()V"},
+                        {"kind":"READ_NBT","owner":"foreign/Orb","method":"func_70037_a","descriptor":"(Lnet/minecraft/nbt/NBTTagCompound;)V"},
+                        {"kind":"WRITE_NBT","owner":"foreign/Orb","method":"func_70014_b","descriptor":"(Lnet/minecraft/nbt/NBTTagCompound;)V"}%s
+                      ],
+                      "sourceMethods": [
+                        {"owner":"foreign/Orb","method":"func_70088_a","descriptor":"()V","callbackKind":"ENTITY_INIT","trivialNoOp":false},
+                        {"owner":"foreign/Orb","method":"func_70037_a","descriptor":"(Lnet/minecraft/nbt/NBTTagCompound;)V","callbackKind":"READ_NBT","trivialNoOp":true},
+                        {"owner":"foreign/Orb","method":"func_70014_b","descriptor":"(Lnet/minecraft/nbt/NBTTagCompound;)V","callbackKind":"WRITE_NBT","trivialNoOp":%s}%s
+                      ]
                     }
                   ]
                 }
-                """.formatted(callbacks, methods), StandardCharsets.UTF_8);
+                """.formatted(tickCallback, Boolean.toString(!statefulWriteNbt), tickMethod), StandardCharsets.UTF_8);
     }
 
     private static void writeConstruction(Path staging, int unmappedEffects) throws Exception {

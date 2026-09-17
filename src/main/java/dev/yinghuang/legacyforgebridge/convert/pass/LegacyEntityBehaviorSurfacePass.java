@@ -50,6 +50,7 @@ public final class LegacyEntityBehaviorSurfacePass implements ConversionPass {
         int totalCallbacks = 0;
         int totalMethods = 0;
         int totalUnclassified = 0;
+        int totalTrivialNoOp = 0;
         for (LegacyEntityBehaviorSurfaceAnalyzer.EntitySurface surface : analysis.entities()) {
             JsonObject definition = definitionByKey.get(key(surface.registryName(), surface.sourceClass()));
             if (definition == null) continue;
@@ -80,12 +81,15 @@ public final class LegacyEntityBehaviorSurfacePass implements ConversionPass {
 
             JsonArray methods = new JsonArray();
             int unclassified = 0;
+            int trivialNoOps = 0;
             for (LegacyEntityBehaviorSurfaceAnalyzer.SourceMethod method : surface.sourceMethods()) {
                 JsonObject item = new JsonObject();
                 item.addProperty("owner", method.owner());
                 item.addProperty("method", method.method());
                 item.addProperty("descriptor", method.descriptor());
                 item.addProperty("access", method.access());
+                item.addProperty("trivialNoOp", method.trivialNoOp());
+                if (method.trivialNoOp()) trivialNoOps++;
                 if (method.callbackKind() != null) item.addProperty("callbackKind", method.callbackKind().name());
                 else unclassified++;
                 methods.add(item);
@@ -93,16 +97,19 @@ public final class LegacyEntityBehaviorSurfacePass implements ConversionPass {
             value.add("sourceMethods", methods);
             value.addProperty("sourceMethodCount", methods.size());
             value.addProperty("unclassifiedSourceMethodCount", unclassified);
+            value.addProperty("trivialNoOpSourceMethodCount", trivialNoOps);
             rules.add(value);
             totalCallbacks += callbacks.size();
             totalMethods += methods.size();
             totalUnclassified += unclassified;
+            totalTrivialNoOp += trivialNoOps;
         }
         root.add("rules", rules);
         root.addProperty("entitySurfaceCount", rules.size());
         root.addProperty("callbackCount", totalCallbacks);
         root.addProperty("sourceMethodCount", totalMethods);
         root.addProperty("unclassifiedSourceMethodCount", totalUnclassified);
+        root.addProperty("trivialNoOpSourceMethodCount", totalTrivialNoOp);
 
         Path output = context.stagingDir().resolve(OUTPUT);
         Files.createDirectories(output.getParent());
@@ -113,7 +120,8 @@ public final class LegacyEntityBehaviorSurfacePass implements ConversionPass {
         if (!rules.isEmpty()) context.diagnostics().info("LFB-CONVERT-ENTITY-BEHAVIOR-0001", SupportLevel.RUNTIME_BRIDGE,
                 "Inventoried source-owned behavior surfaces for " + rules.size() + " entity registration(s): "
                         + totalCallbacks + " classified callback(s), " + totalUnclassified
-                        + " unclassified source instance method(s); behavior runtime remains intentionally unwired.");
+                        + " unclassified source instance method(s), " + totalTrivialNoOp
+                        + " trivial no-op source method(s); behavior runtime remains intentionally unwired.");
     }
 
     private static String key(String registryName, String sourceClass) {

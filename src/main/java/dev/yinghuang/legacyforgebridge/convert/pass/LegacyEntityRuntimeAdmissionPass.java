@@ -76,15 +76,20 @@ public final class LegacyEntityRuntimeAdmissionPass implements ConversionPass {
                 if (number(behaviorRule, "unclassifiedSourceMethodCount", -1) != 0) blockers.add("unclassified-source-instance-methods");
                 for (JsonElement callbackElement : array(behaviorRule, "callbacks")) {
                     if (!callbackElement.isJsonObject()) { blockers.add("malformed-behavior-callback"); continue; }
-                    String kind = string(callbackElement.getAsJsonObject(), "kind", "");
-                    if (!"ENTITY_INIT".equals(kind)) blockers.add("unsupported-callback:" + kind);
+                    JsonObject callback = callbackElement.getAsJsonObject();
+                    String kind = string(callback, "kind", "");
+                    if ("ENTITY_INIT".equals(kind)) continue;
+                    if (("READ_NBT".equals(kind) || "WRITE_NBT".equals(kind)) && trivialNoOpMethod(behaviorRule, callback)) continue;
+                    blockers.add("unsupported-callback:" + kind);
                 }
                 for (JsonElement methodElement : array(behaviorRule, "sourceMethods")) {
                     if (!methodElement.isJsonObject()) { blockers.add("malformed-source-method"); continue; }
                     JsonObject method = methodElement.getAsJsonObject();
-                    if (!"ENTITY_INIT".equals(string(method, "callbackKind", null)))
-                        blockers.add("unsupported-source-method:" + string(method, "owner", "?") + "."
-                                + string(method, "method", "?") + string(method, "descriptor", ""));
+                    String kind = string(method, "callbackKind", null);
+                    if ("ENTITY_INIT".equals(kind)) continue;
+                    if (("READ_NBT".equals(kind) || "WRITE_NBT".equals(kind)) && bool(method, "trivialNoOp", false)) continue;
+                    blockers.add("unsupported-source-method:" + string(method, "owner", "?") + "."
+                            + string(method, "method", "?") + string(method, "descriptor", ""));
                 }
             }
 
@@ -134,6 +139,22 @@ public final class LegacyEntityRuntimeAdmissionPass implements ConversionPass {
                 "Admitted " + admittedCount + " plain Entity synchronized-data-only registration(s) to the runtime candidate family; runtime code generation remains unwired.");
         if (admittedCount < rules.size()) context.diagnostics().warning("LFB-CONVERT-ENTITY-ADMISSION-0002", SupportLevel.RUNTIME_BRIDGE,
                 "Blocked " + (rules.size() - admittedCount) + " entity registration(s) from the first runtime family because behavior/construction/watcher/velocity proof gates remain incomplete or unsupported.");
+    }
+
+    private static boolean trivialNoOpMethod(JsonObject behaviorRule, JsonObject callback) {
+        String owner = string(callback, "owner", null);
+        String method = string(callback, "method", null);
+        String descriptor = string(callback, "descriptor", null);
+        if (owner == null || method == null || descriptor == null) return false;
+        for (JsonElement methodElement : array(behaviorRule, "sourceMethods")) {
+            if (!methodElement.isJsonObject()) continue;
+            JsonObject source = methodElement.getAsJsonObject();
+            if (owner.equals(string(source, "owner", null))
+                    && method.equals(string(source, "method", null))
+                    && descriptor.equals(string(source, "descriptor", null)))
+                return bool(source, "trivialNoOp", false);
+        }
+        return false;
     }
 
     private static JsonObject read(Path path) throws Exception {

@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class LegacyEntityBehaviorSurfaceAnalyzerTest {
     @TempDir Path tempDir;
 
-    @Test void inventoriesEffectiveCallbacksAndRetainsUnclassifiedSourceMethodsAcrossLineage() throws Exception {
+    @Test void inventoriesEffectiveCallbacksRetainsUnknownMethodsAndProvesOnlyExactNoOps() throws Exception {
         Path jar = tempDir.resolve("EntitySurface.jar");
         try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(jar))) {
             put(out, "third/surface/BaseOrb.class", baseEntity());
@@ -43,8 +43,12 @@ class LegacyEntityBehaviorSurfaceAnalyzerTest {
         assertTrue(surface.callbacks().stream().anyMatch(callback -> callback.kind() == LegacyEntityBehaviorSurfaceAnalyzer.CallbackKind.INTERACT
                 && callback.owner().equals("third/surface/Orb")));
 
+        assertTrue(surface.sourceMethods().stream().anyMatch(method -> method.owner().equals("third/surface/Orb")
+                && method.method().equals("func_70037_a") && method.trivialNoOp()));
+        assertTrue(surface.sourceMethods().stream().anyMatch(method -> method.owner().equals("third/surface/Orb")
+                && method.method().equals("func_70085_c") && !method.trivialNoOp()));
         assertTrue(surface.sourceMethods().stream().anyMatch(method -> method.owner().equals("third/surface/BaseOrb")
-                && method.method().equals("helper") && method.callbackKind() == null));
+                && method.method().equals("helper") && method.callbackKind() == null && !method.trivialNoOp()));
         assertFalse(surface.sourceMethods().stream().anyMatch(method -> method.method().equals("<init>")));
     }
 
