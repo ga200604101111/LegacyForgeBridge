@@ -23,6 +23,7 @@ public final class LegacyEntityPresentationAnalyzer {
     private static final String REGISTER = "registerEntityRenderingHandler";
     private static final String REGISTER_DESC = "(Ljava/lang/Class;Lnet/minecraft/client/renderer/entity/Render;)V";
     private static final Set<String> RENDER_NAMES = Set.of("doRender", "func_76986_a");
+    private static final int MAX_IDENTITY_DEPTH = 24;
 
     public record Registration(String entityClass, String rendererClass,
                                String sourceOwner, String sourceMethod, String sourceDescriptor,
@@ -129,27 +130,72 @@ public final class LegacyEntityPresentationAnalyzer {
     }
 
     private static String classLiteral(MethodContext context, SourceValue value) {
-        return uniqueProducerType(context, value, true);
+        return resolveIdentity(context, value, true, 0, Collections.newSetFromMap(new IdentityHashMap<>()));
     }
 
     private static String newObjectType(MethodContext context, SourceValue value) {
-        return uniqueProducerType(context, value, false);
+        return resolveIdentity(context, value, false, 0, Collections.newSetFromMap(new IdentityHashMap<>()));
     }
 
-    private static String uniqueProducerType(MethodContext context, SourceValue value, boolean classLiteral) {
-        if (value == null || value.insns == null || value.insns.isEmpty()) return null;
+    /**
+     * SourceInterpreter deliberately tracks bytecode producers rather than Java object identities.
+     * Constructor expressions may therefore surface as NEW, DUP/copies, CHECKCAST, local aliases,
+     * or a constructor receiver provenance chain. Accept only chains that collapse to one exact
+     * class literal or one exact NEW type; never trust a constructor owner without proving its receiver.
+     */
+    private static String resolveIdentity(MethodContext context, SourceValue value, boolean classLiteral,
+                                          int depth, Set<AbstractInsnNode> guard) {
+        if (value == null || depth > MAX_IDENTITY_DEPTH || value.insns == null || value.insns.isEmpty()) return null;
         String result = null;
         for (AbstractInsnNode producer : value.insns) {
-            String candidate = null;
-            if (classLiteral && producer instanceof LdcInsnNode ldc && ldc.cst instanceof Type type
-                    && type.getSort() == Type.OBJECT) candidate = type.getInternalName();
-            else if (!classLiteral && producer instanceof TypeInsnNode type && type.getOpcode() == Opcodes.NEW)
-                candidate = type.desc;
+            if (!guard.add(producer)) return null;
+            String candidate = resolveIdentityProducer(context, producer, classLiteral, depth + 1, guard);
+            guard.remove(producer);
             if (candidate == null) return null;
             if (result == null) result = candidate;
             else if (!result.equals(candidate)) return null;
         }
         return result;
+    }
+
+    private static String resolveIdentityProducer(MethodContext context, AbstractInsnNode producer,
+                                                   boolean classLiteral, int depth,
+                                                   Set<AbstractInsnNode> guard) {
+        if (classLiteral && producer instanceof LdcInsnNode ldc && ldc.cst instanceof Type type
+                && type.getSort() == Type.OBJECT) return type.getInternalName();
+        if (!classLiteral && producer instanceof TypeInsnNode type && type.getOpcode() == Opcodes.NEW)
+            return type.desc;
+
+        Integer instructionIndex = context.indices().get(producer);
+        if (instructionIndex == null) return null;
+        Frame<SourceValue> frame = context.frames()[instructionIndex];
+        if (frame == null) return null;
+
+        if (producer instanceof VarInsnNode variable && variable.getOpcode() == Opcodes.ALOAD) {
+            if (variable.var < 0 || variable.var >= frame.getLocals()) return null;
+            return resolveIdentity(context, frame.getLocal(variable.var), classLiteral, depth, guard);
+        }
+
+        if (producer instanceof TypeInsnNode type && type.getOpcode() == Opcodes.CHECKCAST) {
+            if (frame.getStackSize() < 1) return null;
+            return resolveIdentity(context, frame.getStack(frame.getStackSize() - 1), classLiteral, depth, guard);
+        }
+
+        if (producer instanceof InsnNode insn && insn.getOpcode() == Opcodes.DUP) {
+            if (frame.getStackSize() < 1) return null;
+            return resolveIdentity(context, frame.getStack(frame.getStackSize() - 1), classLiteral, depth, guard);
+        }
+
+        if (!classLiteral && producer instanceof MethodInsnNode call
+                && call.getOpcode() == Opcodes.INVOKESPECIAL && "<init>".equals(call.name)) {
+            Type[] arguments = Type.getArgumentTypes(call.desc);
+            int receiverIndex = frame.getStackSize() - arguments.length - 1;
+            if (receiverIndex < 0) return null;
+            String receiver = resolveIdentity(context, frame.getStack(receiverIndex), false, depth, guard);
+            return call.owner.equals(receiver) ? receiver : null;
+        }
+
+        return null;
     }
 
     private static MethodContext context(ClassNode owner, MethodNode method) throws AnalyzerException {
