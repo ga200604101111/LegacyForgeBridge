@@ -2,25 +2,26 @@ package dev.yinghuang.legacyforgebridge.convert;
 
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.*;
+import org.objectweb.asm.tree.analysis.Analyzer;
+import org.objectweb.asm.tree.analysis.AnalyzerException;
+import org.objectweb.asm.tree.analysis.Frame;
+import org.objectweb.asm.tree.analysis.SourceInterpreter;
+import org.objectweb.asm.tree.analysis.SourceValue;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
 /**
- * Source-only inventory of exact legacy Block#getRenderType() identities for lifecycle/registry
- * registered mod blocks. Only direct constant or symbolic static-field returns are admitted; any
- * dataflow, arithmetic, branch-dependent mixed identity, or external inherited renderer stays
- * unresolved.
+ * Source-only inventory of exact legacy Block#getRenderType() identities for registry-proven mod
+ * blocks. The bounded proof accepts direct constants/static fields plus an exact constructor-bound
+ * instance-int field when the registration allocation arguments identify one constant/static-field
+ * render identity without ambiguity.
  */
 public final class LegacyRegisteredBlockRenderTypeAnalyzer {
     private static final Set<String> RENDER_NAMES = Set.of("getRenderType", "func_149645_b");
@@ -43,6 +44,10 @@ public final class LegacyRegisteredBlockRenderTypeAnalyzer {
         public Analysis { rules = List.copyOf(rules); diagnostics = List.copyOf(diagnostics); }
     }
 
+    private record InstanceField(String owner, String name) { }
+    private record MethodContext(ClassNode owner, MethodNode method, Frame<SourceValue>[] frames,
+                                 Map<AbstractInsnNode,Integer> indices) { }
+
     public Analysis analyze(Path jarPath) throws IOException {
         Map<String, ClassNode> classes = loadClasses(jarPath);
         LegacyRegistryAnalyzer.Analysis registry = new LegacyRegistryAnalyzer().analyze(jarPath);
@@ -55,8 +60,9 @@ public final class LegacyRegisteredBlockRenderTypeAnalyzer {
             MethodNode method = effectiveSourceMethod(classes, sourceClass);
             if (method == null) continue;
             RenderIdentity identity = directRenderIdentity(method);
+            if (identity == null) identity = constructorBoundRenderIdentity(classes, registration, method);
             if (identity == null) {
-                diagnostics.add("Registered block render type is not an exact direct constant/static-field return: "
+                diagnostics.add("Registered block render type is not a proven direct or constructor-bound constant/static-field identity: "
                         + sourceClass + "." + method.name + method.desc);
                 continue;
             }
@@ -72,13 +78,147 @@ public final class LegacyRegisteredBlockRenderTypeAnalyzer {
         for (AbstractInsnNode instruction = method.instructions.getFirst(); instruction != null; instruction = instruction.getNext()) {
             if (instruction.getOpcode() != Opcodes.IRETURN) continue;
             sawReturn = true;
-            AbstractInsnNode producer = previousReal(instruction);
-            RenderIdentity candidate = identity(producer);
+            RenderIdentity candidate = identity(previousReal(instruction));
             if (candidate == null) return null;
             if (result == null) result = candidate;
             else if (!result.equals(candidate)) return null;
         }
         return sawReturn ? result : null;
+    }
+
+    static RenderIdentity constructorBoundRenderIdentity(Map<String,ClassNode> classes,
+                                                         LegacyRegistryAnalyzer.Registration registration,
+                                                         MethodNode renderMethod) {
+        if (classes == null || registration == null || renderMethod == null) return null;
+        String sourceClass = registration.implementationClass();
+        String descriptor = registration.constructorDescriptor();
+        if (sourceClass == null || descriptor == null) return null;
+        Type[] argumentTypes = Type.getArgumentTypes(descriptor);
+        if (argumentTypes.length == 0 || argumentTypes.length != registration.constructorArguments().size()) return null;
+        for (Type type : argumentTypes) if (type.getSort() != Type.INT) return null; // first bounded family: int-only constructors
+
+        InstanceField field = directInstanceRenderField(renderMethod);
+        ClassNode owner = classes.get(sourceClass);
+        MethodNode constructor = findMethod(owner, "<init>", descriptor);
+        if (field == null || constructor == null) return null;
+        Integer parameterIndex = constructorParameterAssignedToField(constructor, field, argumentTypes);
+        if (parameterIndex == null) return null;
+
+        Object proven = registration.constructorArguments().get(parameterIndex).value();
+        Integer constant = exactInt(proven);
+        if (constant != null) return RenderIdentity.constant(constant);
+        if (proven != null) return null;
+
+        LinkedHashSet<RenderIdentity> candidates = new LinkedHashSet<>();
+        for (ClassNode caller : classes.values()) for (MethodNode method : caller.methods) {
+            if ((method.access & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE)) != 0) continue;
+            MethodContext context;
+            try { context = context(caller, method); }
+            catch (AnalyzerException | RuntimeException ignored) { continue; }
+            for (int i = 0; i < method.instructions.size(); i++) {
+                AbstractInsnNode instruction = method.instructions.get(i);
+                if (!(instruction instanceof MethodInsnNode call) || call.getOpcode() != Opcodes.INVOKESPECIAL
+                        || !"<init>".equals(call.name) || !sourceClass.equals(call.owner) || !descriptor.equals(call.desc)) continue;
+                Frame<SourceValue> frame = context.frames()[i];
+                if (frame == null || frame.getStackSize() < argumentTypes.length + 1) continue;
+                int start = frame.getStackSize() - argumentTypes.length;
+                SourceValue receiver = frame.getStack(start - 1);
+                if (!newReceiver(context, receiver, sourceClass, 0, new HashSet<>())) continue;
+
+                boolean matches = true;
+                RenderIdentity target = null;
+                for (int arg = 0; arg < argumentTypes.length; arg++) {
+                    RenderIdentity actual = intValue(context, frame.getStack(start + arg), 0, new HashSet<>());
+                    if (arg == parameterIndex) {
+                        target = actual;
+                        continue;
+                    }
+                    Integer expected = exactInt(registration.constructorArguments().get(arg).value());
+                    if (expected == null || actual == null || !actual.isConstant(expected)) { matches = false; break; }
+                }
+                if (matches && target != null) candidates.add(target);
+            }
+        }
+        return candidates.size() == 1 ? candidates.getFirst() : null;
+    }
+
+    private static InstanceField directInstanceRenderField(MethodNode method) {
+        if (method == null || !RENDER_NAMES.contains(method.name) || !RENDER_DESC.equals(method.desc)) return null;
+        List<AbstractInsnNode> code = real(method);
+        if (code.size() != 3 || !(code.get(0) instanceof VarInsnNode load) || load.getOpcode() != Opcodes.ALOAD || load.var != 0
+                || !(code.get(1) instanceof FieldInsnNode field) || field.getOpcode() != Opcodes.GETFIELD || !"I".equals(field.desc)
+                || code.get(2).getOpcode() != Opcodes.IRETURN) return null;
+        return new InstanceField(field.owner, field.name);
+    }
+
+    private static Integer constructorParameterAssignedToField(MethodNode constructor, InstanceField field, Type[] arguments) {
+        List<AbstractInsnNode> code = real(constructor);
+        Integer assignedLocal = null;
+        int targetWrites = 0;
+        for (int i = 0; i < code.size(); i++) {
+            AbstractInsnNode instruction = code.get(i);
+            if (!(instruction instanceof FieldInsnNode put) || put.getOpcode() != Opcodes.PUTFIELD
+                    || !field.owner().equals(put.owner) || !field.name().equals(put.name) || !"I".equals(put.desc)) continue;
+            targetWrites++;
+            if (i < 2 || !(code.get(i - 2) instanceof VarInsnNode receiver) || receiver.getOpcode() != Opcodes.ALOAD || receiver.var != 0
+                    || !(code.get(i - 1) instanceof VarInsnNode value) || value.getOpcode() != Opcodes.ILOAD) return null;
+            assignedLocal = value.var;
+        }
+        if (targetWrites != 1 || assignedLocal == null) return null;
+        int local = 1;
+        for (int arg = 0; arg < arguments.length; arg++) {
+            if (local == assignedLocal) return arg;
+            local += arguments[arg].getSize();
+        }
+        return null;
+    }
+
+    private static MethodContext context(ClassNode owner, MethodNode method) throws AnalyzerException {
+        Analyzer<SourceValue> analyzer = new Analyzer<>(new SourceInterpreter());
+        Frame<SourceValue>[] frames = analyzer.analyze(owner.name, method);
+        Map<AbstractInsnNode,Integer> indices = new IdentityHashMap<>();
+        for (int i = 0; i < method.instructions.size(); i++) indices.put(method.instructions.get(i), i);
+        return new MethodContext(owner, method, frames, indices);
+    }
+
+    private static boolean newReceiver(MethodContext context, SourceValue value, String type, int depth, Set<AbstractInsnNode> guard) {
+        if (value == null || depth > 24 || value.insns == null || value.insns.isEmpty()) return false;
+        for (AbstractInsnNode producer : value.insns) {
+            if (!guard.add(producer)) return false;
+            boolean proven;
+            if (producer instanceof TypeInsnNode allocation && allocation.getOpcode() == Opcodes.NEW) proven = type.equals(allocation.desc);
+            else if (producer instanceof InsnNode copy && copy.getOpcode() == Opcodes.DUP) {
+                Integer index = context.indices().get(producer); Frame<SourceValue> frame = index == null ? null : context.frames()[index];
+                proven = frame != null && frame.getStackSize() > 0
+                        && newReceiver(context, frame.getStack(frame.getStackSize() - 1), type, depth + 1, guard);
+            } else proven = false;
+            guard.remove(producer);
+            if (!proven) return false;
+        }
+        return true;
+    }
+
+    private static RenderIdentity intValue(MethodContext context, SourceValue value, int depth, Set<AbstractInsnNode> guard) {
+        if (value == null || depth > 24 || value.insns == null || value.insns.isEmpty()) return null;
+        RenderIdentity result = null;
+        for (AbstractInsnNode producer : value.insns) {
+            if (!guard.add(producer)) return null;
+            RenderIdentity candidate;
+            Integer constant = intConstant(producer);
+            if (constant != null) candidate = RenderIdentity.constant(constant);
+            else if (producer instanceof FieldInsnNode field && field.getOpcode() == Opcodes.GETSTATIC && "I".equals(field.desc))
+                candidate = RenderIdentity.field(field.owner, field.name);
+            else if (producer instanceof VarInsnNode load && load.getOpcode() == Opcodes.ILOAD) {
+                Integer index = context.indices().get(producer); Frame<SourceValue> frame = index == null ? null : context.frames()[index];
+                candidate = frame != null && load.var < frame.getLocals()
+                        ? intValue(context, frame.getLocal(load.var), depth + 1, guard) : null;
+            } else candidate = null;
+            guard.remove(producer);
+            if (candidate == null) return null;
+            if (result == null) result = candidate;
+            else if (!result.equals(candidate)) return null;
+        }
+        return result;
     }
 
     private static RenderIdentity identity(AbstractInsnNode instruction) {
@@ -89,16 +229,17 @@ public final class LegacyRegisteredBlockRenderTypeAnalyzer {
         return null;
     }
 
+    private static Integer exactInt(Object value) {
+        if (!(value instanceof Number number)) return null;
+        double raw = number.doubleValue();
+        return Double.isFinite(raw) && raw == Math.rint(raw) && raw >= Integer.MIN_VALUE && raw <= Integer.MAX_VALUE ? (int) raw : null;
+    }
+
     private static Integer intConstant(AbstractInsnNode instruction) {
         if (instruction == null) return null;
         return switch (instruction.getOpcode()) {
-            case Opcodes.ICONST_M1 -> -1;
-            case Opcodes.ICONST_0 -> 0;
-            case Opcodes.ICONST_1 -> 1;
-            case Opcodes.ICONST_2 -> 2;
-            case Opcodes.ICONST_3 -> 3;
-            case Opcodes.ICONST_4 -> 4;
-            case Opcodes.ICONST_5 -> 5;
+            case Opcodes.ICONST_M1 -> -1; case Opcodes.ICONST_0 -> 0; case Opcodes.ICONST_1 -> 1;
+            case Opcodes.ICONST_2 -> 2; case Opcodes.ICONST_3 -> 3; case Opcodes.ICONST_4 -> 4; case Opcodes.ICONST_5 -> 5;
             case Opcodes.BIPUSH, Opcodes.SIPUSH -> ((IntInsnNode) instruction).operand;
             case Opcodes.LDC -> instruction instanceof LdcInsnNode ldc && ldc.cst instanceof Integer value ? value : null;
             default -> null;
@@ -110,19 +251,26 @@ public final class LegacyRegisteredBlockRenderTypeAnalyzer {
             if (current.getOpcode() >= 0) return current;
         return null;
     }
-
+    private static List<AbstractInsnNode> real(MethodNode method) {
+        List<AbstractInsnNode> output = new ArrayList<>();
+        if (method != null) for (AbstractInsnNode instruction : method.instructions) if (instruction.getOpcode() >= 0) output.add(instruction);
+        return output;
+    }
+    private static MethodNode findMethod(ClassNode owner, String name, String descriptor) {
+        if (owner == null) return null;
+        for (MethodNode method : owner.methods) if (name.equals(method.name) && descriptor.equals(method.desc)) return method;
+        return null;
+    }
     private static MethodNode effectiveSourceMethod(Map<String, ClassNode> classes, String sourceClass) {
         Set<String> visited = new LinkedHashSet<>();
         for (String current = sourceClass; current != null && visited.add(current); ) {
-            ClassNode node = classes.get(current);
-            if (node == null) return null;
+            ClassNode node = classes.get(current); if (node == null) return null;
             for (MethodNode method : node.methods)
                 if ((method.access & Opcodes.ACC_STATIC) == 0 && RENDER_NAMES.contains(method.name) && RENDER_DESC.equals(method.desc)) return method;
             current = node.superName;
         }
         return null;
     }
-
     private static Map<String, ClassNode> loadClasses(Path jarPath) throws IOException {
         Map<String, ClassNode> classes = new LinkedHashMap<>();
         try (JarFile jar = new JarFile(jarPath.toFile(), false)) {
@@ -134,9 +282,7 @@ public final class LegacyRegisteredBlockRenderTypeAnalyzer {
                     ClassNode node = new ClassNode(Opcodes.ASM9);
                     new ClassReader(input).accept(node, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
                     classes.put(node.name, node);
-                } catch (RuntimeException ignored) {
-                    // The positive table is fail-closed: unreadable classes simply cannot become eligible.
-                }
+                } catch (RuntimeException ignored) { }
             }
         }
         return classes;
