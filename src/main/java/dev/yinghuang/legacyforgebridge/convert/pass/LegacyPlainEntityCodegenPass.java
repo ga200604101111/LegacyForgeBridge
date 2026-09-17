@@ -10,6 +10,7 @@ import dev.yinghuang.legacyforgebridge.convert.api.ConversionContext;
 import dev.yinghuang.legacyforgebridge.convert.api.ConversionPass;
 import dev.yinghuang.legacyforgebridge.convert.api.SupportLevel;
 import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
@@ -94,6 +95,7 @@ public final class LegacyPlainEntityCodegenPass implements ConversionPass {
             item.addProperty("generatedInternalName", internalName);
             item.addProperty("classGenerated", true);
             item.addProperty("synchedDataAccessorCount", entries.size());
+            item.addProperty("legacyBaseHurtSemanticsMapped", true);
             item.addProperty("entityTypeRegistrationWired", false);
             generated.add(item);
         }
@@ -108,7 +110,7 @@ public final class LegacyPlainEntityCodegenPass implements ConversionPass {
         Files.writeString(output, GSON.toJson(root) + "\n", StandardCharsets.UTF_8);
 
         if (!generated.isEmpty()) context.diagnostics().info("LFB-CONVERT-ENTITY-CODEGEN-0001", SupportLevel.RUNTIME_BRIDGE,
-                "Generated " + generated.size() + " isolated Java 21 plain Entity subclass(es) with modern SynchedEntityData accessor definitions; EntityType registration remains intentionally unwired.");
+                "Generated " + generated.size() + " isolated Java 21 plain Entity subclass(es) with modern SynchedEntityData accessor definitions and mapped vanilla legacy base hurt semantics; EntityType registration remains intentionally unwired.");
         if (!skipped.isEmpty()) context.diagnostics().warning("LFB-CONVERT-ENTITY-CODEGEN-0002", SupportLevel.RUNTIME_BRIDGE,
                 "Skipped " + skipped.size() + " admitted entity rule(s) because generated synchronized-data class inputs were malformed or unsupported.");
     }
@@ -200,6 +202,15 @@ public final class LegacyPlainEntityCodegenPass implements ConversionPass {
         MethodVisitor hurt = writer.visitMethod(Opcodes.ACC_PUBLIC, "hurtServer",
                 "(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/damagesource/DamageSource;F)Z", null, null);
         hurt.visitCode();
+        hurt.visitVarInsn(Opcodes.ALOAD, 0);
+        hurt.visitMethodInsn(Opcodes.INVOKEVIRTUAL, ENTITY, "isInvulnerable", "()Z", false);
+        Label markHurt = new Label();
+        hurt.visitJumpInsn(Opcodes.IFEQ, markHurt);
+        hurt.visitInsn(Opcodes.ICONST_0);
+        hurt.visitInsn(Opcodes.IRETURN);
+        hurt.visitLabel(markHurt);
+        hurt.visitVarInsn(Opcodes.ALOAD, 0);
+        hurt.visitMethodInsn(Opcodes.INVOKEVIRTUAL, ENTITY, "markHurt", "()V", false);
         hurt.visitInsn(Opcodes.ICONST_0);
         hurt.visitInsn(Opcodes.IRETURN);
         hurt.visitMaxs(0, 0);

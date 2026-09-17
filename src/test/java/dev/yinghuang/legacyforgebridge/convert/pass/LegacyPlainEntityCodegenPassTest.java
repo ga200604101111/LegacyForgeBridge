@@ -27,7 +27,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class LegacyPlainEntityCodegenPassTest {
     @TempDir Path tempDir;
 
-    @Test void generatesIsolatedJava21EntityClassWithAllMappedAccessors() throws Exception {
+    @Test void generatesIsolatedJava21EntityClassWithAllMappedAccessorsAndLegacyBaseHurtSemantics() throws Exception {
         Path staging = tempDir.resolve("generated");
         ConversionContext context = context(staging, "generated.jar");
         writeAdmission(staging, true);
@@ -43,6 +43,7 @@ class LegacyPlainEntityCodegenPassTest {
         JsonObject generated = root.getAsJsonArray("generatedClasses").get(0).getAsJsonObject();
         String internalName = generated.get("generatedInternalName").getAsString();
         assertEquals(5, generated.get("synchedDataAccessorCount").getAsInt());
+        assertTrue(generated.get("legacyBaseHurtSemanticsMapped").getAsBoolean());
         Path classFile = staging.resolve(internalName + ".class");
         assertTrue(Files.isRegularFile(classFile));
 
@@ -66,7 +67,12 @@ class LegacyPlainEntityCodegenPassTest {
         assertEquals(5L, calls(define, "net/minecraft/network/syncher/SynchedEntityData$Builder", "define"));
         assertNotNull(method(node, "readAdditionalSaveData", "(Lnet/minecraft/world/level/storage/ValueInput;)V"));
         assertNotNull(method(node, "addAdditionalSaveData", "(Lnet/minecraft/world/level/storage/ValueOutput;)V"));
-        assertNotNull(method(node, "hurtServer", "(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/damagesource/DamageSource;F)Z"));
+
+        MethodNode hurt = method(node, "hurtServer",
+                "(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/damagesource/DamageSource;F)Z");
+        assertNotNull(hurt);
+        assertEquals(1L, calls(hurt, "net/minecraft/world/entity/Entity", "isInvulnerable"));
+        assertEquals(1L, calls(hurt, "net/minecraft/world/entity/Entity", "markHurt"));
     }
 
     @Test void blockedAdmissionDoesNotGenerateEntityClass() throws Exception {
