@@ -1,5 +1,6 @@
 package dev.yinghuang.legacyforgebridge.convert;
 
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import dev.yinghuang.legacyforgebridge.convert.api.ConversionContext;
@@ -53,14 +54,19 @@ class BambooGridPotPresentationRuntimeExactTest {
                 staging.resolve(LegacyGridPotPresentationRuntimePass.OUTPUT), StandardCharsets.UTF_8)).getAsJsonObject();
         assertEquals("MODERN_ITEM_MODEL_RENDER_STATE", root.get("adaptation").getAsString());
         assertTrue(root.get("storedContentPresentationRuntimeWired").getAsBoolean());
-        JsonObject rule = root.getAsJsonArray("rules").asList().stream()
-                .map(JsonElement -> JsonElement.getAsJsonObject())
-                .filter(value -> "ruby/bamboo/block/BlockMultiPot".equals(value.get("sourceBlockClass").getAsString()))
-                .findFirst()
-                .orElseThrow(() -> new AssertionError("Exact Bamboo MultiPot presentation runtime was not admitted: " + root));
+        assertTrue(root.get("runtimeRules").getAsInt() >= 1);
+
+        JsonObject rule = null;
+        for (JsonElement element : root.getAsJsonArray("rules")) {
+            JsonObject candidate = element.getAsJsonObject();
+            if ("ruby/bamboo/block/BlockMultiPot".equals(candidate.get("sourceBlockClass").getAsString())) {
+                rule = candidate;
+                break;
+            }
+        }
+        assertNotNull(rule, "Exact Bamboo MultiPot presentation runtime was not admitted: " + root);
         assertTrue(rule.get("storedContentPresentationProven").getAsBoolean());
         assertTrue(rule.get("storedContentPresentationRuntimeWired").getAsBoolean());
         assertFalse(rule.get("exactLegacyGeometry").getAsBoolean());
-        assertEquals(9, root.get("runtimeRules").getAsInt() >= 1 ? 9 : 0); // explicit guard that at least one runtime rule exists
     }
 }
