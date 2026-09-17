@@ -30,6 +30,7 @@ import dev.yinghuang.legacyforgebridge.convert.pass.LegacyEventAnalysisPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyFoodItemPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyFuelHandlerPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyGridPotBlockPass;
+import dev.yinghuang.legacyforgebridge.convert.pass.LegacyGridPotPresentationRuntimePass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacySeatBedPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyItemBlockBindingPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyItemRenderPass;
@@ -133,6 +134,7 @@ public final class LegacyConversionEngine {
             builder.add(new LegacyBlockPlacementPass());
             builder.add(new LegacyBlockActivationPass());
             builder.add(new LegacyGridPotBlockPass());
+            builder.add(new LegacyGridPotPresentationRuntimePass());
             builder.add(new LegacySeatBedPass());
             builder.add(new LegacyInertModelBlockPass());
             builder.add(new LegacyOscillatingModelBlockPass());
