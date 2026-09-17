@@ -19,12 +19,15 @@ import java.nio.file.Path;
 public final class LegacyEntityConstantOverridePass implements ConversionPass {
     public static final String OUTPUT = "legacyforgebridge/entity-constant-overrides.json";
     public static final String SOURCE_KIND_CAN_PUSH = "CAN_PUSH";
+    public static final String SOURCE_KIND_CAN_COLLIDE = "CAN_COLLIDE";
     public static final String SOURCE_KIND_RENDER_DISTANCE = "RENDER_DISTANCE";
     public static final String TARGET_METHOD_IS_PUSHABLE = "isPushable";
+    public static final String TARGET_METHOD_IS_PICKABLE = "isPickable";
     public static final String TARGET_METHOD_SHOULD_RENDER_AT_SQR_DISTANCE = "shouldRenderAtSqrDistance";
     public static final String TARGET_DESCRIPTOR_BOOLEAN = "()Z";
     public static final String TARGET_DESCRIPTOR_RENDER_DISTANCE = "(D)Z";
     public static final String MAPPING_PUSHABILITY_BOOLEAN_IDENTITY = "PUSHABILITY_BOOLEAN_IDENTITY";
+    public static final String MAPPING_PICKABILITY_BOOLEAN_IDENTITY = "PICKABILITY_BOOLEAN_IDENTITY";
     public static final String MAPPING_RENDER_DISTANCE_CONSTANT_BOOLEAN_IDENTITY = "RENDER_DISTANCE_CONSTANT_BOOLEAN_IDENTITY";
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
@@ -45,6 +48,7 @@ public final class LegacyEntityConstantOverridePass implements ConversionPass {
         root.addProperty("runtimeCodegenWired", false);
         JsonArray supported = new JsonArray();
         supported.add(SOURCE_KIND_CAN_PUSH);
+        supported.add(SOURCE_KIND_CAN_COLLIDE);
         supported.add(SOURCE_KIND_RENDER_DISTANCE);
         root.add("supportedOverrideKinds", supported);
         JsonArray rules = new JsonArray();
@@ -102,24 +106,29 @@ public final class LegacyEntityConstantOverridePass implements ConversionPass {
         Files.writeString(output, GSON.toJson(root) + "\n", StandardCharsets.UTF_8);
 
         if (proven > 0) context.diagnostics().info("LFB-CONVERT-ENTITY-CONST-0001", SupportLevel.RUNTIME_BRIDGE,
-                "Proved " + proven + " exact constant legacy Entity boolean override(s) for one-to-one modern codegen (pushability/render distance)." );
+                "Proved " + proven + " exact constant legacy Entity boolean override(s) for one-to-one modern codegen (pushability/pickability/render distance)." );
         if (blocked > 0) context.diagnostics().warning("LFB-CONVERT-ENTITY-CONST-0002", SupportLevel.RUNTIME_BRIDGE,
                 "Blocked " + blocked + " supported legacy constant Entity override(s) because their bytecode was not an exact ICONST_0/1; IRETURN body.");
     }
 
     public static boolean supported(String sourceKind) {
-        return SOURCE_KIND_CAN_PUSH.equals(sourceKind) || SOURCE_KIND_RENDER_DISTANCE.equals(sourceKind);
+        return SOURCE_KIND_CAN_PUSH.equals(sourceKind)
+                || SOURCE_KIND_CAN_COLLIDE.equals(sourceKind)
+                || SOURCE_KIND_RENDER_DISTANCE.equals(sourceKind);
     }
     public static String targetMethod(String sourceKind) {
         return SOURCE_KIND_CAN_PUSH.equals(sourceKind) ? TARGET_METHOD_IS_PUSHABLE
+                : SOURCE_KIND_CAN_COLLIDE.equals(sourceKind) ? TARGET_METHOD_IS_PICKABLE
                 : SOURCE_KIND_RENDER_DISTANCE.equals(sourceKind) ? TARGET_METHOD_SHOULD_RENDER_AT_SQR_DISTANCE : null;
     }
     public static String targetDescriptor(String sourceKind) {
-        return SOURCE_KIND_CAN_PUSH.equals(sourceKind) ? TARGET_DESCRIPTOR_BOOLEAN
+        return (SOURCE_KIND_CAN_PUSH.equals(sourceKind) || SOURCE_KIND_CAN_COLLIDE.equals(sourceKind))
+                ? TARGET_DESCRIPTOR_BOOLEAN
                 : SOURCE_KIND_RENDER_DISTANCE.equals(sourceKind) ? TARGET_DESCRIPTOR_RENDER_DISTANCE : null;
     }
     public static String mappingSemantics(String sourceKind) {
         return SOURCE_KIND_CAN_PUSH.equals(sourceKind) ? MAPPING_PUSHABILITY_BOOLEAN_IDENTITY
+                : SOURCE_KIND_CAN_COLLIDE.equals(sourceKind) ? MAPPING_PICKABILITY_BOOLEAN_IDENTITY
                 : SOURCE_KIND_RENDER_DISTANCE.equals(sourceKind) ? MAPPING_RENDER_DISTANCE_CONSTANT_BOOLEAN_IDENTITY : null;
     }
     private static JsonArray array(JsonObject root, String name) {
