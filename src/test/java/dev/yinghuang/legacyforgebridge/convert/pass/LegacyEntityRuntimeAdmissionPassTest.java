@@ -21,10 +21,10 @@ import static org.junit.jupiter.api.Assertions.*;
 class LegacyEntityRuntimeAdmissionPassTest {
     @TempDir Path tempDir;
 
-    @Test void admitsOnlyPlainEntityWithCompleteWatcherBehaviorAndConstructionEvidence() throws Exception {
+    @Test void admitsOnlyPlainEntityWithCompleteWatcherBehaviorConstructionAndVelocityEvidence() throws Exception {
         Path staging = tempDir.resolve("admit");
         ConversionContext context = context(staging, "admit.jar");
-        writeRuntimePlan(staging, true);
+        writeRuntimePlan(staging, true, true);
         writeBehavior(staging, false);
         writeConstruction(staging, 0);
 
@@ -41,6 +41,7 @@ class LegacyEntityRuntimeAdmissionPassTest {
         assertEquals("foreign:orb", rule.get("id").getAsString());
         assertEquals(LegacyEntityRuntimeAdmissionPass.FAMILY_PLAIN_SYNCHED_DATA_ONLY, rule.get("family").getAsString());
         assertTrue(rule.get("admitted").getAsBoolean());
+        assertTrue(rule.get("velocityUpdates").getAsBoolean());
         assertTrue(rule.getAsJsonArray("blockers").isEmpty());
         assertEquals(0.5F, rule.get("width").getAsFloat());
         assertEquals(0.75F, rule.get("height").getAsFloat());
@@ -50,7 +51,7 @@ class LegacyEntityRuntimeAdmissionPassTest {
     @Test void tickBehaviorAndUnknownConstructorEffectKeepEntityBlocked() throws Exception {
         Path staging = tempDir.resolve("blocked");
         ConversionContext context = context(staging, "blocked.jar");
-        writeRuntimePlan(staging, true);
+        writeRuntimePlan(staging, true, true);
         writeBehavior(staging, true);
         writeConstruction(staging, 1);
 
@@ -69,7 +70,7 @@ class LegacyEntityRuntimeAdmissionPassTest {
     @Test void watcherClosureGapIsAnAdmissionBlocker() throws Exception {
         Path staging = tempDir.resolve("watcher-gap");
         ConversionContext context = context(staging, "watcher-gap.jar");
-        writeRuntimePlan(staging, false);
+        writeRuntimePlan(staging, false, true);
         writeBehavior(staging, false);
         writeConstruction(staging, 0);
 
@@ -81,6 +82,24 @@ class LegacyEntityRuntimeAdmissionPassTest {
         assertFalse(rule.get("admitted").getAsBoolean());
         assertTrue(rule.getAsJsonArray("blockers").asList().stream()
                 .anyMatch(value -> value.getAsString().equals("source-wide-datawatcher-call-closure-incomplete")));
+    }
+
+    @Test void legacyVelocityUpdatesFalseStaysBlockedUntilModernFalseSemanticsAreProven() throws Exception {
+        Path staging = tempDir.resolve("velocity-disabled");
+        ConversionContext context = context(staging, "velocity-disabled.jar");
+        writeRuntimePlan(staging, true, false);
+        writeBehavior(staging, false);
+        writeConstruction(staging, 0);
+
+        new LegacyEntityRuntimeAdmissionPass().apply(context);
+
+        JsonObject rule = JsonParser.parseString(Files.readString(
+                staging.resolve(LegacyEntityRuntimeAdmissionPass.OUTPUT), StandardCharsets.UTF_8)).getAsJsonObject()
+                .getAsJsonArray("rules").get(0).getAsJsonObject();
+        assertFalse(rule.get("admitted").getAsBoolean());
+        assertFalse(rule.get("velocityUpdates").getAsBoolean());
+        assertTrue(rule.getAsJsonArray("blockers").asList().stream()
+                .anyMatch(value -> value.getAsString().equals("legacy-velocity-updates-disabled")));
     }
 
     private ConversionContext context(Path staging, String jarName) throws Exception {
@@ -95,7 +114,7 @@ class LegacyEntityRuntimeAdmissionPassTest {
                 Files.size(source), metadata, jarAnalysis, new DiagnosticCollector(), "generic-test");
     }
 
-    private static void writeRuntimePlan(Path staging, boolean closure) throws Exception {
+    private static void writeRuntimePlan(Path staging, boolean closure, boolean velocityUpdates) throws Exception {
         Files.writeString(staging.resolve(LegacyEntityRuntimePlanPass.OUTPUT), """
                 {
                   "schemaVersion": 1,
@@ -108,7 +127,7 @@ class LegacyEntityRuntimeAdmissionPassTest {
                       "legacyNumericId": 17,
                       "trackingRange": 80,
                       "updateFrequency": 2,
-                      "velocityUpdates": true,
+                      "velocityUpdates": %s,
                       "sourceWideDataWatcherCallClosureComplete": %s,
                       "synchedDataMappingComplete": true,
                       "synchedDataEntries": [
@@ -117,7 +136,7 @@ class LegacyEntityRuntimeAdmissionPassTest {
                     }
                   ]
                 }
-                """.formatted(Boolean.toString(closure)), StandardCharsets.UTF_8);
+                """.formatted(Boolean.toString(velocityUpdates), Boolean.toString(closure)), StandardCharsets.UTF_8);
     }
 
     private static void writeBehavior(Path staging, boolean tick) throws Exception {

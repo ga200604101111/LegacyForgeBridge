@@ -64,6 +64,10 @@ public final class LegacyEntityRuntimeAdmissionPass implements ConversionPass {
 
             if (!bool(runtimeRule, "synchedDataMappingComplete", false)) blockers.add("synched-data-mapping-incomplete");
             if (!bool(runtimeRule, "sourceWideDataWatcherCallClosureComplete", false)) blockers.add("source-wide-datawatcher-call-closure-incomplete");
+            // 1.21.11 EntityType exposes trackDeltas/alwaysUpdateVelocity, but the currently admitted
+            // builder surface has no proven way to represent the legacy registerModEntity false case.
+            // Keep the first runtime family exact by admitting only legacy velocityUpdates=true.
+            if (!bool(runtimeRule, "velocityUpdates", false)) blockers.add("legacy-velocity-updates-disabled");
 
             if (behaviorRule == null) blockers.add("behavior-surface-missing");
             else {
@@ -129,7 +133,7 @@ public final class LegacyEntityRuntimeAdmissionPass implements ConversionPass {
         if (admittedCount > 0) context.diagnostics().info("LFB-CONVERT-ENTITY-ADMISSION-0001", SupportLevel.RUNTIME_BRIDGE,
                 "Admitted " + admittedCount + " plain Entity synchronized-data-only registration(s) to the runtime candidate family; runtime code generation remains unwired.");
         if (admittedCount < rules.size()) context.diagnostics().warning("LFB-CONVERT-ENTITY-ADMISSION-0002", SupportLevel.RUNTIME_BRIDGE,
-                "Blocked " + (rules.size() - admittedCount) + " entity registration(s) from the first runtime family because behavior/construction/watcher proof gates remain incomplete or unsupported.");
+                "Blocked " + (rules.size() - admittedCount) + " entity registration(s) from the first runtime family because behavior/construction/watcher/velocity proof gates remain incomplete or unsupported.");
     }
 
     private static JsonObject read(Path path) throws Exception {
