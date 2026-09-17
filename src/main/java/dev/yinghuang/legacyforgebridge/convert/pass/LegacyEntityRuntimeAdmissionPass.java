@@ -16,10 +16,7 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/**
- * Joins watcher, behavior, construction, and narrowly proven constant-override IR into the first
- * generated plain Entity runtime family. Admission is evidence only; generated runtime follows.
- */
+/** Joins watcher, behavior, construction, and narrowly proven constant-override IR into the first generated plain Entity runtime family. */
 public final class LegacyEntityRuntimeAdmissionPass implements ConversionPass {
     public static final String OUTPUT = "legacyforgebridge/entity-runtime-admission.json";
     public static final String FAMILY_PLAIN_SYNCHED_DATA_ONLY = "PLAIN_ENTITY_SYNCHED_DATA_ONLY";
@@ -55,6 +52,7 @@ public final class LegacyEntityRuntimeAdmissionPass implements ConversionPass {
         root.addProperty("sourceSha256", context.sourceHash());
         root.addProperty("postInitWatcherMutationGateWired", true);
         root.addProperty("constantBehaviorOverrideAdmissionWired", true);
+        root.addProperty("typedConstantBehaviorOverrideAdmissionWired", true);
         root.addProperty("runtimeImplementationWired", false);
 
         JsonArray rules = new JsonArray();
@@ -90,8 +88,7 @@ public final class LegacyEntityRuntimeAdmissionPass implements ConversionPass {
                     String kind = string(callback, "kind", "");
                     if ("ENTITY_INIT".equals(kind)) continue;
                     if (("READ_NBT".equals(kind) || "WRITE_NBT".equals(kind)) && trivialNoOpMethod(behaviorRule, callback)) continue;
-                    if (LegacyEntityConstantOverridePass.supported(kind)
-                            && mappedConstantOverride(constantRule, callback, kind)) continue;
+                    if (LegacyEntityConstantOverridePass.supported(kind) && mappedConstantOverride(constantRule, callback, kind)) continue;
                     blockers.add(LegacyEntityConstantOverridePass.supported(kind)
                             ? "constant-override-proof-missing:" + kind : "unsupported-callback:" + kind);
                 }
@@ -101,8 +98,7 @@ public final class LegacyEntityRuntimeAdmissionPass implements ConversionPass {
                     String kind = string(method, "callbackKind", null);
                     if ("ENTITY_INIT".equals(kind)) continue;
                     if (("READ_NBT".equals(kind) || "WRITE_NBT".equals(kind)) && bool(method, "trivialNoOp", false)) continue;
-                    if (LegacyEntityConstantOverridePass.supported(kind)
-                            && mappedConstantOverride(constantRule, method, kind)) continue;
+                    if (LegacyEntityConstantOverridePass.supported(kind) && mappedConstantOverride(constantRule, method, kind)) continue;
                     blockers.add("unsupported-source-method:" + string(method, "owner", "?") + "."
                             + string(method, "method", "?") + string(method, "descriptor", ""));
                 }
@@ -122,16 +118,10 @@ public final class LegacyEntityRuntimeAdmissionPass implements ConversionPass {
             blockers = deduplicate(blockers);
             boolean admitted = blockers.size() == 0;
             JsonObject rule = new JsonObject();
-            copy(runtimeRule, rule, "id");
-            copy(runtimeRule, rule, "legacyRegistryName");
-            copy(runtimeRule, rule, "sourceClass");
-            copy(runtimeRule, rule, "legacyNumericId");
-            copy(runtimeRule, rule, "trackingRange");
-            copy(runtimeRule, rule, "updateFrequency");
-            copy(runtimeRule, rule, "velocityUpdates");
-            copy(runtimeRule, rule, "sourceOwnedDataWatcherReadCount");
-            copy(runtimeRule, rule, "sourceOwnedDataWatcherWriteCount");
-            copy(runtimeRule, rule, "postInitSourceDataWatcherMutationFree");
+            copy(runtimeRule, rule, "id"); copy(runtimeRule, rule, "legacyRegistryName"); copy(runtimeRule, rule, "sourceClass");
+            copy(runtimeRule, rule, "legacyNumericId"); copy(runtimeRule, rule, "trackingRange"); copy(runtimeRule, rule, "updateFrequency");
+            copy(runtimeRule, rule, "velocityUpdates"); copy(runtimeRule, rule, "sourceOwnedDataWatcherReadCount");
+            copy(runtimeRule, rule, "sourceOwnedDataWatcherWriteCount"); copy(runtimeRule, rule, "postInitSourceDataWatcherMutationFree");
             rule.addProperty("family", FAMILY_PLAIN_SYNCHED_DATA_ONLY);
             rule.addProperty("admitted", admitted);
             rule.addProperty("runtimeImplementationWired", false);
@@ -141,8 +131,7 @@ public final class LegacyEntityRuntimeAdmissionPass implements ConversionPass {
             rule.add("constantBehaviorOverrides", constantOverrides);
             rule.addProperty("constantBehaviorOverrideCount", constantOverrides.size());
             if (constructionRule != null && bool(constructionRule, "sizeProofComplete", false)) {
-                copy(constructionRule, rule, "width");
-                copy(constructionRule, rule, "height");
+                copy(constructionRule, rule, "width"); copy(constructionRule, rule, "height");
             }
             rules.add(rule);
             if (admitted) { admittedCount++; admittedConstantOverrides += constantOverrides.size(); }
@@ -159,7 +148,7 @@ public final class LegacyEntityRuntimeAdmissionPass implements ConversionPass {
 
         if (admittedCount > 0) context.diagnostics().info("LFB-CONVERT-ENTITY-ADMISSION-0001", SupportLevel.RUNTIME_BRIDGE,
                 "Admitted " + admittedCount + " write-free plain Entity registration(s), including "
-                        + admittedConstantOverrides + " exact constant base-behavior override(s); post-spawn watcher mutation remains outside this family.");
+                        + admittedConstantOverrides + " exact typed constant base-behavior override(s); post-spawn watcher mutation remains outside this family.");
         if (admittedCount < rules.size()) context.diagnostics().warning("LFB-CONVERT-ENTITY-ADMISSION-0002", SupportLevel.RUNTIME_BRIDGE,
                 "Blocked " + (rules.size() - admittedCount) + " entity registration(s) because behavior/construction/watcher/velocity/constant-override proof gates remain incomplete or unsupported.");
     }
@@ -183,24 +172,36 @@ public final class LegacyEntityRuntimeAdmissionPass implements ConversionPass {
                     && mappingSemantics.equals(string(value, "mappingSemantics", null))
                     && bool(value, "sourceConstantProofComplete", false)
                     && bool(value, "runtimeCodegenReady", false)
-                    && value.has("constantBoolean") && value.get("constantBoolean").isJsonPrimitive()
-                    && value.get("constantBoolean").getAsJsonPrimitive().isBoolean()) return true;
+                    && constantValueValid(value, sourceKind)) return true;
+        }
+        return false;
+    }
+
+    private static boolean constantValueValid(JsonObject value, String sourceKind) {
+        String expected = LegacyEntityConstantOverridePass.constantKind(sourceKind);
+        String declared = string(value, "constantKind", null);
+        if ("float".equals(expected)) {
+            if (!"float".equals(declared) || !value.has("constantFloat") || !value.get("constantFloat").isJsonPrimitive()
+                    || !value.get("constantFloat").getAsJsonPrimitive().isNumber()) return false;
+            try { return Float.isFinite(value.get("constantFloat").getAsFloat()); }
+            catch (RuntimeException invalid) { return false; }
+        }
+        if ("boolean".equals(expected)) {
+            if (declared != null && !"boolean".equals(declared)) return false;
+            return value.has("constantBoolean") && value.get("constantBoolean").isJsonPrimitive()
+                    && value.get("constantBoolean").getAsJsonPrimitive().isBoolean();
         }
         return false;
     }
 
     private static boolean trivialNoOpMethod(JsonObject behaviorRule, JsonObject callback) {
-        String owner = string(callback, "owner", null);
-        String method = string(callback, "method", null);
-        String descriptor = string(callback, "descriptor", null);
+        String owner = string(callback, "owner", null), method = string(callback, "method", null), descriptor = string(callback, "descriptor", null);
         if (owner == null || method == null || descriptor == null) return false;
         for (JsonElement methodElement : array(behaviorRule, "sourceMethods")) {
             if (!methodElement.isJsonObject()) continue;
             JsonObject source = methodElement.getAsJsonObject();
-            if (owner.equals(string(source, "owner", null))
-                    && method.equals(string(source, "method", null))
-                    && descriptor.equals(string(source, "descriptor", null)))
-                return bool(source, "trivialNoOp", false);
+            if (owner.equals(string(source, "owner", null)) && method.equals(string(source, "method", null))
+                    && descriptor.equals(string(source, "descriptor", null))) return bool(source, "trivialNoOp", false);
         }
         return false;
     }

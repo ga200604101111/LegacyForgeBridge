@@ -15,6 +15,7 @@ import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.InsnNode;
+import org.objectweb.asm.tree.LdcInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 
 import java.nio.charset.StandardCharsets;
@@ -25,7 +26,7 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 
-/** Adds only admission-proven constant base-behavior overrides to generated plain Entity classes. */
+/** Adds only admission-proven typed constant base-behavior overrides to generated plain Entity classes. */
 public final class LegacyPlainEntityConstantOverrideCodegenPass implements ConversionPass {
     public static final String OUTPUT = "legacyforgebridge/entity-constant-override-codegen.json";
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -50,6 +51,7 @@ public final class LegacyPlainEntityConstantOverrideCodegenPass implements Conve
         }
 
         generated.addProperty("constantBehaviorOverrideCodegenWired", true);
+        generated.addProperty("typedConstantBehaviorOverrideCodegenWired", true);
         JsonArray reportRules = new JsonArray();
         int complete = 0, patchedMethods = 0, blocked = 0;
         for (JsonElement element : array(generated, "generatedClasses")) {
@@ -79,9 +81,8 @@ public final class LegacyPlainEntityConstantOverrideCodegenPass implements Conve
                 Path classPath = context.stagingDir().resolve(generatedInternalName + ".class");
                 if (!Files.isRegularFile(classPath)) blockers.add("generated-class-file-missing");
                 else {
-                    byte[] original = Files.readAllBytes(classPath);
                     ClassNode node = new ClassNode(Opcodes.ASM9);
-                    try { new ClassReader(original).accept(node, 0); }
+                    try { new ClassReader(Files.readAllBytes(classPath)).accept(node, 0); }
                     catch (RuntimeException malformed) { blockers.add("generated-class-unreadable"); }
                     if (blockers.isEmpty()) {
                         for (JsonElement overrideElement : overrides) {
@@ -99,9 +100,7 @@ public final class LegacyPlainEntityConstantOverrideCodegenPass implements Conve
                             String descriptor = override.get("targetDescriptor").getAsString();
                             MethodNode method = new MethodNode(Opcodes.ACC_PUBLIC,
                                     override.get("targetMethod").getAsString(), descriptor, null, null);
-                            method.instructions.add(new InsnNode(override.get("constantBoolean").getAsBoolean()
-                                    ? Opcodes.ICONST_1 : Opcodes.ICONST_0));
-                            method.instructions.add(new InsnNode(Opcodes.IRETURN));
+                            emitConstantReturn(method, override);
                             method.maxStack = 1;
                             method.maxLocals = instanceLocalSlots(descriptor);
                             node.methods.add(method); patched++;
@@ -129,16 +128,18 @@ public final class LegacyPlainEntityConstantOverrideCodegenPass implements Conve
         Files.writeString(generatedPath, GSON.toJson(generated) + "\n", StandardCharsets.UTF_8);
         JsonObject root = new JsonObject();
         root.addProperty("schemaVersion", 1); root.addProperty("sourceSha256", context.sourceHash());
-        root.addProperty("constantBehaviorOverrideCodegenWired", true); root.add("rules", reportRules);
+        root.addProperty("constantBehaviorOverrideCodegenWired", true);
+        root.addProperty("typedConstantBehaviorOverrideCodegenWired", true);
+        root.add("rules", reportRules);
         root.addProperty("codegenCompleteClasses", complete); root.addProperty("patchedConstantOverrideMethods", patchedMethods);
         root.addProperty("blockedCodegenClasses", blocked);
         Path output = context.stagingDir().resolve(OUTPUT); Files.createDirectories(output.getParent());
         Files.writeString(output, GSON.toJson(root) + "\n", StandardCharsets.UTF_8);
 
         if (patchedMethods > 0) context.diagnostics().info("LFB-CONVERT-ENTITY-CONSTCODEGEN-0001", SupportLevel.RUNTIME_BRIDGE,
-                "Generated " + patchedMethods + " proven constant modern Entity override method(s) across " + complete + " plain Entity class(es)." );
+                "Generated " + patchedMethods + " proven typed constant modern Entity override method(s) across " + complete + " plain Entity class(es)." );
         if (blocked > 0) context.diagnostics().warning("LFB-CONVERT-ENTITY-CONSTCODEGEN-0002", SupportLevel.RUNTIME_BRIDGE,
-                "Blocked constant-behavior codegen for " + blocked + " generated plain Entity class(es); runtime candidacy remains fail-closed for those classes.");
+                "Blocked typed constant-behavior codegen for " + blocked + " generated plain Entity class(es); runtime candidacy remains fail-closed for those classes.");
     }
 
     private static boolean supported(JsonObject value) {
@@ -148,9 +149,37 @@ public final class LegacyPlainEntityConstantOverrideCodegenPass implements Conve
                 && LegacyEntityConstantOverridePass.targetDescriptor(sourceKind).equals(string(value, "targetDescriptor", null))
                 && LegacyEntityConstantOverridePass.mappingSemantics(sourceKind).equals(string(value, "mappingSemantics", null))
                 && bool(value, "sourceConstantProofComplete", false) && bool(value, "runtimeCodegenReady", false)
-                && value.has("constantBoolean") && value.get("constantBoolean").isJsonPrimitive()
-                && value.get("constantBoolean").getAsJsonPrimitive().isBoolean();
+                && constantValueValid(value, sourceKind);
     }
+
+    private static boolean constantValueValid(JsonObject value, String sourceKind) {
+        String expected = LegacyEntityConstantOverridePass.constantKind(sourceKind);
+        String declared = string(value, "constantKind", null);
+        if ("float".equals(expected)) {
+            if (!"float".equals(declared) || !value.has("constantFloat") || !value.get("constantFloat").isJsonPrimitive()
+                    || !value.get("constantFloat").getAsJsonPrimitive().isNumber()) return false;
+            try { return Float.isFinite(value.get("constantFloat").getAsFloat()); }
+            catch (RuntimeException invalid) { return false; }
+        }
+        if ("boolean".equals(expected)) {
+            if (declared != null && !"boolean".equals(declared)) return false;
+            return value.has("constantBoolean") && value.get("constantBoolean").isJsonPrimitive()
+                    && value.get("constantBoolean").getAsJsonPrimitive().isBoolean();
+        }
+        return false;
+    }
+
+    private static void emitConstantReturn(MethodNode method, JsonObject override) {
+        String sourceKind = string(override, "sourceKind", null);
+        if ("float".equals(LegacyEntityConstantOverridePass.constantKind(sourceKind))) {
+            method.instructions.add(new LdcInsnNode(override.get("constantFloat").getAsFloat()));
+            method.instructions.add(new InsnNode(Opcodes.FRETURN));
+        } else {
+            method.instructions.add(new InsnNode(override.get("constantBoolean").getAsBoolean() ? Opcodes.ICONST_1 : Opcodes.ICONST_0));
+            method.instructions.add(new InsnNode(Opcodes.IRETURN));
+        }
+    }
+
     static int instanceLocalSlots(String descriptor) {
         int slots = 1;
         for (Type argument : Type.getArgumentTypes(descriptor)) slots += argument.getSize();
