@@ -31,6 +31,8 @@ public final class LegacyGridPotBlockRegistry {
 
     private LegacyGridPotBlockRegistry() { }
 
+    public enum InsertionRoute { POSITIVE, NEGATIVE, FAIL_CLOSED }
+
     public record Rule(Identifier id, int cells, int gridWidth, float baseHeight, float cellHeight,
                        boolean placementCreatesCell, boolean emptyHandRemovalProven,
                        boolean selfItemAddsCellProven, boolean breakDropsEveryEnabledCell,
@@ -79,6 +81,12 @@ public final class LegacyGridPotBlockRegistry {
         }
         public boolean negativeInsertionEligible(Identifier blockId) {
             return negativeContentInsertionRuntimeWired && blockId != null && sourceProvenNegativeBlockIds.contains(blockId);
+        }
+        public InsertionRoute insertionRoute(Identifier blockId, boolean blockItem) {
+            if (!blockItem) return negativeNonBlockItemRuntimeWired ? InsertionRoute.NEGATIVE : InsertionRoute.FAIL_CLOSED;
+            if (insertionEligible(blockId)) return InsertionRoute.POSITIVE;
+            if (negativeInsertionEligible(blockId)) return InsertionRoute.NEGATIVE;
+            return InsertionRoute.FAIL_CLOSED;
         }
     }
 
