@@ -19,9 +19,9 @@ import java.util.jar.JarFile;
 
 /**
  * Source-only inventory of exact legacy Block#getRenderType() identities for registry-proven mod
- * blocks. The bounded proof accepts direct constants/static fields plus an exact constructor-bound
- * instance-int field when the registration allocation arguments identify one constant/static-field
- * render identity without ambiguity.
+ * blocks. The bounded proof accepts direct constants/static fields, an exact constructor-bound
+ * instance-int field, plus a tiny set of exact 1.7.10 platform-base identities when the complete
+ * source-owned lineage omits getRenderType entirely.
  */
 public final class LegacyRegisteredBlockRenderTypeAnalyzer {
     private static final Set<String> RENDER_NAMES = Set.of("getRenderType", "func_149645_b");
@@ -58,17 +58,40 @@ public final class LegacyRegisteredBlockRenderTypeAnalyzer {
             String sourceClass = registration.implementationClass();
             if (sourceClass == null) continue;
             MethodNode method = effectiveSourceMethod(classes, sourceClass);
-            if (method == null) continue;
-            RenderIdentity identity = directRenderIdentity(method);
-            if (identity == null) identity = constructorBoundRenderIdentity(classes, registration, method);
-            if (identity == null) {
-                diagnostics.add("Registered block render type is not a proven direct or constructor-bound constant/static-field identity: "
-                        + sourceClass + "." + method.name + method.desc);
-                continue;
+            RenderIdentity identity;
+            if (method == null) {
+                identity = inheritedPlatformRenderIdentity(classes, sourceClass);
+                if (identity == null) continue;
+            } else {
+                identity = directRenderIdentity(method);
+                if (identity == null) identity = constructorBoundRenderIdentity(classes, registration, method);
+                if (identity == null) {
+                    diagnostics.add("Registered block render type is not a proven direct or constructor-bound constant/static-field identity: "
+                            + sourceClass + "." + method.name + method.desc);
+                    continue;
+                }
             }
             rules.add(new Rule(registration.registryName(), registration.legacyNamespace(), sourceClass, identity));
         }
         return new Analysis(rules, List.copyOf(diagnostics));
+    }
+
+    static RenderIdentity inheritedPlatformRenderIdentity(Map<String,ClassNode> classes, String sourceClass) {
+        if (classes == null || sourceClass == null) return null;
+        Set<String> visited = new LinkedHashSet<>();
+        for (String current = sourceClass; current != null && visited.add(current); ) {
+            ClassNode node = classes.get(current);
+            if (node == null) {
+                OptionalInt value = LegacyBlockRenderType1710.effectiveRenderType(current);
+                return value.isPresent() ? RenderIdentity.constant(value.getAsInt()) : null;
+            }
+            for (MethodNode method : node.methods) {
+                if ((method.access & Opcodes.ACC_STATIC) == 0 && RENDER_NAMES.contains(method.name) && RENDER_DESC.equals(method.desc))
+                    return null;
+            }
+            current = node.superName;
+        }
+        return null;
     }
 
     static RenderIdentity directRenderIdentity(MethodNode method) {
