@@ -70,7 +70,8 @@ public final class LegacyGridPotPresentationAnalyzer {
             }
             ClassNode rendererNode = classes.get(renderer);
             if (!rendererPresentationShape(rendererNode, rule.sourceTileClass(), shape.enabledGetter().name,
-                    shape.itemGetter().name, shape.itemMetaGetter().name, rule.contentInsertionSymbolicRenderFields())) {
+                    shape.itemGetter().name, shape.itemMetaGetter().name,
+                    Set.copyOf(rule.contentInsertionSymbolicRenderFields()))) {
                 skipped.add(new Skipped(rule.registryName(), rule.sourceBlockClass(),
                         "GridPot renderer does not match the bounded stored-content presentation shape."));
                 continue;
