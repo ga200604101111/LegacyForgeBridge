@@ -14,6 +14,7 @@ import dev.yinghuang.legacyforgebridge.convert.pass.LegacyEntityPresentationPass
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyEntityRuntimeAdmissionPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyEntityRuntimePlanPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyPlainEntityCodegenPass;
+import dev.yinghuang.legacyforgebridge.convert.pass.LegacyPlainEntityRegistrationStripPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyPlainEntityRuntimeCandidatePass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyPlainEntityRuntimePass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacySeatBedPresentationPass;
@@ -35,6 +36,7 @@ public final class GenericLegacyModProfile implements LegacyModProfile {
         plan.add(new LegacyPlainEntityRuntimeCandidatePass());
         plan.add(new LegacyPlainEntityRuntimePass());
         plan.add(new LegacyEntityInstantiationPass());
+        plan.add(new LegacyPlainEntityRegistrationStripPass());
         plan.add(new LegacySeatBedPresentationPass());
     }
 }
