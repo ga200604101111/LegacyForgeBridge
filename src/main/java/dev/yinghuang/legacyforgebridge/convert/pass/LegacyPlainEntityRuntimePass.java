@@ -29,11 +29,14 @@ public final class LegacyPlainEntityRuntimePass implements ConversionPass {
         if (integer(candidates, "schemaVersion", -1) != 1
                 || !context.sourceHash().equals(string(candidates, "sourceSha256", ""))) return;
 
+        String legacyModId = context.metadata().primary().modId();
         JsonObject root = new JsonObject();
         root.addProperty("schemaVersion", 1);
         root.addProperty("sourceSha256", context.sourceHash());
         root.addProperty("entityTypeRegistrationWired", true);
         root.addProperty("clientRendererRegistrationWired", true);
+        root.addProperty("legacyWatcherBridgeWired", true);
+        root.addProperty("remoteEntitySpawnRuntimeWired", true);
         root.addProperty("runtimeImplementationWired", true);
         JsonArray rules = new JsonArray();
         JsonArray skipped = new JsonArray();
@@ -46,15 +49,20 @@ public final class LegacyPlainEntityRuntimePass implements ConversionPass {
             String id = string(source, "id", null);
             String generatedClass = string(source, "generatedClass", null);
             String presentationAdapter = string(source, "presentationAdapter", null);
+            int legacyModEntityTypeId = integer(source, "legacyNumericId", -1);
             int legacyTrackingRangeBlocks = integer(source, "trackingRange", 0);
             int updateFrequency = integer(source, "updateFrequency", 0);
             float width = decimal(source, "width", -1F);
             float height = decimal(source, "height", -1F);
             boolean velocityUpdates = bool(source, "velocityUpdates", false);
+            boolean legacyWatcherBridgeWired = bool(source, "legacyWatcherBridgeWired", false);
 
             String reason = null;
             if (id == null || id.isBlank()) reason = "runtime candidate id missing";
             else if (generatedClass == null || generatedClass.isBlank()) reason = "generated entity class identity missing";
+            else if (legacyModId == null || legacyModId.isBlank()) reason = "legacy mod id missing";
+            else if (legacyModEntityTypeId < 0) reason = "legacy mod entity type id missing";
+            else if (!legacyWatcherBridgeWired) reason = "legacy watcher bridge missing";
             else if (!LegacyPlainEntityRuntimeCandidatePass.PRESENTATION_ADAPTER_NOOP.equals(presentationAdapter))
                 reason = "unsupported presentation adapter " + presentationAdapter;
             else if (!(width > 0F) || !(height > 0F) || !Float.isFinite(width) || !Float.isFinite(height))
@@ -76,6 +84,7 @@ public final class LegacyPlainEntityRuntimePass implements ConversionPass {
             copy(source, rule, "id");
             copy(source, rule, "legacyRegistryName");
             copy(source, rule, "sourceClass");
+            copy(source, rule, "legacyNumericId");
             copy(source, rule, "generatedClass");
             copy(source, rule, "generatedInternalName");
             copy(source, rule, "width");
@@ -84,12 +93,17 @@ public final class LegacyPlainEntityRuntimePass implements ConversionPass {
             copy(source, rule, "velocityUpdates");
             copy(source, rule, "synchedDataAccessorCount");
             copy(source, rule, "rendererClass");
+            if (source.has("synchedDataEntries")) rule.add("synchedDataEntries", source.get("synchedDataEntries").deepCopy());
+            rule.addProperty("legacyModId", legacyModId);
+            rule.addProperty("legacyModEntityTypeId", legacyModEntityTypeId);
             rule.addProperty("legacyTrackingRangeBlocks", legacyTrackingRangeBlocks);
             rule.addProperty("modernClientTrackingRangeChunks", blocksToTrackingChunks(legacyTrackingRangeBlocks));
             rule.addProperty("presentationAdapter", presentationAdapter);
             rule.addProperty("mobCategory", "MISC");
             rule.addProperty("entityTypeRegistrationWired", true);
             rule.addProperty("clientRendererRegistrationWired", true);
+            rule.addProperty("legacyWatcherBridgeWired", true);
+            rule.addProperty("remoteEntitySpawnRuntimeComplete", true);
             rule.addProperty("runtimeImplementationWired", true);
             rule.addProperty("runtimeComplete", true);
             rules.add(rule);
@@ -98,6 +112,7 @@ public final class LegacyPlainEntityRuntimePass implements ConversionPass {
         root.add("rules", rules);
         root.add("skipped", skipped);
         root.addProperty("runtimeRuleCount", rules.size());
+        root.addProperty("remoteEntitySpawnRuntimeCompleteRules", rules.size());
         root.addProperty("skippedRuntimeRuleCount", skipped.size());
 
         Path output = context.stagingDir().resolve(OUTPUT);
@@ -105,7 +120,7 @@ public final class LegacyPlainEntityRuntimePass implements ConversionPass {
         Files.writeString(output, GSON.toJson(root) + "\n", StandardCharsets.UTF_8);
 
         if (!rules.isEmpty()) context.diagnostics().info("LFB-CONVERT-ENTITY-RUNTIME-0001", SupportLevel.ADAPTED,
-                "Materialized " + rules.size() + " executable plain Entity runtime rule(s): EntityType registration and no-op client renderer wiring are enabled.");
+                "Materialized " + rules.size() + " executable plain Entity runtime rule(s): EntityType registration, no-op client renderer wiring, typed legacy watcher mapping, and FML remote spawn identity are enabled.");
         if (!skipped.isEmpty()) context.diagnostics().warning("LFB-CONVERT-ENTITY-RUNTIME-0002", SupportLevel.RUNTIME_BRIDGE,
                 "Skipped " + skipped.size() + " malformed plain Entity runtime candidate(s) while preserving fail-closed registration.");
     }

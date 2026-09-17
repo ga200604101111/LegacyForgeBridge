@@ -35,11 +35,15 @@ public final class LegacyPlainEntityCodegenPass implements ConversionPass {
     private static final String ACCESSOR = "net/minecraft/network/syncher/EntityDataAccessor";
     private static final String SERIALIZER = "net/minecraft/network/syncher/EntityDataSerializer";
     private static final String SERIALIZERS = "net/minecraft/network/syncher/EntityDataSerializers";
+    private static final String WATCHER_BRIDGE = "dev/yinghuang/legacyforgebridge/compat/LegacyPlainEntityWatcherBridge";
     private static final String ACCESSOR_DESC = "L" + ACCESSOR + ";";
     private static final String SERIALIZER_DESC = "L" + SERIALIZER + ";";
     private static final String ENTITY_CTOR_DESC = "(L" + ENTITY_TYPE + ";L" + LEVEL + ";)V";
     private static final String DEFINE_ID_DESC = "(Ljava/lang/Class;" + SERIALIZER_DESC + ")" + ACCESSOR_DESC;
     private static final String BUILDER_DEFINE_DESC = "(" + ACCESSOR_DESC + "Ljava/lang/Object;)L" + BUILDER + ";";
+    private static final String ENTITY_DATA_DESC = "()L" + SYNCHED + ";";
+    private static final String ENTITY_DATA_SET_DESC = "(" + ACCESSOR_DESC + "Ljava/lang/Object;)V";
+    private static final String WATCHER_APPLY_DESC = "(IILjava/lang/Object;)Z";
 
     private record Entry(int sourceIndex, String serializer, String modernValueKind,
                          String adapter, JsonElement defaultValue) { }
@@ -58,6 +62,7 @@ public final class LegacyPlainEntityCodegenPass implements ConversionPass {
         root.addProperty("schemaVersion", 1);
         root.addProperty("sourceSha256", context.sourceHash());
         root.addProperty("runtimeClassGenerationWired", true);
+        root.addProperty("legacyWatcherBridgeWired", true);
         root.addProperty("entityTypeRegistrationWired", false);
         root.addProperty("runtimeImplementationWired", false);
         JsonArray generated = new JsonArray();
@@ -88,13 +93,16 @@ public final class LegacyPlainEntityCodegenPass implements ConversionPass {
 
             JsonObject item = new JsonObject();
             copy(rule, item, "id"); copy(rule, item, "legacyRegistryName"); copy(rule, item, "sourceClass");
+            copy(rule, item, "legacyNumericId");
             copy(rule, item, "trackingRange"); copy(rule, item, "updateFrequency"); copy(rule, item, "velocityUpdates");
             copy(rule, item, "width"); copy(rule, item, "height");
+            if (rule.has("synchedDataEntries")) item.add("synchedDataEntries", rule.get("synchedDataEntries").deepCopy());
             item.addProperty("family", LegacyEntityRuntimeAdmissionPass.FAMILY_PLAIN_SYNCHED_DATA_ONLY);
             item.addProperty("generatedClass", binaryName);
             item.addProperty("generatedInternalName", internalName);
             item.addProperty("classGenerated", true);
             item.addProperty("synchedDataAccessorCount", entries.size());
+            item.addProperty("legacyWatcherBridgeWired", true);
             item.addProperty("legacyBaseHurtSemanticsMapped", true);
             item.addProperty("entityTypeRegistrationWired", false);
             generated.add(item);
@@ -110,7 +118,7 @@ public final class LegacyPlainEntityCodegenPass implements ConversionPass {
         Files.writeString(output, GSON.toJson(root) + "\n", StandardCharsets.UTF_8);
 
         if (!generated.isEmpty()) context.diagnostics().info("LFB-CONVERT-ENTITY-CODEGEN-0001", SupportLevel.RUNTIME_BRIDGE,
-                "Generated " + generated.size() + " isolated Java 21 plain Entity subclass(es) with modern SynchedEntityData accessor definitions and mapped vanilla legacy base hurt semantics; EntityType registration remains intentionally unwired.");
+                "Generated " + generated.size() + " isolated Java 21 plain Entity subclass(es) with modern SynchedEntityData accessor definitions, source-index watcher bridges, and mapped vanilla legacy base hurt semantics; EntityType registration remains intentionally unwired.");
         if (!skipped.isEmpty()) context.diagnostics().warning("LFB-CONVERT-ENTITY-CODEGEN-0002", SupportLevel.RUNTIME_BRIDGE,
                 "Skipped " + skipped.size() + " admitted entity rule(s) because generated synchronized-data class inputs were malformed or unsupported.");
     }
@@ -154,7 +162,7 @@ public final class LegacyPlainEntityCodegenPass implements ConversionPass {
     private static byte[] generate(String internalName, List<Entry> entries) {
         ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
         writer.visit(Opcodes.V21, Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL | Opcodes.ACC_SUPER,
-                internalName, null, ENTITY, null);
+                internalName, null, ENTITY, new String[]{WATCHER_BRIDGE});
 
         for (Entry entry : entries)
             writer.visitField(Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC | Opcodes.ACC_FINAL,
@@ -196,6 +204,35 @@ public final class LegacyPlainEntityCodegenPass implements ConversionPass {
         define.visitMaxs(0, 0);
         define.visitEnd();
 
+        MethodVisitor apply = writer.visitMethod(Opcodes.ACC_PUBLIC, "legacyforgebridge$applyWatcher",
+                WATCHER_APPLY_DESC, null, null);
+        apply.visitCode();
+        for (Entry entry : entries) {
+            Label next = new Label();
+            Label typeOk = new Label();
+            apply.visitVarInsn(Opcodes.ILOAD, 1);
+            pushInt(apply, entry.sourceIndex());
+            apply.visitJumpInsn(Opcodes.IF_ICMPNE, next);
+            apply.visitVarInsn(Opcodes.ILOAD, 2);
+            pushInt(apply, legacyWireType(entry));
+            apply.visitJumpInsn(Opcodes.IF_ICMPEQ, typeOk);
+            apply.visitInsn(Opcodes.ICONST_0);
+            apply.visitInsn(Opcodes.IRETURN);
+            apply.visitLabel(typeOk);
+            apply.visitVarInsn(Opcodes.ALOAD, 0);
+            apply.visitMethodInsn(Opcodes.INVOKEVIRTUAL, ENTITY, "getEntityData", ENTITY_DATA_DESC, false);
+            apply.visitFieldInsn(Opcodes.GETSTATIC, internalName, field(entry), ACCESSOR_DESC);
+            pushWatcherValue(apply, entry);
+            apply.visitMethodInsn(Opcodes.INVOKEVIRTUAL, SYNCHED, "set", ENTITY_DATA_SET_DESC, false);
+            apply.visitInsn(Opcodes.ICONST_1);
+            apply.visitInsn(Opcodes.IRETURN);
+            apply.visitLabel(next);
+        }
+        apply.visitInsn(Opcodes.ICONST_0);
+        apply.visitInsn(Opcodes.IRETURN);
+        apply.visitMaxs(0, 0);
+        apply.visitEnd();
+
         emptyProtected(writer, "readAdditionalSaveData", "(Lnet/minecraft/world/level/storage/ValueInput;)V");
         emptyProtected(writer, "addAdditionalSaveData", "(Lnet/minecraft/world/level/storage/ValueOutput;)V");
 
@@ -218,6 +255,32 @@ public final class LegacyPlainEntityCodegenPass implements ConversionPass {
 
         writer.visitEnd();
         return writer.toByteArray();
+    }
+
+    private static int legacyWireType(Entry entry) {
+        return switch (entry.serializer()) {
+            case "BYTE" -> 0;
+            case "INT" -> "signed_short_widen".equals(entry.adapter()) ? 1 : 2;
+            case "FLOAT" -> 3;
+            case "STRING" -> 4;
+            default -> throw new IllegalArgumentException("Unsupported serializer " + entry.serializer());
+        };
+    }
+
+    private static void pushWatcherValue(MethodVisitor method, Entry entry) {
+        method.visitVarInsn(Opcodes.ALOAD, 3);
+        switch (legacyWireType(entry)) {
+            case 0 -> method.visitTypeInsn(Opcodes.CHECKCAST, "java/lang/Byte");
+            case 1 -> {
+                method.visitTypeInsn(Opcodes.CHECKCAST, "java/lang/Short");
+                method.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/Short", "shortValue", "()S", false);
+                method.visitMethodInsn(Opcodes.INVOKESTATIC, "java/lang/Integer", "valueOf", "(I)Ljava/lang/Integer;", false);
+            }
+            case 2 -> method.visitTypeInsn(Opcodes.CHECKCAST, "java/lang/Integer");
+            case 3 -> method.visitTypeInsn(Opcodes.CHECKCAST, "java/lang/Float");
+            case 4 -> method.visitTypeInsn(Opcodes.CHECKCAST, "java/lang/String");
+            default -> throw new IllegalArgumentException("Unsupported legacy watcher type");
+        }
     }
 
     private static void emptyProtected(ClassWriter writer, String name, String descriptor) {

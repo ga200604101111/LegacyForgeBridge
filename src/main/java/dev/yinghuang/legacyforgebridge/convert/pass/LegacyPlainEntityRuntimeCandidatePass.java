@@ -46,6 +46,7 @@ public final class LegacyPlainEntityRuntimeCandidatePass implements ConversionPa
         root.addProperty("schemaVersion", 1);
         root.addProperty("sourceSha256", context.sourceHash());
         root.addProperty("modernNoOpRendererAdapterAvailable", true);
+        root.addProperty("legacyWatcherBridgeRequired", true);
         root.addProperty("entityTypeRegistrationWired", false);
         root.addProperty("clientRendererRegistrationWired", false);
         root.addProperty("runtimeImplementationWired", false);
@@ -63,9 +64,11 @@ public final class LegacyPlainEntityRuntimeCandidatePass implements ConversionPa
             LinkedHashSet<String> blockers = new LinkedHashSet<>();
 
             if (!bool(source, "classGenerated", false)) blockers.add("generated-entity-class-missing");
+            if (!bool(source, "legacyWatcherBridgeWired", false)) blockers.add("legacy-watcher-bridge-missing");
             if (!bool(source, "legacyBaseHurtSemanticsMapped", false)) blockers.add("legacy-base-hurt-semantics-unmapped");
             String generatedClass = string(source, "generatedClass", null);
             if (generatedClass == null || generatedClass.isBlank()) blockers.add("generated-entity-class-identity-missing");
+            if (integer(source, "legacyNumericId", -1) < 0) blockers.add("legacy-mod-entity-type-id-missing");
             if (!(decimal(source, "width", -1F) > 0F) || !(decimal(source, "height", -1F) > 0F)) blockers.add("invalid-entity-dimensions");
             if (integer(source, "trackingRange", 0) <= 0) blockers.add("invalid-tracking-range");
             if (integer(source, "updateFrequency", 0) <= 0) blockers.add("invalid-update-frequency");
@@ -81,9 +84,12 @@ public final class LegacyPlainEntityRuntimeCandidatePass implements ConversionPa
             boolean ready = blockers.isEmpty();
             JsonObject rule = new JsonObject();
             copy(source, rule, "id"); copy(source, rule, "legacyRegistryName"); copy(source, rule, "sourceClass");
+            copy(source, rule, "legacyNumericId");
             copy(source, rule, "generatedClass"); copy(source, rule, "generatedInternalName");
             copy(source, rule, "trackingRange"); copy(source, rule, "updateFrequency"); copy(source, rule, "velocityUpdates");
             copy(source, rule, "width"); copy(source, rule, "height"); copy(source, rule, "synchedDataAccessorCount");
+            copy(source, rule, "legacyWatcherBridgeWired");
+            if (source.has("synchedDataEntries")) rule.add("synchedDataEntries", source.get("synchedDataEntries").deepCopy());
             rule.addProperty("presentationAdapter", PRESENTATION_ADAPTER_NOOP);
             rule.addProperty("modernNoOpRendererAdapterAvailable", true);
             rule.addProperty("runtimeCandidateReady", ready);
@@ -116,7 +122,7 @@ public final class LegacyPlainEntityRuntimeCandidatePass implements ConversionPa
         Files.writeString(output, GSON.toJson(root) + "\n", StandardCharsets.UTF_8);
 
         if (readyCount > 0) context.diagnostics().info("LFB-CONVERT-ENTITY-CANDIDATE-0001", SupportLevel.RUNTIME_BRIDGE,
-                "Prepared " + readyCount + " plain Entity runtime candidate(s) with isolated generated classes and proven source no-op renderer presentation; EntityType/client renderer registration remain unwired.");
+                "Prepared " + readyCount + " plain Entity runtime candidate(s) with isolated generated classes, legacy watcher bridges, and proven source no-op renderer presentation; EntityType/client renderer registration remain unwired.");
         if (readyCount < rules.size()) context.diagnostics().warning("LFB-CONVERT-ENTITY-CANDIDATE-0002", SupportLevel.RUNTIME_BRIDGE,
                 "Blocked " + (rules.size() - readyCount) + " generated plain entity class(es) from runtime candidacy because class/network/dimension/presentation proof remained incomplete.");
     }

@@ -1,5 +1,7 @@
 package dev.yinghuang.legacyforgebridge.network;
 
+import dev.yinghuang.legacyforgebridge.compat.LegacyPlainEntityRegistry;
+import dev.yinghuang.legacyforgebridge.compat.LegacyPlainEntityWatcherBridge;
 import dev.yinghuang.legacyforgebridge.compat.LegacySeatBedRegistry;
 import dev.yinghuang.legacyforgebridge.convert.runtime.ConvertedLegacySeatEntity;
 import dev.yinghuang.legacyforgebridge.convert.runtime.LegacySeatEntityRuntime;
@@ -38,17 +40,21 @@ public final class FmlRuntimeClient {
     private void handleEntitySpawn(byte[] payload,Phase phase,FmlConnectionTrace trace){
         FmlRuntimeCodec.EntitySpawnHeader message=FmlRuntimeCodec.parseEntitySpawnHeader(payload);
         LegacySeatBedRegistry.Rule seatRule=LegacySeatBedRegistry.remoteSpawnRule(message.modId(),message.modEntityTypeId());
-        trace.packet("IN","FML",payload,"EntitySpawnMessage entityId="+message.entityId()+" modId="+message.modId()+" modEntityTypeId="+message.modEntityTypeId()+" pos="+message.x()+","+message.y()+","+message.z()+" rot="+message.yaw()+","+message.pitch()+" headYaw="+message.headYaw()+" opaqueTailBytes="+message.remainingBytes()+" phase="+phase+(seatRule==null?" (header decoded; no admitted converted entity mapping)":" (matched proof-gated transient-seat mapping)"));
-        if(phase!=Phase.PLAY||seatRule==null)return;
+        LegacyPlainEntityRegistry.Rule plainRule=seatRule==null?LegacyPlainEntityRegistry.remoteSpawnRule(message.modId(),message.modEntityTypeId()):null;
+        String mapping=seatRule!=null?" (matched proof-gated transient-seat mapping)":plainRule!=null?" (matched proof-gated plain-entity mapping)":" (header decoded; no admitted converted entity mapping)";
+        trace.packet("IN","FML",payload,"EntitySpawnMessage entityId="+message.entityId()+" modId="+message.modId()+" modEntityTypeId="+message.modEntityTypeId()+" pos="+message.x()+","+message.y()+","+message.z()+" rot="+message.yaw()+","+message.pitch()+" headYaw="+message.headYaw()+" opaqueTailBytes="+message.remainingBytes()+" phase="+phase+mapping);
+        if(phase!=Phase.PLAY||(seatRule==null&&plainRule==null))return;
 
         final FmlRuntimeCodec.SimpleEntitySpawn spawn;
         try{spawn=FmlRuntimeCodec.parseSimpleEntitySpawn(payload);}
-        catch(RuntimeException unsafe){trace.event("EntitySpawnMessage matched transient-seat identity but tail was outside the admitted simple-entity boundary; entity="+message.entityId()+" reason="+unsafe.getMessage());return;}
+        catch(RuntimeException unsafe){trace.event("EntitySpawnMessage matched converted entity identity but tail was outside the admitted simple-entity boundary; entity="+message.entityId()+" reason="+unsafe.getMessage());return;}
         if(!spawn.plainNonThrowable()){
-            trace.event("EntitySpawnMessage matched transient-seat identity but carried throwable/additional spawn data; entity="+message.entityId()+" throwerId="+spawn.throwerId()+" additionalBytes="+spawn.additionalSpawnBytes());
+            trace.event("EntitySpawnMessage matched converted entity identity but carried throwable/additional spawn data; entity="+message.entityId()+" throwerId="+spawn.throwerId()+" additionalBytes="+spawn.additionalSpawnBytes());
             return;
         }
-        Minecraft client=Minecraft.getInstance();client.execute(()->applyRemoteSeatSpawn(client,spawn,trace));
+        Minecraft client=Minecraft.getInstance();
+        if(seatRule!=null)client.execute(()->applyRemoteSeatSpawn(client,spawn,trace));
+        else client.execute(()->applyRemotePlainSpawn(client,spawn,plainRule,trace));
     }
 
     private void applyRemoteSeatSpawn(Minecraft client,FmlRuntimeCodec.SimpleEntitySpawn spawn,FmlConnectionTrace trace){
@@ -58,6 +64,35 @@ public final class FmlRuntimeClient {
         entity.setId(message.entityId());entity.setPos(message.x(),message.y(),message.z());entity.setYRot(message.yaw());entity.setXRot(message.pitch());
         entity.syncPacketPositionCodec(message.x(),message.y(),message.z());level.addEntity(entity);
         trace.event("Converted legacy FML transient-seat entity spawned; entity="+message.entityId()+" legacy="+message.modId()+":"+message.modEntityTypeId()+" watcherEntries="+spawn.watcherEntries());
+    }
+
+    private void applyRemotePlainSpawn(Minecraft client,FmlRuntimeCodec.SimpleEntitySpawn spawn,LegacyPlainEntityRegistry.Rule rule,FmlConnectionTrace trace){
+        ClientLevel level=client.level;FmlRuntimeCodec.EntitySpawnHeader message=spawn.header();
+        if(level==null){trace.event("Converted plain Entity spawn skipped: client level is null; entity="+message.entityId());return;}
+        Entity entity=LegacyPlainEntityRegistry.create(rule.id(),level);
+        if(entity==null){trace.event("Converted plain Entity spawn skipped: registered Entity factory is unavailable; entity="+message.entityId()+" id="+rule.id());return;}
+        if(!(entity instanceof LegacyPlainEntityWatcherBridge bridge)){
+            trace.event("Converted plain Entity spawn skipped: generated Entity does not expose the proven watcher bridge; entity="+message.entityId()+" id="+rule.id());return;
+        }
+        int customWatchers=0,baseWatchers=0;
+        for(FmlRuntimeCodec.LegacyDataWatcherEntry watcher:spawn.watcherValues()){
+            final boolean mapped;
+            try{mapped=bridge.legacyforgebridge$applyWatcher(watcher.id(),watcher.type(),watcher.value());}
+            catch(RuntimeException invalid){trace.event("Converted plain Entity spawn rejected while applying legacy watcher; entity="+message.entityId()+" watcher="+watcher.id()+" type="+watcher.type()+" reason="+invalid.getClass().getSimpleName());return;}
+            if(mapped){customWatchers++;continue;}
+            if(isDefaultLegacyEntityBaseWatcher(watcher)){baseWatchers++;continue;}
+            trace.event("Converted plain Entity spawn rejected: unmapped/non-default legacy base watcher; entity="+message.entityId()+" watcher="+watcher.id()+" type="+watcher.type()+" value="+watcher.value());
+            return;
+        }
+        entity.setId(message.entityId());entity.setPos(message.x(),message.y(),message.z());entity.setYRot(message.yaw());entity.setXRot(message.pitch());
+        entity.syncPacketPositionCodec(message.x(),message.y(),message.z());level.addEntity(entity);
+        trace.event("Converted legacy FML plain Entity spawned; entity="+message.entityId()+" legacy="+message.modId()+":"+message.modEntityTypeId()+" modern="+rule.id()+" baseWatchers="+baseWatchers+" customWatchers="+customWatchers);
+    }
+
+    private static boolean isDefaultLegacyEntityBaseWatcher(FmlRuntimeCodec.LegacyDataWatcherEntry watcher){
+        if(watcher.id()==0&&watcher.type()==0&&watcher.value() instanceof Byte value)return value.byteValue()==0;
+        if(watcher.id()==1&&watcher.type()==1&&watcher.value() instanceof Short value)return value.shortValue()==300;
+        return false;
     }
 
     private void handleEntityAdjust(byte[] payload,Phase phase,FmlConnectionTrace trace){

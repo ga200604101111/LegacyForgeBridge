@@ -1,6 +1,8 @@
 package dev.yinghuang.legacyforgebridge.network;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 
 /** Forge/FML 1.7.10 runtime-channel codec for the legacy {@code FML} custom payload channel. */
 public final class FmlRuntimeCodec {
@@ -18,18 +20,14 @@ public final class FmlRuntimeCodec {
 
     /**
      * Strict spawn envelope for converted entities whose source proof excludes throwable and
-     * IEntityAdditionalSpawnData behavior. The 1.7 DataWatcher list is structurally skipped so the
-     * following thrower id and additional bytes cannot be confused with watcher payload.
-     *
-     * <p>ItemStack watcher entries are deliberately rejected by this bounded codec. The admitted
-     * transient-seat source directly extends the legacy Entity base and has an empty entityInit,
-     * so its watcher stream contains only base scalar/string values. Future entity families may
-     * extend this decoder when source proof requires more watcher types.</p>
+     * IEntityAdditionalSpawnData behavior. Primitive/string/coordinate DataWatcher values are
+     * retained so proof-gated generated entities can map their source-owned synchronized fields.
+     * ItemStack watcher entries remain outside this bounded runtime family.
      */
     public static SimpleEntitySpawn parseSimpleEntitySpawn(byte[] payload){
         Reader reader=readerFor(payload,ENTITY_SPAWN);EntitySpawnHeader header=readEntitySpawnHeader(reader);
-        int watcherEntries=skipLegacyDataWatcher(reader);int throwerId=reader.readInt();
-        return new SimpleEntitySpawn(header,watcherEntries,throwerId,reader.remaining());
+        List<LegacyDataWatcherEntry> watcherValues=readLegacyDataWatcher(reader);int throwerId=reader.readInt();
+        return new SimpleEntitySpawn(header,watcherValues.size(),watcherValues,throwerId,reader.remaining());
     }
 
     public static EntityAdjust parseEntityAdjust(byte[] payload){Reader reader=readerFor(payload,ENTITY_ADJUST);int entityId=reader.readInt(),serverX=reader.readInt(),serverY=reader.readInt(),serverZ=reader.readInt();return new EntityAdjust(entityId,serverX,serverY,serverZ,reader.remaining());}
@@ -45,22 +43,24 @@ public final class FmlRuntimeCodec {
                 rawYaw*360.0F/256.0F,rawPitch*360.0F/256.0F,rawHeadYaw*360.0F/256.0F,reader.remaining());
     }
 
-    private static int skipLegacyDataWatcher(Reader reader){
-        boolean[] seen=new boolean[32];int entries=0;
+    private static List<LegacyDataWatcherEntry> readLegacyDataWatcher(Reader reader){
+        boolean[] seen=new boolean[32];List<LegacyDataWatcherEntry> entries=new ArrayList<>();
         while(true){
-            int header=reader.readUnsignedByte();if(header==127)return entries;
+            int header=reader.readUnsignedByte();if(header==127)return List.copyOf(entries);
             int type=(header&224)>>5,id=header&31;
             require(!seen[id],"Duplicate legacy DataWatcher id "+id);seen[id]=true;
-            require(++entries<=32,"Legacy DataWatcher entry count exceeds 32");
-            switch(type){
-                case 0->reader.skip(1); // byte
-                case 1->reader.skip(2); // short
-                case 2,3->reader.skip(4); // int / float
-                case 4->{int length=reader.readVarInt(5);require(length>=0&&length<=32767,"Legacy DataWatcher string exceeds 32767 bytes");reader.skip(length);}
+            require(entries.size()<32,"Legacy DataWatcher entry count exceeds 32");
+            Object value=switch(type){
+                case 0->Byte.valueOf((byte)reader.readSignedByte());
+                case 1->Short.valueOf(reader.readShort());
+                case 2->Integer.valueOf(reader.readInt());
+                case 3->Float.valueOf(reader.readFloat());
+                case 4->reader.readPacketString();
                 case 5->throw new IllegalArgumentException("ItemStack legacy DataWatcher entry is outside simple-entity spawn boundary");
-                case 6->reader.skip(12); // ChunkCoordinates x/y/z
+                case 6->new LegacyCoordinates(reader.readInt(),reader.readInt(),reader.readInt());
                 default->throw new IllegalArgumentException("Unsupported legacy DataWatcher type "+type);
-            }
+            };
+            entries.add(new LegacyDataWatcherEntry(type,id,value));
         }
     }
 
@@ -71,7 +71,12 @@ public final class FmlRuntimeCodec {
     public record CompleteHandshake(int targetOrdinal,LegacySide target,int trailingBytes){}
     public record OpenGui(int windowId,String modId,int modGuiId,int x,int y,int z,int trailingBytes){}
     public record EntitySpawnHeader(int entityId,String modId,int modEntityTypeId,int rawX,int rawY,int rawZ,double x,double y,double z,float yaw,float pitch,float headYaw,int remainingBytes){}
-    public record SimpleEntitySpawn(EntitySpawnHeader header,int watcherEntries,int throwerId,int additionalSpawnBytes){
+    public record LegacyCoordinates(int x,int y,int z){}
+    public record LegacyDataWatcherEntry(int type,int id,Object value){
+        public LegacyDataWatcherEntry{require(type>=0&&type<=6,"Invalid legacy DataWatcher type "+type);require(id>=0&&id<=31,"Invalid legacy DataWatcher id "+id);require(value!=null,"Missing legacy DataWatcher value");}
+    }
+    public record SimpleEntitySpawn(EntitySpawnHeader header,int watcherEntries,List<LegacyDataWatcherEntry> watcherValues,int throwerId,int additionalSpawnBytes){
+        public SimpleEntitySpawn{watcherValues=List.copyOf(watcherValues);require(watcherEntries==watcherValues.size(),"Legacy DataWatcher count/value mismatch");}
         public boolean plainNonThrowable(){return throwerId==0&&additionalSpawnBytes==0;}
     }
     public record EntityAdjust(int entityId,int serverX,int serverY,int serverZ,int trailingBytes){public double x(){return serverX/32.0D;}public double y(){return serverY/32.0D;}public double z(){return serverZ/32.0D;}}
@@ -81,10 +86,13 @@ public final class FmlRuntimeCodec {
         int remaining(){return data.length-index;}
         int readUnsignedByte(){ensure(1);return data[index++]&0xFF;}
         int readSignedByte(){ensure(1);return data[index++];}
+        short readShort(){ensure(2);short value=(short)(((data[index]&0xFF)<<8)|(data[index+1]&0xFF));index+=2;return value;}
         int readInt(){ensure(4);int value=((data[index]&0xFF)<<24)|((data[index+1]&0xFF)<<16)|((data[index+2]&0xFF)<<8)|(data[index+3]&0xFF);index+=4;return value;}
+        float readFloat(){return Float.intBitsToFloat(readInt());}
         int readVarInt(int maxBytes){int result=0;for(int byteIndex=0;byteIndex<maxBytes;byteIndex++){int current=readUnsignedByte();result|=(current&0x7F)<<(byteIndex*7);if((current&0x80)==0)return result;}throw new IllegalArgumentException("FML VarInt exceeds "+maxBytes+" bytes");}
-        String readUtf8(){int length=readVarInt(2);ensure(length);String value=new String(data,index,length,StandardCharsets.UTF_8);index+=length;return value;}
-        void skip(int bytes){ensure(bytes);index+=bytes;}
+        String readUtf8(){int length=readVarInt(2);require(length>=0&&length<=32767,"Legacy FML string exceeds 32767 bytes");return readStringBytes(length);}
+        String readPacketString(){int length=readVarInt(5);require(length>=0&&length<=32767,"Legacy DataWatcher string exceeds 32767 bytes");return readStringBytes(length);}
+        private String readStringBytes(int length){ensure(length);String value=new String(data,index,length,StandardCharsets.UTF_8);index+=length;return value;}
         private void ensure(int required){if(required<0||remaining()<required)throw new IllegalArgumentException("Truncated FML runtime payload: need "+required+" bytes but only "+remaining()+" remain");}
     }
 }

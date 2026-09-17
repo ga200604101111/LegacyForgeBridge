@@ -21,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class LegacyPlainEntityRuntimeCandidatePassTest {
     @TempDir Path tempDir;
 
-    @Test void admitsOnlyGeneratedPlainEntitiesWithProvenNoOpPresentation() throws Exception {
+    @Test void admitsOnlyGeneratedPlainEntitiesWithRemoteIdentityWatcherBridgeAndProvenNoOpPresentation() throws Exception {
         Path staging = tempDir.resolve("staging");
         ConversionContext context = context(staging);
         writeGenerated(staging);
@@ -32,6 +32,7 @@ class LegacyPlainEntityRuntimeCandidatePassTest {
         JsonObject root = JsonParser.parseString(Files.readString(
                 staging.resolve(LegacyPlainEntityRuntimeCandidatePass.OUTPUT), StandardCharsets.UTF_8)).getAsJsonObject();
         assertTrue(root.get("modernNoOpRendererAdapterAvailable").getAsBoolean());
+        assertTrue(root.get("legacyWatcherBridgeRequired").getAsBoolean());
         assertFalse(root.get("entityTypeRegistrationWired").getAsBoolean());
         assertFalse(root.get("clientRendererRegistrationWired").getAsBoolean());
         assertEquals(1, root.get("runtimeCandidateReadyCount").getAsInt());
@@ -39,6 +40,8 @@ class LegacyPlainEntityRuntimeCandidatePassTest {
 
         JsonObject ready = root.getAsJsonArray("rules").get(0).getAsJsonObject();
         assertTrue(ready.get("runtimeCandidateReady").getAsBoolean());
+        assertTrue(ready.get("legacyWatcherBridgeWired").getAsBoolean());
+        assertEquals(23, ready.get("legacyNumericId").getAsInt());
         assertEquals(LegacyPlainEntityRuntimeCandidatePass.PRESENTATION_ADAPTER_NOOP,
                 ready.get("presentationAdapter").getAsString());
         assertEquals("third/client/RenderEmpty", ready.get("rendererClass").getAsString());
@@ -72,10 +75,12 @@ class LegacyPlainEntityRuntimeCandidatePassTest {
                       "id":"foreign:orb",
                       "legacyRegistryName":"orb",
                       "sourceClass":"third/entity/Orb",
+                      "legacyNumericId":23,
                       "generatedClass":"dev.yinghuang.legacyforgebridge.generated.foreign.entity.PlainEntity_orb_a",
                       "generatedInternalName":"dev/yinghuang/legacyforgebridge/generated/foreign/entity/PlainEntity_orb_a",
                       "classGenerated":true,
                       "synchedDataAccessorCount":1,
+                      "legacyWatcherBridgeWired":true,
                       "legacyBaseHurtSemanticsMapped":true,
                       "trackingRange":80,
                       "updateFrequency":2,
@@ -87,10 +92,12 @@ class LegacyPlainEntityRuntimeCandidatePassTest {
                       "id":"foreign:visible",
                       "legacyRegistryName":"visible",
                       "sourceClass":"third/entity/Visible",
+                      "legacyNumericId":24,
                       "generatedClass":"dev.yinghuang.legacyforgebridge.generated.foreign.entity.PlainEntity_visible_b",
                       "generatedInternalName":"dev/yinghuang/legacyforgebridge/generated/foreign/entity/PlainEntity_visible_b",
                       "classGenerated":true,
                       "synchedDataAccessorCount":0,
+                      "legacyWatcherBridgeWired":true,
                       "legacyBaseHurtSemanticsMapped":true,
                       "trackingRange":64,
                       "updateFrequency":3,

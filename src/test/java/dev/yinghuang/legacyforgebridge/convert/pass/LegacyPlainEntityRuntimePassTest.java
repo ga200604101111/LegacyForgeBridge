@@ -21,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class LegacyPlainEntityRuntimePassTest {
     @TempDir Path tempDir;
 
-    @Test void promotesOnlyReadyCandidatesAndConvertsLegacyBlockTrackingRangeToChunks() throws Exception {
+    @Test void promotesOnlyReadyCandidatesAndMaterializesRemoteSpawnIdentity() throws Exception {
         Path staging = tempDir.resolve("staging");
         Files.createDirectories(staging.resolve("legacyforgebridge"));
         ConversionContext context = context(staging);
@@ -34,6 +34,7 @@ class LegacyPlainEntityRuntimePassTest {
                       "id":"foreign:orb",
                       "legacyRegistryName":"orb",
                       "sourceClass":"third/entity/Orb",
+                      "legacyNumericId":23,
                       "generatedClass":"dev.yinghuang.legacyforgebridge.generated.foreign.entity.PlainEntity_orb_a",
                       "generatedInternalName":"dev/yinghuang/legacyforgebridge/generated/foreign/entity/PlainEntity_orb_a",
                       "trackingRange":80,
@@ -42,6 +43,7 @@ class LegacyPlainEntityRuntimePassTest {
                       "width":0.5,
                       "height":0.75,
                       "synchedDataAccessorCount":1,
+                      "legacyWatcherBridgeWired":true,
                       "presentationAdapter":"NOOP_RENDERER",
                       "runtimeCandidateReady":true,
                       "rendererClass":"third/client/RenderEmpty"
@@ -62,15 +64,22 @@ class LegacyPlainEntityRuntimePassTest {
                 staging.resolve(LegacyPlainEntityRuntimePass.OUTPUT), StandardCharsets.UTF_8)).getAsJsonObject();
         assertTrue(root.get("entityTypeRegistrationWired").getAsBoolean());
         assertTrue(root.get("clientRendererRegistrationWired").getAsBoolean());
+        assertTrue(root.get("legacyWatcherBridgeWired").getAsBoolean());
+        assertTrue(root.get("remoteEntitySpawnRuntimeWired").getAsBoolean());
         assertTrue(root.get("runtimeImplementationWired").getAsBoolean());
         assertEquals(1, root.get("runtimeRuleCount").getAsInt());
+        assertEquals(1, root.get("remoteEntitySpawnRuntimeCompleteRules").getAsInt());
         assertEquals(0, root.get("skippedRuntimeRuleCount").getAsInt());
 
         JsonObject rule = root.getAsJsonArray("rules").get(0).getAsJsonObject();
         assertEquals("foreign:orb", rule.get("id").getAsString());
+        assertEquals("foreign", rule.get("legacyModId").getAsString());
+        assertEquals(23, rule.get("legacyModEntityTypeId").getAsInt());
         assertEquals(80, rule.get("legacyTrackingRangeBlocks").getAsInt());
         assertEquals(5, rule.get("modernClientTrackingRangeChunks").getAsInt());
         assertEquals("MISC", rule.get("mobCategory").getAsString());
+        assertTrue(rule.get("legacyWatcherBridgeWired").getAsBoolean());
+        assertTrue(rule.get("remoteEntitySpawnRuntimeComplete").getAsBoolean());
         assertTrue(rule.get("runtimeComplete").getAsBoolean());
     }
 

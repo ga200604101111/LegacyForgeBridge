@@ -32,13 +32,25 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class LegacyPlainEntityRegistry {
     private static final Map<Identifier,Rule> RULES = new ConcurrentHashMap<>();
     private static final Map<Identifier,EntityType<? extends Entity>> TYPES = new ConcurrentHashMap<>();
+    private static final Map<Identifier,Constructor<? extends Entity>> CONSTRUCTORS = new ConcurrentHashMap<>();
+    private static final Map<RemoteKey,Rule> REMOTE_RULES = new ConcurrentHashMap<>();
 
     private LegacyPlainEntityRegistry() { }
 
-    public record Rule(Identifier id, String generatedClass, float width, float height,
+    private record RemoteKey(String legacyModId, int legacyModEntityTypeId) {
+        private RemoteKey {
+            if (legacyModId == null || legacyModId.isBlank() || legacyModEntityTypeId < 0)
+                throw new IllegalArgumentException("Invalid legacy remote Entity identity");
+        }
+    }
+
+    public record Rule(Identifier id, String generatedClass,
+                       String legacyModId, int legacyModEntityTypeId,
+                       float width, float height,
                        int legacyTrackingRangeBlocks, int modernClientTrackingRangeChunks,
                        int updateFrequency, boolean velocityUpdates, String presentationAdapter,
                        boolean entityTypeRegistrationWired, boolean clientRendererRegistrationWired,
+                       boolean legacyWatcherBridgeWired, boolean remoteEntitySpawnRuntimeComplete,
                        boolean runtimeImplementationWired, boolean runtimeComplete) {
         public Rule {
             if (id == null || generatedClass == null || generatedClass.isBlank()
@@ -49,6 +61,11 @@ public final class LegacyPlainEntityRegistry {
                     || !entityTypeRegistrationWired || !clientRendererRegistrationWired
                     || !runtimeImplementationWired || !runtimeComplete) {
                 throw new IllegalArgumentException("Invalid plain Entity runtime rule");
+            }
+            if (remoteEntitySpawnRuntimeComplete
+                    && (!legacyWatcherBridgeWired || legacyModId == null || legacyModId.isBlank()
+                    || legacyModEntityTypeId < 0)) {
+                throw new IllegalArgumentException("Invalid plain Entity remote spawn rule");
             }
         }
     }
@@ -92,11 +109,26 @@ public final class LegacyPlainEntityRegistry {
         return id == null ? null : TYPES.get(id);
     }
 
+    public static Entity create(Identifier id, Level level) {
+        if (id == null || level == null) return null;
+        Constructor<? extends Entity> constructor = CONSTRUCTORS.get(id);
+        EntityType<? extends Entity> type = TYPES.get(id);
+        return constructor == null || type == null ? null : instantiate(constructor, type, level);
+    }
+
+    public static Rule remoteSpawnRule(String legacyModId, int legacyModEntityTypeId) {
+        if (legacyModId == null || legacyModId.isBlank() || legacyModEntityTypeId < 0) return null;
+        return REMOTE_RULES.get(new RemoteKey(legacyModId, legacyModEntityTypeId));
+    }
+
     private static synchronized void install(Rule rule) throws Exception {
         Rule previous = RULES.putIfAbsent(rule.id(), rule);
         if (previous != null && !previous.equals(rule))
             throw new IllegalStateException("Conflicting converted plain Entity rule for " + rule.id());
-        if (TYPES.containsKey(rule.id())) return;
+        if (TYPES.containsKey(rule.id())) {
+            installRemote(rule);
+            return;
+        }
         if (BuiltInRegistries.ENTITY_TYPE.containsKey(rule.id()))
             throw new IllegalStateException("Converted plain Entity id is already registered: " + rule.id());
 
@@ -112,6 +144,17 @@ public final class LegacyPlainEntityRegistry {
                 .build(key);
         Registry.register(BuiltInRegistries.ENTITY_TYPE, key, created);
         TYPES.put(rule.id(), created);
+        CONSTRUCTORS.put(rule.id(), constructor);
+        installRemote(rule);
+    }
+
+    private static void installRemote(Rule rule) {
+        if (!rule.remoteEntitySpawnRuntimeComplete()) return;
+        RemoteKey key = new RemoteKey(rule.legacyModId(), rule.legacyModEntityTypeId());
+        Rule previous = REMOTE_RULES.putIfAbsent(key, rule);
+        if (previous != null && !previous.equals(rule))
+            throw new IllegalStateException("Conflicting converted legacy remote Entity identity: "
+                    + rule.legacyModId() + ":" + rule.legacyModEntityTypeId());
     }
 
     private static Entity instantiate(Constructor<? extends Entity> constructor, EntityType<?> type, Level level) {
@@ -124,7 +167,9 @@ public final class LegacyPlainEntityRegistry {
     }
 
     static Rule parseForTests(JsonObject value) { return parse(value); }
-    static synchronized void clearForTests() { RULES.clear(); TYPES.clear(); }
+    static synchronized void clearForTests() {
+        RULES.clear(); TYPES.clear(); CONSTRUCTORS.clear(); REMOTE_RULES.clear();
+    }
 
     private static Rule parse(JsonObject value) {
         try {
@@ -133,11 +178,13 @@ public final class LegacyPlainEntityRegistry {
             String presentationAdapter = string(value, "presentationAdapter");
             if (idValue == null || generatedClass == null || presentationAdapter == null) return null;
             return new Rule(Identifier.parse(idValue), generatedClass,
+                    string(value, "legacyModId"), integer(value, "legacyModEntityTypeId", -1),
                     decimal(value, "width", -1F), decimal(value, "height", -1F),
                     integer(value, "legacyTrackingRangeBlocks", 0),
                     integer(value, "modernClientTrackingRangeChunks", 0),
                     integer(value, "updateFrequency", 0), bool(value, "velocityUpdates"), presentationAdapter,
                     bool(value, "entityTypeRegistrationWired"), bool(value, "clientRendererRegistrationWired"),
+                    bool(value, "legacyWatcherBridgeWired"), bool(value, "remoteEntitySpawnRuntimeComplete"),
                     bool(value, "runtimeImplementationWired"), bool(value, "runtimeComplete"));
         } catch (RuntimeException invalid) {
             return null;
