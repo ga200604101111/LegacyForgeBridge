@@ -90,10 +90,10 @@ public final class LegacyEntityRuntimeAdmissionPass implements ConversionPass {
                     String kind = string(callback, "kind", "");
                     if ("ENTITY_INIT".equals(kind)) continue;
                     if (("READ_NBT".equals(kind) || "WRITE_NBT".equals(kind)) && trivialNoOpMethod(behaviorRule, callback)) continue;
-                    if (LegacyEntityConstantOverridePass.SOURCE_KIND_CAN_PUSH.equals(kind)
-                            && mappedConstantOverride(constantRule, callback)) continue;
-                    blockers.add(LegacyEntityConstantOverridePass.SOURCE_KIND_CAN_PUSH.equals(kind)
-                            ? "constant-override-proof-missing:CAN_PUSH" : "unsupported-callback:" + kind);
+                    if (LegacyEntityConstantOverridePass.supported(kind)
+                            && mappedConstantOverride(constantRule, callback, kind)) continue;
+                    blockers.add(LegacyEntityConstantOverridePass.supported(kind)
+                            ? "constant-override-proof-missing:" + kind : "unsupported-callback:" + kind);
                 }
                 for (JsonElement methodElement : array(behaviorRule, "sourceMethods")) {
                     if (!methodElement.isJsonObject()) { blockers.add("malformed-source-method"); continue; }
@@ -101,8 +101,8 @@ public final class LegacyEntityRuntimeAdmissionPass implements ConversionPass {
                     String kind = string(method, "callbackKind", null);
                     if ("ENTITY_INIT".equals(kind)) continue;
                     if (("READ_NBT".equals(kind) || "WRITE_NBT".equals(kind)) && bool(method, "trivialNoOp", false)) continue;
-                    if (LegacyEntityConstantOverridePass.SOURCE_KIND_CAN_PUSH.equals(kind)
-                            && mappedConstantOverride(constantRule, method)) continue;
+                    if (LegacyEntityConstantOverridePass.supported(kind)
+                            && mappedConstantOverride(constantRule, method, kind)) continue;
                     blockers.add("unsupported-source-method:" + string(method, "owner", "?") + "."
                             + string(method, "method", "?") + string(method, "descriptor", ""));
                 }
@@ -164,23 +164,27 @@ public final class LegacyEntityRuntimeAdmissionPass implements ConversionPass {
                 "Blocked " + (rules.size() - admittedCount) + " entity registration(s) because behavior/construction/watcher/velocity/constant-override proof gates remain incomplete or unsupported.");
     }
 
-    private static boolean mappedConstantOverride(JsonObject constantRule, JsonObject sourceMethod) {
-        if (constantRule == null) return false;
+    private static boolean mappedConstantOverride(JsonObject constantRule, JsonObject sourceMethod, String sourceKind) {
+        if (constantRule == null || !LegacyEntityConstantOverridePass.supported(sourceKind)) return false;
         String owner = string(sourceMethod, "owner", null), method = string(sourceMethod, "method", null), descriptor = string(sourceMethod, "descriptor", null);
         if (owner == null || method == null || descriptor == null) return false;
+        String targetMethod = LegacyEntityConstantOverridePass.targetMethod(sourceKind);
+        String targetDescriptor = LegacyEntityConstantOverridePass.targetDescriptor(sourceKind);
+        String mappingSemantics = LegacyEntityConstantOverridePass.mappingSemantics(sourceKind);
         for (JsonElement element : array(constantRule, "constantOverrides")) {
             if (!element.isJsonObject()) continue;
             JsonObject value = element.getAsJsonObject();
-            if (LegacyEntityConstantOverridePass.SOURCE_KIND_CAN_PUSH.equals(string(value, "sourceKind", null))
+            if (sourceKind.equals(string(value, "sourceKind", null))
                     && owner.equals(string(value, "sourceOwner", null))
                     && method.equals(string(value, "sourceMethod", null))
                     && descriptor.equals(string(value, "sourceDescriptor", null))
-                    && LegacyEntityConstantOverridePass.TARGET_METHOD_IS_PUSHABLE.equals(string(value, "targetMethod", null))
-                    && LegacyEntityConstantOverridePass.TARGET_DESCRIPTOR_BOOLEAN.equals(string(value, "targetDescriptor", null))
-                    && LegacyEntityConstantOverridePass.MAPPING_PUSHABILITY_BOOLEAN_IDENTITY.equals(string(value, "mappingSemantics", null))
+                    && targetMethod.equals(string(value, "targetMethod", null))
+                    && targetDescriptor.equals(string(value, "targetDescriptor", null))
+                    && mappingSemantics.equals(string(value, "mappingSemantics", null))
                     && bool(value, "sourceConstantProofComplete", false)
                     && bool(value, "runtimeCodegenReady", false)
-                    && value.has("constantBoolean") && value.get("constantBoolean").isJsonPrimitive()) return true;
+                    && value.has("constantBoolean") && value.get("constantBoolean").isJsonPrimitive()
+                    && value.get("constantBoolean").getAsJsonPrimitive().isBoolean()) return true;
         }
         return false;
     }
@@ -201,12 +205,8 @@ public final class LegacyEntityRuntimeAdmissionPass implements ConversionPass {
         return false;
     }
 
-    private static JsonObject read(Path path) throws Exception {
-        return JsonParser.parseString(Files.readString(path, StandardCharsets.UTF_8)).getAsJsonObject();
-    }
-    private static boolean validInput(JsonObject root, String sourceHash) {
-        return number(root, "schemaVersion", -1) == 1 && sourceHash.equals(string(root, "sourceSha256", ""));
-    }
+    private static JsonObject read(Path path) throws Exception { return JsonParser.parseString(Files.readString(path, StandardCharsets.UTF_8)).getAsJsonObject(); }
+    private static boolean validInput(JsonObject root, String sourceHash) { return number(root, "schemaVersion", -1) == 1 && sourceHash.equals(string(root, "sourceSha256", "")); }
     private static Map<String,JsonObject> index(JsonObject root) {
         Map<String,JsonObject> output = new LinkedHashMap<>();
         for (JsonElement element : array(root, "rules")) {
@@ -217,33 +217,15 @@ public final class LegacyEntityRuntimeAdmissionPass implements ConversionPass {
         }
         return output;
     }
-    private static JsonArray array(JsonObject root, String name) {
-        JsonElement value = root.get(name);
-        return value != null && value.isJsonArray() ? value.getAsJsonArray() : new JsonArray();
-    }
+    private static JsonArray array(JsonObject root, String name) { JsonElement value = root.get(name); return value != null && value.isJsonArray() ? value.getAsJsonArray() : new JsonArray(); }
     private static JsonArray deduplicate(JsonArray source) {
-        JsonArray output = new JsonArray();
-        java.util.LinkedHashSet<String> seen = new java.util.LinkedHashSet<>();
+        JsonArray output = new JsonArray(); java.util.LinkedHashSet<String> seen = new java.util.LinkedHashSet<>();
         for (JsonElement element : source) if (element.isJsonPrimitive() && seen.add(element.getAsString())) output.add(element.getAsString());
         return output;
     }
-    private static boolean bool(JsonObject root, String name, boolean fallback) {
-        JsonElement value = root.get(name);
-        return value != null && value.isJsonPrimitive() ? value.getAsBoolean() : fallback;
-    }
-    private static int number(JsonObject root, String name, int fallback) {
-        JsonElement value = root.get(name);
-        return value != null && value.isJsonPrimitive() ? value.getAsInt() : fallback;
-    }
-    private static String string(JsonObject root, String name, String fallback) {
-        JsonElement value = root.get(name);
-        return value != null && value.isJsonPrimitive() ? value.getAsString() : fallback;
-    }
-    private static String key(String registryName, String sourceClass) {
-        return registryName == null || sourceClass == null ? null : registryName + '\u0000' + sourceClass;
-    }
-    private static void copy(JsonObject source, JsonObject target, String name) {
-        JsonElement value = source.get(name);
-        if (value != null) target.add(name, value.deepCopy());
-    }
+    private static boolean bool(JsonObject root, String name, boolean fallback) { JsonElement value = root.get(name); return value != null && value.isJsonPrimitive() ? value.getAsBoolean() : fallback; }
+    private static int number(JsonObject root, String name, int fallback) { JsonElement value = root.get(name); return value != null && value.isJsonPrimitive() ? value.getAsInt() : fallback; }
+    private static String string(JsonObject root, String name, String fallback) { JsonElement value = root.get(name); return value != null && value.isJsonPrimitive() ? value.getAsString() : fallback; }
+    private static String key(String registryName, String sourceClass) { return registryName == null || sourceClass == null ? null : registryName + '\u0000' + sourceClass; }
+    private static void copy(JsonObject source, JsonObject target, String name) { JsonElement value = source.get(name); if (value != null) target.add(name, value.deepCopy()); }
 }

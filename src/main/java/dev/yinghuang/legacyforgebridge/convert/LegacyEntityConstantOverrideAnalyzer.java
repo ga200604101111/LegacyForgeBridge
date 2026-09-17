@@ -19,7 +19,8 @@ public final class LegacyEntityConstantOverrideAnalyzer {
     public record BooleanProof(boolean proven, Boolean value, String reason) { }
 
     public BooleanProof proveBoolean(Path sourceJar, String owner, String method, String descriptor) throws IOException {
-        if (owner == null || owner.isBlank() || method == null || method.isBlank() || !"()Z".equals(descriptor))
+        if (owner == null || owner.isBlank() || method == null || method.isBlank()
+                || !("()Z".equals(descriptor) || "(D)Z".equals(descriptor)))
             return new BooleanProof(false, null, "unsupported-boolean-callback-identity");
         ClassNode node = load(sourceJar, owner);
         if (node == null) return new BooleanProof(false, null, "source-callback-owner-missing");

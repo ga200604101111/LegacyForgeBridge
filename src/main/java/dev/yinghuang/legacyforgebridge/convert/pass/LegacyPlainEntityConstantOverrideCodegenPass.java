@@ -12,6 +12,7 @@ import dev.yinghuang.legacyforgebridge.convert.api.SupportLevel;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.MethodNode;
@@ -95,12 +96,14 @@ public final class LegacyPlainEntityConstantOverrideCodegenPass implements Conve
                     if (blockers.isEmpty()) {
                         for (JsonElement overrideElement : overrides) {
                             JsonObject override = overrideElement.getAsJsonObject();
+                            String descriptor = override.get("targetDescriptor").getAsString();
                             MethodNode method = new MethodNode(Opcodes.ACC_PUBLIC,
-                                    override.get("targetMethod").getAsString(), override.get("targetDescriptor").getAsString(), null, null);
+                                    override.get("targetMethod").getAsString(), descriptor, null, null);
                             method.instructions.add(new InsnNode(override.get("constantBoolean").getAsBoolean()
                                     ? Opcodes.ICONST_1 : Opcodes.ICONST_0));
                             method.instructions.add(new InsnNode(Opcodes.IRETURN));
-                            method.maxStack = 1; method.maxLocals = 1;
+                            method.maxStack = 1;
+                            method.maxLocals = instanceLocalSlots(descriptor);
                             node.methods.add(method); patched++;
                         }
                         ClassWriter writer = new ClassWriter(0);
@@ -133,19 +136,25 @@ public final class LegacyPlainEntityConstantOverrideCodegenPass implements Conve
         Files.writeString(output, GSON.toJson(root) + "\n", StandardCharsets.UTF_8);
 
         if (patchedMethods > 0) context.diagnostics().info("LFB-CONVERT-ENTITY-CONSTCODEGEN-0001", SupportLevel.RUNTIME_BRIDGE,
-                "Generated " + patchedMethods + " proven constant modern Entity override method(s) across " + complete + " plain Entity class(es).");
+                "Generated " + patchedMethods + " proven constant modern Entity override method(s) across " + complete + " plain Entity class(es)." );
         if (blocked > 0) context.diagnostics().warning("LFB-CONVERT-ENTITY-CONSTCODEGEN-0002", SupportLevel.RUNTIME_BRIDGE,
                 "Blocked constant-behavior codegen for " + blocked + " generated plain Entity class(es); runtime candidacy remains fail-closed for those classes.");
     }
 
     private static boolean supported(JsonObject value) {
-        return LegacyEntityConstantOverridePass.SOURCE_KIND_CAN_PUSH.equals(string(value, "sourceKind", null))
-                && LegacyEntityConstantOverridePass.TARGET_METHOD_IS_PUSHABLE.equals(string(value, "targetMethod", null))
-                && LegacyEntityConstantOverridePass.TARGET_DESCRIPTOR_BOOLEAN.equals(string(value, "targetDescriptor", null))
-                && LegacyEntityConstantOverridePass.MAPPING_PUSHABILITY_BOOLEAN_IDENTITY.equals(string(value, "mappingSemantics", null))
+        String sourceKind = string(value, "sourceKind", null);
+        return LegacyEntityConstantOverridePass.supported(sourceKind)
+                && LegacyEntityConstantOverridePass.targetMethod(sourceKind).equals(string(value, "targetMethod", null))
+                && LegacyEntityConstantOverridePass.targetDescriptor(sourceKind).equals(string(value, "targetDescriptor", null))
+                && LegacyEntityConstantOverridePass.mappingSemantics(sourceKind).equals(string(value, "mappingSemantics", null))
                 && bool(value, "sourceConstantProofComplete", false) && bool(value, "runtimeCodegenReady", false)
                 && value.has("constantBoolean") && value.get("constantBoolean").isJsonPrimitive()
                 && value.get("constantBoolean").getAsJsonPrimitive().isBoolean();
+    }
+    static int instanceLocalSlots(String descriptor) {
+        int slots = 1;
+        for (Type argument : Type.getArgumentTypes(descriptor)) slots += argument.getSize();
+        return slots;
     }
     private static JsonObject read(Path path) throws Exception { return JsonParser.parseString(Files.readString(path, StandardCharsets.UTF_8)).getAsJsonObject(); }
     private static boolean valid(JsonObject root, String hash) { return integer(root, "schemaVersion", -1) == 1 && hash.equals(string(root, "sourceSha256", "")); }
