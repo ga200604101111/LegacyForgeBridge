@@ -13,7 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-/** Writes conservative source/runtime dependency evidence without authorizing source-class removal. */
+/** Writes conservative source/runtime dependency evidence, then applies separately proof-gated retirement. */
 public final class LegacyClassDependencyAnalysisPass implements ConversionPass {
     public static final String ANALYSIS_PATH = "legacyforgebridge/class-dependency-analysis.json";
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -83,12 +83,14 @@ public final class LegacyClassDependencyAnalysisPass implements ConversionPass {
                 "Inventoried original source-class dependencies without executing legacy classes: classes="
                         + analysis.classes().size() + ", potentiallyReachable=" + analysis.potentiallyReachableCount()
                         + ", capabilities=" + analysis.capabilities().size()
-                        + ". This inventory does not authorize deleting any source class."
+                        + ". The inventory itself does not authorize source-class deletion."
         );
 
-        // This runs here, after generated semantic/entrypoint bytecode exists, so retirement readiness
-        // can inspect the final staged candidate reference graph rather than the original source graph.
+        // These run after generated semantic/entrypoint bytecode and all profile-level entity
+        // registration rewrites. Readiness inspects the final staged candidate graph; retirement then
+        // performs independent fresh pre/post checks and restores bytes if post-delete proof fails.
         LegacyPlainEntityRetirementReadiness.materialize(context, analysis);
+        new LegacyPlainEntityRetirementPass().apply(context);
     }
 
     private static JsonArray strings(Iterable<String> values) {
