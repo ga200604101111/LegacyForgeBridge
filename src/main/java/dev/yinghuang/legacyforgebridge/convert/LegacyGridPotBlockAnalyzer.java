@@ -68,7 +68,7 @@ public final class LegacyGridPotBlockAnalyzer {
             MethodNode activation=method(classes,blockClass,Set.of("onBlockActivated","func_149727_a"),
                     "(Lnet/minecraft/world/World;IIILnet/minecraft/entity/player/EntityPlayer;IFFF)Z");
             boolean emptyHand=canonicalEmptyHandAndSelfItemActivation(activation,tileClass,shape);
-            boolean insertionPredicate=canonicalContentInsertionPredicate(activation);
+            boolean insertionPredicate=canonicalContentInsertionPredicate(activation,tileClass,shape);
             if(!emptyHand){skipped.add(skip(registration,blockClass,"activation does not prove empty-hand removal plus same-BlockItem cell addition"));continue;}
 
             MethodNode breakBlock=method(classes,blockClass,Set.of("breakBlock","func_149749_a"),

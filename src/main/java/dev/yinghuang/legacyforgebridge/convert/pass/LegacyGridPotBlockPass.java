@@ -6,6 +6,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import dev.yinghuang.legacyforgebridge.convert.LegacyGridPotBlockAnalyzer;
+import dev.yinghuang.legacyforgebridge.convert.LegacyRegisteredBlockRenderTypeAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.api.ConversionContext;
 import dev.yinghuang.legacyforgebridge.convert.api.ConversionPass;
 import dev.yinghuang.legacyforgebridge.convert.api.SupportLevel;
@@ -14,37 +15,40 @@ import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
-/** Materializes the proof-complete non-render-type portion of a legacy square grid-pot BlockEntity. */
+/** Materializes the proof-complete core plus a positive source-proven insertion subset of a legacy square grid-pot BlockEntity. */
 public final class LegacyGridPotBlockPass implements ConversionPass {
     public static final String OUTPUT = "legacyforgebridge/grid-pot-block-rules.json";
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
-    @Override
-    public String id() {
-        return "legacy-grid-pot-blocks";
-    }
+    @Override public String id() { return "legacy-grid-pot-blocks"; }
 
     @Override
     public void apply(ConversionContext context) throws Exception {
         LegacyGridPotBlockAnalyzer.Analysis analysis = new LegacyGridPotBlockAnalyzer().analyze(context.sourceJar());
         if (analysis.rules().isEmpty() && analysis.skipped().isEmpty()) return;
         Map<String, String> ids = generatedBlockIds(context.stagingDir());
+        LegacyRegisteredBlockRenderTypeAnalyzer.Analysis renderTypes =
+                new LegacyRegisteredBlockRenderTypeAnalyzer().analyze(context.sourceJar());
+        List<String> sourceProvenEligibleModBlocks = eligibleGeneratedIds(renderTypes, ids);
+
         JsonObject root = new JsonObject();
         root.addProperty("schemaVersion", 1);
         root.addProperty("sourceSha256", context.sourceHash());
+        root.addProperty("sourceProvenModInsertionEligibilityWired", true);
         JsonArray rules = new JsonArray();
         int coreRuntime = 0;
         int insertionBlocked = 0;
+        int insertionSubset = 0;
         int unmapped = 0;
         for (LegacyGridPotBlockAnalyzer.Rule rule : analysis.rules()) {
             String id = ids.get(rule.sourceBlockClass());
-            if (id == null) {
-                unmapped++;
-                continue;
-            }
+            if (id == null) { unmapped++; continue; }
             JsonObject value = new JsonObject();
             value.addProperty("id", id);
             value.addProperty("sourceBlockClass", rule.sourceBlockClass());
@@ -70,11 +74,22 @@ public final class LegacyGridPotBlockPass implements ConversionPass {
                     && rule.normalBlockDropDisabled() && rule.persistenceProven()
                     && rule.dynamicCellShapeProven() && rule.nonOpaqueProven();
             value.addProperty("coreRuntimeComplete", core);
+
+            JsonArray eligible = new JsonArray();
+            if (rule.contentInsertionPredicateProven()) for (String eligibleId : sourceProvenEligibleModBlocks) eligible.add(eligibleId);
+            boolean positiveSubset = core && rule.contentInsertionPredicateProven() && !eligible.isEmpty();
+            value.addProperty("sourceProvenModContentInsertionWired", positiveSubset);
+            value.add("sourceProvenInsertionBlockIds", eligible);
+            value.addProperty("sourceProvenInsertionBlockCount", eligible.size());
+
+            // The full legacy predicate still includes vanilla render-type members and the dynamic
+            // coordinateCrossUID identity; this checkpoint intentionally does not claim closure.
             value.addProperty("contentInsertionRuntimeComplete", false);
             value.addProperty("presentationRuntimeComplete", false);
             value.addProperty("runtimeComplete", false);
             if (core) coreRuntime++;
             if (rule.contentInsertionPredicateProven()) insertionBlocked++;
+            if (positiveSubset) insertionSubset++;
             rules.add(value);
         }
         root.add("rules", rules);
@@ -88,6 +103,7 @@ public final class LegacyGridPotBlockPass implements ConversionPass {
         }
         root.add("skipped", skipped);
         root.addProperty("coreRuntimeCompleteRules", coreRuntime);
+        root.addProperty("sourceProvenModContentInsertionRules", insertionSubset);
         root.addProperty("legacyInsertionPredicateProvenButRuntimeClosedRules", insertionBlocked);
         root.addProperty("runtimeCompleteRules", 0);
         Path output = context.stagingDir().resolve(OUTPUT);
@@ -101,7 +117,21 @@ public final class LegacyGridPotBlockPass implements ConversionPass {
         if (coreRuntime > 0) context.diagnostics().info(
                 "LFB-CONVERT-GRIDPOT-0001", SupportLevel.ADAPTED,
                 "Proof-complete grid-pot core runtimes: " + coreRuntime
-                        + "; legacy content-insertion render predicate remains fail-closed.");
+                        + "; source-proven mod Block insertion subset wired for " + insertionSubset
+                        + " rule(s), while vanilla/custom-render predicate coverage remains fail-closed.");
+    }
+
+    static List<String> eligibleGeneratedIds(LegacyRegisteredBlockRenderTypeAnalyzer.Analysis analysis,
+                                             Map<String, String> generatedIds) {
+        List<String> output = new ArrayList<>();
+        for (LegacyRegisteredBlockRenderTypeAnalyzer.Rule rule : analysis.rules()) {
+            var identity = rule.renderIdentity();
+            if (!(identity.isConstant(1) || identity.isConstant(13) || identity.isConstant(40))) continue;
+            String id = generatedIds.get(rule.sourceBlockClass());
+            if (id != null && !output.contains(id)) output.add(id);
+        }
+        output.sort(Comparator.naturalOrder());
+        return List.copyOf(output);
     }
 
     private static Map<String, String> generatedBlockIds(Path staging) throws Exception {
@@ -114,9 +144,8 @@ public final class LegacyGridPotBlockPass implements ConversionPass {
             if (blocks != null) for (var element : blocks) {
                 if (!element.isJsonObject()) continue;
                 JsonObject block = element.getAsJsonObject();
-                if (block.has("sourceClass") && block.has("id")) {
+                if (block.has("sourceClass") && block.has("id"))
                     result.put(block.get("sourceClass").getAsString(), block.get("id").getAsString());
-                }
             }
         }
         return result;

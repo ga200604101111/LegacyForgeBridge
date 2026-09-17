@@ -17,7 +17,7 @@ class BambooGridPotExactTest {
             "bcceb588950f911398cfc94856a45527b4aa17b6e130927b2e0516fdf059b402";
 
     @Test
-    void exactBambooProvesNineCellGridPotCoreWithoutOpeningLegacyRenderPredicate() throws Exception {
+    void exactBambooProvesNineCellGridPotCoreAndPortablePositiveInsertionIdentity() throws Exception {
         String input = System.getProperty("lfb.exactCorpus.jar");
         assertNotNull(input, "exact Bamboo corpus is required");
         Path source = Path.of(input);
@@ -46,5 +46,11 @@ class BambooGridPotExactTest {
         assertTrue(rule.dynamicCellShapeProven());
         assertTrue(rule.nonOpaqueProven());
         assertTrue(rule.contentInsertionPredicateProven());
+
+        var renderTypes = new LegacyRegisteredBlockRenderTypeAnalyzer().analyze(source);
+        assertTrue(renderTypes.rules().stream().anyMatch(value ->
+                        "ruby/bamboo/block/BlockCrossLamp".equals(value.sourceBlockClass())
+                                && value.renderIdentity().isConstant(1)),
+                "Exact Bamboo must preserve at least the source-proven BlockCrossLamp render-type-1 identity for the portable MultiPot insertion subset");
     }
 }

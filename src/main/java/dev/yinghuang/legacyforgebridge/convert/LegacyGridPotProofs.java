@@ -1,9 +1,9 @@
 package dev.yinghuang.legacyforgebridge.convert;
 
 import org.objectweb.asm.Opcodes;
-import org.objectweb.asm.tree.ClassNode;
-import org.objectweb.asm.tree.MethodNode;
+import org.objectweb.asm.tree.*;
 
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -18,8 +18,8 @@ final class LegacyGridPotProofs {
     private LegacyGridPotProofs() { }
 
     record TileShape(String enabledField,String itemField,MethodNode slotMapper,MethodNode enableCell,MethodNode removeCell,
-                     MethodNode removeItem,MethodNode itemGetter,MethodNode itemMetaGetter,MethodNode enabledGetter,
-                     MethodNode dropAll,MethodNode emptyCheck) { }
+                     MethodNode removeItem,MethodNode setItem,MethodNode itemGetter,MethodNode itemMetaGetter,
+                     MethodNode enabledGetter,MethodNode dropAll,MethodNode emptyCheck) { }
 
     static TileShape tileShape(ClassNode tile){
         if(tile==null)return null; MethodNode ctor=ownMethod(tile,Set.of("<init>"),"()V");
@@ -30,6 +30,9 @@ final class LegacyGridPotProofs {
         MethodNode enable=findMethod(tile,"(I)V",m->hasArrayStore(m,tile.name,enabled,Opcodes.BASTORE,1)&&callsNamed(m,"func_70296_d","()V"));
         MethodNode removeItem=findMethod(tile,"(I)Lnet/minecraft/item/ItemStack;",m->hasArrayStore(m,tile.name,items,Opcodes.AASTORE,null)&&!hasArrayStore(m,tile.name,enabled,Opcodes.BASTORE,0));
         MethodNode removeCell=findMethod(tile,"(I)Lnet/minecraft/item/ItemStack;",m->hasArrayStore(m,tile.name,enabled,Opcodes.BASTORE,0));
+        MethodNode setItem=findMethod(tile,"(ILnet/minecraft/item/Item;I)V",m->readsArrayField(m,tile.name,enabled,Opcodes.BALOAD)
+                &&hasArrayStore(m,tile.name,items,Opcodes.AASTORE,null)&&canonicalSingleItemStackConstructor(m)
+                &&callsNamed(m,"func_70296_d","()V"));
         MethodNode itemGetter=findMethod(tile,"(I)Lnet/minecraft/item/Item;",m->calls(m,ITEM_STACK,"func_77973_b","()Lnet/minecraft/item/Item;"));
         MethodNode itemMeta=findMethod(tile,"(I)I",m->calls(m,ITEM_STACK,"func_77960_j","()I"));
         MethodNode enabledGetter=findMethod(tile,"(I)Z",m->readsArrayField(m,tile.name,enabled,Opcodes.BALOAD));
@@ -37,8 +40,20 @@ final class LegacyGridPotProofs {
                 &&readsArrayField(m,tile.name,items,Opcodes.AALOAD)&&hasInt(m,9)&&typed(m,Opcodes.NEW,ITEM_STACK));
         MethodNode empty=findMethod(tile,"()Z",m->readsArrayField(m,tile.name,enabled,Opcodes.BALOAD)&&hasInt(m,9)
                 &&directBooleanReturn(m,false)&&directBooleanReturn(m,true));
-        if(enable==null||removeItem==null||removeCell==null||itemGetter==null||itemMeta==null||enabledGetter==null||dropAll==null||empty==null)return null;
-        return new TileShape(enabled,items,mapper,enable,removeCell,removeItem,itemGetter,itemMeta,enabledGetter,dropAll,empty);
+        if(enable==null||removeItem==null||removeCell==null||setItem==null||itemGetter==null||itemMeta==null||enabledGetter==null||dropAll==null||empty==null)return null;
+        return new TileShape(enabled,items,mapper,enable,removeCell,removeItem,setItem,itemGetter,itemMeta,enabledGetter,dropAll,empty);
+    }
+
+    private static boolean canonicalSingleItemStackConstructor(MethodNode method){
+        if(method==null)return false;
+        for(AbstractInsnNode insn:method.instructions){
+            if(!(insn instanceof MethodInsnNode call)||call.getOpcode()!=Opcodes.INVOKESPECIAL||!ITEM_STACK.equals(call.owner)
+                    ||!"<init>".equals(call.name)||!"(Lnet/minecraft/item/Item;II)V".equals(call.desc))continue;
+            AbstractInsnNode meta=previousReal(call);AbstractInsnNode count=previousReal(meta);
+            if(meta instanceof VarInsnNode metaVar&&metaVar.getOpcode()==Opcodes.ILOAD
+                    &&Integer.valueOf(1).equals(intConstant(count)))return true;
+        }
+        return false;
     }
 
     static boolean canonicalPersistence(ClassNode tile,TileShape s){
@@ -68,9 +83,58 @@ final class LegacyGridPotProofs {
                 &&calls(a,"net/minecraft/item/Item","func_150898_a","(Lnet/minecraft/block/Block;)Lnet/minecraft/item/Item;")&&directBooleanReturn(a,true);
     }
 
-    static boolean canonicalContentInsertionPredicate(MethodNode a){
-        return a!=null&&calls(a,"net/minecraft/block/Block","func_149634_a","(Lnet/minecraft/item/Item;)Lnet/minecraft/block/Block;")
-                &&countCalls(a,"net/minecraft/block/Block","func_149645_b","()I")>=4&&hasInt(a,1)&&hasInt(a,13)&&hasInt(a,40);
+    /**
+     * Proves the executable positive insertion branch: exact render-id comparisons plus a proven
+     * TileEntity setter directly fed from one held ItemStack local's item/damage identity.
+     */
+    static boolean canonicalContentInsertionPredicate(MethodNode a,String tileClass,TileShape s){
+        if(a==null||s==null||!calls(a,"net/minecraft/block/Block","func_149634_a","(Lnet/minecraft/item/Item;)Lnet/minecraft/block/Block;"))return false;
+        if(!canonicalHeldItemSetterCall(a,tileClass,s.setItem())
+                ||!calls(a,tileClass,s.removeItem().name,s.removeItem().desc))return false;
+        Set<Integer> constants=new HashSet<>();int symbolic=0,comparisons=0;
+        for(AbstractInsnNode insn:a.instructions){
+            if(!(insn instanceof MethodInsnNode call)||!"net/minecraft/block/Block".equals(call.owner)
+                    ||!"func_149645_b".equals(call.name)||!"()I".equals(call.desc))continue;
+            AbstractInsnNode identity=nextReal(call);AbstractInsnNode branch=nextReal(identity);
+            if(!(branch instanceof JumpInsnNode jump)||!integerComparison(jump.getOpcode()))continue;
+            Integer value=intConstant(identity);
+            if(value!=null){constants.add(value);comparisons++;continue;}
+            if(identity instanceof FieldInsnNode field&&field.getOpcode()==Opcodes.GETSTATIC&&"I".equals(field.desc)){
+                symbolic++;comparisons++;
+            }
+        }
+        return comparisons>=4&&constants.contains(1)&&constants.contains(13)&&constants.contains(40)&&symbolic>=1;
+    }
+
+    private static boolean canonicalHeldItemSetterCall(MethodNode method,String tileClass,MethodNode setter){
+        if(method==null||setter==null)return false;
+        for(AbstractInsnNode insn:method.instructions){
+            if(!(insn instanceof MethodInsnNode call)||call.getOpcode()!=Opcodes.INVOKEVIRTUAL||!tileClass.equals(call.owner)
+                    ||!setter.name.equals(call.name)||!setter.desc.equals(call.desc))continue;
+            AbstractInsnNode damageCall=previousReal(call);
+            AbstractInsnNode damageReceiver=previousReal(damageCall);
+            AbstractInsnNode itemCall=previousReal(damageReceiver);
+            AbstractInsnNode itemReceiver=previousReal(itemCall);
+            if(!(damageCall instanceof MethodInsnNode damage)||!ITEM_STACK.equals(damage.owner)
+                    ||!"func_77960_j".equals(damage.name)||!"()I".equals(damage.desc))continue;
+            if(!(itemCall instanceof MethodInsnNode item)||!ITEM_STACK.equals(item.owner)
+                    ||!"func_77973_b".equals(item.name)||!"()Lnet/minecraft/item/Item;".equals(item.desc))continue;
+            if(damageReceiver instanceof VarInsnNode damageVar&&damageVar.getOpcode()==Opcodes.ALOAD
+                    &&itemReceiver instanceof VarInsnNode itemVar&&itemVar.getOpcode()==Opcodes.ALOAD
+                    &&damageVar.var==itemVar.var)return true;
+        }
+        return false;
+    }
+
+    private static AbstractInsnNode previousReal(AbstractInsnNode insn){
+        for(AbstractInsnNode previous=insn==null?null:insn.getPrevious();previous!=null;previous=previous.getPrevious())
+            if(previous.getOpcode()>=0)return previous;
+        return null;
+    }
+
+    private static boolean integerComparison(int opcode){
+        return opcode==Opcodes.IF_ICMPEQ||opcode==Opcodes.IF_ICMPNE||opcode==Opcodes.IF_ICMPLT
+                ||opcode==Opcodes.IF_ICMPGE||opcode==Opcodes.IF_ICMPGT||opcode==Opcodes.IF_ICMPLE;
     }
 
     static boolean canonicalDynamicCellShape(Map<String,ClassNode> classes,String blockClass,String tileClass,TileShape s,Float baseHeight,Float cellHeight){

@@ -19,7 +19,9 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /** Runtime table for the proof-complete core of legacy 3x3 grid-pot BlockEntities. */
@@ -35,9 +37,12 @@ public final class LegacyGridPotBlockRegistry {
                        boolean normalBlockDropDisabled, boolean persistenceProven,
                        boolean dynamicCellShapeProven, boolean nonOpaqueProven,
                        boolean legacyInsertionPredicateProven,
+                       boolean sourceProvenModContentInsertionWired,
+                       Set<Identifier> sourceProvenInsertionBlockIds,
                        boolean contentInsertionRuntimeComplete,
                        boolean presentationRuntimeComplete) {
         public Rule {
+            sourceProvenInsertionBlockIds = Set.copyOf(sourceProvenInsertionBlockIds == null ? Set.of() : sourceProvenInsertionBlockIds);
             if (id == null || cells != 9 || gridWidth != 3
                     || !(baseHeight > 0F && baseHeight <= 1F)
                     || !(cellHeight > baseHeight && cellHeight <= 1F)
@@ -46,9 +51,20 @@ public final class LegacyGridPotBlockRegistry {
                     || !dynamicCellShapeProven || !nonOpaqueProven) {
                 throw new IllegalArgumentException("Invalid converted grid-pot core rule");
             }
-            if (contentInsertionRuntimeComplete || presentationRuntimeComplete) {
-                throw new IllegalArgumentException("Grid-pot insertion/presentation runtime not admitted by schema 1");
+            if (sourceProvenModContentInsertionWired
+                    && (!legacyInsertionPredicateProven || sourceProvenInsertionBlockIds.isEmpty())) {
+                throw new IllegalArgumentException("Grid-pot positive insertion subset lacks source predicate/eligible identities");
             }
+            if (!sourceProvenModContentInsertionWired && !sourceProvenInsertionBlockIds.isEmpty()) {
+                throw new IllegalArgumentException("Grid-pot insertion identities present without runtime wiring");
+            }
+            if (contentInsertionRuntimeComplete || presentationRuntimeComplete) {
+                throw new IllegalArgumentException("Full grid-pot insertion/presentation runtime not admitted by schema 1");
+            }
+        }
+
+        public boolean insertionEligible(Identifier blockId) {
+            return sourceProvenModContentInsertionWired && blockId != null && sourceProvenInsertionBlockIds.contains(blockId);
         }
     }
 
@@ -70,9 +86,8 @@ public final class LegacyGridPotBlockRegistry {
                 Rule rule = parse(value);
                 if (rule == null || !modId.equals(rule.id().getNamespace())) continue;
                 Rule previous = RULES.putIfAbsent(rule.id(), rule);
-                if (previous != null && !previous.equals(rule)) {
+                if (previous != null && !previous.equals(rule))
                     throw new IllegalStateException("Conflicting converted grid-pot rule for " + rule.id());
-                }
                 loaded++;
             }
             if (loaded > 0) LegacyForgeBridge.LOGGER.info(
@@ -82,13 +97,8 @@ public final class LegacyGridPotBlockRegistry {
         }
     }
 
-    public static boolean hasRule(Identifier id) {
-        return id != null && RULES.containsKey(id);
-    }
-
-    public static Rule rule(Identifier id) {
-        return id == null ? null : RULES.get(id);
-    }
+    public static boolean hasRule(Identifier id) { return id != null && RULES.containsKey(id); }
+    public static Rule rule(Identifier id) { return id == null ? null : RULES.get(id); }
 
     public static Rule requireRule(Block block) {
         Identifier id = BuiltInRegistries.BLOCK.getKey(block);
@@ -120,57 +130,53 @@ public final class LegacyGridPotBlockRegistry {
         return type;
     }
 
-    static synchronized void clearForTests() {
-        RULES.clear();
-        TYPES.clear();
-    }
-
-    static Rule parseForTests(JsonObject value) {
-        return parse(value);
-    }
+    static synchronized void clearForTests() { RULES.clear(); TYPES.clear(); }
+    static Rule parseForTests(JsonObject value) { return parse(value); }
 
     private static Rule parse(JsonObject value) {
         try {
             String idValue = string(value, "id");
             if (idValue == null) return null;
+            boolean subset = bool(value, "sourceProvenModContentInsertionWired");
+            Set<Identifier> eligible = identifiers(value.get("sourceProvenInsertionBlockIds"));
             return new Rule(
                     Identifier.parse(idValue),
-                    integer(value, "cells", 0),
-                    integer(value, "gridWidth", 0),
-                    decimal(value, "baseHeight", 0F),
-                    decimal(value, "cellHeight", 0F),
-                    bool(value, "placementCreatesCell"),
-                    bool(value, "emptyHandRemovalProven"),
-                    bool(value, "selfItemAddsCellProven"),
-                    bool(value, "breakDropsEveryEnabledCell"),
-                    bool(value, "normalBlockDropDisabled"),
-                    bool(value, "persistenceProven"),
-                    bool(value, "dynamicCellShapeProven"),
-                    bool(value, "nonOpaqueProven"),
-                    bool(value, "legacyInsertionPredicateProven"),
-                    bool(value, "contentInsertionRuntimeComplete"),
-                    bool(value, "presentationRuntimeComplete")
+                    integer(value, "cells", 0), integer(value, "gridWidth", 0),
+                    decimal(value, "baseHeight", 0F), decimal(value, "cellHeight", 0F),
+                    bool(value, "placementCreatesCell"), bool(value, "emptyHandRemovalProven"),
+                    bool(value, "selfItemAddsCellProven"), bool(value, "breakDropsEveryEnabledCell"),
+                    bool(value, "normalBlockDropDisabled"), bool(value, "persistenceProven"),
+                    bool(value, "dynamicCellShapeProven"), bool(value, "nonOpaqueProven"),
+                    bool(value, "legacyInsertionPredicateProven"), subset, eligible,
+                    bool(value, "contentInsertionRuntimeComplete"), bool(value, "presentationRuntimeComplete")
             );
         } catch (RuntimeException invalid) {
             return null;
         }
     }
 
+    private static Set<Identifier> identifiers(JsonElement element) {
+        if (element == null || !element.isJsonArray()) return Set.of();
+        LinkedHashSet<Identifier> values = new LinkedHashSet<>();
+        for (JsonElement item : element.getAsJsonArray()) {
+            if (!item.isJsonPrimitive() || !item.getAsJsonPrimitive().isString()) throw new IllegalArgumentException("Invalid grid-pot insertion id");
+            if (!values.add(Identifier.parse(item.getAsString()))) throw new IllegalArgumentException("Duplicate grid-pot insertion id");
+        }
+        return Set.copyOf(values);
+    }
+
     private static String string(JsonObject object, String key) {
         JsonElement value = object.get(key);
         return value != null && value.isJsonPrimitive() ? value.getAsString() : null;
     }
-
     private static int integer(JsonObject object, String key, int fallback) {
         JsonElement value = object.get(key);
         return value != null && value.isJsonPrimitive() ? value.getAsInt() : fallback;
     }
-
     private static float decimal(JsonObject object, String key, float fallback) {
         JsonElement value = object.get(key);
         return value != null && value.isJsonPrimitive() ? value.getAsFloat() : fallback;
     }
-
     private static boolean bool(JsonObject object, String key) {
         JsonElement value = object.get(key);
         return value != null && value.isJsonPrimitive() && value.getAsBoolean();
