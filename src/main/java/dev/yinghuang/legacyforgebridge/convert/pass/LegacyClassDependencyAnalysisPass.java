@@ -22,6 +22,11 @@ public final class LegacyClassDependencyAnalysisPass implements ConversionPass {
 
     @Override
     public void apply(ConversionContext context) throws Exception {
+        // These two stages depend on generated behavior bytecode, so they run here after
+        // LegacyBehaviorPass/GeneratedSemanticCodePass but before the final dependency inventory.
+        LegacyVariantSnowballConstructionReplacementReadiness.materialize(context);
+        new LegacyVariantSnowballSourceAllocationStripPass().apply(context);
+
         LegacyClassDependencyAnalyzer.Analysis analysis = new LegacyClassDependencyAnalyzer()
                 .analyze(context.sourceJar(), context.stagingDir());
         if (analysis.classes().isEmpty()) return;
@@ -91,7 +96,6 @@ public final class LegacyClassDependencyAnalysisPass implements ConversionPass {
         // performs independent fresh pre/post checks and restores bytes if post-delete proof fails.
         LegacyPlainEntityRetirementReadiness.materialize(context, analysis);
         new LegacyPlainEntityRetirementPass().apply(context);
-        LegacyVariantSnowballConstructionReplacementReadiness.materialize(context);
         LegacyVariantSnowballRetirementReadiness.materialize(context, analysis);
     }
 
