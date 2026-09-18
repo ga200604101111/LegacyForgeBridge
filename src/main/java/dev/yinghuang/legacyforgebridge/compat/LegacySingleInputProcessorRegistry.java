@@ -18,7 +18,10 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.minecraft.world.level.block.state.BlockBehaviour;
+import net.minecraft.world.level.material.MapColor;
 
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
@@ -56,10 +59,19 @@ public final class LegacySingleInputProcessorRegistry {
                 throw new IllegalArgumentException("Invalid processor particle rule");
         }
     }
+    public record BlockConstruction(float destroyTime,float explosionResistance,String soundType,String mapColor,int lightLevel){
+        public BlockConstruction{
+            if(!Float.isFinite(destroyTime)||destroyTime<0F
+                    ||!Float.isFinite(explosionResistance)||explosionResistance<0F
+                    ||soundType==null||soundType.isBlank()||mapColor==null||mapColor.isBlank()
+                    ||lightLevel<0||lightLevel>15)
+                throw new IllegalArgumentException("Invalid processor block construction rule");
+        }
+    }
     public record Rule(Identifier id,int slots,int stackLimit,int inputSlot,int[] outputSlots,int[] topSlots,int[] bottomSlots,int[] sideSlots,
                        int processTicks,double interactionDistanceSq,boolean comparator,boolean dropContents,
                        boolean legacyEnergyApiPresent,int minUseEnergy,int maxUseEnergy,String energyNbtKey,
-                       boolean energyIngressRuntimeComplete,boolean metadataDrivesRoll,ParticleRule particle,List<Recipe> recipes){
+                       boolean energyIngressRuntimeComplete,boolean metadataDrivesRoll,ParticleRule particle,BlockConstruction blockConstruction,List<Recipe> recipes){
         public Rule{
             outputSlots=outputSlots.clone();topSlots=topSlots.clone();bottomSlots=bottomSlots.clone();sideSlots=sideSlots.clone();
             recipes=List.copyOf(recipes);energyNbtKey=energyNbtKey==null?"":energyNbtKey;
@@ -93,6 +105,31 @@ public final class LegacySingleInputProcessorRegistry {
     public static Rule rule(Identifier id){return id==null?null:RULES.get(id);}
     public static Rule requireRule(Block block){Identifier id=BuiltInRegistries.BLOCK.getKey(block);Rule rule=RULES.get(id);if(rule==null)throw new IllegalStateException("No converted processor rule for "+id);return rule;}
     public static int presentationKey(Identifier id){if(id==null)return 0;int value=id.toString().hashCode();return value==0?1:value;}
+    public static BlockBehaviour.Properties applyBlockProperties(Identifier id,BlockBehaviour.Properties properties){
+        Rule rule=RULES.get(id);if(rule==null||rule.blockConstruction()==null)return properties;
+        BlockConstruction source=rule.blockConstruction();
+        properties.destroyTime(source.destroyTime()).explosionResistance(source.explosionResistance());
+        properties.sound(switch(source.soundType()){
+            case "STONE"->SoundType.STONE;
+            case "WOOD"->SoundType.WOOD;
+            case "GRAVEL"->SoundType.GRAVEL;
+            case "GRASS"->SoundType.GRASS;
+            case "METAL"->SoundType.METAL;
+            case "GLASS"->SoundType.GLASS;
+            case "WOOL"->SoundType.WOOL;
+            case "SAND"->SoundType.SAND;
+            case "SNOW"->SoundType.SNOW;
+            case "LADDER"->SoundType.LADDER;
+            case "ANVIL"->SoundType.ANVIL;
+            default->throw new IllegalStateException("Unsupported converted processor sound type "+source.soundType()+" for "+id);
+        });
+        properties.mapColor(switch(source.mapColor()){
+            case "STONE"->MapColor.STONE;
+            default->throw new IllegalStateException("Unsupported converted processor map color "+source.mapColor()+" for "+id);
+        });
+        if(source.lightLevel()>0){int light=source.lightLevel();properties.lightLevel(state->light);}
+        return properties;
+    }
 
     public static synchronized void registerType(Identifier id,Block block){
         Rule rule=RULES.get(id);if(rule==null)return;
@@ -139,7 +176,10 @@ public final class LegacySingleInputProcessorRegistry {
             if(bool(value,"particlePresentationRuntimeComplete")&&particleValue!=null)particle=new ParticleRule((float)decimal(particleValue,"blockVelocityMultiplier",0D),(float)decimal(particleValue,"blockScale",0D),integer(particleValue,"itemParticleCount",0),decimal(particleValue,"itemVelocityYOffset",-1D));
             boolean legacyEnergy=bool(value,"legacyEnergyApiPresent");
             boolean ingress=legacyEnergy&&bool(value,"energyIngressRuntimeComplete");
-            return new Rule(id,integer(value,"slots",0),integer(value,"stackLimit",0),integer(value,"inputSlot",-1),ints(value.getAsJsonArray("outputSlots")),ints(value.getAsJsonArray("topSlots")),ints(value.getAsJsonArray("bottomSlots")),ints(value.getAsJsonArray("sideSlots")),integer(value,"processTicks",0),decimal(value,"interactionDistanceSq",0),bool(value,"comparator"),bool(value,"dropContents"),legacyEnergy,integer(value,"minUseEnergy",0),integer(value,"maxUseEnergy",0),string(value,"energyNbtKey",""),ingress,metadataRoll,particle,recipes);
+            BlockConstruction blockConstruction=null;JsonObject construction=value.has("blockConstruction")&&value.get("blockConstruction").isJsonObject()?value.getAsJsonObject("blockConstruction"):null;
+            if(bool(value,"blockConstructorReplacementProven")&&bool(value,"blockConstructionRuntimeWired")&&construction!=null)
+                blockConstruction=new BlockConstruction((float)decimal(construction,"destroyTime",-1D),(float)decimal(construction,"explosionResistance",-1D),string(construction,"soundType",""),string(construction,"mapColor",""),integer(construction,"lightLevel",-1));
+            return new Rule(id,integer(value,"slots",0),integer(value,"stackLimit",0),integer(value,"inputSlot",-1),ints(value.getAsJsonArray("outputSlots")),ints(value.getAsJsonArray("topSlots")),ints(value.getAsJsonArray("bottomSlots")),ints(value.getAsJsonArray("sideSlots")),integer(value,"processTicks",0),decimal(value,"interactionDistanceSq",0),bool(value,"comparator"),bool(value,"dropContents"),legacyEnergy,integer(value,"minUseEnergy",0),integer(value,"maxUseEnergy",0),string(value,"energyNbtKey",""),ingress,metadataRoll,particle,blockConstruction,recipes);
         }catch(RuntimeException invalid){return null;}
     }
     private static Recipe parseRecipe(JsonObject value){
@@ -148,7 +188,7 @@ public final class LegacySingleInputProcessorRegistry {
         List<JsonObject> inputs=new ArrayList<>();for(JsonElement element:alternatives){if(!element.isJsonObject())return null;inputs.add(element.getAsJsonObject().deepCopy());}
         JsonObject bonus=value.has("bonus")&&value.get("bonus").isJsonObject()?value.getAsJsonObject("bonus"):null;return new Recipe(legacy,inputs,output,bonus,value.has("bonusChance")?value.get("bonusChance").getAsFloat():0F);
     }
-    private static boolean sameRule(Rule left,Rule right){return left.id().equals(right.id())&&left.processTicks()==right.processTicks()&&left.energyIngressRuntimeComplete()==right.energyIngressRuntimeComplete()&&left.metadataDrivesRoll()==right.metadataDrivesRoll()&&Objects.equals(left.particle(),right.particle())&&left.recipes().size()==right.recipes().size();}
+    private static boolean sameRule(Rule left,Rule right){return left.id().equals(right.id())&&left.processTicks()==right.processTicks()&&left.energyIngressRuntimeComplete()==right.energyIngressRuntimeComplete()&&left.metadataDrivesRoll()==right.metadataDrivesRoll()&&Objects.equals(left.particle(),right.particle())&&Objects.equals(left.blockConstruction(),right.blockConstruction())&&left.recipes().size()==right.recipes().size();}
     private static int[] ints(JsonArray array){if(array==null)return new int[0];int[] values=new int[array.size()];for(int i=0;i<values.length;i++)values[i]=array.get(i).getAsInt();return values;}
     private static String required(JsonObject object,String key){String value=string(object,key,null);if(value==null)throw new IllegalArgumentException("Missing "+key);return value;}
     private static String string(JsonObject object,String key,String fallback){JsonElement value=object.get(key);return value!=null&&value.isJsonPrimitive()?value.getAsString():fallback;}
