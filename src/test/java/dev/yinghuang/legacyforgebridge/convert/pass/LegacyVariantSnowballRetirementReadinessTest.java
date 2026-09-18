@@ -70,6 +70,12 @@ class LegacyVariantSnowballRetirementReadinessTest {
         assertTrue(rule.get("itemRegistrationStripComplete").getAsBoolean());
         assertTrue(rule.get("constructorReplacementProven").getAsBoolean(), rule.toString());
         assertTrue(rule.get("sourceAllocationStripComplete").getAsBoolean(), rule.toString());
+        assertTrue(rule.get("nestedCompanionClassCount").getAsInt() >= 1, rule.toString());
+        java.util.List<String> companions = new java.util.ArrayList<>();
+        for (var element : rule.getAsJsonArray("nestedCompanionClasses")) {
+            companions.add(element.getAsString());
+        }
+        assertTrue(companions.contains("foreign/entity/VariantProjectile$1"), companions.toString());
         assertTrue(rule.get("retirementCohortCandidateReady").getAsBoolean(), rule.toString());
         assertFalse(rule.get("sourceClassDeletionAuthorized").getAsBoolean());
         assertEquals(0, rule.get("deletedSourceClassCount").getAsInt());
