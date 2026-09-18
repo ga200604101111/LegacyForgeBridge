@@ -34,7 +34,7 @@ class LegacySingleInputProcessorTileConstructionAnalyzerTest {
         assertTrue(proof.noAdditionalMethodCalls(), proof.blockers().toString());
         assertTrue(proof.replacementProofComplete(), proof.blockers().toString());
         assertEquals(2, proof.constructorChain().size());
-        assertEquals(2, proof.fieldInitializations().size());
+        assertEquals(3, proof.fieldInitializations().size());
         assertTrue(proof.fieldInitializations().stream().anyMatch(value ->
                 value.kind().equals("item-stack-array")
                         && Integer.valueOf(3).equals(value.arrayLength())));
