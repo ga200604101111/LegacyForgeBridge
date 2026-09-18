@@ -53,6 +53,13 @@ class LegacyVariantSnowballRetirementPassTest {
                 StandardCharsets.UTF_8)).getAsJsonObject();
         assertEquals(1, readiness.get("retirementCohortCandidateReadyCount").getAsInt(),
                 readiness.toString());
+        JsonObject readinessRule = readiness.getAsJsonArray("rules").get(0).getAsJsonObject();
+        java.util.List<String> companions = new java.util.ArrayList<>();
+        for (var element : readinessRule.getAsJsonArray("nestedCompanionClasses")) {
+            companions.add(element.getAsString());
+        }
+        assertTrue(companions.contains("foreign/entity/VariantProjectile$1"), companions.toString());
+        int expectedDeletedClasses = 3 + companions.size();
 
         new LegacyVariantSnowballRetirementPass().apply(context);
 
@@ -65,19 +72,22 @@ class LegacyVariantSnowballRetirementPassTest {
         assertTrue(root.get("freshPostDeleteReferenceCheckWired").getAsBoolean());
         assertTrue(root.get("restoreOnPostDeleteFailureWired").getAsBoolean());
         assertEquals(1, root.get("retirementAuthorizedCohorts").getAsInt(), root.toString());
-        assertEquals(3, root.get("deletedSourceClasses").getAsInt(), root.toString());
+        assertEquals(expectedDeletedClasses, root.get("deletedSourceClasses").getAsInt(), root.toString());
         assertEquals(0, root.get("blockedRetirementCohorts").getAsInt(), root.toString());
 
         JsonObject rule = root.getAsJsonArray("rules").get(0).getAsJsonObject();
         assertTrue(rule.get("retirementComplete").getAsBoolean(), rule.toString());
         assertTrue(rule.get("sourceClassDeletionAuthorized").getAsBoolean());
-        assertEquals(3, rule.get("deletedSourceClassCount").getAsInt());
+        assertEquals(expectedDeletedClasses, rule.get("deletedSourceClassCount").getAsInt());
         assertFalse(rule.get("restoredAfterFailedRetirement").getAsBoolean());
         assertTrue(rule.getAsJsonArray("blockers").isEmpty(), rule.toString());
 
         assertFalse(Files.exists(staging.resolve("foreign/item/VariantBall.class")));
         assertFalse(Files.exists(staging.resolve("foreign/entity/VariantProjectile.class")));
         assertFalse(Files.exists(staging.resolve("foreign/entity/VariantKind.class")));
+        for (String companion : companions) {
+            assertFalse(Files.exists(staging.resolve(companion + ".class")), companion);
+        }
         assertTrue(Files.isRegularFile(staging.resolve("foreign/Bootstrap.class")));
     }
 
