@@ -59,11 +59,11 @@ class LegacyVariantSnowballRegistrationStripPassTest {
 
         var refs = new LegacyCandidateReferenceAnalyzer().analyze(
                 staging, Set.of("foreign/entity/VariantProjectile"));
+        byte[] strippedBootstrap = Files.readAllBytes(staging.resolve("foreign/Bootstrap.class"));
         assertFalse(refs.forTarget("foreign/entity/VariantProjectile")
                         .incomingClassReferences().contains("foreign/Bootstrap"),
                 () -> "Bootstrap still references projectile after strip: "
-                        + projectileReferenceSites(
-                                Files.readAllBytes(staging.resolve("foreign/Bootstrap.class"))));
+                        + projectileReferenceSites(strippedBootstrap));
         // The launch item still legitimately constructs the legacy projectile in the copied
         // source cohort until the later retirement/registration-strip closure removes it.
         assertTrue(refs.forTarget("foreign/entity/VariantProjectile")
