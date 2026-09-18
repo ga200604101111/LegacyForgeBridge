@@ -15,6 +15,7 @@ import dev.yinghuang.legacyforgebridge.convert.pass.LegacyVariantSnowballConstru
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyVariantSnowballItemRegistrationStripPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyVariantSnowballPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyVariantSnowballRegistrationStripPass;
+import dev.yinghuang.legacyforgebridge.convert.pass.LegacyVariantSnowballRetirementPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyVariantSnowballRetirementReadiness;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyVariantSnowballRuntimeCandidatePass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyVariantSnowballRuntimePass;
@@ -189,6 +190,31 @@ class BambooVariantSnowballRuntimeClosureExactTest {
         if (!allocationStripComplete) {
             assertFalse(readinessRule.get("retirementCohortCandidateReady").getAsBoolean(),
                     readinessRule.toString());
+        }
+
+        boolean retirementReady =
+                readinessRule.get("retirementCohortCandidateReady").getAsBoolean();
+        new LegacyVariantSnowballRetirementPass().apply(context);
+        JsonObject retirement = JsonParser.parseString(Files.readString(
+                staging.resolve(LegacyVariantSnowballRetirementPass.OUTPUT),
+                StandardCharsets.UTF_8)).getAsJsonObject();
+        JsonObject retirementRule = find(retirement, "sourceItemClass",
+                "ruby/bamboo/item/ItemDirtySnowball");
+        assertEquals(retirementReady,
+                retirementRule.get("retirementComplete").getAsBoolean(),
+                retirementRule.toString());
+
+        Path itemClass = staging.resolve("ruby/bamboo/item/ItemDirtySnowball.class");
+        Path projectileClass = staging.resolve("ruby/bamboo/entity/EntityDirtySnowball.class");
+        Path selectorClass = staging.resolve("ruby/bamboo/entity/EnumDirtySnowball.class");
+        if (retirementReady) {
+            assertFalse(Files.exists(itemClass));
+            assertFalse(Files.exists(projectileClass));
+            assertFalse(Files.exists(selectorClass));
+        } else {
+            assertTrue(Files.isRegularFile(itemClass));
+            assertTrue(Files.isRegularFile(projectileClass));
+            assertTrue(Files.isRegularFile(selectorClass));
         }
     }
 
