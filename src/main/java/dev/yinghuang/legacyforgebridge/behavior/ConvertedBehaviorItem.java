@@ -10,7 +10,7 @@ import net.minecraft.world.item.ItemUseAnimation;
 import net.minecraft.world.level.Level;
 
 /** Ordinary modern Item, with source-compiled callbacks supplied by the converted mod itself. */
-public final class ConvertedBehaviorItem extends Item {
+public class ConvertedBehaviorItem extends Item {
     public ConvertedBehaviorItem(Properties properties){super(properties);}
     @Override public InteractionResult use(Level level,Player player,InteractionHand hand){
         ItemStack stack=player.getItemInHand(hand);var d=LegacyBehaviorRuntime.definition(stack);
