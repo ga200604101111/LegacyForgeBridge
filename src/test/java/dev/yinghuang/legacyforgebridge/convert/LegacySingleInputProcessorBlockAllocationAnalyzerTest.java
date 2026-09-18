@@ -73,9 +73,10 @@ class LegacySingleInputProcessorBlockAllocationAnalyzerTest {
 
         assertFalse(proof.allocationProofComplete());
         assertFalse(proof.inlineAllocationProven());
-        assertTrue(proof.blockers().stream().anyMatch(value ->
-                value.contains("not-inline")
-                        || value.contains("merged-or-missing")));
+        // Registry provenance rejects the local alias before the later expression tracer runs.
+        // Keep rejection mandatory and assert the actual early constructor-proof boundary.
+        assertTrue(proof.blockers().contains("source-allocation-inline-constructor-not-proven"),
+                proof.blockers().toString());
     }
 
     private static LegacySingleInputProcessorAnalyzer.Rule rule() {

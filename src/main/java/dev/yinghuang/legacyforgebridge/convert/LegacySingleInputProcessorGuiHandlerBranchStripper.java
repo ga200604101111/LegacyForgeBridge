@@ -3,395 +3,343 @@ package dev.yinghuang.legacyforgebridge.convert;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
-import org.objectweb.asm.Type;
-import org.objectweb.asm.tree.AbstractInsnNode;
-import org.objectweb.asm.tree.ClassNode;
-import org.objectweb.asm.tree.FieldInsnNode;
-import org.objectweb.asm.tree.FrameNode;
-import org.objectweb.asm.tree.InsnList;
-import org.objectweb.asm.tree.InsnNode;
-import org.objectweb.asm.tree.JumpInsnNode;
-import org.objectweb.asm.tree.LabelNode;
-import org.objectweb.asm.tree.LdcInsnNode;
-import org.objectweb.asm.tree.LineNumberNode;
-import org.objectweb.asm.tree.LookupSwitchInsnNode;
-import org.objectweb.asm.tree.MethodInsnNode;
-import org.objectweb.asm.tree.MethodNode;
-import org.objectweb.asm.tree.MultiANewArrayInsnNode;
-import org.objectweb.asm.tree.TableSwitchInsnNode;
-import org.objectweb.asm.tree.TypeInsnNode;
-import org.objectweb.asm.tree.VarInsnNode;
+import org.objectweb.asm.tree.*;
+import org.objectweb.asm.tree.analysis.Analyzer;
+import org.objectweb.asm.tree.analysis.BasicVerifier;
 
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.IdentityHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
 /**
- * Replaces one already-proven processor IGuiHandler server/client case pair with null returns while
- * preserving every other GUI id in the shared handler.
+ * Retires only a freshly verified processor GUI-id case pair. No legacy class is loaded. Unknown
+ * effects, shared entry points and verification failures return the original bytes atomically.
  */
 public final class LegacySingleInputProcessorGuiHandlerBranchStripper {
-    public record Target(
-            int guiId,
-            String serverMethod,
-            String serverDescriptor,
-            String clientMethod,
-            String clientDescriptor,
-            String sourceTileClass,
-            String sourceContainerClass,
-            String sourceGuiClass) { }
+    private static final String HANDLER_DESC =
+            "(ILnet/minecraft/entity/player/EntityPlayer;Lnet/minecraft/world/World;III)Ljava/lang/Object;";
+    private static final String CONSTRUCTOR_DESC =
+            "(Lnet/minecraft/entity/player/InventoryPlayer;Lnet/minecraft/tileentity/TileEntity;)V";
+    private static final String PLAYER = "net/minecraft/entity/player/EntityPlayer";
+    private static final String WORLD = "net/minecraft/world/World";
 
-    public record Result(
-            byte[] bytes,
-            int strippedBranches,
-            boolean serverBranchStripped,
-            boolean clientBranchStripped,
-            List<String> blockers) {
-        public Result {
-            blockers = List.copyOf(blockers);
-        }
+    public record Target(
+            int guiId, String serverMethod, String serverDescriptor,
+            String clientMethod, String clientDescriptor, String sourceTileClass,
+            String sourceContainerClass, String sourceGuiClass) { }
+
+    public record Result(byte[] bytes, int strippedBranches, boolean serverBranchStripped,
+                         boolean clientBranchStripped, List<String> blockers) {
+        public Result { blockers = List.copyOf(blockers); }
     }
 
-    private record SwitchCase(
-            LabelNode target,
-            LabelNode defaultLabel,
-            Set<LabelNode> boundaries,
-            boolean uniqueTarget) { }
-
-    private record Branch(
-            MethodNode method,
-            SwitchCase shape,
-            AbstractInsnNode firstMeaningful,
-            AbstractInsnNode returnInstruction,
-            List<AbstractInsnNode> meaningful) { }
+    private record Branch(MethodNode method, AbstractInsnNode dispatch, LabelNode label,
+                          List<AbstractInsnNode> instructions) { }
 
     public Result strip(byte[] sourceClass, Target target) {
-        List<String> blockers = new ArrayList<>();
-        ClassNode node = new ClassNode(Opcodes.ASM9);
-        new ClassReader(sourceClass).accept(node, 0);
-
-        MethodNode server = ownMethod(
-                node, target.serverMethod(), target.serverDescriptor());
-        MethodNode client = ownMethod(
-                node, target.clientMethod(), target.clientDescriptor());
-        if (server == null) blockers.add("processor-gui-handler-server-method-missing");
-        if (client == null) blockers.add("processor-gui-handler-client-method-missing");
-        if (!blockers.isEmpty()) {
-            return new Result(sourceClass, 0, false, false, blockers);
-        }
-
-        Branch serverBranch = locateBranch(
-                server, target.guiId(), "server", blockers);
-        Branch clientBranch = locateBranch(
-                client, target.guiId(), "client", blockers);
-        if (serverBranch != null) {
-            if (!references(serverBranch.meaningful(), target.sourceContainerClass())) {
-                blockers.add("processor-gui-handler-server-container-reference-drift");
-            }
-            if (!references(serverBranch.meaningful(), target.sourceTileClass())) {
-                blockers.add("processor-gui-handler-server-tile-reference-drift");
-            }
-        }
-        if (clientBranch != null) {
-            if (!references(clientBranch.meaningful(), target.sourceGuiClass())) {
-                blockers.add("processor-gui-handler-client-gui-reference-drift");
-            }
-            if (!references(clientBranch.meaningful(), target.sourceTileClass())) {
-                blockers.add("processor-gui-handler-client-tile-reference-drift");
-            }
-        }
-        if (!blockers.isEmpty() || serverBranch == null || clientBranch == null) {
-            return new Result(sourceClass, 0, false, false, blockers);
-        }
-
-        rewrite(serverBranch);
-        rewrite(clientBranch);
-
-        ClassWriter writer = new ClassWriter(0);
-        node.accept(writer);
-        byte[] rewritten = writer.toByteArray();
-
-        List<String> postBlockers = verifyPostRewrite(rewritten, target);
-        if (!postBlockers.isEmpty()) {
-            return new Result(sourceClass, 0, false, false, postBlockers);
-        }
-        return new Result(rewritten, 2, true, true, List.of());
-    }
-
-    private static List<String> verifyPostRewrite(byte[] rewritten, Target target) {
-        List<String> blockers = new ArrayList<>();
-        ClassNode node = new ClassNode(Opcodes.ASM9);
+        if (!validTarget(target)) return rejected(sourceClass, "target-invalid");
         try {
-            new ClassReader(rewritten).accept(node, 0);
-        } catch (RuntimeException malformed) {
-            return List.of("processor-gui-handler-post-strip-reparse-failed:"
-                    + malformed.getClass().getSimpleName());
-        }
-
-        MethodNode server = ownMethod(
-                node, target.serverMethod(), target.serverDescriptor());
-        MethodNode client = ownMethod(
-                node, target.clientMethod(), target.clientDescriptor());
-        if (server == null) blockers.add("processor-gui-handler-post-strip-server-method-missing");
-        if (client == null) blockers.add("processor-gui-handler-post-strip-client-method-missing");
-        if (!blockers.isEmpty()) return blockers;
-
-        Branch serverBranch = locateBranch(
-                server, target.guiId(), "post-server", blockers);
-        Branch clientBranch = locateBranch(
-                client, target.guiId(), "post-client", blockers);
-        if (serverBranch == null || clientBranch == null) return blockers;
-
-        if (!isNullReturn(serverBranch.meaningful())) {
-            blockers.add("processor-gui-handler-post-strip-server-not-null-return");
-        }
-        if (!isNullReturn(clientBranch.meaningful())) {
-            blockers.add("processor-gui-handler-post-strip-client-not-null-return");
-        }
-
-        Set<String> retired = Set.of(
-                target.sourceTileClass(),
-                target.sourceContainerClass(),
-                target.sourceGuiClass());
-        for (String sourceClass : retired) {
-            if (references(serverBranch.meaningful(), sourceClass)) {
-                blockers.add("processor-gui-handler-post-strip-server-reference-remains:"
-                        + sourceClass);
+            ClassNode node = read(sourceClass);
+            List<String> blockers = new ArrayList<>();
+            Branch server = locate(node, target.serverMethod(), target.serverDescriptor(),
+                    target.guiId(), "server", blockers);
+            Branch client = locate(node, target.clientMethod(), target.clientDescriptor(),
+                    target.guiId(), "client", blockers);
+            if (server != null && !exactConstruction(server.instructions(),
+                    target.sourceContainerClass(), target.sourceTileClass())) {
+                blockers.add("processor-gui-handler-server-construction-or-effects-not-proven");
             }
-            if (references(clientBranch.meaningful(), sourceClass)) {
-                blockers.add("processor-gui-handler-post-strip-client-reference-remains:"
-                        + sourceClass);
+            if (client != null && !exactConstruction(client.instructions(),
+                    target.sourceGuiClass(), target.sourceTileClass())) {
+                blockers.add("processor-gui-handler-client-construction-or-effects-not-proven");
             }
+            if (!blockers.isEmpty() || server == null || client == null) {
+                return new Result(sourceClass, 0, false, false, blockers);
+            }
+
+            rewrite(server);
+            rewrite(client);
+            ClassWriter writer = new ClassWriter(0);
+            node.accept(writer);
+            byte[] rewritten = writer.toByteArray();
+            ClassNode checked = read(rewritten);
+            Branch postServer = locate(checked, target.serverMethod(), target.serverDescriptor(),
+                    target.guiId(), "post-server", blockers);
+            Branch postClient = locate(checked, target.clientMethod(), target.clientDescriptor(),
+                    target.guiId(), "post-client", blockers);
+            if (postServer == null || !nullReturn(postServer.instructions())
+                    || postClient == null || !nullReturn(postClient.instructions())) {
+                blockers.add("processor-gui-handler-post-strip-null-return-not-proven");
+            }
+            if (!blockers.isEmpty()) {
+                return new Result(sourceClass, 0, false, false, blockers);
+            }
+            return new Result(rewritten, 2, true, true, List.of());
+        } catch (RuntimeException failure) {
+            return rejected(sourceClass, "verification-failed:" + failure.getClass().getSimpleName());
         }
-        return blockers;
     }
 
-    private static Branch locateBranch(
-            MethodNode method,
-            int guiId,
-            String side,
-            List<String> blockers) {
-        List<SwitchCase> matches = new ArrayList<>();
+    private static boolean validTarget(Target target) {
+        return target != null
+                && "getServerGuiElement".equals(target.serverMethod())
+                && "getClientGuiElement".equals(target.clientMethod())
+                && HANDLER_DESC.equals(target.serverDescriptor())
+                && HANDLER_DESC.equals(target.clientDescriptor())
+                && validName(target.sourceTileClass())
+                && validName(target.sourceContainerClass())
+                && validName(target.sourceGuiClass())
+                && !target.sourceTileClass().equals(target.sourceContainerClass())
+                && !target.sourceTileClass().equals(target.sourceGuiClass())
+                && !target.sourceContainerClass().equals(target.sourceGuiClass());
+    }
+
+    private static boolean validName(String value) {
+        return value != null && !value.isBlank() && !value.startsWith("/")
+                && !value.endsWith("/") && !value.contains("//") && !value.contains(".")
+                && !value.contains("\\") && !value.contains(";") && !value.contains("[");
+    }
+
+    private static Result rejected(byte[] original, String blocker) {
+        return new Result(original, 0, false, false,
+                List.of("processor-gui-handler-" + blocker));
+    }
+
+    private static ClassNode read(byte[] bytes) {
+        ClassNode node = new ClassNode(Opcodes.ASM9);
+        new ClassReader(bytes).accept(node, ClassReader.EXPAND_FRAMES);
+        return node;
+    }
+
+    private static Branch locate(ClassNode owner, String name, String descriptor, int guiId,
+                                 String side, List<String> blockers) {
+        String prefix = "processor-gui-handler-" + side + "-";
+        List<MethodNode> methods = owner.methods.stream()
+                .filter(method -> name.equals(method.name) && descriptor.equals(method.desc))
+                .toList();
+        if (methods.size() != 1) {
+            blockers.add(prefix + "method-missing-or-ambiguous");
+            return null;
+        }
+        MethodNode method = methods.getFirst();
+        if ((method.access & (Opcodes.ACC_STATIC | Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE)) != 0
+                || (method.access & Opcodes.ACC_PUBLIC) == 0) {
+            blockers.add(prefix + "method-contract-invalid");
+            return null;
+        }
+        // Exception entry points/ranges need an independent proof, not just ordinary CFG edges.
+        if (!method.tryCatchBlocks.isEmpty()) {
+            blockers.add(prefix + "exception-handlers-not-proven");
+            return null;
+        }
         for (AbstractInsnNode instruction : method.instructions) {
-            if (!(instruction instanceof TableSwitchInsnNode)
-                    && !(instruction instanceof LookupSwitchInsnNode)) {
-                continue;
+            if ((instruction instanceof VarInsnNode variable
+                    && variable.var >= 1 && variable.var <= 6
+                    && instruction.getOpcode() >= Opcodes.ISTORE
+                    && instruction.getOpcode() <= Opcodes.ASTORE)
+                    || (instruction instanceof IincInsnNode increment
+                    && increment.var >= 1 && increment.var <= 6)) {
+                blockers.add(prefix + "handler-parameter-overwritten");
+                return null;
             }
-            AbstractInsnNode previous = previousMeaningful(instruction.getPrevious());
-            if (!(previous instanceof VarInsnNode load)
-                    || load.getOpcode() != Opcodes.ILOAD
-                    || load.var != 1) {
-                continue;
-            }
-
-            LabelNode target;
-            LabelNode defaultLabel;
-            List<LabelNode> labels = new ArrayList<>();
-            if (instruction instanceof TableSwitchInsnNode table) {
-                if (guiId < table.min || guiId > table.max) continue;
-                target = table.labels.get(guiId - table.min);
-                defaultLabel = table.dflt;
-                labels.addAll(table.labels);
-            } else {
-                LookupSwitchInsnNode lookup = (LookupSwitchInsnNode) instruction;
-                int index = lookup.keys.indexOf(guiId);
-                if (index < 0) continue;
-                target = lookup.labels.get(index);
-                defaultLabel = lookup.dflt;
-                labels.addAll(lookup.labels);
-            }
-
-            int targetUses = 0;
-            for (LabelNode label : labels) {
-                if (label == target) targetUses++;
-            }
-            Set<LabelNode> boundaries =
-                    Collections.newSetFromMap(new IdentityHashMap<>());
-            boundaries.add(defaultLabel);
-            boundaries.addAll(labels);
-            matches.add(new SwitchCase(
-                    target,
-                    defaultLabel,
-                    boundaries,
-                    targetUses == 1 && target != defaultLabel));
         }
 
-        if (matches.isEmpty()) {
-            blockers.add("processor-gui-handler-" + side + "-switch-case-missing");
-            return null;
+        AbstractInsnNode dispatch = null;
+        LabelNode label = null;
+        List<LabelNode> boundaries = List.of();
+        for (AbstractInsnNode instruction : method.instructions) {
+            LabelNode candidate = caseLabel(instruction, guiId);
+            if (candidate == null || !variable(previous(instruction), Opcodes.ILOAD, 1)) continue;
+            if (dispatch != null) {
+                blockers.add(prefix + "switch-case-ambiguous");
+                return null;
+            }
+            dispatch = instruction;
+            label = candidate;
+            boundaries = labels(instruction);
         }
-        if (matches.size() != 1) {
-            blockers.add("processor-gui-handler-" + side
-                    + "-switch-case-ambiguous:" + matches.size());
+        if (dispatch == null || label == null) {
+            blockers.add(prefix + "switch-case-missing");
             return null;
         }
 
-        SwitchCase shape = matches.getFirst();
-        if (!shape.uniqueTarget()) {
-            blockers.add("processor-gui-handler-" + side + "-case-label-shared");
+        AbstractInsnNode entry = label;
+        while (entry != null && entry.getOpcode() < 0) entry = entry.getNext();
+        int entryIndex = entry == null ? -1 : method.instructions.indexOf(entry);
+        int selectedEntries = 0;
+        for (LabelNode destination : boundaries) {
+            if (enters(method, destination, entryIndex, entryIndex)) selectedEntries++;
+        }
+        if (entryIndex < 0 || selectedEntries != 1) {
+            blockers.add(prefix + "case-label-shared");
             return null;
         }
 
-        Set<LabelNode> targetedLabels = targetedLabels(method);
-        List<AbstractInsnNode> meaningful = new ArrayList<>();
-        AbstractInsnNode firstMeaningful = null;
-        AbstractInsnNode returnInstruction = null;
-        boolean returnSeen = false;
-
-        for (AbstractInsnNode cursor = shape.target().getNext();
-             cursor != null;
+        List<AbstractInsnNode> body = new ArrayList<>();
+        boolean returned = false;
+        for (AbstractInsnNode cursor = label.getNext(); cursor != null; cursor = cursor.getNext()) {
+            if (cursor instanceof LabelNode boundary && boundaries.contains(boundary)) break;
+            if (cursor.getOpcode() < 0) continue;
+            if (returned) {
+                blockers.add(prefix + "case-has-code-after-return");
+                return null;
+            }
+            body.add(cursor);
+            if (cursor.getOpcode() == Opcodes.ARETURN) returned = true;
+        }
+        if (!returned || body.isEmpty()) {
+            blockers.add(prefix + "case-return-not-proven");
+            return null;
+        }
+        int first = method.instructions.indexOf(body.getFirst());
+        int last = method.instructions.indexOf(body.getLast());
+        // Count destinations by executable offset, not LabelNode identity: aliases are shared too.
+        int switchEntries = 0;
+        for (AbstractInsnNode instruction : method.instructions) {
+            if (instruction instanceof JumpInsnNode jump
+                    && enters(method, jump.label, first, last)) {
+                blockers.add(prefix + "case-has-external-control-flow-target");
+                return null;
+            }
+            for (LabelNode destination : labels(instruction)) {
+                if (enters(method, destination, first, last)) {
+                    if (instruction != dispatch || destination != label) {
+                        blockers.add(prefix + "case-label-shared");
+                        return null;
+                    }
+                    switchEntries++;
+                }
+            }
+        }
+        if (switchEntries != 1) {
+            blockers.add(prefix + "case-label-shared");
+            return null;
+        }
+        AbstractInsnNode before = previous(body.getFirst());
+        if (before == null || !terminates(before.getOpcode())) {
+            blockers.add(prefix + "case-has-fallthrough-entry");
+            return null;
+        }
+        // Preserve frames at the case entry and all unrelated cases. An interior frame can carry
+        // removed NEW offsets or changed locals and is outside this bounded rewrite.
+        for (AbstractInsnNode cursor = body.getFirst(); cursor != body.getLast();
              cursor = cursor.getNext()) {
-            if (cursor instanceof LabelNode label
-                    && shape.boundaries().contains(label)
-                    && label != shape.target()) {
-                break;
-            }
-            if (cursor instanceof LabelNode label
-                    && targetedLabels.contains(label)) {
-                blockers.add("processor-gui-handler-" + side
-                        + "-case-has-external-control-flow-target");
+            if (cursor instanceof FrameNode) {
+                blockers.add(prefix + "interior-stack-frame-not-proven");
                 return null;
-            }
-            if (cursor instanceof LineNumberNode || cursor instanceof FrameNode
-                    || cursor instanceof LabelNode) {
-                continue;
-            }
-
-            if (firstMeaningful == null) firstMeaningful = cursor;
-            if (returnSeen) {
-                blockers.add("processor-gui-handler-" + side
-                        + "-case-has-code-after-return");
-                return null;
-            }
-            if (cursor instanceof JumpInsnNode
-                    || cursor instanceof TableSwitchInsnNode
-                    || cursor instanceof LookupSwitchInsnNode) {
-                blockers.add("processor-gui-handler-" + side
-                        + "-case-flow-not-simple");
-                return null;
-            }
-            meaningful.add(cursor);
-            if (cursor.getOpcode() == Opcodes.ARETURN) {
-                returnInstruction = cursor;
-                returnSeen = true;
             }
         }
-
-        if (firstMeaningful == null || returnInstruction == null) {
-            blockers.add("processor-gui-handler-" + side
-                    + "-case-return-not-proven");
+        try {
+            var frames = new Analyzer<>(new BasicVerifier()).analyze(owner.name, method);
+            if (frames[first] == null || frames[first].getStackSize() != 0) {
+                blockers.add(prefix + "case-entry-stack-not-empty-or-unreachable");
+                return null;
+            }
+        } catch (Exception invalid) {
+            blockers.add(prefix + "bytecode-verification-failed:"
+                    + invalid.getClass().getSimpleName());
             return null;
         }
-        return new Branch(
-                method,
-                shape,
-                firstMeaningful,
-                returnInstruction,
-                List.copyOf(meaningful));
+        return new Branch(method, dispatch, label, List.copyOf(body));
     }
 
-    private static Set<LabelNode> targetedLabels(MethodNode method) {
-        Set<LabelNode> result =
-                Collections.newSetFromMap(new IdentityHashMap<>());
-        for (AbstractInsnNode instruction : method.instructions) {
-            if (instruction instanceof JumpInsnNode jump) {
-                result.add(jump.label);
-            } else if (instruction instanceof TableSwitchInsnNode table) {
-                result.add(table.dflt);
-                result.addAll(table.labels);
-            } else if (instruction instanceof LookupSwitchInsnNode lookup) {
-                result.add(lookup.dflt);
-                result.addAll(lookup.labels);
-            }
+    private static LabelNode caseLabel(AbstractInsnNode instruction, int id) {
+        if (instruction instanceof TableSwitchInsnNode table && id >= table.min && id <= table.max) {
+            return table.labels.get(id - table.min);
+        }
+        if (instruction instanceof LookupSwitchInsnNode lookup) {
+            int index = lookup.keys.indexOf(id);
+            if (index >= 0) return lookup.labels.get(index);
+        }
+        return null;
+    }
+
+    private static List<LabelNode> labels(AbstractInsnNode instruction) {
+        List<LabelNode> result = new ArrayList<>();
+        if (instruction instanceof TableSwitchInsnNode table) {
+            result.add(table.dflt);
+            result.addAll(table.labels);
+        } else if (instruction instanceof LookupSwitchInsnNode lookup) {
+            result.add(lookup.dflt);
+            result.addAll(lookup.labels);
         }
         return result;
+    }
+
+    private static boolean enters(MethodNode method, LabelNode label, int first, int last) {
+        AbstractInsnNode cursor = label;
+        while (cursor != null && cursor.getOpcode() < 0) cursor = cursor.getNext();
+        int index = cursor == null ? -1 : method.instructions.indexOf(cursor);
+        return index >= first && index <= last;
+    }
+
+    private static boolean terminates(int opcode) {
+        return opcode == Opcodes.GOTO || opcode == Opcodes.TABLESWITCH
+                || opcode == Opcodes.LOOKUPSWITCH || opcode == Opcodes.ATHROW
+                || (opcode >= Opcodes.IRETURN && opcode <= Opcodes.RETURN);
+    }
+
+    private static boolean exactConstruction(List<AbstractInsnNode> body, String constructed,
+                                             String tile) {
+        // NEW/DUP, the handler player's inventory, the handler World(x,y,z), optional tile cast,
+        // exactly one admitted constructor, and return of that object. No extra effects are erased.
+        if (body.size() != 11 && body.size() != 12) return false;
+        if (!type(body.get(0), Opcodes.NEW, constructed) || body.get(1).getOpcode() != Opcodes.DUP
+                || !variable(body.get(2), Opcodes.ALOAD, 2)
+                || !(body.get(3) instanceof FieldInsnNode field)
+                || field.getOpcode() != Opcodes.GETFIELD || !PLAYER.equals(field.owner)
+                || !Set.of("inventory", "field_71071_by").contains(field.name)
+                || !"Lnet/minecraft/entity/player/InventoryPlayer;".equals(field.desc)
+                || !variable(body.get(4), Opcodes.ALOAD, 3)
+                || !variable(body.get(5), Opcodes.ILOAD, 4)
+                || !variable(body.get(6), Opcodes.ILOAD, 5)
+                || !variable(body.get(7), Opcodes.ILOAD, 6)
+                || !(body.get(8) instanceof MethodInsnNode lookup)
+                || lookup.getOpcode() != Opcodes.INVOKEVIRTUAL || lookup.itf
+                || !WORLD.equals(lookup.owner)
+                || !Set.of("getTileEntity", "func_147438_o").contains(lookup.name)
+                || !"(III)Lnet/minecraft/tileentity/TileEntity;".equals(lookup.desc)) return false;
+        int constructor = 9;
+        if (body.size() == 12) {
+            if (!type(body.get(9), Opcodes.CHECKCAST, tile)) return false;
+            constructor++;
+        }
+        return body.get(constructor) instanceof MethodInsnNode call
+                && call.getOpcode() == Opcodes.INVOKESPECIAL && !call.itf
+                && constructed.equals(call.owner) && "<init>".equals(call.name)
+                && CONSTRUCTOR_DESC.equals(call.desc)
+                && body.get(constructor + 1).getOpcode() == Opcodes.ARETURN;
+    }
+
+    private static boolean type(AbstractInsnNode node, int opcode, String type) {
+        return node instanceof TypeInsnNode instruction && node.getOpcode() == opcode
+                && type.equals(instruction.desc);
+    }
+
+    private static boolean variable(AbstractInsnNode node, int opcode, int slot) {
+        return node instanceof VarInsnNode instruction && node.getOpcode() == opcode
+                && instruction.var == slot;
+    }
+
+    private static AbstractInsnNode previous(AbstractInsnNode node) {
+        AbstractInsnNode cursor = node.getPrevious();
+        while (cursor != null && cursor.getOpcode() < 0) cursor = cursor.getPrevious();
+        return cursor;
+    }
+
+    private static boolean nullReturn(List<AbstractInsnNode> body) {
+        return body.size() == 2 && body.getFirst().getOpcode() == Opcodes.ACONST_NULL
+                && body.getLast().getOpcode() == Opcodes.ARETURN;
     }
 
     private static void rewrite(Branch branch) {
         InsnList replacement = new InsnList();
         replacement.add(new InsnNode(Opcodes.ACONST_NULL));
         replacement.add(new InsnNode(Opcodes.ARETURN));
-        branch.method().instructions.insertBefore(branch.firstMeaningful(), replacement);
-
-        AbstractInsnNode cursor = branch.firstMeaningful();
-        while (cursor != null) {
-            AbstractInsnNode next = cursor.getNext();
-            boolean done = cursor == branch.returnInstruction();
-            branch.method().instructions.remove(cursor);
-            if (done) break;
-            cursor = next;
+        branch.method().instructions.insertBefore(branch.instructions().getFirst(), replacement);
+        // Keep labels/debug scopes: deleting a range of nodes can leave dangling metadata labels.
+        for (AbstractInsnNode instruction : branch.instructions()) {
+            branch.method().instructions.remove(instruction);
         }
-    }
-
-    private static boolean isNullReturn(List<AbstractInsnNode> instructions) {
-        return instructions.size() == 2
-                && instructions.get(0).getOpcode() == Opcodes.ACONST_NULL
-                && instructions.get(1).getOpcode() == Opcodes.ARETURN;
-    }
-
-    private static boolean references(
-            List<AbstractInsnNode> instructions, String internalName) {
-        if (internalName == null || internalName.isBlank()) return false;
-        for (AbstractInsnNode instruction : instructions) {
-            if (instruction instanceof TypeInsnNode type
-                    && typeReference(type.desc, internalName)) {
-                return true;
-            }
-            if (instruction instanceof FieldInsnNode field
-                    && (internalName.equals(field.owner)
-                    || descriptorReferences(field.desc, internalName))) {
-                return true;
-            }
-            if (instruction instanceof MethodInsnNode call
-                    && (internalName.equals(call.owner)
-                    || descriptorReferences(call.desc, internalName))) {
-                return true;
-            }
-            if (instruction instanceof MultiANewArrayInsnNode array
-                    && descriptorReferences(array.desc, internalName)) {
-                return true;
-            }
-            if (instruction instanceof LdcInsnNode ldc
-                    && ldc.cst instanceof Type type
-                    && type.getSort() == Type.OBJECT
-                    && internalName.equals(type.getInternalName())) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static boolean typeReference(String descriptorOrName, String internalName) {
-        return internalName.equals(descriptorOrName)
-                || descriptorReferences(descriptorOrName, internalName);
-    }
-
-    private static boolean descriptorReferences(String descriptor, String internalName) {
-        return descriptor != null
-                && descriptor.contains("L" + internalName + ";");
-    }
-
-    private static MethodNode ownMethod(
-            ClassNode owner, String name, String descriptor) {
-        if (owner == null || name == null || descriptor == null) return null;
-        for (MethodNode method : owner.methods) {
-            if (name.equals(method.name) && descriptor.equals(method.desc)) {
-                return method;
-            }
-        }
-        return null;
-    }
-
-    private static AbstractInsnNode previousMeaningful(AbstractInsnNode node) {
-        AbstractInsnNode cursor = node;
-        while (cursor instanceof LabelNode
-                || cursor instanceof LineNumberNode
-                || cursor instanceof FrameNode) {
-            cursor = cursor.getPrevious();
-        }
-        return cursor;
     }
 }
