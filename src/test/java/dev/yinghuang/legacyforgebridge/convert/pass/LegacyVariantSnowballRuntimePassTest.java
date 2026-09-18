@@ -24,7 +24,7 @@ class LegacyVariantSnowballRuntimePassTest {
     @TempDir Path tempDir;
 
     @Test
-    void sourceCompleteCandidateJoinsProvenProjectileRegistrationWithoutOpeningGameplay() throws Exception {
+    void sourceCompleteCandidateJoinsRegistrationAndOpensImpactWithoutItemLaunch() throws Exception {
         Path source = VariantSnowballRuntimeFixture.write(tempDir.resolve("variant.jar"));
         Path staging = tempDir.resolve("staging");
         JsonObject root = run(source, staging);
@@ -36,8 +36,8 @@ class LegacyVariantSnowballRuntimePassTest {
         assertTrue(root.get("projectileItemStackCarrierWired").getAsBoolean());
         assertTrue(root.get("legacyMetadataSyncWired").getAsBoolean());
         assertFalse(root.get("itemRuntimeWired").getAsBoolean());
-        assertFalse(root.get("projectileRuntimeWired").getAsBoolean());
-        assertFalse(root.get("projectileImpactRuntimeWired").getAsBoolean());
+        assertTrue(root.get("projectileRuntimeWired").getAsBoolean());
+        assertTrue(root.get("projectileImpactRuntimeWired").getAsBoolean());
         assertFalse(root.get("rendererRuntimeWired").getAsBoolean());
         assertFalse(root.get("runtimeImplementationWired").getAsBoolean());
         assertEquals(1, root.get("runtimeRuleCount").getAsInt());
@@ -62,8 +62,8 @@ class LegacyVariantSnowballRuntimePassTest {
         assertTrue(rule.get("projectileItemStackCarrierWired").getAsBoolean());
         assertTrue(rule.get("legacyMetadataSyncWired").getAsBoolean());
         assertFalse(rule.get("itemRuntimeWired").getAsBoolean());
-        assertFalse(rule.get("projectileRuntimeWired").getAsBoolean());
-        assertFalse(rule.get("projectileImpactRuntimeWired").getAsBoolean());
+        assertTrue(rule.get("projectileRuntimeWired").getAsBoolean());
+        assertTrue(rule.get("projectileImpactRuntimeWired").getAsBoolean());
         assertFalse(rule.get("rendererRuntimeWired").getAsBoolean());
         assertFalse(rule.get("runtimeImplementationWired").getAsBoolean());
         assertEquals(2, rule.getAsJsonArray("variants").size());
