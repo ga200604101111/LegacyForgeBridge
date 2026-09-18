@@ -33,6 +33,8 @@ class LegacyVariantSnowballRuntimePassTest {
         assertTrue(root.get("runtimeRuleRegistryWired").getAsBoolean());
         assertTrue(root.get("preRegistrationRuleLoadWired").getAsBoolean());
         assertTrue(root.get("projectileEntityTypeRegistrationWired").getAsBoolean());
+        assertTrue(root.get("projectileItemStackCarrierWired").getAsBoolean());
+        assertTrue(root.get("legacyMetadataSyncWired").getAsBoolean());
         assertFalse(root.get("itemRuntimeWired").getAsBoolean());
         assertFalse(root.get("projectileRuntimeWired").getAsBoolean());
         assertFalse(root.get("projectileImpactRuntimeWired").getAsBoolean());
@@ -57,6 +59,8 @@ class LegacyVariantSnowballRuntimePassTest {
         assertTrue(rule.get("legacyProjectileRegistrationProven").getAsBoolean());
         assertTrue(rule.get("runtimeRuleReady").getAsBoolean());
         assertTrue(rule.get("projectileEntityTypeRegistrationWired").getAsBoolean());
+        assertTrue(rule.get("projectileItemStackCarrierWired").getAsBoolean());
+        assertTrue(rule.get("legacyMetadataSyncWired").getAsBoolean());
         assertFalse(rule.get("itemRuntimeWired").getAsBoolean());
         assertFalse(rule.get("projectileRuntimeWired").getAsBoolean());
         assertFalse(rule.get("projectileImpactRuntimeWired").getAsBoolean());
