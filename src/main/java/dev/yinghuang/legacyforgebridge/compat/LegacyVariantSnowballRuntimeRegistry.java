@@ -143,8 +143,8 @@ public final class LegacyVariantSnowballRuntimeRegistry {
                     || !bool(root, "projectileItemStackCarrierWired")
                     || !bool(root, "legacyMetadataSyncWired")
                     || bool(root, "itemRuntimeWired")
-                    || bool(root, "projectileRuntimeWired")
-                    || bool(root, "projectileImpactRuntimeWired")
+                    || !bool(root, "projectileRuntimeWired")
+                    || !bool(root, "projectileImpactRuntimeWired")
                     || bool(root, "rendererRuntimeWired")
                     || bool(root, "runtimeImplementationWired")) {
                 return;
@@ -247,8 +247,8 @@ public final class LegacyVariantSnowballRuntimeRegistry {
                     || !bool(value, "projectileItemStackCarrierWired")
                     || !bool(value, "legacyMetadataSyncWired")
                     || bool(value, "itemRuntimeWired")
-                    || bool(value, "projectileRuntimeWired")
-                    || bool(value, "projectileImpactRuntimeWired")
+                    || !bool(value, "projectileRuntimeWired")
+                    || !bool(value, "projectileImpactRuntimeWired")
                     || bool(value, "rendererRuntimeWired")
                     || bool(value, "runtimeImplementationWired")
                     || !"VARIANT_SNOWBALL".equals(string(value, "adapter", null))
