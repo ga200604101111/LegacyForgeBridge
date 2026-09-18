@@ -119,6 +119,7 @@ public final class GeneratedModSupport {
         if("snowball".equals(kind))properties.stacksTo(16);
         var plantingRule=LegacyPlantPlacementRegistry.rule(id);
         var seatBedRule=LegacySeatBedRegistry.placementItemRule(id);
+        var variantSnowballRule=LegacyVariantSnowballRuntimeRegistry.rule(id);
         var food=LegacyFoodItemRegistry.rule(id);
         if(plantingRule!=null&&plantingRule.adapter()==LegacyPlantPlacementRegistry.Adapter.SEED_FOOD){
             if(food!=null&&(food.nutrition()!=plantingRule.nutrition()
@@ -133,6 +134,7 @@ public final class GeneratedModSupport {
             if(count>=1&&count<=99)properties.stacksTo(count);
             if(source.item().durability>0)durability=source.item().durability;
         }
+        if(variantSnowballRule!=null)properties.stacksTo(16);
         if(seatBedRule!=null)properties.stacksTo(1);
         if("sword".equals(kind)){
             properties.sword(ToolMaterial.DIAMOND,attackDamage-ToolMaterial.DIAMOND.attackDamageBonus(),attackSpeed);
@@ -151,12 +153,16 @@ public final class GeneratedModSupport {
         if(durability>0)properties.durability(durability);
         boolean planting=LegacyPlantPlacementRegistry.hasRuntimeRule(id);
         boolean seatBedPlacement=seatBedRule!=null;
+        boolean variantSnowball=variantSnowballRule!=null;
         if(planting&&"snowball".equals(kind))throw new IllegalStateException("Converted item has conflicting snowball and plant placement runtimes: "+id);
         if(seatBedPlacement&&(planting||"snowball".equals(kind)))throw new IllegalStateException("Converted item has conflicting seat-bed placement runtime: "+id);
+        if(variantSnowball&&(planting||seatBedPlacement||"snowball".equals(kind)))
+            throw new IllegalStateException("Converted item has conflicting variant-snowball runtime: "+id);
         if(planting&&source!=null&&source.hooks().stream().anyMatch(hook->!"identity".equals(hook)))
             throw new IllegalStateException("Source callback unexpectedly survived strict plant placement proof for "+id+": "+source.hooks());
         Item item;
-        if("snowball".equals(kind))item=new SnowballItem(properties);
+        if(variantSnowball)item=new ConvertedLegacyVariantSnowballItem(properties,variantSnowballRule);
+        else if("snowball".equals(kind))item=new SnowballItem(properties);
         else if(planting)item=new ConvertedLegacyPlantingItem(id,properties);
         else if(seatBedPlacement){
             Block target=BLOCKS.get(seatBedRule.id());
