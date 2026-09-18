@@ -35,11 +35,11 @@ class LegacyVariantSnowballRuntimePassTest {
         assertTrue(root.get("projectileEntityTypeRegistrationWired").getAsBoolean());
         assertTrue(root.get("projectileItemStackCarrierWired").getAsBoolean());
         assertTrue(root.get("legacyMetadataSyncWired").getAsBoolean());
-        assertFalse(root.get("itemRuntimeWired").getAsBoolean());
+        assertTrue(root.get("itemRuntimeWired").getAsBoolean());
         assertTrue(root.get("projectileRuntimeWired").getAsBoolean());
         assertTrue(root.get("projectileImpactRuntimeWired").getAsBoolean());
-        assertFalse(root.get("rendererRuntimeWired").getAsBoolean());
-        assertFalse(root.get("runtimeImplementationWired").getAsBoolean());
+        assertTrue(root.get("rendererRuntimeWired").getAsBoolean());
+        assertTrue(root.get("runtimeImplementationWired").getAsBoolean());
         assertEquals(1, root.get("runtimeRuleCount").getAsInt());
         assertEquals(1, root.get("projectileEntityTypeRuleCount").getAsInt());
         assertEquals(0, root.get("skippedRuntimeRuleCount").getAsInt());
@@ -61,11 +61,11 @@ class LegacyVariantSnowballRuntimePassTest {
         assertTrue(rule.get("projectileEntityTypeRegistrationWired").getAsBoolean());
         assertTrue(rule.get("projectileItemStackCarrierWired").getAsBoolean());
         assertTrue(rule.get("legacyMetadataSyncWired").getAsBoolean());
-        assertFalse(rule.get("itemRuntimeWired").getAsBoolean());
+        assertTrue(rule.get("itemRuntimeWired").getAsBoolean());
         assertTrue(rule.get("projectileRuntimeWired").getAsBoolean());
         assertTrue(rule.get("projectileImpactRuntimeWired").getAsBoolean());
-        assertFalse(rule.get("rendererRuntimeWired").getAsBoolean());
-        assertFalse(rule.get("runtimeImplementationWired").getAsBoolean());
+        assertTrue(rule.get("rendererRuntimeWired").getAsBoolean());
+        assertTrue(rule.get("runtimeImplementationWired").getAsBoolean());
         assertEquals(2, rule.getAsJsonArray("variants").size());
     }
 
