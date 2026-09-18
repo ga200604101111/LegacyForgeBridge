@@ -371,13 +371,13 @@ public final class LegacySingleInputProcessorBlockConstructionAnalyzer {
             int nextIndex,
             String blocker) { }
 
-    private static PropertyMatch property(List<AbstractInsnNode> code, int index) {
+    private PropertyMatch property(List<AbstractInsnNode> code, int index) {
         if (!aload0(code.get(index)) || index + 2 >= code.size()) return null;
         AbstractInsnNode argument = code.get(index + 1);
         AbstractInsnNode rawCall = code.get(index + 2);
         if (!(rawCall instanceof MethodInsnNode call)
                 || call.getOpcode() != Opcodes.INVOKEVIRTUAL
-                || !blockSetterOwner(call.owner)) {
+                || !blockSetterOwner(call)) {
             return null;
         }
 
@@ -449,7 +449,7 @@ public final class LegacySingleInputProcessorBlockConstructionAnalyzer {
         }
     }
 
-    private static void replayProperties(
+    private void replayProperties(
             List<AbstractInsnNode> code,
             State state,
             List<String> blockers) {
@@ -491,7 +491,7 @@ public final class LegacySingleInputProcessorBlockConstructionAnalyzer {
             case "field_149766_f", "soundTypeWood" -> "WOOD";
             case "field_149767_g", "soundTypeGravel" -> "GRAVEL";
             case "field_149779_h", "soundTypeGrass" -> "GRASS";
-            case "field_149780_i", "soundTypePiston" -> "STONE";
+            case "field_149780_i", "soundTypePiston" -> null;
             case "field_149777_j", "soundTypeMetal" -> "METAL";
             case "field_149778_k", "soundTypeGlass" -> "GLASS";
             case "field_149775_l", "soundTypeCloth" -> "WOOL";
@@ -503,11 +503,28 @@ public final class LegacySingleInputProcessorBlockConstructionAnalyzer {
         };
     }
 
-    private static boolean blockSetterOwner(String owner) {
-        return owner != null
-                && (BLOCK.equals(owner)
-                || BLOCK_CONTAINER.equals(owner)
-                || !owner.startsWith("net/minecraft/"));
+    private boolean blockSetterOwner(MethodInsnNode call) {
+        if (call == null || call.owner == null) return false;
+        if (BLOCK.equals(call.owner) || BLOCK_CONTAINER.equals(call.owner)) {
+            return true;
+        }
+
+        String current = call.owner;
+        Set<String> visited = new LinkedHashSet<>();
+        while (current != null && visited.add(current)) {
+            ClassNode node = classes.get(current);
+            if (node == null) return false;
+            for (MethodNode method : node.methods) {
+                if (call.name.equals(method.name) && call.desc.equals(method.desc)) {
+                    return false;
+                }
+            }
+            if (BLOCK.equals(node.superName) || BLOCK_CONTAINER.equals(node.superName)) {
+                return true;
+            }
+            current = node.superName;
+        }
+        return false;
     }
 
     private static boolean method(
