@@ -39,19 +39,25 @@ public final class LegacyVariantSnowballRetirementReadiness {
                 context.stagingDir().resolve(LegacyVariantSnowballRegistrationStripPass.OUTPUT);
         Path itemStripPath =
                 context.stagingDir().resolve(LegacyVariantSnowballItemRegistrationStripPass.OUTPUT);
+        Path constructionPath = context.stagingDir().resolve(
+                LegacyVariantSnowballConstructionReplacementReadiness.OUTPUT);
         if (!Files.isRegularFile(runtimePath)
                 || !Files.isRegularFile(stripPath)
-                || !Files.isRegularFile(itemStripPath)) return;
+                || !Files.isRegularFile(itemStripPath)
+                || !Files.isRegularFile(constructionPath)) return;
 
         JsonObject runtime = read(runtimePath);
         JsonObject strip = read(stripPath);
         JsonObject itemStrip = read(itemStripPath);
+        JsonObject construction = read(constructionPath);
         if (integer(runtime, "schemaVersion", -1) != LegacyVariantSnowballRuntimePass.SCHEMA
                 || integer(strip, "schemaVersion", -1) != 1
                 || integer(itemStrip, "schemaVersion", -1) != 1
+                || integer(construction, "schemaVersion", -1) != 1
                 || !context.sourceHash().equals(string(runtime, "sourceSha256", ""))
                 || !context.sourceHash().equals(string(strip, "sourceSha256", ""))
-                || !context.sourceHash().equals(string(itemStrip, "sourceSha256", ""))) {
+                || !context.sourceHash().equals(string(itemStrip, "sourceSha256", ""))
+                || !context.sourceHash().equals(string(construction, "sourceSha256", ""))) {
             return;
         }
 
@@ -77,11 +83,21 @@ public final class LegacyVariantSnowballRetirementReadiness {
             if (item != null) stripByItem.putIfAbsent(item, rule);
         }
 
+        Map<String, JsonObject> constructionByItem = new LinkedHashMap<>();
+        for (JsonElement element : array(construction, "rules")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject rule = element.getAsJsonObject();
+            String item = string(rule, "sourceItemClass", null);
+            if (item != null) constructionByItem.putIfAbsent(item, rule);
+        }
+
         JsonObject root = new JsonObject();
         root.addProperty("schemaVersion", 1);
         root.addProperty("sourceSha256", context.sourceHash());
         root.addProperty("retirementReadinessAnalysisWired", true);
         root.addProperty("itemRegistrationRetirementRequired", true);
+        root.addProperty("constructorReplacementRequired", true);
+        root.addProperty("sourceAllocationRetirementRequired", true);
         root.addProperty("retirementAuthorizationWired", false);
         root.addProperty("sourceClassDeletionWired", false);
 
@@ -128,6 +144,18 @@ public final class LegacyVariantSnowballRetirementReadiness {
                 blockers.add("item-registration-strip-incomplete");
             }
 
+            JsonObject constructionRule = constructionByItem.get(itemClass);
+            if (!bool(construction, "constructionReplacementAnalysisWired", false)
+                    || constructionRule == null
+                    || !bool(constructionRule, "constructorReplacementProven", false)) {
+                blockers.add("item-constructor-replacement-incomplete");
+            }
+            if (!bool(construction, "sourceAllocationStripWired", false)
+                    || constructionRule == null
+                    || !bool(constructionRule, "sourceAllocationStripWired", false)) {
+                blockers.add("item-source-allocation-strip-incomplete");
+            }
+
             inspectClass(
                     "item",
                     itemClass,
@@ -165,6 +193,12 @@ public final class LegacyVariantSnowballRetirementReadiness {
             value.addProperty("itemRegistrationStripComplete",
                     itemStripRule != null
                             && bool(itemStripRule, "itemRegistrationStripComplete", false));
+            value.addProperty("constructorReplacementProven",
+                    constructionRule != null
+                            && bool(constructionRule, "constructorReplacementProven", false));
+            value.addProperty("sourceAllocationStripComplete",
+                    constructionRule != null
+                            && bool(constructionRule, "sourceAllocationStripWired", false));
             value.addProperty("retirementCohortCandidateReady", cohortReady);
             value.addProperty("sourceClassDeletionAuthorized", false);
             value.addProperty("deletedSourceClassCount", 0);
