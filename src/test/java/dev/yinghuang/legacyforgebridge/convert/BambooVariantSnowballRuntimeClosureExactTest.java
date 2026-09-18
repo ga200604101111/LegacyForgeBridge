@@ -192,6 +192,10 @@ class BambooVariantSnowballRuntimeClosureExactTest {
                     readinessRule.toString());
         }
 
+        java.util.List<String> nestedCompanions = new java.util.ArrayList<>();
+        for (JsonElement companion : readinessRule.getAsJsonArray("nestedCompanionClasses")) {
+            nestedCompanions.add(companion.getAsString());
+        }
         boolean retirementReady =
                 readinessRule.get("retirementCohortCandidateReady").getAsBoolean();
         new LegacyVariantSnowballRetirementPass().apply(context);
@@ -211,10 +215,16 @@ class BambooVariantSnowballRuntimeClosureExactTest {
             assertFalse(Files.exists(itemClass));
             assertFalse(Files.exists(projectileClass));
             assertFalse(Files.exists(selectorClass));
+            for (String companion : nestedCompanions) {
+                assertFalse(Files.exists(staging.resolve(companion + ".class")), companion);
+            }
         } else {
             assertTrue(Files.isRegularFile(itemClass));
             assertTrue(Files.isRegularFile(projectileClass));
             assertTrue(Files.isRegularFile(selectorClass));
+            for (String companion : nestedCompanions) {
+                assertTrue(Files.isRegularFile(staging.resolve(companion + ".class")), companion);
+            }
         }
     }
 
