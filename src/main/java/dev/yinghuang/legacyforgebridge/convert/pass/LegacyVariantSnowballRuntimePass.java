@@ -46,6 +46,8 @@ public final class LegacyVariantSnowballRuntimePass implements ConversionPass {
         root.addProperty("runtimeRuleRegistryWired", true);
         root.addProperty("preRegistrationRuleLoadWired", true);
         root.addProperty("projectileEntityTypeRegistrationWired", true);
+        root.addProperty("projectileItemStackCarrierWired", true);
+        root.addProperty("legacyMetadataSyncWired", true);
         root.addProperty("itemRuntimeWired", false);
         root.addProperty("projectileRuntimeWired", false);
         root.addProperty("projectileImpactRuntimeWired", false);
@@ -113,6 +115,8 @@ public final class LegacyVariantSnowballRuntimePass implements ConversionPass {
             rule.addProperty("runtimeRuleReady", true);
             rule.addProperty("preRegistrationRuleLoadWired", true);
             rule.addProperty("projectileEntityTypeRegistrationWired", true);
+            rule.addProperty("projectileItemStackCarrierWired", true);
+            rule.addProperty("legacyMetadataSyncWired", true);
             rule.addProperty("itemRuntimeWired", false);
             rule.addProperty("projectileRuntimeWired", false);
             rule.addProperty("projectileImpactRuntimeWired", false);
