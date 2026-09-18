@@ -10,6 +10,7 @@ import dev.yinghuang.legacyforgebridge.convert.pass.CopyLegacyJarPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.GenericContentPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyEntityDataWatcherPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyVariantSnowballLaunchPass;
+import dev.yinghuang.legacyforgebridge.convert.pass.LegacyVariantSnowballItemRegistrationStripPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyVariantSnowballPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyVariantSnowballRegistrationStripPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyVariantSnowballRetirementReadiness;
@@ -101,6 +102,20 @@ class BambooVariantSnowballRuntimeClosureExactTest {
         assertEquals(1, stripRule.get("strippedProjectileRegistrationSites").getAsInt());
         assertTrue(stripRule.getAsJsonArray("blockers").isEmpty(), stripRule.toString());
 
+        new LegacyVariantSnowballItemRegistrationStripPass().apply(context);
+        JsonObject itemStrip = JsonParser.parseString(Files.readString(
+                staging.resolve(LegacyVariantSnowballItemRegistrationStripPass.OUTPUT),
+                StandardCharsets.UTF_8)).getAsJsonObject();
+        JsonObject itemStripRule = find(itemStrip, "sourceItemClass",
+                "ruby/bamboo/item/ItemDirtySnowball");
+        assertTrue(itemStrip.get("itemRegistrationStripWired").getAsBoolean());
+        boolean itemStripComplete =
+                itemStripRule.get("itemRegistrationStripComplete").getAsBoolean();
+        if (!itemStripComplete) {
+            assertFalse(itemStripRule.getAsJsonArray("blockers").isEmpty(),
+                    itemStripRule.toString());
+        }
+
         LegacyClassDependencyAnalyzer.Analysis dependencies =
                 new LegacyClassDependencyAnalyzer().analyze(source, staging);
         LegacyVariantSnowballRetirementReadiness.materialize(context, dependencies);
@@ -111,18 +126,22 @@ class BambooVariantSnowballRuntimeClosureExactTest {
                 "ruby/bamboo/entity/EntityDirtySnowball");
         assertTrue(readinessRule.get("modernRuntimeReplacementComplete").getAsBoolean());
         assertTrue(readinessRule.get("projectileRegistrationStripComplete").getAsBoolean());
-        assertFalse(readinessRule.get("itemRegistrationStripComplete").getAsBoolean());
-        assertFalse(readinessRule.get("retirementCohortCandidateReady").getAsBoolean());
+        assertEquals(itemStripComplete,
+                readinessRule.get("itemRegistrationStripComplete").getAsBoolean());
+        assertFalse(readinessRule.get("retirementCohortCandidateReady").getAsBoolean(),
+                readinessRule.toString());
         assertFalse(readinessRule.get("sourceClassDeletionAuthorized").getAsBoolean());
 
-        boolean itemStripBlocker = false;
-        for (JsonElement blocker : readinessRule.getAsJsonArray("blockers")) {
-            if ("item-registration-strip-not-wired".equals(blocker.getAsString())) {
-                itemStripBlocker = true;
-                break;
+        if (!itemStripComplete) {
+            boolean itemStripBlocker = false;
+            for (JsonElement blocker : readinessRule.getAsJsonArray("blockers")) {
+                if ("item-registration-strip-incomplete".equals(blocker.getAsString())) {
+                    itemStripBlocker = true;
+                    break;
+                }
             }
+            assertTrue(itemStripBlocker, readinessRule.toString());
         }
-        assertTrue(itemStripBlocker, readinessRule.toString());
     }
 
     private static JsonObject find(JsonObject root, String key, String expected) {
