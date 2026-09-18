@@ -50,8 +50,10 @@ class ConvertedLegacyVariantSnowballMetadataCarrierTest {
                                     && methodDescriptor.contains("Lnet/minecraft/world/item/ItemStack;")) {
                                 stackCtor[0] = true;
                             }
-                            if (owner.equals(ThrowableItemProjectile.class.getName().replace('.', '/'))
-                                    && methodName.equals("getItem")) {
+                            if (methodName.equals("getItem")
+                                    && methodDescriptor.equals("()Lnet/minecraft/world/item/ItemStack;")) {
+                                // invokevirtual may legally name either the declaring superclass or
+                                // the current subclass for this inherited final-shape call.
                                 getItem[0] = true;
                             }
                             if (owner.equals(LegacyStackComponents.class.getName().replace('.', '/'))
