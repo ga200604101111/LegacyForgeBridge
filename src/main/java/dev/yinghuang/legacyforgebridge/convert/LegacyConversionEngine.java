@@ -56,6 +56,7 @@ import dev.yinghuang.legacyforgebridge.convert.pass.LegacySingleInputProcessorTi
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacySingleInputProcessorBlockRegistrationStripPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacySingleInputProcessorTileConstructionPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacySingleInputProcessorGuiHandlerProofPass;
+import dev.yinghuang.legacyforgebridge.convert.pass.LegacySingleInputProcessorGuiHandlerStripPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacySnowballItemPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyStorageBlockPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.NativeItemTagsPass;
@@ -149,6 +150,7 @@ public final class LegacyConversionEngine {
             builder.add(new LegacySingleInputProcessorBlockRegistrationStripPass());
             builder.add(new LegacySingleInputProcessorTileConstructionPass());
             builder.add(new LegacySingleInputProcessorGuiHandlerProofPass());
+            builder.add(new LegacySingleInputProcessorGuiHandlerStripPass());
             builder.add(new LegacyRecipeAnalysisPass());
             builder.add(new LegacyRecipeMaterializationPass());
             builder.add(new LegacyFuelHandlerPass());
