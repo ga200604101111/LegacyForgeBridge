@@ -40,6 +40,7 @@ class LegacyVariantSnowballRetirementReadinessTest {
         new LegacyEntityDataWatcherPass().apply(context);
         new LegacyVariantSnowballRuntimePass().apply(context);
         new LegacyVariantSnowballRegistrationStripPass().apply(context);
+        new LegacyVariantSnowballItemRegistrationStripPass().apply(context);
 
         LegacyClassDependencyAnalyzer.Analysis dependencies =
                 new LegacyClassDependencyAnalyzer().analyze(source, staging);
@@ -61,7 +62,7 @@ class LegacyVariantSnowballRetirementReadinessTest {
         JsonObject rule = root.getAsJsonArray("rules").get(0).getAsJsonObject();
         assertTrue(rule.get("modernRuntimeReplacementComplete").getAsBoolean());
         assertTrue(rule.get("projectileRegistrationStripComplete").getAsBoolean());
-        assertFalse(rule.get("itemRegistrationStripComplete").getAsBoolean());
+        assertTrue(rule.get("itemRegistrationStripComplete").getAsBoolean());
         assertFalse(rule.get("retirementCohortCandidateReady").getAsBoolean());
         assertFalse(rule.get("sourceClassDeletionAuthorized").getAsBoolean());
         assertEquals(0, rule.get("deletedSourceClassCount").getAsInt());
@@ -70,7 +71,7 @@ class LegacyVariantSnowballRetirementReadinessTest {
         for (var element : rule.getAsJsonArray("blockers")) {
             blockers.add(element.getAsString());
         }
-        assertTrue(blockers.contains("item-registration-strip-not-wired"), blockers.toString());
+        assertFalse(blockers.contains("item-registration-strip-incomplete"), blockers.toString());
         assertTrue(blockers.stream().anyMatch(value ->
                 value.startsWith("item-candidate-incoming-reference:foreign/Bootstrap")),
                 blockers.toString());
