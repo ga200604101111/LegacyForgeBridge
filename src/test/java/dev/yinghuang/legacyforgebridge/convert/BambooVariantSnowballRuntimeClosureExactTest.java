@@ -167,9 +167,14 @@ class BambooVariantSnowballRuntimeClosureExactTest {
             }
             assertTrue(constructorBlocker, readinessRule.toString());
         }
-        assertTrue(readinessRule.getAsJsonArray("blockers").asList().stream()
-                .anyMatch(blocker -> "item-source-allocation-strip-incomplete"
-                        .equals(blocker.getAsString())), readinessRule.toString());
+        boolean allocationStripBlocker = false;
+        for (JsonElement blocker : readinessRule.getAsJsonArray("blockers")) {
+            if ("item-source-allocation-strip-incomplete".equals(blocker.getAsString())) {
+                allocationStripBlocker = true;
+                break;
+            }
+        }
+        assertTrue(allocationStripBlocker, readinessRule.toString());
     }
 
     private static JsonObject find(JsonObject root, String key, String expected) {
