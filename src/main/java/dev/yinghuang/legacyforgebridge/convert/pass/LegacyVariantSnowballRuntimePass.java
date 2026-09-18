@@ -13,17 +13,20 @@ import dev.yinghuang.legacyforgebridge.convert.api.SupportLevel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Objects;
 
 /**
  * Promotes source-complete variant-snowball candidates into a runtime-owned rule sidecar.
  *
- * This pass intentionally does not claim projectile or item gameplay implementation. It only
- * establishes the fail-closed configuration boundary that GeneratedModSupport loads before any
- * generated item registration occurs.
+ * The projectile EntityType registration is admitted only after joining the variant-snowball
+ * family with a unique source-proven EntityRegistry.registerModEntity registration. Item launch,
+ * projectile impact behavior and presentation remain deliberately closed.
  */
 public final class LegacyVariantSnowballRuntimePass implements ConversionPass {
     public static final String OUTPUT = "legacyforgebridge/variant-snowball-runtime-rules.json";
-    public static final int SCHEMA = 1;
+    public static final int SCHEMA = 2;
+    public static final float VANILLA_SNOWBALL_WIDTH = 0.25F;
+    public static final float VANILLA_SNOWBALL_HEIGHT = 0.25F;
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     @Override public String id() { return "legacy-variant-snowball-runtime-rules"; }
@@ -33,16 +36,19 @@ public final class LegacyVariantSnowballRuntimePass implements ConversionPass {
         Path candidatePath = context.stagingDir().resolve(LegacyVariantSnowballRuntimeCandidatePass.OUTPUT);
         if (!Files.isRegularFile(candidatePath)) return;
 
-        JsonObject candidates = JsonParser.parseString(
-                Files.readString(candidatePath, StandardCharsets.UTF_8)).getAsJsonObject();
+        JsonObject candidates = read(candidatePath);
+        JsonObject entityRegistrations = readIfPresent(
+                context.stagingDir().resolve(LegacyEntityDataWatcherPass.OUTPUT));
 
         JsonObject root = new JsonObject();
         root.addProperty("schemaVersion", SCHEMA);
         root.addProperty("sourceSha256", context.sourceHash());
         root.addProperty("runtimeRuleRegistryWired", true);
         root.addProperty("preRegistrationRuleLoadWired", true);
+        root.addProperty("projectileEntityTypeRegistrationWired", true);
         root.addProperty("itemRuntimeWired", false);
         root.addProperty("projectileRuntimeWired", false);
+        root.addProperty("projectileImpactRuntimeWired", false);
         root.addProperty("rendererRuntimeWired", false);
         root.addProperty("runtimeImplementationWired", false);
         JsonArray rules = new JsonArray();
@@ -53,33 +59,63 @@ public final class LegacyVariantSnowballRuntimePass implements ConversionPass {
         if (integer(candidates, "schemaVersion", -1) != LegacyVariantSnowballRuntimeCandidatePass.SCHEMA
                 || !context.sourceHash().equals(string(candidates, "sourceSha256", ""))
                 || bool(candidates, "runtimeImplementationWired")) {
-            JsonObject skip = new JsonObject();
-            skip.addProperty("reason", "runtime-candidate-sidecar-schema-source-or-runtime-claim-invalid");
-            skipped.add(skip);
+            skip(skipped, null, null, null,
+                    "runtime-candidate-sidecar-schema-source-or-runtime-claim-invalid");
             finish(context, root, rules, skipped);
             return;
         }
+
+        boolean entitySidecarValid = entityRegistrations != null
+                && integer(entityRegistrations, "schemaVersion", -1) == 1
+                && context.sourceHash().equals(string(entityRegistrations, "sourceSha256", ""))
+                && !bool(entityRegistrations, "runtimeImplementationWired");
 
         for (JsonElement element : array(candidates, "rules")) {
             if (!element.isJsonObject()) continue;
             JsonObject source = element.getAsJsonObject();
             String reason = blocker(source, context.metadata().fabricId());
+
+            JsonObject registration = null;
+            if (reason == null && !entitySidecarValid) {
+                reason = "legacy-projectile-registration-sidecar-missing-or-stale";
+            }
+            if (reason == null) {
+                registration = uniqueProjectileRegistration(
+                        entityRegistrations, string(source, "sourceProjectileClass", null));
+                if (registration == null) reason = "legacy-projectile-registration-not-uniquely-proven";
+            }
+            if (reason == null) reason = registrationBlocker(registration);
+
             if (reason != null) {
-                JsonObject skip = new JsonObject();
-                copy(source, skip, "id");
-                copy(source, skip, "projectileId");
-                copy(source, skip, "legacyRegistryName");
-                copy(source, skip, "sourceItemClass");
-                skip.addProperty("reason", reason);
-                skipped.add(skip);
+                skip(skipped,
+                        string(source, "id", null),
+                        string(source, "projectileId", null),
+                        string(source, "sourceProjectileClass", null),
+                        reason);
                 continue;
             }
 
+            int trackingRange = integer(registration, "trackingRange", 0);
             JsonObject rule = source.deepCopy();
+            rule.addProperty("legacyProjectileRegistryName",
+                    string(registration, "legacyRegistryName", null));
+            rule.addProperty("legacyProjectileNumericId",
+                    integer(registration, "legacyNumericId", -1));
+            rule.addProperty("legacyTrackingRangeBlocks", trackingRange);
+            rule.addProperty("modernClientTrackingRangeChunks", blocksToTrackingChunks(trackingRange));
+            rule.addProperty("updateFrequency", integer(registration, "updateFrequency", 0));
+            rule.addProperty("velocityUpdates", true);
+            rule.addProperty("width", VANILLA_SNOWBALL_WIDTH);
+            rule.addProperty("height", VANILLA_SNOWBALL_HEIGHT);
+            rule.addProperty("mobCategory", "MISC");
+            rule.addProperty("inheritedVanillaSnowballDimensions", true);
+            rule.addProperty("legacyProjectileRegistrationProven", true);
             rule.addProperty("runtimeRuleReady", true);
             rule.addProperty("preRegistrationRuleLoadWired", true);
+            rule.addProperty("projectileEntityTypeRegistrationWired", true);
             rule.addProperty("itemRuntimeWired", false);
             rule.addProperty("projectileRuntimeWired", false);
+            rule.addProperty("projectileImpactRuntimeWired", false);
             rule.addProperty("rendererRuntimeWired", false);
             rule.addProperty("runtimeImplementationWired", false);
             rules.add(rule);
@@ -125,9 +161,56 @@ public final class LegacyVariantSnowballRuntimePass implements ConversionPass {
         return null;
     }
 
+    private static String registrationBlocker(JsonObject registration) {
+        if (registration == null) return "legacy-projectile-registration-not-uniquely-proven";
+        if (bool(registration, "runtimeImplementationWired")) {
+            return "legacy-projectile-registration-unexpected-runtime-claim";
+        }
+        if (!bool(registration, "sourceDataWatcherDefinitionComplete")) {
+            return "legacy-projectile-registration-proof-incomplete";
+        }
+        String name = string(registration, "legacyRegistryName", null);
+        if (name == null || name.isBlank()) return "legacy-projectile-registry-name-missing";
+        if (integer(registration, "legacyNumericId", -1) < 0) {
+            return "legacy-projectile-numeric-id-missing";
+        }
+        if (integer(registration, "trackingRange", 0) <= 0) {
+            return "legacy-projectile-tracking-range-invalid";
+        }
+        if (integer(registration, "updateFrequency", 0) <= 0) {
+            return "legacy-projectile-update-frequency-invalid";
+        }
+        if (!bool(registration, "velocityUpdates")) {
+            return "legacy-projectile-velocity-updates-disabled";
+        }
+        if (!array(registration, "dataWatcherEntries").isEmpty()) {
+            return "legacy-projectile-source-datawatcher-state-requires-runtime-sync";
+        }
+        return null;
+    }
+
+    private static JsonObject uniqueProjectileRegistration(JsonObject root, String sourceProjectileClass) {
+        if (root == null || sourceProjectileClass == null) return null;
+        JsonObject found = null;
+        for (JsonElement element : array(root, "rules")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject rule = element.getAsJsonObject();
+            if (!Objects.equals(sourceProjectileClass, string(rule, "sourceClass", null))) continue;
+            if (found != null) return null;
+            found = rule;
+        }
+        return found;
+    }
+
+    static int blocksToTrackingChunks(int blocks) {
+        if (blocks <= 0) throw new IllegalArgumentException("blocks");
+        return blocks / 16 + (blocks % 16 == 0 ? 0 : 1);
+    }
+
     private static void finish(ConversionContext context, JsonObject root,
                                JsonArray rules, JsonArray skipped) throws Exception {
         root.addProperty("runtimeRuleCount", rules.size());
+        root.addProperty("projectileEntityTypeRuleCount", rules.size());
         root.addProperty("skippedRuntimeRuleCount", skipped.size());
         Path output = context.stagingDir().resolve(OUTPUT);
         Files.createDirectories(output.getParent());
@@ -138,17 +221,36 @@ public final class LegacyVariantSnowballRuntimePass implements ConversionPass {
                     "LFB-CONVERT-VARIANT-SNOWBALL-RUNTIME-0003",
                     SupportLevel.RUNTIME_BRIDGE,
                     "Installed " + rules.size()
-                            + " source-complete variant-snowball rule family/families into the "
-                            + "pre-registration runtime sidecar; item/projectile gameplay remains fail-closed.");
+                            + " source-complete variant-snowball runtime rule family/families with "
+                            + "source-proven projectile EntityType registration metadata; item launch, "
+                            + "impact gameplay and renderer registration remain fail-closed.");
         }
         if (!skipped.isEmpty()) {
             context.diagnostics().warning(
                     "LFB-CONVERT-VARIANT-SNOWBALL-RUNTIME-0004",
                     SupportLevel.RUNTIME_BRIDGE,
                     "Skipped " + skipped.size()
-                            + " variant-snowball runtime candidate(s) while materializing the "
-                            + "pre-registration rule boundary.");
+                            + " variant-snowball runtime candidate(s) while joining source projectile "
+                            + "registration metadata.");
         }
+    }
+
+    private static void skip(JsonArray skipped, String id, String projectileId,
+                             String sourceProjectileClass, String reason) {
+        JsonObject value = new JsonObject();
+        if (id != null) value.addProperty("id", id);
+        if (projectileId != null) value.addProperty("projectileId", projectileId);
+        if (sourceProjectileClass != null) value.addProperty("sourceProjectileClass", sourceProjectileClass);
+        value.addProperty("reason", reason);
+        skipped.add(value);
+    }
+
+    private static JsonObject readIfPresent(Path path) throws Exception {
+        return Files.isRegularFile(path) ? read(path) : null;
+    }
+
+    private static JsonObject read(Path path) throws Exception {
+        return JsonParser.parseString(Files.readString(path, StandardCharsets.UTF_8)).getAsJsonObject();
     }
 
     private static JsonArray array(JsonObject root, String name) {
@@ -187,10 +289,5 @@ public final class LegacyVariantSnowballRuntimePass implements ConversionPass {
 
     private static String namespace(String id) {
         return id.substring(0, id.indexOf(':'));
-    }
-
-    private static void copy(JsonObject source, JsonObject target, String name) {
-        JsonElement value = source.get(name);
-        if (value != null) target.add(name, value.deepCopy());
     }
 }

@@ -6,9 +6,16 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import dev.yinghuang.legacyforgebridge.LegacyForgeBridge;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyVariantSnowballRuntimePass;
+import dev.yinghuang.legacyforgebridge.convert.runtime.ConvertedLegacyVariantSnowballProjectile;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
+import net.minecraft.core.Registry;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.MobCategory;
 
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
@@ -20,11 +27,11 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Pre-registration runtime rule registry for source-proven metadata-indexed legacy snowballs.
+ * Pre-registration runtime registry for source-proven metadata-indexed legacy snowballs.
  *
- * The registry intentionally owns only normalized data in this revision. Projectile EntityType,
- * specialized item behavior and renderer registration stay closed until their dedicated runtime
- * slices are admitted.
+ * Rules are loaded before generated item construction. This revision also materializes the dormant
+ * modern projectile EntityType from source-proven legacy registration metadata. No item path can
+ * launch the projectile yet, and impact/presentation runtimes remain closed.
  */
 public final class LegacyVariantSnowballRuntimeRegistry {
     public enum Effect {
@@ -74,15 +81,27 @@ public final class LegacyVariantSnowballRuntimeRegistry {
     }
 
     public record Rule(Identifier id, Identifier projectileId,
+                       String legacyProjectileRegistryName, int legacyProjectileNumericId,
+                       int legacyTrackingRangeBlocks, int modernClientTrackingRangeChunks,
+                       int updateFrequency, boolean velocityUpdates,
+                       float width, float height,
                        String launchSound, float launchVolume,
                        float launchPitchNumerator, float launchPitchRandomScale,
                        float launchPitchBase, boolean consumeOutsideCreative,
                        boolean serverAuthoritativeLaunch,
                        Map<Integer, Variant> variants,
-                       boolean sourceSemanticsComplete, boolean runtimeRuleReady) {
+                       boolean sourceSemanticsComplete, boolean runtimeRuleReady,
+                       boolean projectileEntityTypeRegistrationWired) {
         public Rule {
             if (id == null || projectileId == null
                     || !id.getNamespace().equals(projectileId.getNamespace())
+                    || legacyProjectileRegistryName == null || legacyProjectileRegistryName.isBlank()
+                    || legacyProjectileNumericId < 0
+                    || legacyTrackingRangeBlocks <= 0
+                    || modernClientTrackingRangeChunks != trackingChunks(legacyTrackingRangeBlocks)
+                    || updateFrequency <= 0 || !velocityUpdates
+                    || Float.compare(width, LegacyVariantSnowballRuntimePass.VANILLA_SNOWBALL_WIDTH) != 0
+                    || Float.compare(height, LegacyVariantSnowballRuntimePass.VANILLA_SNOWBALL_HEIGHT) != 0
                     || !"random.bow".equals(launchSound)
                     || Float.compare(launchVolume, 0.5F) != 0
                     || Float.compare(launchPitchNumerator, 0.4F) != 0
@@ -90,7 +109,8 @@ public final class LegacyVariantSnowballRuntimeRegistry {
                     || Float.compare(launchPitchBase, 0.8F) != 0
                     || !consumeOutsideCreative || !serverAuthoritativeLaunch
                     || variants == null || variants.isEmpty()
-                    || !sourceSemanticsComplete || !runtimeRuleReady) {
+                    || !sourceSemanticsComplete || !runtimeRuleReady
+                    || !projectileEntityTypeRegistrationWired) {
                 throw new IllegalArgumentException("Invalid converted variant-snowball runtime rule");
             }
             variants = Collections.unmodifiableMap(new LinkedHashMap<>(variants));
@@ -102,6 +122,8 @@ public final class LegacyVariantSnowballRuntimeRegistry {
     }
 
     private static final Map<Identifier, Rule> RULES = new ConcurrentHashMap<>();
+    private static final Map<Identifier, EntityType<ConvertedLegacyVariantSnowballProjectile>> TYPES =
+            new ConcurrentHashMap<>();
 
     private LegacyVariantSnowballRuntimeRegistry() { }
 
@@ -117,6 +139,11 @@ public final class LegacyVariantSnowballRuntimeRegistry {
             if (integer(root, "schemaVersion", 0) != LegacyVariantSnowballRuntimePass.SCHEMA
                     || !bool(root, "runtimeRuleRegistryWired")
                     || !bool(root, "preRegistrationRuleLoadWired")
+                    || !bool(root, "projectileEntityTypeRegistrationWired")
+                    || bool(root, "itemRuntimeWired")
+                    || bool(root, "projectileRuntimeWired")
+                    || bool(root, "projectileImpactRuntimeWired")
+                    || bool(root, "rendererRuntimeWired")
                     || bool(root, "runtimeImplementationWired")) {
                 return;
             }
@@ -127,13 +154,13 @@ public final class LegacyVariantSnowballRuntimeRegistry {
                 if (!element.isJsonObject()) continue;
                 Rule rule = parse(element.getAsJsonObject());
                 if (rule == null || !modId.equals(rule.id().getNamespace())) continue;
-                register(rule);
+                install(rule);
                 loaded++;
             }
             if (loaded > 0) {
                 LegacyForgeBridge.LOGGER.info(
-                        "Loaded converted variant-snowball pre-registration rules: mod={}, rules={}",
-                        modId, loaded);
+                        "Loaded converted variant-snowball runtime rules and projectile EntityTypes: "
+                                + "mod={}, rules={}", modId, loaded);
             }
         } catch (Exception exception) {
             throw new IllegalStateException(
@@ -145,6 +172,15 @@ public final class LegacyVariantSnowballRuntimeRegistry {
         return id == null ? null : RULES.get(id);
     }
 
+    public static EntityType<ConvertedLegacyVariantSnowballProjectile> projectileType(Identifier projectileId) {
+        return projectileId == null ? null : TYPES.get(projectileId);
+    }
+
+    public static EntityType<ConvertedLegacyVariantSnowballProjectile> projectileTypeForItem(Identifier itemId) {
+        Rule rule = rule(itemId);
+        return rule == null ? null : projectileType(rule.projectileId());
+    }
+
     public static List<Rule> rules(String namespace) {
         return RULES.values().stream()
                 .filter(rule -> namespace.equals(rule.id().getNamespace()))
@@ -152,19 +188,47 @@ public final class LegacyVariantSnowballRuntimeRegistry {
                 .toList();
     }
 
+    static int trackingChunks(int blocks) {
+        if (blocks <= 0) throw new IllegalArgumentException("blocks");
+        return blocks / 16 + (blocks % 16 == 0 ? 0 : 1);
+    }
+
     static Rule parseForTests(JsonObject value) {
         return parse(value);
     }
 
     static void registerForTests(Rule rule) {
-        register(rule);
+        registerRule(rule);
     }
 
     static void clearForTests() {
         RULES.clear();
+        TYPES.clear();
     }
 
-    private static void register(Rule rule) {
+    private static synchronized void install(Rule rule) {
+        registerRule(rule);
+        EntityType<ConvertedLegacyVariantSnowballProjectile> existing = TYPES.get(rule.projectileId());
+        if (existing != null) return;
+        if (BuiltInRegistries.ENTITY_TYPE.containsKey(rule.projectileId())) {
+            throw new IllegalStateException(
+                    "Converted variant-snowball projectile id is already registered: " + rule.projectileId());
+        }
+
+        EntityType.EntityFactory<ConvertedLegacyVariantSnowballProjectile> factory =
+                (type, level) -> new ConvertedLegacyVariantSnowballProjectile(type, level, rule);
+        ResourceKey<EntityType<?>> key = ResourceKey.create(Registries.ENTITY_TYPE, rule.projectileId());
+        EntityType<ConvertedLegacyVariantSnowballProjectile> created =
+                EntityType.Builder.<ConvertedLegacyVariantSnowballProjectile>of(factory, MobCategory.MISC)
+                        .sized(rule.width(), rule.height())
+                        .clientTrackingRange(rule.modernClientTrackingRangeChunks())
+                        .updateInterval(rule.updateFrequency())
+                        .build(key);
+        Registry.register(BuiltInRegistries.ENTITY_TYPE, key, created);
+        TYPES.put(rule.projectileId(), created);
+    }
+
+    private static void registerRule(Rule rule) {
         Rule previous = RULES.putIfAbsent(rule.id(), rule);
         if (previous != null && !previous.equals(rule)) {
             throw new IllegalStateException(
@@ -176,9 +240,17 @@ public final class LegacyVariantSnowballRuntimeRegistry {
         try {
             if (!bool(value, "runtimeRuleReady")
                     || !bool(value, "preRegistrationRuleLoadWired")
+                    || !bool(value, "legacyProjectileRegistrationProven")
+                    || !bool(value, "projectileEntityTypeRegistrationWired")
+                    || bool(value, "itemRuntimeWired")
+                    || bool(value, "projectileRuntimeWired")
+                    || bool(value, "projectileImpactRuntimeWired")
+                    || bool(value, "rendererRuntimeWired")
                     || bool(value, "runtimeImplementationWired")
                     || !"VARIANT_SNOWBALL".equals(string(value, "adapter", null))
                     || !"THROWN_ITEM".equals(string(value, "rendererAdapter", null))
+                    || !"MISC".equals(string(value, "mobCategory", null))
+                    || !bool(value, "inheritedVanillaSnowballDimensions")
                     || !bool(value, "sourceSemanticsComplete")) {
                 return null;
             }
@@ -203,6 +275,14 @@ public final class LegacyVariantSnowballRuntimeRegistry {
             return new Rule(
                     id,
                     projectileId,
+                    string(value, "legacyProjectileRegistryName", null),
+                    integer(value, "legacyProjectileNumericId", -1),
+                    integer(value, "legacyTrackingRangeBlocks", 0),
+                    integer(value, "modernClientTrackingRangeChunks", 0),
+                    integer(value, "updateFrequency", 0),
+                    bool(value, "velocityUpdates"),
+                    decimal(value, "width", Float.NaN),
+                    decimal(value, "height", Float.NaN),
                     string(value, "launchSound", null),
                     decimal(value, "launchVolume", Float.NaN),
                     decimal(value, "launchPitchNumerator", Float.NaN),
@@ -212,7 +292,8 @@ public final class LegacyVariantSnowballRuntimeRegistry {
                     bool(value, "serverAuthoritativeLaunch"),
                     variants,
                     bool(value, "sourceSemanticsComplete"),
-                    bool(value, "runtimeRuleReady"));
+                    bool(value, "runtimeRuleReady"),
+                    bool(value, "projectileEntityTypeRegistrationWired"));
         } catch (RuntimeException invalid) {
             return null;
         }

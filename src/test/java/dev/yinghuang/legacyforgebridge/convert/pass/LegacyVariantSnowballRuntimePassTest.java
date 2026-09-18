@@ -4,6 +4,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import dev.yinghuang.legacyforgebridge.convert.LegacyJarAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.VariantSnowballLaunchFixture;
+import dev.yinghuang.legacyforgebridge.convert.VariantSnowballRuntimeFixture;
 import dev.yinghuang.legacyforgebridge.convert.api.ConversionContext;
 import dev.yinghuang.legacyforgebridge.convert.api.DiagnosticCollector;
 import dev.yinghuang.legacyforgebridge.convert.api.LegacyModMetadata;
@@ -23,28 +24,42 @@ class LegacyVariantSnowballRuntimePassTest {
     @TempDir Path tempDir;
 
     @Test
-    void sourceCompleteCandidateBecomesPreRegistrationRuleWithoutGameplayRuntimeClaim() throws Exception {
-        Path source = VariantSnowballLaunchFixture.write(tempDir.resolve("variant.jar"));
+    void sourceCompleteCandidateJoinsProvenProjectileRegistrationWithoutOpeningGameplay() throws Exception {
+        Path source = VariantSnowballRuntimeFixture.write(tempDir.resolve("variant.jar"));
         Path staging = tempDir.resolve("staging");
         JsonObject root = run(source, staging);
 
-        assertEquals(1, root.get("schemaVersion").getAsInt());
+        assertEquals(2, root.get("schemaVersion").getAsInt());
         assertTrue(root.get("runtimeRuleRegistryWired").getAsBoolean());
         assertTrue(root.get("preRegistrationRuleLoadWired").getAsBoolean());
+        assertTrue(root.get("projectileEntityTypeRegistrationWired").getAsBoolean());
         assertFalse(root.get("itemRuntimeWired").getAsBoolean());
         assertFalse(root.get("projectileRuntimeWired").getAsBoolean());
+        assertFalse(root.get("projectileImpactRuntimeWired").getAsBoolean());
         assertFalse(root.get("rendererRuntimeWired").getAsBoolean());
         assertFalse(root.get("runtimeImplementationWired").getAsBoolean());
         assertEquals(1, root.get("runtimeRuleCount").getAsInt());
+        assertEquals(1, root.get("projectileEntityTypeRuleCount").getAsInt());
         assertEquals(0, root.get("skippedRuntimeRuleCount").getAsInt());
 
         JsonObject rule = root.getAsJsonArray("rules").get(0).getAsJsonObject();
         assertEquals("foreign:variant_ball", rule.get("id").getAsString());
         assertEquals("foreign:variant_ball_projectile", rule.get("projectileId").getAsString());
+        assertEquals("variant_projectile", rule.get("legacyProjectileRegistryName").getAsString());
+        assertEquals(41, rule.get("legacyProjectileNumericId").getAsInt());
+        assertEquals(64, rule.get("legacyTrackingRangeBlocks").getAsInt());
+        assertEquals(4, rule.get("modernClientTrackingRangeChunks").getAsInt());
+        assertEquals(10, rule.get("updateFrequency").getAsInt());
+        assertTrue(rule.get("velocityUpdates").getAsBoolean());
+        assertEquals(0.25F, rule.get("width").getAsFloat());
+        assertEquals(0.25F, rule.get("height").getAsFloat());
+        assertTrue(rule.get("inheritedVanillaSnowballDimensions").getAsBoolean());
+        assertTrue(rule.get("legacyProjectileRegistrationProven").getAsBoolean());
         assertTrue(rule.get("runtimeRuleReady").getAsBoolean());
-        assertTrue(rule.get("preRegistrationRuleLoadWired").getAsBoolean());
+        assertTrue(rule.get("projectileEntityTypeRegistrationWired").getAsBoolean());
         assertFalse(rule.get("itemRuntimeWired").getAsBoolean());
         assertFalse(rule.get("projectileRuntimeWired").getAsBoolean());
+        assertFalse(rule.get("projectileImpactRuntimeWired").getAsBoolean());
         assertFalse(rule.get("rendererRuntimeWired").getAsBoolean());
         assertFalse(rule.get("runtimeImplementationWired").getAsBoolean());
         assertEquals(2, rule.getAsJsonArray("variants").size());
@@ -52,11 +67,11 @@ class LegacyVariantSnowballRuntimePassTest {
 
     @Test
     void unexpectedCandidateRuntimeClaimFailsClosed() throws Exception {
-        Path source = VariantSnowballLaunchFixture.write(tempDir.resolve("claimed.jar"));
+        Path source = VariantSnowballRuntimeFixture.write(tempDir.resolve("claimed.jar"));
         Path staging = tempDir.resolve("claimed-staging");
         Files.createDirectories(staging);
         ConversionContext context = context(source, staging);
-        runCandidatePipeline(context);
+        runInputs(context);
 
         Path candidates = staging.resolve(LegacyVariantSnowballRuntimeCandidatePass.OUTPUT);
         JsonObject root = JsonParser.parseString(Files.readString(candidates)).getAsJsonObject();
@@ -72,20 +87,40 @@ class LegacyVariantSnowballRuntimePassTest {
                 runtime.getAsJsonArray("skipped").get(0).getAsJsonObject().get("reason").getAsString());
     }
 
+    @Test
+    void missingProjectileEntityRegistrationFailsClosed() throws Exception {
+        Path source = VariantSnowballLaunchFixture.write(tempDir.resolve("missing-registration.jar"));
+        Path staging = tempDir.resolve("missing-registration-staging");
+        JsonObject root = run(source, staging);
+        assertEquals(0, root.get("runtimeRuleCount").getAsInt());
+        assertEquals(1, root.get("skippedRuntimeRuleCount").getAsInt());
+        assertEquals("legacy-projectile-registration-sidecar-missing-or-stale",
+                root.getAsJsonArray("skipped").get(0).getAsJsonObject().get("reason").getAsString());
+    }
+
+    @Test
+    void trackingRangeUsesCeilingChunks() {
+        assertEquals(1, LegacyVariantSnowballRuntimePass.blocksToTrackingChunks(1));
+        assertEquals(1, LegacyVariantSnowballRuntimePass.blocksToTrackingChunks(16));
+        assertEquals(2, LegacyVariantSnowballRuntimePass.blocksToTrackingChunks(17));
+        assertEquals(4, LegacyVariantSnowballRuntimePass.blocksToTrackingChunks(64));
+    }
+
     private JsonObject run(Path source, Path staging) throws Exception {
         Files.createDirectories(staging);
         ConversionContext context = context(source, staging);
-        runCandidatePipeline(context);
+        runInputs(context);
         new LegacyVariantSnowballRuntimePass().apply(context);
         return JsonParser.parseString(
                 Files.readString(staging.resolve(LegacyVariantSnowballRuntimePass.OUTPUT))).getAsJsonObject();
     }
 
-    private static void runCandidatePipeline(ConversionContext context) throws Exception {
+    private static void runInputs(ConversionContext context) throws Exception {
         new GenericContentPass().apply(context);
         new LegacyVariantSnowballPass().apply(context);
         new LegacyVariantSnowballLaunchPass().apply(context);
         new LegacyVariantSnowballRuntimeCandidatePass().apply(context);
+        new LegacyEntityDataWatcherPass().apply(context);
     }
 
     private ConversionContext context(Path source, Path staging) throws Exception {

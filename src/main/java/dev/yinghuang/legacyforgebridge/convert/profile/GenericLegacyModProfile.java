@@ -35,9 +35,9 @@ public final class GenericLegacyModProfile implements LegacyModProfile {
         plan.add(new LegacyVariantSnowballPass());
         plan.add(new LegacyVariantSnowballLaunchPass());
         plan.add(new LegacyVariantSnowballRuntimeCandidatePass());
-        plan.add(new LegacyVariantSnowballRuntimePass());
         plan.add(new LegacyGridPotPresentationProofPass());
         plan.add(new LegacyEntityDataWatcherPass());
+        plan.add(new LegacyVariantSnowballRuntimePass());
         plan.add(new LegacyEntityDataWatcherAccessPass());
         plan.add(new LegacyEntityDataWatcherGlobalClosurePass());
         plan.add(new LegacyEntityRuntimePlanPass());

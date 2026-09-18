@@ -14,13 +14,20 @@ class LegacyVariantSnowballRuntimeRegistryTest {
     @AfterEach void clear() { LegacyVariantSnowballRuntimeRegistry.clearForTests(); }
 
     @Test
-    void normalizedRuleParsesMetadataVariantsAndRegistersIdempotently() {
+    void normalizedRuleParsesProjectileRegistrationAndMetadataVariants() {
         JsonObject value = validRule();
         LegacyVariantSnowballRuntimeRegistry.Rule rule =
                 LegacyVariantSnowballRuntimeRegistry.parseForTests(value);
 
         assertEquals(Identifier.parse("foreign:variant_ball"), rule.id());
         assertEquals(Identifier.parse("foreign:variant_ball_projectile"), rule.projectileId());
+        assertEquals("variant_projectile", rule.legacyProjectileRegistryName());
+        assertEquals(41, rule.legacyProjectileNumericId());
+        assertEquals(64, rule.legacyTrackingRangeBlocks());
+        assertEquals(4, rule.modernClientTrackingRangeChunks());
+        assertEquals(10, rule.updateFrequency());
+        assertEquals(0.25F, rule.width());
+        assertEquals(0.25F, rule.height());
         assertEquals(LegacyVariantSnowballRuntimeRegistry.Effect.NONE, rule.variant(0).effect());
         assertEquals(2, rule.variant(0).baseDamage());
         assertEquals(LegacyVariantSnowballRuntimeRegistry.Effect.RANDOM_TELEPORT, rule.variant(7).effect());
@@ -34,14 +41,18 @@ class LegacyVariantSnowballRuntimeRegistryTest {
     }
 
     @Test
-    void malformedOrPrematureRuntimeClaimsFailClosed() {
+    void malformedRegistrationOrPrematureGameplayClaimsFailClosed() {
         JsonObject claimed = validRule();
-        claimed.addProperty("runtimeImplementationWired", true);
+        claimed.addProperty("projectileRuntimeWired", true);
         assertNull(LegacyVariantSnowballRuntimeRegistry.parseForTests(claimed));
 
-        JsonObject wrongLaunch = validRule();
-        wrongLaunch.addProperty("launchSound", "random.click");
-        assertNull(LegacyVariantSnowballRuntimeRegistry.parseForTests(wrongLaunch));
+        JsonObject wrongTracking = validRule();
+        wrongTracking.addProperty("modernClientTrackingRangeChunks", 3);
+        assertNull(LegacyVariantSnowballRuntimeRegistry.parseForTests(wrongTracking));
+
+        JsonObject wrongDimensions = validRule();
+        wrongDimensions.addProperty("width", 0.5F);
+        assertNull(LegacyVariantSnowballRuntimeRegistry.parseForTests(wrongDimensions));
 
         JsonObject wrongTeleport = validRule();
         wrongTeleport.getAsJsonArray("variants").get(1).getAsJsonObject()
@@ -56,8 +67,18 @@ class LegacyVariantSnowballRuntimeRegistryTest {
                         null, 0, 0, 0D, 0, 0, 0, null));
         assertThrows(IllegalArgumentException.class, () ->
                 new LegacyVariantSnowballRuntimeRegistry.Rule(
-                        id, projectile, "random.bow", 0.5F, 0.4F, 0.4F, 0.8F,
-                        true, true, variants, true, false));
+                        id, projectile, "variant_projectile", 41,
+                        64, 3, 10, true, 0.25F, 0.25F,
+                        "random.bow", 0.5F, 0.4F, 0.4F, 0.8F,
+                        true, true, variants, true, true, true));
+    }
+
+    @Test
+    void trackingRangeConversionMatchesEntityRuntimeConvention() {
+        assertEquals(1, LegacyVariantSnowballRuntimeRegistry.trackingChunks(1));
+        assertEquals(1, LegacyVariantSnowballRuntimeRegistry.trackingChunks(16));
+        assertEquals(2, LegacyVariantSnowballRuntimeRegistry.trackingChunks(17));
+        assertEquals(4, LegacyVariantSnowballRuntimeRegistry.trackingChunks(64));
     }
 
     private static JsonObject validRule() {
@@ -71,7 +92,23 @@ class LegacyVariantSnowballRuntimeRegistryTest {
                   "sourceSemanticsComplete": true,
                   "runtimeRuleReady": true,
                   "preRegistrationRuleLoadWired": true,
+                  "legacyProjectileRegistrationProven": true,
+                  "projectileEntityTypeRegistrationWired": true,
+                  "itemRuntimeWired": false,
+                  "projectileRuntimeWired": false,
+                  "projectileImpactRuntimeWired": false,
+                  "rendererRuntimeWired": false,
                   "runtimeImplementationWired": false,
+                  "legacyProjectileRegistryName": "variant_projectile",
+                  "legacyProjectileNumericId": 41,
+                  "legacyTrackingRangeBlocks": 64,
+                  "modernClientTrackingRangeChunks": 4,
+                  "updateFrequency": 10,
+                  "velocityUpdates": true,
+                  "width": 0.25,
+                  "height": 0.25,
+                  "mobCategory": "MISC",
+                  "inheritedVanillaSnowballDimensions": true,
                   "launchSound": "random.bow",
                   "launchVolume": 0.5,
                   "launchPitchNumerator": 0.4,
