@@ -94,6 +94,8 @@ class LegacyVariantSnowballRuntimeRegistryTest {
                   "preRegistrationRuleLoadWired": true,
                   "legacyProjectileRegistrationProven": true,
                   "projectileEntityTypeRegistrationWired": true,
+                  "projectileItemStackCarrierWired": true,
+                  "legacyMetadataSyncWired": true,
                   "itemRuntimeWired": false,
                   "projectileRuntimeWired": false,
                   "projectileImpactRuntimeWired": false,
