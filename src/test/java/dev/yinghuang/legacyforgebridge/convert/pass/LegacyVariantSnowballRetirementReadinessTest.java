@@ -66,8 +66,10 @@ class LegacyVariantSnowballRetirementReadinessTest {
         assertFalse(rule.get("sourceClassDeletionAuthorized").getAsBoolean());
         assertEquals(0, rule.get("deletedSourceClassCount").getAsInt());
 
-        var blockers = rule.getAsJsonArray("blockers").asList().stream()
-                .map(element -> element.getAsString()).toList();
+        java.util.List<String> blockers = new java.util.ArrayList<>();
+        for (var element : rule.getAsJsonArray("blockers")) {
+            blockers.add(element.getAsString());
+        }
         assertTrue(blockers.contains("item-registration-strip-not-wired"), blockers.toString());
         assertTrue(blockers.stream().anyMatch(value ->
                 value.startsWith("item-candidate-incoming-reference:foreign/Bootstrap")),
