@@ -51,6 +51,8 @@ public final class LegacyVariantSnowballRetirementPass implements ConversionPass
         root.addProperty("sourceSha256", context.sourceHash());
         root.addProperty("retirementAuthorizationWired", true);
         root.addProperty("sourceClassDeletionWired", true);
+        root.addProperty("nestedCompanionRetirementWired", true);
+        root.addProperty("freshNestedCompanionSetRecheckWired", true);
         root.addProperty("freshPreDeleteReferenceCheckWired", true);
         root.addProperty("freshPostDeleteReferenceCheckWired", true);
         root.addProperty("restoreOnPostDeleteFailureWired", true);
@@ -87,13 +89,37 @@ public final class LegacyVariantSnowballRetirementPass implements ConversionPass
                 }
             }
 
-            LinkedHashSet<String> cohort = new LinkedHashSet<>();
-            if (itemClass != null) cohort.add(itemClass);
-            if (projectileClass != null) cohort.add(projectileClass);
-            if (selectorClass != null) cohort.add(selectorClass);
-            if (cohort.size() != 3) {
+            LinkedHashSet<String> baseCohort = new LinkedHashSet<>();
+            if (itemClass != null) baseCohort.add(itemClass);
+            if (projectileClass != null) baseCohort.add(projectileClass);
+            if (selectorClass != null) baseCohort.add(selectorClass);
+            if (baseCohort.size() != 3) {
                 blockers.add("retirement-cohort-class-identity-incomplete-or-colliding");
             }
+
+            LinkedHashSet<String> declaredCompanions = new LinkedHashSet<>();
+            for (JsonElement companion : array(source, "nestedCompanionClasses")) {
+                if (!companion.isJsonPrimitive()) {
+                    blockers.add("retirement-nested-companion-identity-malformed");
+                    continue;
+                }
+                String name = companion.getAsString();
+                if (!isNestedCompanion(name, baseCohort)) {
+                    blockers.add("retirement-nested-companion-outside-base-cohort:" + name);
+                    continue;
+                }
+                declaredCompanions.add(name);
+            }
+
+            LinkedHashSet<String> freshCompanions =
+                    LegacyVariantSnowballRetirementReadiness.discoverNestedCompanions(
+                            context.stagingDir(), baseCohort);
+            if (!freshCompanions.equals(declaredCompanions)) {
+                blockers.add("nested-companion-set-changed-after-readiness");
+            }
+
+            LinkedHashSet<String> cohort = new LinkedHashSet<>(baseCohort);
+            cohort.addAll(freshCompanions);
 
             Map<String,Path> paths = new LinkedHashMap<>();
             for (String target : cohort) {
@@ -178,10 +204,12 @@ public final class LegacyVariantSnowballRetirementPass implements ConversionPass
 
             value.addProperty("retirementComplete", retired);
             value.addProperty("sourceClassDeletionAuthorized", retired);
-            value.addProperty("deletedSourceClassCount", retired ? 3 : 0);
+            value.addProperty("nestedCompanionClassCount", freshCompanions.size());
+            value.add("nestedCompanionClasses", strings(freshCompanions));
+            value.addProperty("deletedSourceClassCount", retired ? cohort.size() : 0);
             value.addProperty("restoredAfterFailedRetirement", restored);
             if (pre != null) {
-                for (String target : cohort) {
+                for (String target : baseCohort) {
                     String key = target.equals(itemClass) ? "item"
                             : target.equals(projectileClass) ? "projectile" : "selector";
                     value.add(key + "FreshPreDeleteIncomingReferences",
@@ -189,6 +217,17 @@ public final class LegacyVariantSnowballRetirementPass implements ConversionPass
                     value.add(key + "FreshPreDeleteResourceReferences",
                             strings(pre.forTarget(target).resourceReferences()));
                 }
+                JsonArray companionEvidence = new JsonArray();
+                for (String companion : freshCompanions) {
+                    JsonObject evidence = new JsonObject();
+                    evidence.addProperty("sourceClass", companion);
+                    evidence.add("freshPreDeleteIncomingReferences",
+                            strings(pre.forTarget(companion).incomingClassReferences()));
+                    evidence.add("freshPreDeleteResourceReferences",
+                            strings(pre.forTarget(companion).resourceReferences()));
+                    companionEvidence.add(evidence);
+                }
+                value.add("nestedCompanionFreshPreDeleteEvidence", companionEvidence);
             }
             value.add("postDeleteScanDiagnostics", postDiagnostics);
             value.add("blockers", strings(blockers));
@@ -196,7 +235,7 @@ public final class LegacyVariantSnowballRetirementPass implements ConversionPass
 
             if (retired) {
                 retiredCohorts++;
-                deletedClasses += 3;
+                deletedClasses += cohort.size();
             } else {
                 blockedCohorts++;
             }
@@ -245,6 +284,15 @@ public final class LegacyVariantSnowballRetirementPass implements ConversionPass
             blockers.add("fresh-predelete-resource-reference:"
                     + target + "<-" + resource);
         }
+    }
+
+    private static boolean isNestedCompanion(
+            String internalName, Set<String> baseCohort) {
+        if (internalName == null || internalName.isBlank()) return false;
+        for (String base : baseCohort) {
+            if (internalName.startsWith(base + "$")) return true;
+        }
+        return false;
     }
 
     private static Path safeClassPath(Path staging, String internalName) {
