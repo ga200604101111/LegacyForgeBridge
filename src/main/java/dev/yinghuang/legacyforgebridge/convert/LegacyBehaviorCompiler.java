@@ -16,7 +16,7 @@ public final class LegacyBehaviorCompiler {
     public static final String API="dev/yinghuang/legacyforgebridge/behavior/LegacyBehaviorApi";
     public static final String REG="dev/yinghuang/legacyforgebridge/behavior/LegacyBehaviorRegistry";
     private static final Map<String,String> TYPES=Map.ofEntries(
-            Map.entry("net/minecraft/item/Item","Item"),Map.entry("net/minecraft/item/ItemSword","Sword"),
+            Map.entry("net/minecraft/item/Item","Item"),Map.entry("net/minecraft/item/ItemSnowball","Snowball"),Map.entry("net/minecraft/item/ItemSword","Sword"),
             Map.entry("net/minecraft/item/ItemArmor","Armor"),Map.entry("net/minecraft/item/ItemBow","Bow"),
             Map.entry("net/minecraft/item/ItemTool","Tool"),Map.entry("net/minecraft/item/ItemPickaxe","Pickaxe"),
             Map.entry("net/minecraft/item/ItemAxe","Axe"),Map.entry("net/minecraft/item/ItemSpade","Spade"),Map.entry("net/minecraft/item/ItemHoe","Hoe"),
@@ -43,7 +43,7 @@ public final class LegacyBehaviorCompiler {
             Map.entry("net/minecraftforge/event/entity/player/ItemTooltipEvent","Event"),
             Map.entry("net/minecraftforge/client/event/RenderLivingEvent$Specials$Pre","Event"));
     private static final Set<String> PRESENTATION_STATEFUL_ITEM_API=Set.of(
-            "net/minecraft/item/Item","net/minecraft/item/ItemSword","net/minecraft/item/ItemArmor","net/minecraft/item/ItemBow",
+            "net/minecraft/item/Item","net/minecraft/item/ItemSnowball","net/minecraft/item/ItemSword","net/minecraft/item/ItemArmor","net/minecraft/item/ItemBow",
             "net/minecraft/item/ItemTool","net/minecraft/item/ItemPickaxe","net/minecraft/item/ItemAxe","net/minecraft/item/ItemSpade",
             "net/minecraft/item/ItemHoe","net/minecraft/item/ItemBlock");
     private static final Set<String> JDK=Set.of("java/lang/Object","java/lang/String","java/lang/StringBuilder","java/lang/StringBuffer",
@@ -273,7 +273,7 @@ public final class LegacyBehaviorCompiler {
     private String presentationParentConstructor(String type){
         Clazz clazz=classes.get(type);if(clazz==null)return null;
         return switch(clazz.parent){
-            case "net/minecraft/item/Item","net/minecraft/item/ItemBow"->"()V";
+            case "net/minecraft/item/Item","net/minecraft/item/ItemSnowball","net/minecraft/item/ItemBow"->"()V";
             case "net/minecraft/item/ItemSword","net/minecraft/item/ItemTool","net/minecraft/item/ItemPickaxe","net/minecraft/item/ItemAxe","net/minecraft/item/ItemSpade","net/minecraft/item/ItemHoe"->"(Lnet/minecraft/item/Item$ToolMaterial;)V";
             default->null;
         };
