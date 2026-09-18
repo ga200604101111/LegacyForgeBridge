@@ -18,6 +18,7 @@ import dev.yinghuang.legacyforgebridge.convert.pass.LegacyVariantSnowballRegistr
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyVariantSnowballRetirementReadiness;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyVariantSnowballRuntimeCandidatePass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyVariantSnowballRuntimePass;
+import dev.yinghuang.legacyforgebridge.convert.pass.LegacyVariantSnowballSourceAllocationStripPass;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -125,6 +126,12 @@ class BambooVariantSnowballRuntimeClosureExactTest {
                 StandardCharsets.UTF_8)).getAsJsonObject();
         JsonObject constructionRule = find(construction, "sourceItemClass",
                 "ruby/bamboo/item/ItemDirtySnowball");
+        new LegacyVariantSnowballSourceAllocationStripPass().apply(context);
+        JsonObject allocationStrip = JsonParser.parseString(Files.readString(
+                staging.resolve(LegacyVariantSnowballSourceAllocationStripPass.OUTPUT),
+                StandardCharsets.UTF_8)).getAsJsonObject();
+        JsonObject allocationStripRule = find(allocationStrip, "sourceItemClass",
+                "ruby/bamboo/item/ItemDirtySnowball");
 
         LegacyClassDependencyAnalyzer.Analysis dependencies =
                 new LegacyClassDependencyAnalyzer().analyze(source, staging);
@@ -142,8 +149,11 @@ class BambooVariantSnowballRuntimeClosureExactTest {
                 constructionRule.get("constructorReplacementProven").getAsBoolean();
         assertEquals(constructorReplacement,
                 readinessRule.get("constructorReplacementProven").getAsBoolean());
-        assertFalse(readinessRule.get("sourceAllocationStripComplete").getAsBoolean());
-        assertFalse(readinessRule.get("retirementCohortCandidateReady").getAsBoolean(),
+        boolean allocationStripComplete =
+                allocationStripRule.get("sourceAllocationStripComplete").getAsBoolean();
+        assertEquals(allocationStripComplete,
+                readinessRule.get("sourceAllocationStripComplete").getAsBoolean());
+        assertFalse(readinessRule.get("sourceClassDeletionAuthorized").getAsBoolean(),
                 readinessRule.toString());
         assertFalse(readinessRule.get("sourceClassDeletionAuthorized").getAsBoolean());
 
@@ -174,7 +184,12 @@ class BambooVariantSnowballRuntimeClosureExactTest {
                 break;
             }
         }
-        assertTrue(allocationStripBlocker, readinessRule.toString());
+        assertEquals(!allocationStripComplete, allocationStripBlocker,
+                readinessRule.toString());
+        if (!allocationStripComplete) {
+            assertFalse(readinessRule.get("retirementCohortCandidateReady").getAsBoolean(),
+                    readinessRule.toString());
+        }
     }
 
     private static JsonObject find(JsonObject root, String key, String expected) {
