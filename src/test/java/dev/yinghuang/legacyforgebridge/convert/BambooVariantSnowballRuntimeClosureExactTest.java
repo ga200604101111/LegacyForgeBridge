@@ -8,8 +8,10 @@ import dev.yinghuang.legacyforgebridge.convert.api.DiagnosticCollector;
 import dev.yinghuang.legacyforgebridge.convert.api.LegacyModMetadata;
 import dev.yinghuang.legacyforgebridge.convert.pass.CopyLegacyJarPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.GenericContentPass;
+import dev.yinghuang.legacyforgebridge.convert.pass.LegacyBehaviorPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyEntityDataWatcherPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyVariantSnowballLaunchPass;
+import dev.yinghuang.legacyforgebridge.convert.pass.LegacyVariantSnowballConstructionReplacementReadiness;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyVariantSnowballItemRegistrationStripPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyVariantSnowballPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyVariantSnowballRegistrationStripPass;
@@ -116,6 +118,14 @@ class BambooVariantSnowballRuntimeClosureExactTest {
                     itemStripRule.toString());
         }
 
+        new LegacyBehaviorPass().apply(context);
+        LegacyVariantSnowballConstructionReplacementReadiness.materialize(context);
+        JsonObject construction = JsonParser.parseString(Files.readString(
+                staging.resolve(LegacyVariantSnowballConstructionReplacementReadiness.OUTPUT),
+                StandardCharsets.UTF_8)).getAsJsonObject();
+        JsonObject constructionRule = find(construction, "sourceItemClass",
+                "ruby/bamboo/item/ItemDirtySnowball");
+
         LegacyClassDependencyAnalyzer.Analysis dependencies =
                 new LegacyClassDependencyAnalyzer().analyze(source, staging);
         LegacyVariantSnowballRetirementReadiness.materialize(context, dependencies);
@@ -128,6 +138,11 @@ class BambooVariantSnowballRuntimeClosureExactTest {
         assertTrue(readinessRule.get("projectileRegistrationStripComplete").getAsBoolean());
         assertEquals(itemStripComplete,
                 readinessRule.get("itemRegistrationStripComplete").getAsBoolean());
+        boolean constructorReplacement =
+                constructionRule.get("constructorReplacementProven").getAsBoolean();
+        assertEquals(constructorReplacement,
+                readinessRule.get("constructorReplacementProven").getAsBoolean());
+        assertFalse(readinessRule.get("sourceAllocationStripComplete").getAsBoolean());
         assertFalse(readinessRule.get("retirementCohortCandidateReady").getAsBoolean(),
                 readinessRule.toString());
         assertFalse(readinessRule.get("sourceClassDeletionAuthorized").getAsBoolean());
@@ -142,6 +157,19 @@ class BambooVariantSnowballRuntimeClosureExactTest {
             }
             assertTrue(itemStripBlocker, readinessRule.toString());
         }
+        if (!constructorReplacement) {
+            boolean constructorBlocker = false;
+            for (JsonElement blocker : readinessRule.getAsJsonArray("blockers")) {
+                if ("item-constructor-replacement-incomplete".equals(blocker.getAsString())) {
+                    constructorBlocker = true;
+                    break;
+                }
+            }
+            assertTrue(constructorBlocker, readinessRule.toString());
+        }
+        assertTrue(readinessRule.getAsJsonArray("blockers").asList().stream()
+                .anyMatch(blocker -> "item-source-allocation-strip-incomplete"
+                        .equals(blocker.getAsString())), readinessRule.toString());
     }
 
     private static JsonObject find(JsonObject root, String key, String expected) {
