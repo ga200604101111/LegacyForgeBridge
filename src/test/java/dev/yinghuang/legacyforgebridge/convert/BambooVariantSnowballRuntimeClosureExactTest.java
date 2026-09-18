@@ -12,6 +12,7 @@ import dev.yinghuang.legacyforgebridge.convert.pass.LegacyEntityDataWatcherPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyVariantSnowballLaunchPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyVariantSnowballPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyVariantSnowballRegistrationStripPass;
+import dev.yinghuang.legacyforgebridge.convert.pass.LegacyVariantSnowballRetirementReadiness;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyVariantSnowballRuntimeCandidatePass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyVariantSnowballRuntimePass;
 import org.junit.jupiter.api.Tag;
@@ -23,6 +24,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -98,6 +100,29 @@ class BambooVariantSnowballRuntimeClosureExactTest {
                 stripRule.toString());
         assertEquals(1, stripRule.get("strippedProjectileRegistrationSites").getAsInt());
         assertTrue(stripRule.getAsJsonArray("blockers").isEmpty(), stripRule.toString());
+
+        LegacyClassDependencyAnalyzer.Analysis dependencies =
+                new LegacyClassDependencyAnalyzer().analyze(source, staging);
+        LegacyVariantSnowballRetirementReadiness.materialize(context, dependencies);
+        JsonObject readiness = JsonParser.parseString(Files.readString(
+                staging.resolve(LegacyVariantSnowballRetirementReadiness.OUTPUT),
+                StandardCharsets.UTF_8)).getAsJsonObject();
+        JsonObject readinessRule = find(readiness, "sourceProjectileClass",
+                "ruby/bamboo/entity/EntityDirtySnowball");
+        assertTrue(readinessRule.get("modernRuntimeReplacementComplete").getAsBoolean());
+        assertTrue(readinessRule.get("projectileRegistrationStripComplete").getAsBoolean());
+        assertFalse(readinessRule.get("itemRegistrationStripComplete").getAsBoolean());
+        assertFalse(readinessRule.get("retirementCohortCandidateReady").getAsBoolean());
+        assertFalse(readinessRule.get("sourceClassDeletionAuthorized").getAsBoolean());
+
+        boolean itemStripBlocker = false;
+        for (JsonElement blocker : readinessRule.getAsJsonArray("blockers")) {
+            if ("item-registration-strip-not-wired".equals(blocker.getAsString())) {
+                itemStripBlocker = true;
+                break;
+            }
+        }
+        assertTrue(itemStripBlocker, readinessRule.toString());
     }
 
     private static JsonObject find(JsonObject root, String key, String expected) {
