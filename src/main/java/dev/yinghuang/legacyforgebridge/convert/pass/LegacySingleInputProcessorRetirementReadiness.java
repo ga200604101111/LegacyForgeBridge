@@ -42,6 +42,8 @@ public final class LegacySingleInputProcessorRetirementReadiness {
                 LegacySingleInputProcessorBlockRegistrationStripPass.OUTPUT);
         Path blockConstructionPath = context.stagingDir().resolve(
                 LegacySingleInputProcessorBlockConstructionPass.OUTPUT);
+        Path blockAllocationPath = context.stagingDir().resolve(
+                LegacySingleInputProcessorBlockAllocationStripPass.OUTPUT);
         Path tileConstructionPath = context.stagingDir().resolve(
                 LegacySingleInputProcessorTileConstructionPass.OUTPUT);
         Path guiProofPath = context.stagingDir().resolve(
@@ -67,6 +69,17 @@ public final class LegacySingleInputProcessorRetirementReadiness {
                         "blockConstructionReplacementAnalysisWired", false)
                 && bool(blockConstruction,
                         "modernBlockPropertiesRuntimeWired", false);
+        JsonObject blockAllocation = Files.isRegularFile(blockAllocationPath)
+                ? read(blockAllocationPath) : null;
+        boolean blockAllocationValid = blockAllocation != null
+                && integer(blockAllocation, "schemaVersion", -1) == 1
+                && context.sourceHash().equals(
+                        string(blockAllocation, "sourceSha256", ""))
+                && bool(blockAllocation, "sourceAllocationStripWired", false)
+                && bool(blockAllocation,
+                        "allocationPropertyEffectsRuntimeWired", false)
+                && bool(blockAllocation,
+                        "freshPostStripReferenceCheckWired", false);
         JsonObject tileConstruction = Files.isRegularFile(tileConstructionPath)
                 ? read(tileConstructionPath) : null;
         boolean tileConstructionValid = tileConstruction != null
@@ -109,6 +122,10 @@ public final class LegacySingleInputProcessorRetirementReadiness {
                 blockConstructionValid
                         ? index(blockConstruction, "rules", "sourceBlockClass")
                         : Map.of();
+        Map<String, JsonObject> blockAllocationByClass =
+                blockAllocationValid
+                        ? index(blockAllocation, "rules", "sourceBlockClass")
+                        : Map.of();
         Map<String, JsonObject> tileConstructionByClass = tileConstructionValid
                 ? index(tileConstruction, "rules", "sourceTileClass")
                 : Map.of();
@@ -130,6 +147,8 @@ public final class LegacySingleInputProcessorRetirementReadiness {
         root.addProperty("blockConstructorReplacementAnalysisWired",
                 blockConstructionValid);
         root.addProperty("blockSourceAllocationRetirementRequired", true);
+        root.addProperty("blockSourceAllocationRetirementAnalysisWired",
+                blockAllocationValid);
         root.addProperty("tileConstructorReplacementRequired", true);
         root.addProperty("tileConstructorReplacementAnalysisWired",
                 tileConstructionValid);
@@ -250,6 +269,27 @@ public final class LegacySingleInputProcessorRetirementReadiness {
                 blockers.add("processor-block-constructor-replacement-incomplete");
             }
 
+            JsonObject blockAllocationRule =
+                    blockAllocationByClass.get(blockClass);
+            boolean blockSourceAllocationStripComplete =
+                    blockAllocationValid
+                            && blockAllocationRule != null
+                            && bool(blockAllocationRule,
+                            "sourceAllocationProofComplete", false)
+                            && bool(blockAllocationRule,
+                            "allocationPropertyEffectsRuntimeWired", false)
+                            && bool(blockAllocationRule,
+                            "sourceAllocationStripComplete", false)
+                            && integer(blockAllocationRule,
+                            "strippedSourceAllocationSites", 0) == 1;
+            if (!blockAllocationValid) {
+                blockers.add(
+                        "processor-block-source-allocation-retirement-not-wired");
+            } else if (!blockSourceAllocationStripComplete) {
+                blockers.add(
+                        "processor-block-source-allocation-retirement-incomplete");
+            }
+
             JsonObject tileConstructionRule =
                     tileConstructionByClass.get(tileClass);
             boolean tileConstructorReplacementProven = tileConstructionValid
@@ -267,11 +307,6 @@ public final class LegacySingleInputProcessorRetirementReadiness {
             } else if (!guiHandlerBranchStripComplete) {
                 blockers.add("processor-gui-handler-branch-strip-incomplete");
             }
-
-            // Constructor-local effects are independently proven above. Allocation-site new/dup/
-            // <init>/fluent-setter evaluation remains deliberately separate until the exact source
-            // allocation can be removed without discarding unresolved post-construction effects.
-            blockers.add("processor-block-source-allocation-retirement-not-wired");
 
             inspectClass(
                     "block", blockClass, cohort,
@@ -315,7 +350,10 @@ public final class LegacySingleInputProcessorRetirementReadiness {
                     blockConstructorReplacementProven);
             value.addProperty("blockConstructionRuntimeWired",
                     blockConstructorReplacementProven);
-            value.addProperty("blockSourceAllocationStripComplete", false);
+            value.addProperty("blockAllocationEffectsRuntimeWired",
+                    blockSourceAllocationStripComplete);
+            value.addProperty("blockSourceAllocationStripComplete",
+                    blockSourceAllocationStripComplete);
             value.addProperty("tileConstructorReplacementProven",
                     tileConstructorReplacementProven);
             value.addProperty("guiHandlerBranchProofComplete",
