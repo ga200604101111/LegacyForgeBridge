@@ -80,6 +80,10 @@ public final class LegacyBehaviorApi {
         public void func_77615_a(Stack stack,World world,Player player,int remaining) { }
 
     }
+    public static class Snowball extends Item {
+        public Snowball() { maximumStackSize=16; }
+    }
+
     public static class ItemBlock extends Item {
         public final Block field_150939_a;
         public ItemBlock(Block block) { field_150939_a=Objects.requireNonNull(block); }
