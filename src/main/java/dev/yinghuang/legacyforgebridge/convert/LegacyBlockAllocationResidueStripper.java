@@ -17,6 +17,7 @@ import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.TypeInsnNode;
 import org.objectweb.asm.tree.analysis.Analyzer;
 import org.objectweb.asm.tree.analysis.AnalyzerException;
+import org.objectweb.asm.tree.analysis.BasicVerifier;
 import org.objectweb.asm.tree.analysis.Frame;
 import org.objectweb.asm.tree.analysis.SourceInterpreter;
 import org.objectweb.asm.tree.analysis.SourceValue;
@@ -72,7 +73,7 @@ public final class LegacyBlockAllocationResidueStripper {
         try {
             new ClassReader(sourceClass).accept(
                     node,
-                    ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+                    ClassReader.SKIP_DEBUG);
         } catch (RuntimeException malformed) {
             return new Result(
                     sourceClass, 0,
@@ -224,6 +225,11 @@ public final class LegacyBlockAllocationResidueStripper {
         if (candidatePops.size() != 1) return null;
         InsnNode discardedBlock = candidatePops.getFirst();
         if (expressionSet.contains(discardedBlock)) return null;
+        AbstractInsnNode producer = finalSetter == null ? dup : finalSetter;
+        if (!LegacyInlineBlockAllocationSafety.exclusiveUse(
+                method, allocation, cursor, producer, discardedBlock, 0, state::frame)) {
+            return null;
+        }
         return new Match(
                 method,
                 List.copyOf(expression),
@@ -308,8 +314,8 @@ public final class LegacyBlockAllocationResidueStripper {
             };
         }
         if (instruction instanceof LdcInsnNode ldc
-                && ldc.cst instanceof Number number) {
-            return number.floatValue();
+                && ldc.cst instanceof Float value) {
+            return value;
         }
         return null;
     }
@@ -385,6 +391,7 @@ public final class LegacyBlockAllocationResidueStripper {
         Analyzer<SourceValue> analyzer =
                 new Analyzer<>(new SourceInterpreter());
         analyzer.analyze(node.name, method);
+        new Analyzer<>(new BasicVerifier()).analyze(node.name, method);
         if (methodReferences(method, sourceBlockClass)) {
             throw new IllegalStateException(
                     "post-strip source block reference remains");
@@ -405,6 +412,7 @@ public final class LegacyBlockAllocationResidueStripper {
 
     private static AnalysisState analyze(
             String owner, MethodNode method) throws AnalyzerException {
+        new Analyzer<>(new BasicVerifier()).analyze(owner, method);
         Analyzer<SourceValue> analyzer =
                 new Analyzer<>(new SourceInterpreter());
         Frame<SourceValue>[] frames = analyzer.analyze(owner, method);

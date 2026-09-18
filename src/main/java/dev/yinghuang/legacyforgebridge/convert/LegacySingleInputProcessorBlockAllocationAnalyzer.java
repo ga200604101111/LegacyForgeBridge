@@ -266,6 +266,19 @@ public final class LegacySingleInputProcessorBlockAllocationAnalyzer {
             simple = false;
         }
 
+        if (inline) {
+            AbstractInsnNode last = trace.effects().isEmpty()
+                    ? trace.constructor() : trace.effects().getLast().call();
+            AbstractInsnNode producer = trace.effects().isEmpty()
+                    ? trace.dup() : last;
+            if (!LegacyInlineBlockAllocationSafety.exclusiveUse(
+                    method, trace.allocation(), last, producer, register,
+                    arguments.length - 1, instruction -> frame(key, instruction))) {
+                blockers.add("source-block-allocation-exclusive-use-not-proven");
+                simple = false;
+            }
+        }
+
         List<Effect> effects = inline
                 ? trace.effects().stream().map(EffectStep::effect).toList()
                 : List.of();
@@ -336,7 +349,7 @@ public final class LegacySingleInputProcessorBlockAllocationAnalyzer {
 
             if (producer instanceof MethodInsnNode call
                     && call.getOpcode() == Opcodes.INVOKEVIRTUAL) {
-                EffectStep step = effectStep(key, call, blockers);
+                EffectStep step = effectStep(key, call, sourceBlockClass, blockers);
                 if (step == null) return null;
 
                 Frame<SourceValue> frame = frame(key, call);
@@ -369,8 +382,9 @@ public final class LegacySingleInputProcessorBlockAllocationAnalyzer {
     private EffectStep effectStep(
             MethodKey key,
             MethodInsnNode call,
+            String sourceBlockClass,
             List<String> blockers) {
-        if (!safeBlockSetterOwner(call)) {
+        if (!safeBlockSetterOwner(call, sourceBlockClass)) {
             blockers.add("source-block-allocation-setter-owner-not-safe:"
                     + call.owner + "." + call.name + call.desc);
             return null;
@@ -475,14 +489,19 @@ public final class LegacySingleInputProcessorBlockAllocationAnalyzer {
         return null;
     }
 
-    private boolean safeBlockSetterOwner(MethodInsnNode call) {
-        if (BLOCK.equals(call.owner) || BLOCK_CONTAINER.equals(call.owner)) {
-            return true;
-        }
-
-        String current = call.owner;
+    private boolean safeBlockSetterOwner(
+            MethodInsnNode call, String sourceBlockClass) {
+        // INVOKEVIRTUAL dispatches on the allocated class, not the symbolic call owner.
+        // A Block-typed fluent return must not hide a source override or its side effects.
+        String current = sourceBlockClass;
+        boolean ownerInHierarchy = false;
         Set<String> visited = new LinkedHashSet<>();
         while (current != null && visited.add(current)) {
+            ownerInHierarchy |= current.equals(call.owner);
+            if (BLOCK.equals(current)) return ownerInHierarchy;
+            if (BLOCK_CONTAINER.equals(current)) {
+                return ownerInHierarchy || BLOCK.equals(call.owner);
+            }
             ClassNode node = classes.get(current);
             if (node == null) return false;
             for (MethodNode method : node.methods) {
@@ -490,10 +509,6 @@ public final class LegacySingleInputProcessorBlockAllocationAnalyzer {
                         && call.desc.equals(method.desc)) {
                     return false;
                 }
-            }
-            if (BLOCK.equals(node.superName)
-                    || BLOCK_CONTAINER.equals(node.superName)) {
-                return true;
             }
             current = node.superName;
         }
@@ -584,8 +599,8 @@ public final class LegacySingleInputProcessorBlockAllocationAnalyzer {
             };
         }
         if (instruction instanceof LdcInsnNode ldc
-                && ldc.cst instanceof Number number) {
-            return number.floatValue();
+                && ldc.cst instanceof Float value) {
+            return value;
         }
         return null;
     }
