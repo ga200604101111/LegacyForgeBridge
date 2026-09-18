@@ -95,7 +95,38 @@ public final class LegacyEntityRegistrationStripper {
 
         ClassWriter writer = new ClassWriter(0);
         node.accept(writer);
-        return new Result(writer.toByteArray(), 1, List.of());
+        byte[] rewritten = writer.toByteArray();
+        String residual = residualReference(rewritten, target);
+        if (residual != null) {
+            return new Result(sourceClass, 0,
+                    List.of("post-strip-residual-projectile-reference:" + residual));
+        }
+        return new Result(rewritten, 1, List.of());
+    }
+
+    private static String residualReference(byte[] bytes, Target target) {
+        ClassNode node = new ClassNode(Opcodes.ASM9);
+        new ClassReader(bytes).accept(node, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+        for (MethodNode method : node.methods) {
+            if (!method.name.equals(target.sourceMethod())
+                    || !method.desc.equals(target.sourceDescriptor())) continue;
+            for (AbstractInsnNode instruction : method.instructions) {
+                if (instruction instanceof LdcInsnNode ldc
+                        && ldc.cst instanceof Type type
+                        && type.getSort() == Type.OBJECT
+                        && target.entityClass().equals(type.getInternalName())) {
+                    return "ldc-class-literal";
+                }
+                if (instruction instanceof MethodInsnNode call
+                        && call.getOpcode() == Opcodes.INVOKESTATIC
+                        && ENTITY_REGISTRY.equals(call.owner)
+                        && REGISTER.equals(call.name)
+                        && REGISTER_DESC.equals(call.desc)) {
+                    return "registerModEntity-call";
+                }
+            }
+        }
+        return null;
     }
 
     private static AbstractInsnNode[] exactPureSlice(String sourceOwner, MethodInsnNode call, Target target) {
