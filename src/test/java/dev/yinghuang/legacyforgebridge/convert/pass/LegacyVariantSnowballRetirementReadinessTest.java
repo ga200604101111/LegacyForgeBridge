@@ -41,6 +41,8 @@ class LegacyVariantSnowballRetirementReadinessTest {
         new LegacyVariantSnowballRuntimePass().apply(context);
         new LegacyVariantSnowballRegistrationStripPass().apply(context);
         new LegacyVariantSnowballItemRegistrationStripPass().apply(context);
+        new LegacyBehaviorPass().apply(context);
+        LegacyVariantSnowballConstructionReplacementReadiness.materialize(context);
 
         LegacyClassDependencyAnalyzer.Analysis dependencies =
                 new LegacyClassDependencyAnalyzer().analyze(source, staging);
@@ -63,6 +65,8 @@ class LegacyVariantSnowballRetirementReadinessTest {
         assertTrue(rule.get("modernRuntimeReplacementComplete").getAsBoolean());
         assertTrue(rule.get("projectileRegistrationStripComplete").getAsBoolean());
         assertTrue(rule.get("itemRegistrationStripComplete").getAsBoolean());
+        assertTrue(rule.get("constructorReplacementProven").getAsBoolean(), rule.toString());
+        assertFalse(rule.get("sourceAllocationStripComplete").getAsBoolean());
         assertFalse(rule.get("retirementCohortCandidateReady").getAsBoolean());
         assertFalse(rule.get("sourceClassDeletionAuthorized").getAsBoolean());
         assertEquals(0, rule.get("deletedSourceClassCount").getAsInt());
@@ -72,6 +76,8 @@ class LegacyVariantSnowballRetirementReadinessTest {
             blockers.add(element.getAsString());
         }
         assertFalse(blockers.contains("item-registration-strip-incomplete"), blockers.toString());
+        assertFalse(blockers.contains("item-constructor-replacement-incomplete"), blockers.toString());
+        assertTrue(blockers.contains("item-source-allocation-strip-incomplete"), blockers.toString());
         assertTrue(blockers.stream().anyMatch(value ->
                 value.startsWith("item-candidate-incoming-reference:foreign/Bootstrap")),
                 blockers.toString());
