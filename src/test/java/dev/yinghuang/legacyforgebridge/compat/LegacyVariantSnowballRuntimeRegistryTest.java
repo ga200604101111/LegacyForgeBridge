@@ -42,9 +42,9 @@ class LegacyVariantSnowballRuntimeRegistryTest {
 
     @Test
     void malformedRegistrationOrPrematureGameplayClaimsFailClosed() {
-        JsonObject claimed = validRule();
-        claimed.addProperty("projectileRuntimeWired", true);
-        assertNull(LegacyVariantSnowballRuntimeRegistry.parseForTests(claimed));
+        JsonObject incompleteImpact = validRule();
+        incompleteImpact.addProperty("projectileImpactRuntimeWired", false);
+        assertNull(LegacyVariantSnowballRuntimeRegistry.parseForTests(incompleteImpact));
 
         JsonObject wrongTracking = validRule();
         wrongTracking.addProperty("modernClientTrackingRangeChunks", 3);
@@ -97,8 +97,8 @@ class LegacyVariantSnowballRuntimeRegistryTest {
                   "projectileItemStackCarrierWired": true,
                   "legacyMetadataSyncWired": true,
                   "itemRuntimeWired": false,
-                  "projectileRuntimeWired": false,
-                  "projectileImpactRuntimeWired": false,
+                  "projectileRuntimeWired": true,
+                  "projectileImpactRuntimeWired": true,
                   "rendererRuntimeWired": false,
                   "runtimeImplementationWired": false,
                   "legacyProjectileRegistryName": "variant_projectile",
