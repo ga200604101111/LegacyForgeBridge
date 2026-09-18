@@ -49,8 +49,8 @@ public final class LegacyVariantSnowballRuntimePass implements ConversionPass {
         root.addProperty("projectileItemStackCarrierWired", true);
         root.addProperty("legacyMetadataSyncWired", true);
         root.addProperty("itemRuntimeWired", false);
-        root.addProperty("projectileRuntimeWired", false);
-        root.addProperty("projectileImpactRuntimeWired", false);
+        root.addProperty("projectileRuntimeWired", true);
+        root.addProperty("projectileImpactRuntimeWired", true);
         root.addProperty("rendererRuntimeWired", false);
         root.addProperty("runtimeImplementationWired", false);
         JsonArray rules = new JsonArray();
@@ -118,8 +118,8 @@ public final class LegacyVariantSnowballRuntimePass implements ConversionPass {
             rule.addProperty("projectileItemStackCarrierWired", true);
             rule.addProperty("legacyMetadataSyncWired", true);
             rule.addProperty("itemRuntimeWired", false);
-            rule.addProperty("projectileRuntimeWired", false);
-            rule.addProperty("projectileImpactRuntimeWired", false);
+            rule.addProperty("projectileRuntimeWired", true);
+            rule.addProperty("projectileImpactRuntimeWired", true);
             rule.addProperty("rendererRuntimeWired", false);
             rule.addProperty("runtimeImplementationWired", false);
             rules.add(rule);
@@ -226,8 +226,8 @@ public final class LegacyVariantSnowballRuntimePass implements ConversionPass {
                     SupportLevel.RUNTIME_BRIDGE,
                     "Installed " + rules.size()
                             + " source-complete variant-snowball runtime rule family/families with "
-                            + "source-proven projectile EntityType registration metadata; item launch, "
-                            + "impact gameplay and renderer registration remain fail-closed.");
+                            + "source-proven projectile EntityType registration metadata and impact runtime; "
+                            + "item launch and renderer registration remain fail-closed.");
         }
         if (!skipped.isEmpty()) {
             context.diagnostics().warning(
