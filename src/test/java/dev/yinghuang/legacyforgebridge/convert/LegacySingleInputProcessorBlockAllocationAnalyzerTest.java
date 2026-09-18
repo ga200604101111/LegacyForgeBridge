@@ -68,15 +68,17 @@ class LegacySingleInputProcessorBlockAllocationAnalyzerTest {
             put(out, "foreign/machine/Bootstrap.class", bootstrap(true));
         }
 
+        // The registry analyzer cannot bind this local alias to the concrete source class.
+        // Verify that earlier evidence boundary instead of expecting a later expression trace.
+        var registry = new LegacyRegistryAnalyzer().analyze(jar);
+        assertTrue(registry.blocks().stream().noneMatch(value ->
+                MACHINE.equals(value.implementationClass())), registry.diagnostics().toString());
         var proof = new LegacySingleInputProcessorBlockAllocationAnalyzer()
                 .prove(jar, rule());
 
         assertFalse(proof.allocationProofComplete());
         assertFalse(proof.inlineAllocationProven());
-        // Registry provenance rejects the local alias before the later expression tracer runs.
-        // Keep rejection mandatory and assert the actual early constructor-proof boundary.
-        assertTrue(proof.blockers().contains("source-allocation-inline-constructor-not-proven"),
-                proof.blockers().toString());
+        assertEquals(List.of("exact-block-registration-proof-missing"), proof.blockers());
     }
 
     private static LegacySingleInputProcessorAnalyzer.Rule rule() {
