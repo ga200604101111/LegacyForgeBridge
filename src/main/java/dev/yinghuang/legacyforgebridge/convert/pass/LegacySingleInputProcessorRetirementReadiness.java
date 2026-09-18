@@ -42,6 +42,8 @@ public final class LegacySingleInputProcessorRetirementReadiness {
                 LegacySingleInputProcessorBlockRegistrationStripPass.OUTPUT);
         Path tileConstructionPath = context.stagingDir().resolve(
                 LegacySingleInputProcessorTileConstructionPass.OUTPUT);
+        Path guiProofPath = context.stagingDir().resolve(
+                LegacySingleInputProcessorGuiHandlerProofPass.OUTPUT);
         if (!Files.isRegularFile(processorPath)
                 || !Files.isRegularFile(tileStripPath)
                 || !Files.isRegularFile(blockStripPath)) {
@@ -57,6 +59,12 @@ public final class LegacySingleInputProcessorRetirementReadiness {
                 && integer(tileConstruction, "schemaVersion", -1) == 1
                 && context.sourceHash().equals(
                         string(tileConstruction, "sourceSha256", ""));
+        JsonObject guiProof = Files.isRegularFile(guiProofPath)
+                ? read(guiProofPath) : null;
+        boolean guiProofValid = guiProof != null
+                && integer(guiProof, "schemaVersion", -1) == 1
+                && context.sourceHash().equals(
+                        string(guiProof, "sourceSha256", ""));
         if (integer(processor, "schemaVersion", -1) != 4
                 || integer(tileStrip, "schemaVersion", -1) != 1
                 || integer(blockStrip, "schemaVersion", -1) != 1
@@ -79,6 +87,9 @@ public final class LegacySingleInputProcessorRetirementReadiness {
         Map<String, JsonObject> tileConstructionByClass = tileConstructionValid
                 ? index(tileConstruction, "rules", "sourceTileClass")
                 : Map.of();
+        Map<String, JsonObject> guiProofByBlock = guiProofValid
+                ? index(guiProof, "rules", "sourceBlockClass")
+                : Map.of();
 
         JsonObject root = new JsonObject();
         root.addProperty("schemaVersion", 1);
@@ -93,6 +104,8 @@ public final class LegacySingleInputProcessorRetirementReadiness {
         root.addProperty("tileConstructorReplacementAnalysisWired",
                 tileConstructionValid);
         root.addProperty("guiHandlerRetirementRequired", true);
+        root.addProperty("guiHandlerBranchProofRequired", true);
+        root.addProperty("guiHandlerBranchProofAnalysisWired", guiProofValid);
         root.addProperty("nestedCompanionCohortExpansionWired", true);
         root.addProperty("retirementAuthorizationWired", false);
         root.addProperty("sourceClassDeletionWired", false);
@@ -163,12 +176,21 @@ public final class LegacySingleInputProcessorRetirementReadiness {
                 blockers.add("processor-tile-constructor-replacement-not-wired");
             }
 
+            JsonObject guiProofRule = guiProofByBlock.get(blockClass);
+            boolean guiHandlerBranchProofComplete = guiProofValid
+                    && guiProofRule != null
+                    && bool(guiProofRule,
+                    "guiHandlerBranchProofComplete", false);
+            if (!guiHandlerBranchProofComplete) {
+                blockers.add("processor-gui-handler-branch-proof-incomplete");
+            } else {
+                blockers.add("processor-gui-handler-branch-strip-not-wired");
+            }
+
             // These remain intentionally separate gates. Runtime completeness proves the modern
-            // behavior, but does not itself prove source Block constructor/global side effects or
-            // that a legacy GUI handler branch can be removed safely.
+            // behavior, but does not itself prove source Block constructor/global side effects.
             blockers.add("processor-block-constructor-replacement-not-wired");
             blockers.add("processor-block-source-allocation-retirement-not-wired");
-            blockers.add("processor-gui-handler-retirement-not-wired");
 
             inspectClass(
                     "block", blockClass, cohort,
@@ -203,7 +225,24 @@ public final class LegacySingleInputProcessorRetirementReadiness {
             value.addProperty("blockSourceAllocationStripComplete", false);
             value.addProperty("tileConstructorReplacementProven",
                     tileConstructorReplacementProven);
+            value.addProperty("guiHandlerBranchProofComplete",
+                    guiHandlerBranchProofComplete);
             value.addProperty("guiHandlerRetirementComplete", false);
+            if (guiProofRule != null) {
+                String handlerClass = string(guiProofRule, "handlerClass", null);
+                String sourceContainerClass =
+                        string(guiProofRule, "sourceContainerClass", null);
+                String sourceGuiClass = string(guiProofRule, "sourceGuiClass", null);
+                if (handlerClass != null) {
+                    value.addProperty("guiHandlerClass", handlerClass);
+                }
+                if (sourceContainerClass != null) {
+                    value.addProperty("sourceContainerClass", sourceContainerClass);
+                }
+                if (sourceGuiClass != null) {
+                    value.addProperty("sourceGuiClass", sourceGuiClass);
+                }
+            }
             value.addProperty("nestedCompanionClassCount", companions.size());
             value.add("nestedCompanionClasses", strings(companions));
             value.addProperty("retirementCohortCandidateReady", cohortReady);
