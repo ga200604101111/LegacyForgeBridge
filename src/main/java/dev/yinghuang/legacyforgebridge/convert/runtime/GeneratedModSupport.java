@@ -79,6 +79,7 @@ public final class GeneratedModSupport {
         boolean inert=LegacyInertModelBlockRegistry.hasRule(id);
         boolean storage=LegacyStorageBlockRegistry.hasRule(id);
         boolean processor=LegacySingleInputProcessorRegistry.hasRule(id);
+        if(processor)blockProperties=LegacySingleInputProcessorRegistry.applyBlockProperties(id,blockProperties);
         var plantRule=LegacyPlantRuntimeRegistry.rule(id);
         boolean plant=plantRule!=null&&LegacyPlantPlacementRegistry.plantTargetRuntimeReady(id);
         int families=(gridPot?1:0)+(seatBed?1:0)+(inert?1:0)+(storage?1:0)+(processor?1:0)+(plant?1:0);
