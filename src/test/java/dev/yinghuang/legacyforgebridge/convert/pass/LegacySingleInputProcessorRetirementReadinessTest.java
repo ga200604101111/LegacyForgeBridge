@@ -119,7 +119,7 @@ class LegacySingleInputProcessorRetirementReadinessTest {
         assertTrue(blockers.contains(
                 "processor-tile-constructor-replacement-not-wired"), blockers.toString());
         assertTrue(blockers.contains(
-                "processor-gui-handler-retirement-not-wired"), blockers.toString());
+                "processor-gui-handler-branch-proof-incomplete"), blockers.toString());
         assertTrue(blockers.contains(
                 "block-candidate-incoming-reference:foreign/machine/Bootstrap"),
                 blockers.toString());
