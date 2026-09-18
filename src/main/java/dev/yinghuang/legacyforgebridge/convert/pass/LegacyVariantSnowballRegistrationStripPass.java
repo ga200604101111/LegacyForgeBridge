@@ -54,16 +54,17 @@ public final class LegacyVariantSnowballRegistrationStripPass implements Convers
             return;
         }
 
-        List<RuntimeRule> runtimeRules = array(runtime, "rules").asList().stream()
-                .filter(JsonElement::isJsonObject)
-                .map(JsonElement::getAsJsonObject)
-                .filter(rule -> bool(rule, "runtimeImplementationWired", false))
-                .filter(rule -> bool(rule, "projectileEntityTypeRegistrationWired", false))
-                .filter(rule -> bool(rule, "projectileRuntimeWired", false))
-                .filter(rule -> bool(rule, "projectileImpactRuntimeWired", false))
-                .map(LegacyVariantSnowballRegistrationStripPass::runtimeRule)
-                .filter(java.util.Objects::nonNull)
-                .toList();
+        java.util.ArrayList<RuntimeRule> runtimeRules = new java.util.ArrayList<>();
+        for (JsonElement element : array(runtime, "rules")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject rule = element.getAsJsonObject();
+            if (!bool(rule, "runtimeImplementationWired", false)
+                    || !bool(rule, "projectileEntityTypeRegistrationWired", false)
+                    || !bool(rule, "projectileRuntimeWired", false)
+                    || !bool(rule, "projectileImpactRuntimeWired", false)) continue;
+            RuntimeRule parsed = runtimeRule(rule);
+            if (parsed != null) runtimeRules.add(parsed);
+        }
         if (runtimeRules.isEmpty()) return;
 
         LegacyLifecycleAnalyzer.Analysis lifecycle =
