@@ -1,10 +1,13 @@
 package dev.yinghuang.legacyforgebridge.convert.runtime;
 
+import dev.yinghuang.legacyforgebridge.compat.LegacyStackComponents;
 import dev.yinghuang.legacyforgebridge.compat.LegacyVariantSnowballRuntimeRegistry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.projectile.throwableitemprojectile.ThrowableItemProjectile;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 
@@ -27,8 +30,38 @@ public final class ConvertedLegacyVariantSnowballProjectile extends ThrowableIte
         this.rule = Objects.requireNonNull(rule, "rule");
     }
 
+    public ConvertedLegacyVariantSnowballProjectile(
+            Level level,
+            LivingEntity owner,
+            ItemStack stack,
+            LegacyVariantSnowballRuntimeRegistry.Rule rule) {
+        super(requireType(rule), owner, level, stack);
+        this.rule = Objects.requireNonNull(rule, "rule");
+    }
+
     public LegacyVariantSnowballRuntimeRegistry.Rule rule() {
         return rule;
+    }
+
+    public int legacyMetadata() {
+        return LegacyStackComponents.get(getItem());
+    }
+
+    public LegacyVariantSnowballRuntimeRegistry.Variant variant() {
+        return rule.variant(legacyMetadata());
+    }
+
+    private static EntityType<ConvertedLegacyVariantSnowballProjectile> requireType(
+            LegacyVariantSnowballRuntimeRegistry.Rule rule) {
+        Objects.requireNonNull(rule, "rule");
+        EntityType<ConvertedLegacyVariantSnowballProjectile> type =
+                LegacyVariantSnowballRuntimeRegistry.projectileType(rule.projectileId());
+        if (type == null) {
+            throw new IllegalStateException(
+                    "Missing registered converted variant-snowball EntityType for "
+                            + rule.projectileId());
+        }
+        return type;
     }
 
     @Override
