@@ -104,15 +104,18 @@ public final class LegacyVariantSnowballItemRegistrationStripPass implements Con
                         : "ambiguous-item-registration-proof:" + matches.size());
             } else {
                 LegacyRegistryAnalyzer.Registration registration = matches.getFirst();
-                sourceOwner = registration.sourceOwner();
-                sourceMethod = registration.sourceMethod();
-                sourceDescriptor = registration.sourceDescriptor();
+                String directOwner = registration.sourceOwner();
+                String directMethod = registration.sourceMethod();
+                String directDescriptor = registration.sourceDescriptor();
+                sourceOwner = directOwner;
+                sourceMethod = directMethod;
+                sourceDescriptor = directDescriptor;
 
                 long sameDirectSource = registry.items().stream()
                         .filter(candidate ->
-                                sourceOwner.equals(candidate.sourceOwner())
-                                        && sourceMethod.equals(candidate.sourceMethod())
-                                        && sourceDescriptor.equals(candidate.sourceDescriptor()))
+                                directOwner.equals(candidate.sourceOwner())
+                                        && directMethod.equals(candidate.sourceMethod())
+                                        && directDescriptor.equals(candidate.sourceDescriptor()))
                         .count();
                 if (sameDirectSource != 1) {
                     blockers.add("shared-registerItem-direct-source:" + sameDirectSource);
