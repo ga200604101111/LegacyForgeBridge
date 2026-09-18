@@ -40,6 +40,8 @@ public final class LegacySingleInputProcessorRetirementReadiness {
                 LegacySingleInputProcessorTileRegistrationStripPass.OUTPUT);
         Path blockStripPath = context.stagingDir().resolve(
                 LegacySingleInputProcessorBlockRegistrationStripPass.OUTPUT);
+        Path tileConstructionPath = context.stagingDir().resolve(
+                LegacySingleInputProcessorTileConstructionPass.OUTPUT);
         if (!Files.isRegularFile(processorPath)
                 || !Files.isRegularFile(tileStripPath)
                 || !Files.isRegularFile(blockStripPath)) {
@@ -49,6 +51,12 @@ public final class LegacySingleInputProcessorRetirementReadiness {
         JsonObject processor = read(processorPath);
         JsonObject tileStrip = read(tileStripPath);
         JsonObject blockStrip = read(blockStripPath);
+        JsonObject tileConstruction = Files.isRegularFile(tileConstructionPath)
+                ? read(tileConstructionPath) : null;
+        boolean tileConstructionValid = tileConstruction != null
+                && integer(tileConstruction, "schemaVersion", -1) == 1
+                && context.sourceHash().equals(
+                        string(tileConstruction, "sourceSha256", ""));
         if (integer(processor, "schemaVersion", -1) != 4
                 || integer(tileStrip, "schemaVersion", -1) != 1
                 || integer(blockStrip, "schemaVersion", -1) != 1
@@ -68,6 +76,9 @@ public final class LegacySingleInputProcessorRetirementReadiness {
                 tileStrip, "rules", "sourceTileClass");
         Map<String, JsonObject> blockStripByClass = index(
                 blockStrip, "rules", "sourceBlockClass");
+        Map<String, JsonObject> tileConstructionByClass = tileConstructionValid
+                ? index(tileConstruction, "rules", "sourceTileClass")
+                : Map.of();
 
         JsonObject root = new JsonObject();
         root.addProperty("schemaVersion", 1);
@@ -79,6 +90,8 @@ public final class LegacySingleInputProcessorRetirementReadiness {
         root.addProperty("blockConstructorReplacementRequired", true);
         root.addProperty("blockSourceAllocationRetirementRequired", true);
         root.addProperty("tileConstructorReplacementRequired", true);
+        root.addProperty("tileConstructorReplacementAnalysisWired",
+                tileConstructionValid);
         root.addProperty("guiHandlerRetirementRequired", true);
         root.addProperty("nestedCompanionCohortExpansionWired", true);
         root.addProperty("retirementAuthorizationWired", false);
@@ -140,12 +153,21 @@ public final class LegacySingleInputProcessorRetirementReadiness {
                 blockers.add("block-registration-strip-incomplete");
             }
 
-            // These are intentionally separate gates. Runtime completeness proves the modern
-            // behavior, but does not itself prove source constructors/global side effects or that
-            // a legacy GUI handler branch can be removed safely.
+            JsonObject tileConstructionRule =
+                    tileConstructionByClass.get(tileClass);
+            boolean tileConstructorReplacementProven = tileConstructionValid
+                    && tileConstructionRule != null
+                    && bool(tileConstructionRule,
+                    "tileConstructorReplacementProven", false);
+            if (!tileConstructorReplacementProven) {
+                blockers.add("processor-tile-constructor-replacement-not-wired");
+            }
+
+            // These remain intentionally separate gates. Runtime completeness proves the modern
+            // behavior, but does not itself prove source Block constructor/global side effects or
+            // that a legacy GUI handler branch can be removed safely.
             blockers.add("processor-block-constructor-replacement-not-wired");
             blockers.add("processor-block-source-allocation-retirement-not-wired");
-            blockers.add("processor-tile-constructor-replacement-not-wired");
             blockers.add("processor-gui-handler-retirement-not-wired");
 
             inspectClass(
@@ -179,7 +201,8 @@ public final class LegacySingleInputProcessorRetirementReadiness {
                             && bool(blockRule, "blockRegistrationStripComplete", false));
             value.addProperty("blockConstructorReplacementProven", false);
             value.addProperty("blockSourceAllocationStripComplete", false);
-            value.addProperty("tileConstructorReplacementProven", false);
+            value.addProperty("tileConstructorReplacementProven",
+                    tileConstructorReplacementProven);
             value.addProperty("guiHandlerRetirementComplete", false);
             value.addProperty("nestedCompanionClassCount", companions.size());
             value.add("nestedCompanionClasses", strings(companions));
