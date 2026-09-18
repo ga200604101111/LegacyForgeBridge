@@ -41,23 +41,29 @@ public final class LegacyVariantSnowballRetirementReadiness {
                 context.stagingDir().resolve(LegacyVariantSnowballItemRegistrationStripPass.OUTPUT);
         Path constructionPath = context.stagingDir().resolve(
                 LegacyVariantSnowballConstructionReplacementReadiness.OUTPUT);
+        Path allocationStripPath = context.stagingDir().resolve(
+                LegacyVariantSnowballSourceAllocationStripPass.OUTPUT);
         if (!Files.isRegularFile(runtimePath)
                 || !Files.isRegularFile(stripPath)
                 || !Files.isRegularFile(itemStripPath)
-                || !Files.isRegularFile(constructionPath)) return;
+                || !Files.isRegularFile(constructionPath)
+                || !Files.isRegularFile(allocationStripPath)) return;
 
         JsonObject runtime = read(runtimePath);
         JsonObject strip = read(stripPath);
         JsonObject itemStrip = read(itemStripPath);
         JsonObject construction = read(constructionPath);
+        JsonObject allocationStrip = read(allocationStripPath);
         if (integer(runtime, "schemaVersion", -1) != LegacyVariantSnowballRuntimePass.SCHEMA
                 || integer(strip, "schemaVersion", -1) != 1
                 || integer(itemStrip, "schemaVersion", -1) != 1
                 || integer(construction, "schemaVersion", -1) != 1
+                || integer(allocationStrip, "schemaVersion", -1) != 1
                 || !context.sourceHash().equals(string(runtime, "sourceSha256", ""))
                 || !context.sourceHash().equals(string(strip, "sourceSha256", ""))
                 || !context.sourceHash().equals(string(itemStrip, "sourceSha256", ""))
-                || !context.sourceHash().equals(string(construction, "sourceSha256", ""))) {
+                || !context.sourceHash().equals(string(construction, "sourceSha256", ""))
+                || !context.sourceHash().equals(string(allocationStrip, "sourceSha256", ""))) {
             return;
         }
 
@@ -89,6 +95,14 @@ public final class LegacyVariantSnowballRetirementReadiness {
             JsonObject rule = element.getAsJsonObject();
             String item = string(rule, "sourceItemClass", null);
             if (item != null) constructionByItem.putIfAbsent(item, rule);
+        }
+
+        Map<String, JsonObject> allocationStripByItem = new LinkedHashMap<>();
+        for (JsonElement element : array(allocationStrip, "rules")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject rule = element.getAsJsonObject();
+            String item = string(rule, "sourceItemClass", null);
+            if (item != null) allocationStripByItem.putIfAbsent(item, rule);
         }
 
         JsonObject root = new JsonObject();
@@ -150,9 +164,11 @@ public final class LegacyVariantSnowballRetirementReadiness {
                     || !bool(constructionRule, "constructorReplacementProven", false)) {
                 blockers.add("item-constructor-replacement-incomplete");
             }
-            if (!bool(construction, "sourceAllocationStripWired", false)
-                    || constructionRule == null
-                    || !bool(constructionRule, "sourceAllocationStripWired", false)) {
+            JsonObject allocationStripRule = allocationStripByItem.get(itemClass);
+            if (!bool(allocationStrip, "sourceAllocationStripWired", false)
+                    || allocationStripRule == null
+                    || !bool(allocationStripRule, "sourceAllocationStripComplete", false)
+                    || integer(allocationStripRule, "strippedSourceAllocationSites", 0) != 1) {
                 blockers.add("item-source-allocation-strip-incomplete");
             }
 
@@ -197,8 +213,8 @@ public final class LegacyVariantSnowballRetirementReadiness {
                     constructionRule != null
                             && bool(constructionRule, "constructorReplacementProven", false));
             value.addProperty("sourceAllocationStripComplete",
-                    constructionRule != null
-                            && bool(constructionRule, "sourceAllocationStripWired", false));
+                    allocationStripRule != null
+                            && bool(allocationStripRule, "sourceAllocationStripComplete", false));
             value.addProperty("retirementCohortCandidateReady", cohortReady);
             value.addProperty("sourceClassDeletionAuthorized", false);
             value.addProperty("deletedSourceClassCount", 0);
