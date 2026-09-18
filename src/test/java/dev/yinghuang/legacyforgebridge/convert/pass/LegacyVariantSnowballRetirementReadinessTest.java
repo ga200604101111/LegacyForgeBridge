@@ -25,7 +25,7 @@ class LegacyVariantSnowballRetirementReadinessTest {
     @TempDir Path tempDir;
 
     @Test
-    void completeRuntimeStillBlocksDeletionUntilItemRegistrationRetirementIsProven()
+    void completeReplacementBecomesRetirementCandidateBeforeDeletionAuthorization()
             throws Exception {
         Path source = VariantSnowballRuntimeFixture.write(tempDir.resolve("variant.jar"));
         Path staging = tempDir.resolve("staging");
@@ -43,6 +43,7 @@ class LegacyVariantSnowballRetirementReadinessTest {
         new LegacyVariantSnowballItemRegistrationStripPass().apply(context);
         new LegacyBehaviorPass().apply(context);
         LegacyVariantSnowballConstructionReplacementReadiness.materialize(context);
+        new LegacyVariantSnowballSourceAllocationStripPass().apply(context);
 
         LegacyClassDependencyAnalyzer.Analysis dependencies =
                 new LegacyClassDependencyAnalyzer().analyze(source, staging);
@@ -57,8 +58,10 @@ class LegacyVariantSnowballRetirementReadinessTest {
         assertFalse(root.get("retirementAuthorizationWired").getAsBoolean());
         assertFalse(root.get("sourceClassDeletionWired").getAsBoolean());
         assertEquals(1, root.get("evaluatedRuntimeCohorts").getAsInt());
-        assertEquals(0, root.get("retirementCohortCandidateReadyCount").getAsInt());
-        assertEquals(1, root.get("retirementCohortBlockedCount").getAsInt());
+        assertEquals(1, root.get("retirementCohortCandidateReadyCount").getAsInt(),
+                root.toString());
+        assertEquals(0, root.get("retirementCohortBlockedCount").getAsInt(),
+                root.toString());
         assertEquals(0, root.get("sourceClassDeletionAuthorizedCount").getAsInt());
 
         JsonObject rule = root.getAsJsonArray("rules").get(0).getAsJsonObject();
@@ -66,8 +69,8 @@ class LegacyVariantSnowballRetirementReadinessTest {
         assertTrue(rule.get("projectileRegistrationStripComplete").getAsBoolean());
         assertTrue(rule.get("itemRegistrationStripComplete").getAsBoolean());
         assertTrue(rule.get("constructorReplacementProven").getAsBoolean(), rule.toString());
-        assertFalse(rule.get("sourceAllocationStripComplete").getAsBoolean());
-        assertFalse(rule.get("retirementCohortCandidateReady").getAsBoolean());
+        assertTrue(rule.get("sourceAllocationStripComplete").getAsBoolean(), rule.toString());
+        assertTrue(rule.get("retirementCohortCandidateReady").getAsBoolean(), rule.toString());
         assertFalse(rule.get("sourceClassDeletionAuthorized").getAsBoolean());
         assertEquals(0, rule.get("deletedSourceClassCount").getAsInt());
 
@@ -77,10 +80,8 @@ class LegacyVariantSnowballRetirementReadinessTest {
         }
         assertFalse(blockers.contains("item-registration-strip-incomplete"), blockers.toString());
         assertFalse(blockers.contains("item-constructor-replacement-incomplete"), blockers.toString());
-        assertTrue(blockers.contains("item-source-allocation-strip-incomplete"), blockers.toString());
-        assertTrue(blockers.stream().anyMatch(value ->
-                value.startsWith("item-candidate-incoming-reference:foreign/Bootstrap")),
-                blockers.toString());
+        assertFalse(blockers.contains("item-source-allocation-strip-incomplete"), blockers.toString());
+        assertTrue(blockers.isEmpty(), blockers.toString());
 
         assertTrue(Files.isRegularFile(staging.resolve("foreign/item/VariantBall.class")));
         assertTrue(Files.isRegularFile(staging.resolve("foreign/entity/VariantProjectile.class")));
