@@ -25,6 +25,7 @@ import dev.yinghuang.legacyforgebridge.convert.pass.LegacySeatBedPresentationPas
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyVariantSnowballLaunchPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyVariantSnowballPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyVariantSnowballRuntimeCandidatePass;
+import dev.yinghuang.legacyforgebridge.convert.pass.LegacyVariantSnowballRuntimePass;
 
 public final class GenericLegacyModProfile implements LegacyModProfile {
     @Override public String id(){ return "generic-forge-1.7.10"; }
@@ -34,6 +35,7 @@ public final class GenericLegacyModProfile implements LegacyModProfile {
         plan.add(new LegacyVariantSnowballPass());
         plan.add(new LegacyVariantSnowballLaunchPass());
         plan.add(new LegacyVariantSnowballRuntimeCandidatePass());
+        plan.add(new LegacyVariantSnowballRuntimePass());
         plan.add(new LegacyGridPotPresentationProofPass());
         plan.add(new LegacyEntityDataWatcherPass());
         plan.add(new LegacyEntityDataWatcherAccessPass());

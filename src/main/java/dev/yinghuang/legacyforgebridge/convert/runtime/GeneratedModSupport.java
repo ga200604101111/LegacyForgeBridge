@@ -16,6 +16,7 @@ import dev.yinghuang.legacyforgebridge.compat.LegacySeatBedRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacySingleInputProcessorRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyStackComponents;
 import dev.yinghuang.legacyforgebridge.compat.LegacyStorageBlockRegistry;
+import dev.yinghuang.legacyforgebridge.compat.LegacyVariantSnowballRuntimeRegistry;
 import net.fabricmc.fabric.api.itemgroup.v1.FabricItemGroup;
 import net.minecraft.core.Registry;
 import net.minecraft.core.component.DataComponents;
@@ -55,6 +56,7 @@ public final class GeneratedModSupport {
 
     public static void beginMod(String modId){
         LegacyStackComponents.bootstrap();
+        LegacyVariantSnowballRuntimeRegistry.loadMod(modId);
         LegacyPlantRuntimeRegistry.loadMod(modId);
         LegacyPlantPlacementRegistry.loadMod(modId);
         LegacyFoodItemRegistry.loadMod(modId);
