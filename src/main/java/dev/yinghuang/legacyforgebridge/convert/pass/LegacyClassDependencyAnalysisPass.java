@@ -91,6 +91,7 @@ public final class LegacyClassDependencyAnalysisPass implements ConversionPass {
         // performs independent fresh pre/post checks and restores bytes if post-delete proof fails.
         LegacyPlainEntityRetirementReadiness.materialize(context, analysis);
         new LegacyPlainEntityRetirementPass().apply(context);
+        LegacyVariantSnowballRetirementReadiness.materialize(context, analysis);
     }
 
     private static JsonArray strings(Iterable<String> values) {
