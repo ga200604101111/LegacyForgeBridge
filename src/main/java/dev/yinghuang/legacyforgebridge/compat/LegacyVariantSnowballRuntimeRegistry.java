@@ -142,11 +142,11 @@ public final class LegacyVariantSnowballRuntimeRegistry {
                     || !bool(root, "projectileEntityTypeRegistrationWired")
                     || !bool(root, "projectileItemStackCarrierWired")
                     || !bool(root, "legacyMetadataSyncWired")
-                    || bool(root, "itemRuntimeWired")
+                    || !bool(root, "itemRuntimeWired")
                     || !bool(root, "projectileRuntimeWired")
                     || !bool(root, "projectileImpactRuntimeWired")
-                    || bool(root, "rendererRuntimeWired")
-                    || bool(root, "runtimeImplementationWired")) {
+                    || !bool(root, "rendererRuntimeWired")
+                    || !bool(root, "runtimeImplementationWired")) {
                 return;
             }
 
@@ -246,11 +246,11 @@ public final class LegacyVariantSnowballRuntimeRegistry {
                     || !bool(value, "projectileEntityTypeRegistrationWired")
                     || !bool(value, "projectileItemStackCarrierWired")
                     || !bool(value, "legacyMetadataSyncWired")
-                    || bool(value, "itemRuntimeWired")
+                    || !bool(value, "itemRuntimeWired")
                     || !bool(value, "projectileRuntimeWired")
                     || !bool(value, "projectileImpactRuntimeWired")
-                    || bool(value, "rendererRuntimeWired")
-                    || bool(value, "runtimeImplementationWired")
+                    || !bool(value, "rendererRuntimeWired")
+                    || !bool(value, "runtimeImplementationWired")
                     || !"VARIANT_SNOWBALL".equals(string(value, "adapter", null))
                     || !"THROWN_ITEM".equals(string(value, "rendererAdapter", null))
                     || !"MISC".equals(string(value, "mobCategory", null))
