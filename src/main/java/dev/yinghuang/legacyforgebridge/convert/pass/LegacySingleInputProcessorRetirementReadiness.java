@@ -44,6 +44,8 @@ public final class LegacySingleInputProcessorRetirementReadiness {
                 LegacySingleInputProcessorTileConstructionPass.OUTPUT);
         Path guiProofPath = context.stagingDir().resolve(
                 LegacySingleInputProcessorGuiHandlerProofPass.OUTPUT);
+        Path guiStripPath = context.stagingDir().resolve(
+                LegacySingleInputProcessorGuiHandlerStripPass.OUTPUT);
         if (!Files.isRegularFile(processorPath)
                 || !Files.isRegularFile(tileStripPath)
                 || !Files.isRegularFile(blockStripPath)) {
@@ -65,6 +67,13 @@ public final class LegacySingleInputProcessorRetirementReadiness {
                 && integer(guiProof, "schemaVersion", -1) == 1
                 && context.sourceHash().equals(
                         string(guiProof, "sourceSha256", ""));
+        JsonObject guiStrip = Files.isRegularFile(guiStripPath)
+                ? read(guiStripPath) : null;
+        boolean guiStripValid = guiStrip != null
+                && integer(guiStrip, "schemaVersion", -1) == 1
+                && context.sourceHash().equals(
+                        string(guiStrip, "sourceSha256", ""))
+                && bool(guiStrip, "guiHandlerBranchStripWired", false);
         if (integer(processor, "schemaVersion", -1) != 4
                 || integer(tileStrip, "schemaVersion", -1) != 1
                 || integer(blockStrip, "schemaVersion", -1) != 1
@@ -90,6 +99,9 @@ public final class LegacySingleInputProcessorRetirementReadiness {
         Map<String, JsonObject> guiProofByBlock = guiProofValid
                 ? index(guiProof, "rules", "sourceBlockClass")
                 : Map.of();
+        Map<String, JsonObject> guiStripByBlock = guiStripValid
+                ? index(guiStrip, "rules", "sourceBlockClass")
+                : Map.of();
 
         JsonObject root = new JsonObject();
         root.addProperty("schemaVersion", 1);
@@ -106,6 +118,9 @@ public final class LegacySingleInputProcessorRetirementReadiness {
         root.addProperty("guiHandlerRetirementRequired", true);
         root.addProperty("guiHandlerBranchProofRequired", true);
         root.addProperty("guiHandlerBranchProofAnalysisWired", guiProofValid);
+        root.addProperty("guiHandlerBranchStripRequired", true);
+        root.addProperty("guiHandlerBranchStripAnalysisWired", guiStripValid);
+        root.addProperty("processorPresentationCohortExpansionWired", true);
         root.addProperty("nestedCompanionCohortExpansionWired", true);
         root.addProperty("retirementAuthorizationWired", false);
         root.addProperty("sourceClassDeletionWired", false);
@@ -130,9 +145,45 @@ public final class LegacySingleInputProcessorRetirementReadiness {
                 continue;
             }
 
+            JsonObject guiProofRule = guiProofByBlock.get(blockClass);
+            boolean guiHandlerBranchProofComplete = guiProofValid
+                    && guiProofRule != null
+                    && bool(guiProofRule,
+                    "guiHandlerBranchProofComplete", false);
+            JsonObject guiStripRule = guiStripByBlock.get(blockClass);
+            boolean guiHandlerBranchStripComplete = guiStripValid
+                    && guiStripRule != null
+                    && bool(guiStripRule,
+                    "guiHandlerBranchStripComplete", false)
+                    && integer(guiStripRule, "strippedGuiHandlerBranches", 0) == 2;
+            boolean guiHandlerRetirementComplete =
+                    guiHandlerBranchProofComplete && guiHandlerBranchStripComplete;
+
+            String guiHandlerClass = guiProofRule == null
+                    ? null : string(guiProofRule, "handlerClass", null);
+            String sourceContainerClass = guiProofRule == null
+                    ? null : string(guiProofRule, "sourceContainerClass", null);
+            String sourceGuiClass = guiProofRule == null
+                    ? null : string(guiProofRule, "sourceGuiClass", null);
+
+            LinkedHashSet<String> presentationClasses = new LinkedHashSet<>();
+            if (guiHandlerRetirementComplete) {
+                if (sourceContainerClass != null
+                        && !sourceContainerClass.equals(blockClass)
+                        && !sourceContainerClass.equals(tileClass)) {
+                    presentationClasses.add(sourceContainerClass);
+                }
+                if (sourceGuiClass != null
+                        && !sourceGuiClass.equals(blockClass)
+                        && !sourceGuiClass.equals(tileClass)) {
+                    presentationClasses.add(sourceGuiClass);
+                }
+            }
+
             LinkedHashSet<String> baseCohort = new LinkedHashSet<>();
             baseCohort.add(blockClass);
             baseCohort.add(tileClass);
+            baseCohort.addAll(presentationClasses);
             LinkedHashSet<String> companions =
                     discoverNestedCompanions(context.stagingDir(), baseCohort);
             LinkedHashSet<String> cohort = new LinkedHashSet<>(baseCohort);
@@ -176,15 +227,12 @@ public final class LegacySingleInputProcessorRetirementReadiness {
                 blockers.add("processor-tile-constructor-replacement-not-wired");
             }
 
-            JsonObject guiProofRule = guiProofByBlock.get(blockClass);
-            boolean guiHandlerBranchProofComplete = guiProofValid
-                    && guiProofRule != null
-                    && bool(guiProofRule,
-                    "guiHandlerBranchProofComplete", false);
             if (!guiHandlerBranchProofComplete) {
                 blockers.add("processor-gui-handler-branch-proof-incomplete");
-            } else {
+            } else if (!guiStripValid) {
                 blockers.add("processor-gui-handler-branch-strip-not-wired");
+            } else if (!guiHandlerBranchStripComplete) {
+                blockers.add("processor-gui-handler-branch-strip-incomplete");
             }
 
             // These remain intentionally separate gates. Runtime completeness proves the modern
@@ -200,6 +248,15 @@ public final class LegacySingleInputProcessorRetirementReadiness {
                     "tile", tileClass, cohort,
                     dependencyByClass.get(tileClass),
                     references.forTarget(tileClass), blockers);
+            for (String presentationClass : presentationClasses) {
+                inspectClass(
+                        "presentation:" + presentationClass,
+                        presentationClass,
+                        cohort,
+                        dependencyByClass.get(presentationClass),
+                        references.forTarget(presentationClass),
+                        blockers);
+            }
             for (String companion : companions) {
                 inspectClass(
                         "companion:" + companion, companion, cohort,
@@ -227,22 +284,25 @@ public final class LegacySingleInputProcessorRetirementReadiness {
                     tileConstructorReplacementProven);
             value.addProperty("guiHandlerBranchProofComplete",
                     guiHandlerBranchProofComplete);
-            value.addProperty("guiHandlerRetirementComplete", false);
-            if (guiProofRule != null) {
-                String handlerClass = string(guiProofRule, "handlerClass", null);
-                String sourceContainerClass =
-                        string(guiProofRule, "sourceContainerClass", null);
-                String sourceGuiClass = string(guiProofRule, "sourceGuiClass", null);
-                if (handlerClass != null) {
-                    value.addProperty("guiHandlerClass", handlerClass);
-                }
-                if (sourceContainerClass != null) {
-                    value.addProperty("sourceContainerClass", sourceContainerClass);
-                }
-                if (sourceGuiClass != null) {
-                    value.addProperty("sourceGuiClass", sourceGuiClass);
-                }
+            value.addProperty("guiHandlerBranchStripComplete",
+                    guiHandlerBranchStripComplete);
+            value.addProperty("guiHandlerRetirementComplete",
+                    guiHandlerRetirementComplete);
+            if (guiHandlerClass != null) {
+                value.addProperty("guiHandlerClass", guiHandlerClass);
             }
+            if (sourceContainerClass != null) {
+                value.addProperty("sourceContainerClass", sourceContainerClass);
+            }
+            if (sourceGuiClass != null) {
+                value.addProperty("sourceGuiClass", sourceGuiClass);
+            }
+            value.addProperty(
+                    "processorPresentationCohortExpanded",
+                    guiHandlerRetirementComplete);
+            value.addProperty(
+                    "presentationSourceClassCount", presentationClasses.size());
+            value.add("presentationSourceClasses", strings(presentationClasses));
             value.addProperty("nestedCompanionClassCount", companions.size());
             value.add("nestedCompanionClasses", strings(companions));
             value.addProperty("retirementCohortCandidateReady", cohortReady);
@@ -258,6 +318,20 @@ public final class LegacySingleInputProcessorRetirementReadiness {
                     value, "tile", tileClass,
                     dependencyByClass.get(tileClass),
                     references.forTarget(tileClass));
+
+            JsonArray presentationEvidence = new JsonArray();
+            for (String presentationClass : presentationClasses) {
+                JsonObject evidence = new JsonObject();
+                evidence.addProperty("sourceClass", presentationClass);
+                addEvidence(
+                        evidence,
+                        "presentation",
+                        presentationClass,
+                        dependencyByClass.get(presentationClass),
+                        references.forTarget(presentationClass));
+                presentationEvidence.add(evidence);
+            }
+            value.add("presentationSourceEvidence", presentationEvidence);
 
             JsonArray companionEvidence = new JsonArray();
             for (String companion : companions) {
