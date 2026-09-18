@@ -54,10 +54,44 @@ public final class LegacyEntityRegistrationStripper {
         MethodInsnNode call = matches.getFirst();
         AbstractInsnNode[] slice = slices.getFirst();
         MethodNode ownerMethod = null;
-        for (MethodNode method : node.methods) if (method.instructions.indexOf(call) >= 0) { ownerMethod = method; break; }
-        if (ownerMethod == null) return new Result(sourceClass, 0, List.of("matched-callsite-owner-method-missing"));
-        for (AbstractInsnNode instruction : slice) ownerMethod.instructions.remove(instruction);
-        ownerMethod.instructions.remove(call);
+        for (MethodNode method : node.methods) {
+            for (AbstractInsnNode instruction = method.instructions.getFirst();
+                 instruction != null;
+                 instruction = instruction.getNext()) {
+                if (instruction == call) {
+                    ownerMethod = method;
+                    break;
+                }
+            }
+            if (ownerMethod != null) break;
+        }
+        if (ownerMethod == null) {
+            return new Result(sourceClass, 0,
+                    List.of("matched-callsite-owner-method-missing"));
+        }
+
+        // Delete the already-proven contiguous producer/call region by following the live
+        // instruction links. Removing saved nodes one-by-one after an InsnList index lookup can
+        // leave the first producer behind and consume the following RETURN on ASM 9.x. Capturing
+        // the call successor first makes the mutation independent of InsnList cache/index state.
+        AbstractInsnNode first = slice[0];
+        AbstractInsnNode after = call.getNext();
+        AbstractInsnNode cursor = first;
+        boolean reachedCall = false;
+        while (cursor != after) {
+            if (cursor == null) {
+                return new Result(sourceClass, 0,
+                        List.of("matched-registerModEntity-slice-not-contiguous"));
+            }
+            AbstractInsnNode next = cursor.getNext();
+            if (cursor == call) reachedCall = true;
+            ownerMethod.instructions.remove(cursor);
+            cursor = next;
+        }
+        if (!reachedCall) {
+            return new Result(sourceClass, 0,
+                    List.of("matched-registerModEntity-call-not-in-removal-range"));
+        }
 
         ClassWriter writer = new ClassWriter(0);
         node.accept(writer);
