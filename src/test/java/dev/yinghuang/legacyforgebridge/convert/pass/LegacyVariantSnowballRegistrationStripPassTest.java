@@ -62,12 +62,54 @@ class LegacyVariantSnowballRegistrationStripPassTest {
         byte[] strippedBootstrap = Files.readAllBytes(staging.resolve("foreign/Bootstrap.class"));
         assertFalse(refs.forTarget("foreign/entity/VariantProjectile")
                         .incomingClassReferences().contains("foreign/Bootstrap"),
-                () -> "Bootstrap still references projectile after strip: "
-                        + projectileReferenceSites(strippedBootstrap));
+                () -> "Bootstrap still references projectile after strip: sites="
+                        + projectileReferenceSites(strippedBootstrap)
+                        + ", preInit=" + preInitInstructions(strippedBootstrap));
         // The launch item still legitimately constructs the legacy projectile in the copied
         // source cohort until the later retirement/registration-strip closure removes it.
         assertTrue(refs.forTarget("foreign/entity/VariantProjectile")
                 .incomingClassReferences().contains("foreign/item/VariantBall"));
+    }
+
+    private static java.util.List<String> preInitInstructions(byte[] bytes) {
+        java.util.List<String> instructions = new java.util.ArrayList<>();
+        new ClassReader(bytes).accept(new ClassVisitor(Opcodes.ASM9) {
+            @Override
+            public MethodVisitor visitMethod(int access, String name, String descriptor,
+                                             String signature, String[] exceptions) {
+                if (!"preInit".equals(name)) return null;
+                return new MethodVisitor(Opcodes.ASM9) {
+                    @Override public void visitInsn(int opcode) {
+                        instructions.add("INSN:" + opcode);
+                    }
+                    @Override public void visitIntInsn(int opcode, int operand) {
+                        instructions.add("INT:" + opcode + ":" + operand);
+                    }
+                    @Override public void visitVarInsn(int opcode, int varIndex) {
+                        instructions.add("VAR:" + opcode + ":" + varIndex);
+                    }
+                    @Override public void visitTypeInsn(int opcode, String type) {
+                        instructions.add("TYPE:" + opcode + ":" + type);
+                    }
+                    @Override public void visitFieldInsn(int opcode, String owner,
+                                                         String fieldName, String fieldDescriptor) {
+                        instructions.add("FIELD:" + opcode + ":" + owner + "."
+                                + fieldName + fieldDescriptor);
+                    }
+                    @Override public void visitMethodInsn(int opcode, String owner,
+                                                          String methodName,
+                                                          String methodDescriptor,
+                                                          boolean isInterface) {
+                        instructions.add("CALL:" + opcode + ":" + owner + "."
+                                + methodName + methodDescriptor);
+                    }
+                    @Override public void visitLdcInsn(Object value) {
+                        instructions.add("LDC:" + String.valueOf(value));
+                    }
+                };
+            }
+        }, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+        return instructions;
     }
 
     private static java.util.List<String> projectileReferenceSites(byte[] bytes) {
