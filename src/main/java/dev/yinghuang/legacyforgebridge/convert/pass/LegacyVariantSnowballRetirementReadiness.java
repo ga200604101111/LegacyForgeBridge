@@ -16,6 +16,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -112,6 +113,8 @@ public final class LegacyVariantSnowballRetirementReadiness {
         root.addProperty("itemRegistrationRetirementRequired", true);
         root.addProperty("constructorReplacementRequired", true);
         root.addProperty("sourceAllocationRetirementRequired", true);
+        root.addProperty("nestedCompanionCohortExpansionWired", true);
+        root.addProperty("nestedCompanionReferenceClosureRequired", true);
         root.addProperty("retirementAuthorizationWired", false);
         root.addProperty("sourceClassDeletionWired", false);
 
@@ -130,7 +133,15 @@ public final class LegacyVariantSnowballRetirementReadiness {
             String selectorClass = string(runtimeRule, "selectorClass", null);
             if (itemClass == null || projectileClass == null || selectorClass == null) continue;
 
-            Set<String> cohort = Set.of(itemClass, projectileClass, selectorClass);
+            LinkedHashSet<String> baseCohort = new LinkedHashSet<>();
+            baseCohort.add(itemClass);
+            baseCohort.add(projectileClass);
+            baseCohort.add(selectorClass);
+            LinkedHashSet<String> nestedCompanions =
+                    discoverNestedCompanions(context.stagingDir(), baseCohort);
+            LinkedHashSet<String> cohort = new LinkedHashSet<>(baseCohort);
+            cohort.addAll(nestedCompanions);
+
             LegacyCandidateReferenceAnalyzer.Analysis references =
                     new LegacyCandidateReferenceAnalyzer().analyze(
                             context.stagingDir(), cohort);
@@ -193,6 +204,15 @@ public final class LegacyVariantSnowballRetirementReadiness {
                     dependencyByClass.get(selectorClass),
                     references.forTarget(selectorClass),
                     blockers);
+            for (String companion : nestedCompanions) {
+                inspectClass(
+                        "companion:" + companion,
+                        companion,
+                        cohort,
+                        dependencyByClass.get(companion),
+                        references.forTarget(companion),
+                        blockers);
+            }
 
             boolean cohortReady = blockers.isEmpty();
             if (cohortReady) ready++; else blocked++;
@@ -218,6 +238,8 @@ public final class LegacyVariantSnowballRetirementReadiness {
             value.addProperty("retirementCohortCandidateReady", cohortReady);
             value.addProperty("sourceClassDeletionAuthorized", false);
             value.addProperty("deletedSourceClassCount", 0);
+            value.addProperty("nestedCompanionClassCount", nestedCompanions.size());
+            value.add("nestedCompanionClasses", strings(nestedCompanions));
             value.add("blockers", strings(blockers));
 
             addEvidence(value, "item", itemClass,
@@ -226,6 +248,15 @@ public final class LegacyVariantSnowballRetirementReadiness {
                     dependencyByClass.get(projectileClass), references.forTarget(projectileClass));
             addEvidence(value, "selector", selectorClass,
                     dependencyByClass.get(selectorClass), references.forTarget(selectorClass));
+            JsonArray companionEvidence = new JsonArray();
+            for (String companion : nestedCompanions) {
+                JsonObject evidence = new JsonObject();
+                evidence.addProperty("sourceClass", companion);
+                addEvidence(evidence, "companion", companion,
+                        dependencyByClass.get(companion), references.forTarget(companion));
+                companionEvidence.add(evidence);
+            }
+            value.add("nestedCompanionEvidence", companionEvidence);
             value.add("referenceScanDiagnostics", strings(references.diagnostics()));
             rules.add(value);
         }
@@ -326,6 +357,29 @@ public final class LegacyVariantSnowballRetirementReadiness {
             value.add(prefix + "DynamicEvidence",
                     strings(dependency.dynamicEvidence()));
         }
+    }
+
+    static LinkedHashSet<String> discoverNestedCompanions(
+            Path stagingDir, Set<String> baseCohort) throws Exception {
+        LinkedHashSet<String> companions = new LinkedHashSet<>();
+        if (stagingDir == null || baseCohort == null || baseCohort.isEmpty()) return companions;
+        try (var stream = Files.walk(stagingDir)) {
+            for (Path path : stream.filter(Files::isRegularFile)
+                    .filter(value -> value.getFileName().toString().endsWith(".class"))
+                    .sorted()
+                    .toList()) {
+                String relative = stagingDir.relativize(path).toString().replace('\\', '/');
+                if (!relative.endsWith(".class")) continue;
+                String internalName = relative.substring(0, relative.length() - 6);
+                for (String base : baseCohort) {
+                    if (internalName.startsWith(base + "$")) {
+                        companions.add(internalName);
+                        break;
+                    }
+                }
+            }
+        }
+        return companions;
     }
 
     private static JsonObject read(Path path) throws Exception {
