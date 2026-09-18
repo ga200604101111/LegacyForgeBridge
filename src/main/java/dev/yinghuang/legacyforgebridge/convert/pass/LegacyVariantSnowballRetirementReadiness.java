@@ -37,14 +37,21 @@ public final class LegacyVariantSnowballRetirementReadiness {
                 context.stagingDir().resolve(LegacyVariantSnowballRuntimePass.OUTPUT);
         Path stripPath =
                 context.stagingDir().resolve(LegacyVariantSnowballRegistrationStripPass.OUTPUT);
-        if (!Files.isRegularFile(runtimePath) || !Files.isRegularFile(stripPath)) return;
+        Path itemStripPath =
+                context.stagingDir().resolve(LegacyVariantSnowballItemRegistrationStripPass.OUTPUT);
+        if (!Files.isRegularFile(runtimePath)
+                || !Files.isRegularFile(stripPath)
+                || !Files.isRegularFile(itemStripPath)) return;
 
         JsonObject runtime = read(runtimePath);
         JsonObject strip = read(stripPath);
+        JsonObject itemStrip = read(itemStripPath);
         if (integer(runtime, "schemaVersion", -1) != LegacyVariantSnowballRuntimePass.SCHEMA
                 || integer(strip, "schemaVersion", -1) != 1
+                || integer(itemStrip, "schemaVersion", -1) != 1
                 || !context.sourceHash().equals(string(runtime, "sourceSha256", ""))
-                || !context.sourceHash().equals(string(strip, "sourceSha256", ""))) {
+                || !context.sourceHash().equals(string(strip, "sourceSha256", ""))
+                || !context.sourceHash().equals(string(itemStrip, "sourceSha256", ""))) {
             return;
         }
 
@@ -60,6 +67,14 @@ public final class LegacyVariantSnowballRetirementReadiness {
             JsonObject rule = element.getAsJsonObject();
             String projectile = string(rule, "sourceProjectileClass", null);
             if (projectile != null) stripByProjectile.putIfAbsent(projectile, rule);
+        }
+
+        Map<String, JsonObject> stripByItem = new LinkedHashMap<>();
+        for (JsonElement element : array(itemStrip, "rules")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject rule = element.getAsJsonObject();
+            String item = string(rule, "sourceItemClass", null);
+            if (item != null) stripByItem.putIfAbsent(item, rule);
         }
 
         JsonObject root = new JsonObject();
@@ -105,8 +120,12 @@ public final class LegacyVariantSnowballRetirementReadiness {
                 blockers.add("projectile-registration-strip-incomplete");
             }
 
-            if (!bool(strip, "itemRegistrationStripWired", false)) {
-                blockers.add("item-registration-strip-not-wired");
+            JsonObject itemStripRule = stripByItem.get(itemClass);
+            if (!bool(itemStrip, "itemRegistrationStripWired", false)
+                    || itemStripRule == null
+                    || !bool(itemStripRule, "itemRegistrationStripComplete", false)
+                    || integer(itemStripRule, "strippedItemRegistrationSites", 0) != 1) {
+                blockers.add("item-registration-strip-incomplete");
             }
 
             inspectClass(
@@ -143,7 +162,9 @@ public final class LegacyVariantSnowballRetirementReadiness {
             value.addProperty("projectileRegistrationStripComplete",
                     stripRule != null
                             && bool(stripRule, "projectileRegistrationStripComplete", false));
-            value.addProperty("itemRegistrationStripComplete", false);
+            value.addProperty("itemRegistrationStripComplete",
+                    itemStripRule != null
+                            && bool(itemStripRule, "itemRegistrationStripComplete", false));
             value.addProperty("retirementCohortCandidateReady", cohortReady);
             value.addProperty("sourceClassDeletionAuthorized", false);
             value.addProperty("deletedSourceClassCount", 0);
@@ -182,7 +203,7 @@ public final class LegacyVariantSnowballRetirementReadiness {
                     "LFB-CONVERT-VARIANT-SNOWBALL-RETIRE-0002",
                     SupportLevel.RUNTIME_BRIDGE,
                     "Variant-snowball source retirement remains blocked for " + blocked
-                            + " cohort(s); item registration retirement and candidate reference "
+                            + " cohort(s); registration retirement and candidate reference "
                             + "closure must complete before deletion.");
         }
     }
