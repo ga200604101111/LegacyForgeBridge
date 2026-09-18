@@ -110,22 +110,25 @@ public final class LegacySingleInputProcessorBlockRegistrationStripPass
             } else {
                 LegacyRegistryAnalyzer.Registration registration = matches.getFirst();
                 registryName = registration.registryName();
-                sourceOwner = registration.sourceOwner();
-                sourceMethod = registration.sourceMethod();
-                sourceDescriptor = registration.sourceDescriptor();
+                String directOwner = registration.sourceOwner();
+                String directMethod = registration.sourceMethod();
+                String directDescriptor = registration.sourceDescriptor();
+                sourceOwner = directOwner;
+                sourceMethod = directMethod;
+                sourceDescriptor = directDescriptor;
 
                 long sameDirectSource = registry.blocks().stream()
                         .filter(candidate ->
-                                sourceOwner.equals(candidate.sourceOwner())
-                                        && sourceMethod.equals(candidate.sourceMethod())
-                                        && sourceDescriptor.equals(candidate.sourceDescriptor()))
+                                directOwner.equals(candidate.sourceOwner())
+                                        && directMethod.equals(candidate.sourceMethod())
+                                        && directDescriptor.equals(candidate.sourceDescriptor()))
                         .count();
                 if (sameDirectSource != 1) {
                     blockers.add("shared-registerBlock-direct-source:" + sameDirectSource);
                 }
 
                 String sourceSafety = sourceMethods.safety(
-                        sourceOwner, sourceMethod, sourceDescriptor);
+                        directOwner, directMethod, directDescriptor);
                 if (sourceSafety != null) blockers.add(sourceSafety);
 
                 Path classPath = context.stagingDir().resolve(sourceOwner + ".class");
