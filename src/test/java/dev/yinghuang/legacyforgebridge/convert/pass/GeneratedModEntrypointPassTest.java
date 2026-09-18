@@ -76,6 +76,7 @@ class GeneratedModEntrypointPassTest {
         assertTrue(clientCalls.contains("dev/yinghuang/legacyforgebridge/render/ConvertedPlainEntityPresentationRuntime#initializeMod(Ljava/lang/String;)V"));
         assertTrue(clientCalls.contains("dev/yinghuang/legacyforgebridge/render/ConvertedSeatBedPresentationRuntime#initializeMod(Ljava/lang/String;)V"));
         assertTrue(clientCalls.contains("dev/yinghuang/legacyforgebridge/render/ConvertedPlantPresentationRuntime#initializeMod(Ljava/lang/String;)V"));
+        assertTrue(clientCalls.contains("dev/yinghuang/legacyforgebridge/render/ConvertedVariantSnowballPresentationRuntime#initializeMod(Ljava/lang/String;)V"));
     }
 
     private ConversionContext context(Path staging) {
