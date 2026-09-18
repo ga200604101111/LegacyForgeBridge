@@ -19,8 +19,8 @@ import java.util.Objects;
  * Promotes source-complete variant-snowball candidates into a runtime-owned rule sidecar.
  *
  * The projectile EntityType registration is admitted only after joining the variant-snowball
- * family with a unique source-proven EntityRegistry.registerModEntity registration. Item launch,
- * projectile impact behavior and presentation remain deliberately closed.
+ * family with a unique source-proven EntityRegistry.registerModEntity registration. Launch,
+ * impact and thrown-item presentation are enabled only after the complete source contract is joined.
  */
 public final class LegacyVariantSnowballRuntimePass implements ConversionPass {
     public static final String OUTPUT = "legacyforgebridge/variant-snowball-runtime-rules.json";
@@ -48,11 +48,11 @@ public final class LegacyVariantSnowballRuntimePass implements ConversionPass {
         root.addProperty("projectileEntityTypeRegistrationWired", true);
         root.addProperty("projectileItemStackCarrierWired", true);
         root.addProperty("legacyMetadataSyncWired", true);
-        root.addProperty("itemRuntimeWired", false);
+        root.addProperty("itemRuntimeWired", true);
         root.addProperty("projectileRuntimeWired", true);
         root.addProperty("projectileImpactRuntimeWired", true);
-        root.addProperty("rendererRuntimeWired", false);
-        root.addProperty("runtimeImplementationWired", false);
+        root.addProperty("rendererRuntimeWired", true);
+        root.addProperty("runtimeImplementationWired", true);
         JsonArray rules = new JsonArray();
         JsonArray skipped = new JsonArray();
         root.add("rules", rules);
@@ -117,11 +117,11 @@ public final class LegacyVariantSnowballRuntimePass implements ConversionPass {
             rule.addProperty("projectileEntityTypeRegistrationWired", true);
             rule.addProperty("projectileItemStackCarrierWired", true);
             rule.addProperty("legacyMetadataSyncWired", true);
-            rule.addProperty("itemRuntimeWired", false);
+            rule.addProperty("itemRuntimeWired", true);
             rule.addProperty("projectileRuntimeWired", true);
             rule.addProperty("projectileImpactRuntimeWired", true);
-            rule.addProperty("rendererRuntimeWired", false);
-            rule.addProperty("runtimeImplementationWired", false);
+            rule.addProperty("rendererRuntimeWired", true);
+            rule.addProperty("runtimeImplementationWired", true);
             rules.add(rule);
         }
 
@@ -226,8 +226,7 @@ public final class LegacyVariantSnowballRuntimePass implements ConversionPass {
                     SupportLevel.RUNTIME_BRIDGE,
                     "Installed " + rules.size()
                             + " source-complete variant-snowball runtime rule family/families with "
-                            + "source-proven projectile EntityType registration metadata and impact runtime; "
-                            + "item launch and renderer registration remain fail-closed.");
+                            + "source-proven projectile registration, launch, impact and thrown-item presentation runtime.");
         }
         if (!skipped.isEmpty()) {
             context.diagnostics().warning(
