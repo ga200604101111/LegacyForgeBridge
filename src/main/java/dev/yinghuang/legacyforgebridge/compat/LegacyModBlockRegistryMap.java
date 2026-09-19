@@ -12,11 +12,12 @@ import java.util.Map;
 /** Session-local Forge 1.7.10 numeric Block ID mapping from FML ModIdData. */
 public final class LegacyModBlockRegistryMap {
     static final char BLOCK_REGISTRY_PREFIX = '\u0001';
+    private static final int LEGACY_METADATA_VALUES = 16;
 
     private static volatile Map<Integer, Identifier> legacyToModern = Map.of();
     private static volatile Map<Identifier, Integer> modernToLegacy = Map.of();
-    private static volatile Map<Integer, Integer> legacyToStateToken = Map.of();
-    private static volatile List<Identifier> stateTokenToModern = List.of();
+    private static volatile Map<Integer, Integer> legacyToStateTokenBase = Map.of();
+    private static volatile List<StateIdentity> stateTokenIdentities = List.of();
 
     private LegacyModBlockRegistryMap() { }
 
@@ -54,52 +55,56 @@ public final class LegacyModBlockRegistryMap {
 
         List<Map.Entry<Integer, Identifier>> sorted = new ArrayList<>(byLegacyId.entrySet());
         sorted.sort(Comparator.comparingInt(Map.Entry::getKey));
-        Map<Integer, Integer> tokens = new LinkedHashMap<>();
-        List<Identifier> identities = new ArrayList<>(sorted.size());
+        Map<Integer, Integer> tokenBases = new LinkedHashMap<>();
+        List<StateIdentity> identities = new ArrayList<>(sorted.size() * LEGACY_METADATA_VALUES);
         for (Map.Entry<Integer, Identifier> entry : sorted) {
-            tokens.put(entry.getKey(), identities.size());
-            identities.add(entry.getValue());
+            tokenBases.put(entry.getKey(), identities.size());
+            for (int metadata = 0; metadata < LEGACY_METADATA_VALUES; metadata++) {
+                identities.add(new StateIdentity(entry.getValue(), metadata));
+            }
         }
 
         legacyToModern = Collections.unmodifiableMap(new LinkedHashMap<>(byLegacyId));
         modernToLegacy = Collections.unmodifiableMap(new LinkedHashMap<>(byModernId));
-        legacyToStateToken = Collections.unmodifiableMap(new LinkedHashMap<>(tokens));
-        stateTokenToModern = List.copyOf(identities);
+        legacyToStateTokenBase = Collections.unmodifiableMap(new LinkedHashMap<>(tokenBases));
+        stateTokenIdentities = List.copyOf(identities);
         return legacyToModern.size();
     }
 
     public static synchronized void clear() {
         legacyToModern = Map.of();
         modernToLegacy = Map.of();
-        legacyToStateToken = Map.of();
-        stateTokenToModern = List.of();
+        legacyToStateTokenBase = Map.of();
+        stateTokenIdentities = List.of();
     }
 
-    public static int mappedBlockCount() {
-        return legacyToModern.size();
-    }
-
-    public static int stateTokenCount() {
-        return stateTokenToModern.size();
-    }
+    public static int mappedBlockCount() { return legacyToModern.size(); }
+    public static int stateTokenCount() { return stateTokenIdentities.size(); }
 
     /** Converts a pre-flattening {@code blockId << 4 | metadata} value to a dense session token. */
     public static int stateToken(int legacyStateId) {
         if (legacyStateId < 0) return -1;
-        Integer token = legacyToStateToken.get(legacyStateId >>> 4);
-        return token == null ? -1 : token;
+        Integer base = legacyToStateTokenBase.get(legacyStateId >>> 4);
+        return base == null ? -1 : base + (legacyStateId & 0xF);
     }
 
     public static Identifier modernIdentityForStateToken(int token) {
-        List<Identifier> identities = stateTokenToModern;
+        StateIdentity identity = stateIdentity(token);
+        return identity == null ? null : identity.modernId();
+    }
+
+    public static int legacyMetadataForStateToken(int token) {
+        StateIdentity identity = stateIdentity(token);
+        return identity == null ? -1 : identity.metadata();
+    }
+
+    public static Identifier legacyIdentity(int legacyId) { return legacyToModern.get(legacyId); }
+    public static Integer legacyNumericId(Identifier modernId) { return modernToLegacy.get(modernId); }
+
+    private static StateIdentity stateIdentity(int token) {
+        List<StateIdentity> identities = stateTokenIdentities;
         return token >= 0 && token < identities.size() ? identities.get(token) : null;
     }
 
-    public static Identifier legacyIdentity(int legacyId) {
-        return legacyToModern.get(legacyId);
-    }
-
-    public static Integer legacyNumericId(Identifier modernId) {
-        return modernToLegacy.get(modernId);
-    }
+    private record StateIdentity(Identifier modernId, int metadata) { }
 }

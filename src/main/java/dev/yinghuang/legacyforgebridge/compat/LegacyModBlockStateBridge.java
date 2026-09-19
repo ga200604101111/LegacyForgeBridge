@@ -1,25 +1,18 @@
 package dev.yinghuang.legacyforgebridge.compat;
 
 import dev.yinghuang.legacyforgebridge.LegacyForgeBridge;
+import dev.yinghuang.legacyforgebridge.convert.runtime.ConvertedLegacyBlock;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Carries Forge mod block identities through ViaVersion's numeric block-state mapping chain.
- *
- * <p>Forge 1.7.10 supplies a session-local numeric Block registry. Before flattening, each mod
- * block is replaced with a dense token in the unused tail of the target protocol's block-state
- * space. Every later MappingData boundary moves that token to the next protocol's unused tail.
- * At the native client boundary the token is resolved to the generated modern block's default
- * state. The server remains authoritative; metadata variants intentionally collapse to the
- * generated block state until a semantic converter proves a richer state mapping.</p>
- */
+/** Carries Forge mod block identities and metadata through ViaVersion's mapping chain. */
 public final class LegacyModBlockStateBridge {
     public static final int NO_MAPPING = -1;
     private static final String NATIVE_TARGET_VERSION = "1.21.11";
@@ -38,10 +31,7 @@ public final class LegacyModBlockStateBridge {
             warnOnce(
                     "capacity:" + targetVersion,
                     "Cannot reserve generic legacy block-state carrier range for protocol {}: registrySize={}, tokens={}",
-                    targetVersion,
-                    targetRegistrySize,
-                    tokenCount
-            );
+                    targetVersion, targetRegistrySize, tokenCount);
             return NO_MAPPING;
         }
         protocolBases.put(targetVersion, targetRegistrySize);
@@ -62,22 +52,15 @@ public final class LegacyModBlockStateBridge {
         int sourceBase = protocolBases.getOrDefault(sourceVersion, sourceRegistrySize);
         int token = decodeToken(stateId, sourceBase, tokenCount);
         if (token < 0) return NO_MAPPING;
-
-        if (NATIVE_TARGET_VERSION.equals(targetVersion)) {
-            return resolveNativeState(token);
-        }
+        if (NATIVE_TARGET_VERSION.equals(targetVersion)) return resolveNativeState(token);
 
         if (!canReserve(targetRegistrySize, tokenCount)) {
             warnOnce(
                     "capacity:" + targetVersion,
                     "Cannot carry generic legacy block-state tokens into protocol {}: registrySize={}, tokens={}",
-                    targetVersion,
-                    targetRegistrySize,
-                    tokenCount
-            );
+                    targetVersion, targetRegistrySize, tokenCount);
             return NO_MAPPING;
         }
-
         protocolBases.put(targetVersion, targetRegistrySize);
         return targetRegistrySize + token;
     }
@@ -104,18 +87,21 @@ public final class LegacyModBlockStateBridge {
 
     private static int resolveNativeState(int token) {
         Identifier modernId = LegacyModBlockRegistryMap.modernIdentityForStateToken(token);
+        int legacyMetadata = LegacyModBlockRegistryMap.legacyMetadataForStateToken(token);
         if (modernId != null && BuiltInRegistries.BLOCK.containsKey(modernId)) {
             Block block = BuiltInRegistries.BLOCK.getValue(modernId);
-            int stateId = Block.BLOCK_STATE_REGISTRY.getId(block.defaultBlockState());
+            BlockState state = block.defaultBlockState();
+            if (legacyMetadata >= 0 && state.hasProperty(ConvertedLegacyBlock.LEGACY_META)) {
+                state = ConvertedLegacyBlock.withLegacyMeta(state, legacyMetadata);
+            }
+            int stateId = Block.BLOCK_STATE_REGISTRY.getId(state);
             if (stateId >= 0) return stateId;
         }
 
         warnOnce(
                 "missing-native:" + token,
-                "Converted modern block registry entry is unavailable for legacy state token {} (identity={}); using a visible fallback block",
-                token,
-                modernId
-        );
+                "Converted modern block registry entry is unavailable for legacy state token {} (identity={}, metadata={}); using explicit unresolved marker",
+                token, modernId, legacyMetadata);
         return Block.BLOCK_STATE_REGISTRY.getId(Blocks.MAGENTA_GLAZED_TERRACOTTA.defaultBlockState());
     }
 

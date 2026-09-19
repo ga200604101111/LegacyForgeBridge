@@ -11,13 +11,7 @@ import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-/**
- * Client-side Forge 1.7.10 handshake driver.
- *
- * <p>The built-in FML network identity is always advertised. Loader-safe converted candidates may
- * additionally expose their original 1.7.10 mod IDs/versions through {@link ConvertedModCatalog}
- * so a modded Forge server does not reject the modern client as "missing" that converted mod.</p>
- */
+/** Client-side Forge 1.7.10 handshake driver. */
 public final class FmlHandshakeClient {
     public enum State {
         WAITING_SERVER_HELLO,
@@ -43,21 +37,10 @@ public final class FmlHandshakeClient {
         this.convertedModSupplier = Objects.requireNonNull(convertedModSupplier, "convertedModSupplier");
     }
 
-    public State state() {
-        return state;
-    }
-
-    public FmlWireCodec.ServerHello serverHello() {
-        return serverHello;
-    }
-
-    public Map<String, String> serverMods() {
-        return serverMods;
-    }
-
-    public FmlWireCodec.ModIdData registryData() {
-        return registryData;
-    }
+    public State state() { return state; }
+    public FmlWireCodec.ServerHello serverHello() { return serverHello; }
+    public Map<String, String> serverMods() { return serverMods; }
+    public FmlWireCodec.ModIdData registryData() { return registryData; }
 
     public void reset() {
         state = State.WAITING_SERVER_HELLO;
@@ -88,11 +71,8 @@ public final class FmlHandshakeClient {
                     trace.state(previous.name(), state.name(), "HandshakeReset");
                 }
                 default -> trace.packet(
-                        "IN",
-                        "FML|HS",
-                        payload,
-                        "Unknown handshake discriminator; packet left unhandled"
-                );
+                        "IN", "FML|HS", payload,
+                        "Unknown handshake discriminator; packet left unhandled");
             }
         } catch (RuntimeException exception) {
             State previous = state;
@@ -106,30 +86,31 @@ public final class FmlHandshakeClient {
     private void onServerHello(byte[] payload, Consumer<byte[]> sender, FmlConnectionTrace trace) {
         require(State.WAITING_SERVER_HELLO, "ServerHello");
         serverHello = FmlWireCodec.parseServerHello(payload);
-
         trace.packet(
-                "IN",
-                "FML|HS",
-                payload,
+                "IN", "FML|HS", payload,
                 "ServerHello\nprotocol=" + serverHello.protocolVersion()
                         + "\noverrideDimension=" + serverHello.overrideDimension()
-                        + "\ntrailingBytes=" + serverHello.trailingBytes()
-        );
+                        + "\ntrailingBytes=" + serverHello.trailingBytes());
 
         if (serverHello.protocolVersion() != FmlWireCodec.FML_PROTOCOL) {
             trace.event("Server FML protocol differs from expected protocol 2; continuing for diagnostics");
         }
 
         Map<String, String> clientMods = clientModList();
-        send(sender, trace, FmlWireCodec.encodeClientHello(), "ClientHello protocol=" + FmlWireCodec.FML_PROTOCOL);
-        send(sender, trace, FmlWireCodec.encodeModList(clientMods), "Client ModList " + clientMods);
-
+        send(sender, trace, FmlWireCodec.encodeClientHello(),
+                "ClientHello protocol=" + FmlWireCodec.FML_PROTOCOL);
+        send(sender, trace, FmlWireCodec.encodeModList(clientMods),
+                "Client ModList " + clientMods);
         transition(State.WAITING_SERVER_MOD_LIST, trace, "ServerHello handled");
     }
 
+    /** Mirrors the built-in identities present in a normal Forge 1.7.10 client, then converted mods. */
     private Map<String, String> clientModList() {
         Map<String, String> mods = new LinkedHashMap<>();
+        mods.put("mcp", "9.05");
         mods.put("FML", "7.10.99.99");
+        mods.put("Forge", "10.13.4.1614");
+
         Map<String, String> converted = convertedModSupplier.get();
         if (converted != null) {
             converted.forEach((modId, version) -> {
@@ -145,13 +126,10 @@ public final class FmlHandshakeClient {
         require(State.WAITING_SERVER_MOD_LIST, "Server ModList");
         serverMods = FmlWireCodec.parseModList(payload);
         trace.packet(
-                "IN",
-                "FML|HS",
-                payload,
-                "Server ModList count=" + serverMods.size() + "\nmods=" + serverMods
-        );
-
-        send(sender, trace, FmlWireCodec.encodeAck(2), "HandshakeAck phase=2 WAITING_SERVER_DATA");
+                "IN", "FML|HS", payload,
+                "Server ModList count=" + serverMods.size() + "\nmods=" + serverMods);
+        send(sender, trace, FmlWireCodec.encodeAck(2),
+                "HandshakeAck phase=2 WAITING_SERVER_DATA");
         transition(State.WAITING_REGISTRY_DATA, trace, "Server ModList accepted");
     }
 
@@ -159,29 +137,23 @@ public final class FmlHandshakeClient {
         require(State.WAITING_REGISTRY_DATA, "ModIdData");
         registryData = FmlWireCodec.parseModIdData(payload);
         trace.packet(
-                "IN",
-                "FML|HS",
-                payload,
+                "IN", "FML|HS", payload,
                 "ModIdData registryEntries=" + registryData.ids().size()
                         + " blockSubstitutions=" + registryData.blockSubstitutions().size()
-                        + " itemSubstitutions=" + registryData.itemSubstitutions().size()
-        );
+                        + " itemSubstitutions=" + registryData.itemSubstitutions().size());
         trace.registry(registryData);
 
         LegacyModBlockStateBridge.reset();
         int mappedBlocks = LegacyModBlockRegistryMap.install(
-                registryData.ids(),
-                ConvertedModCatalog.legacyBlockRegistryAliases()
-        );
+                registryData.ids(), ConvertedModCatalog.legacyBlockRegistryAliases());
         int mappedItems = LegacyModItemRegistryMap.install(
-                registryData.ids(),
-                ConvertedModCatalog.legacyItemRegistryAliases()
-        );
+                registryData.ids(), ConvertedModCatalog.legacyItemRegistryAliases());
         trace.event("Legacy mod registry identity bridge installed blocks=" + mappedBlocks
                 + ", blockStateTokens=" + LegacyModBlockRegistryMap.stateTokenCount()
                 + ", items=" + mappedItems);
 
-        send(sender, trace, FmlWireCodec.encodeAck(3), "HandshakeAck phase=3 WAITING_SERVER_COMPLETE");
+        send(sender, trace, FmlWireCodec.encodeAck(3),
+                "HandshakeAck phase=3 WAITING_SERVER_COMPLETE");
         transition(State.WAITING_SERVER_ACK_AFTER_REGISTRY, trace, "Registry data received");
     }
 
@@ -190,18 +162,19 @@ public final class FmlHandshakeClient {
         trace.packet("IN", "FML|HS", payload, "Server HandshakeAck phase=" + serverPhase);
 
         if (state == State.WAITING_SERVER_ACK_AFTER_REGISTRY) {
-            send(sender, trace, FmlWireCodec.encodeAck(4), "HandshakeAck phase=4 PENDING_COMPLETE");
-            transition(State.WAITING_FINAL_SERVER_ACK, trace, "first server ack after registry");
+            send(sender, trace, FmlWireCodec.encodeAck(4),
+                    "HandshakeAck phase=4 PENDING_COMPLETE");
+            transition(State.WAITING_FINAL_SERVER_ACK, trace,
+                    "first server ack after registry");
             return;
         }
-
         if (state == State.WAITING_FINAL_SERVER_ACK) {
-            send(sender, trace, FmlWireCodec.encodeAck(5), "HandshakeAck phase=5 COMPLETE");
+            send(sender, trace, FmlWireCodec.encodeAck(5),
+                    "HandshakeAck phase=5 COMPLETE");
             transition(State.COMPLETE, trace, "final server ack");
             trace.event("Forge/FML handshake reached COMPLETE");
             return;
         }
-
         trace.event("Unexpected server HandshakeAck phase=" + serverPhase + " while state=" + state);
     }
 
@@ -219,8 +192,8 @@ public final class FmlHandshakeClient {
     private void require(State required, String operation) {
         if (state != required) {
             throw new IllegalStateException(
-                    "Cannot handle " + operation + " while FML handshake state is " + state + "; expected " + required
-            );
+                    "Cannot handle " + operation + " while FML handshake state is " + state
+                            + "; expected " + required);
         }
     }
 }
