@@ -14,9 +14,13 @@ class Geometry141ExactCorpusTest {
         Path jar=Path.of(input);assertEquals("bcceb588950f911398cfc94856a45527b4aa17b6e130927b2e0516fdf059b402",Hashing.sha256(jar));
         var analysis=new LegacyBlockGeometryAnalyzer().analyze(jar);Map<String,LegacyBlockGeometryAnalyzer.Rule> rules=new HashMap<>();
         analysis.rules().forEach(r->rules.put(r.input().registryName(),r));assertEquals(19,rules.size());
-        for(String name:List.of("halfDirSquare","halfDeco","halfTwoDirDeco")){
+        for(String name:List.of("halfDeco","halfTwoDirDeco")){
             var v=rules.get(name).input().variants();assertEquals(16,v.size());assertEquals(.5,v.get(0).bounds().get(4));assertEquals(.5,v.get(8).bounds().get(1));assertEquals(0d,v.get(8).inventoryBounds().get(1));
         }
+        // BlockDSquare has a fixed lower-half constructor box; all metadata bits select
+        // source texture/orientation. It is not the upper-half format of BlockDecorations.
+        var tatami=rules.get("halfDirSquare").input().variants();assertEquals(16,tatami.size());
+        for(var v:tatami){assertEquals(List.of(0d,0d,0d,1d,.5d,1d),v.bounds());assertEquals(v.bounds(),v.inventoryBounds());}
         for(String name:List.of("kayabukiRoof","kawara_stair","wara_stair"))assertEquals("stairs",rules.get(name).family());
         var pane=rules.get("bambooPanel");assertEquals("pane",pane.family());assertEquals(7,pane.input().variants().size());
         assertEquals("empty",pane.input().collisions().get(4));assertEquals("empty",pane.input().collisions().get(5));assertFalse(pane.input().paneEdges().get(4));
