@@ -99,6 +99,7 @@ public final class LegacyClassDependencyAnalysisPass implements ConversionPass {
         LegacyVariantSnowballRetirementReadiness.materialize(context, analysis);
         new LegacyVariantSnowballRetirementPass().apply(context);
         LegacySingleInputProcessorRetirementReadiness.materialize(context, analysis);
+        new LegacySingleInputProcessorRetirementPass().apply(context);
     }
 
     private static JsonArray strings(Iterable<String> values) {
