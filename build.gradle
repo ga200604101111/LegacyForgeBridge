@@ -37,6 +37,11 @@ dependencies {
     // API-v6 line is 4.4.14 and exposes the same methods used by LegacyForgeBridge.
     modCompileOnly "com.viaversion:viafabricplus-api:${project.viafabricplus_api_version}"
 
+    // Exercise carrier NBT and the real upstream fallback policy in unit tests only.
+    // These dependencies are NOT included or shaded into LegacyForgeBridge.
+    testImplementation 'com.viaversion:viaversion-common:5.12.0-SNAPSHOT'
+    testImplementation 'net.raphimc:ViaLegacy:3.1.0-SNAPSHOT'
+
     // Fabric Loader 0.19.3 already supplies ASM 9.10.1 from the application class loader.
     // Never include/shade ASM inside this mod: doing so creates Knot/app ClassLoader conflicts
     // with Mixin, MixinExtras and preLaunch mods such as AsyncLogger.

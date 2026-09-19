@@ -113,6 +113,8 @@ public final class LegacyConversionEngine {
             builder.add(new LegacyEquipmentRenderPass());
             builder.add(new LegacyBehaviorPass());
             builder.add(new LegacyClientContentBaselinePass());
+            builder.add(new LegacyIconPresentationPass());
+            builder.add(new LegacyTextureAtlasPass());
             builder.add(new GeneratedSemanticCodePass());
             builder.add(new GeneratedModEntrypointPass());
             builder.add(new LegacyClassDependencyAnalysisPass());

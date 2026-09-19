@@ -9,9 +9,12 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-/** Bridges Forge numeric mod item IDs around ViaVersion's lossy 1.12.2 -> 1.13 boundary. */
+/** Keeps Forge item identities in a carrier through the ENTIRE Via pipeline (1.7.10 edge). */
+// Restoring at 1.13 was too early: ViaLegacy subsequently replaces non-existent vanilla
+// 1.8 IDs (including 165..169 and 179..192) with stone. Forge reuses those IDs for mod content.
+// Verified against the nested ViaLegacy JAR in ViaFabricPlus 4.4.15, not a moving snapshot.
 @Mixin(
-        targets = "com.viaversion.viaversion.protocols.v1_12_2to1_13.rewriter.ItemPacketRewriter1_13",
+        targets = "net.raphimc.vialegacy.protocol.release.r1_7_6_10tor1_8.rewriter.ItemRewriter",
         remap = false
 )
 public abstract class ViaLegacyModItemBoundaryMixin {
