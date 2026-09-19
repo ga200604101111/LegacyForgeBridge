@@ -31,32 +31,36 @@ public final class ConvertedModCatalog {
         try {
             for (ModContainer container : FabricLoader.getInstance().getAllMods()) {
                 String fabricId = container.getMetadata().getId();
-                if (STALE_CONVERTED_MODS.contains(fabricId)) {
-                    continue;
-                }
-                Optional<JsonObject> content = readConvertedContent(container);
-                if (content.isEmpty()) {
-                    continue;
-                }
-                JsonElement legacyMods = content.get().get("legacyMods");
-                if (legacyMods == null || !legacyMods.isJsonArray()) {
-                    continue;
-                }
-                for (JsonElement element : legacyMods.getAsJsonArray()) {
-                    if (!element.isJsonObject()) {
-                        continue;
-                    }
-                    JsonObject mod = element.getAsJsonObject();
-                    JsonElement modId = mod.get("modid");
-                    JsonElement version = mod.get("version");
-                    if (modId != null && version != null) {
-                        result.put(modId.getAsString(), version.getAsString());
-                    }
-                }
+                if (STALE_CONVERTED_MODS.contains(fabricId)) continue;
+                readConvertedContent(container).ifPresent(content ->
+                        result.putAll(legacyModVersions(content)));
             }
         } catch (Throwable ignored) {
             // Unit tests and very early bootstrap environments may not have a complete loader
             // runtime. The FML handshake can always fall back to the clean FML identity.
+        }
+        return Map.copyOf(result);
+    }
+
+    /** Parses exact FML advertisement versions from one converted-content sidecar. */
+    static Map<String, String> legacyModVersions(JsonObject content) {
+        Map<String, String> result = new LinkedHashMap<>();
+        JsonElement legacyMods = content == null ? null : content.get("legacyMods");
+        if (legacyMods == null || !legacyMods.isJsonArray()) return Map.of();
+        for (JsonElement element : legacyMods.getAsJsonArray()) {
+            if (!element.isJsonObject()) continue;
+            JsonObject mod = element.getAsJsonObject();
+            JsonElement modId = mod.get("modid");
+            JsonElement version = mod.get("networkVersion");
+            if (version == null || !version.isJsonPrimitive()
+                    || version.getAsString().isBlank()) {
+                version = mod.get("version");
+            }
+            if (modId == null || !modId.isJsonPrimitive()
+                    || version == null || !version.isJsonPrimitive()) continue;
+            String id = modId.getAsString();
+            String exactVersion = version.getAsString();
+            if (!id.isBlank() && !exactVersion.isBlank()) result.put(id, exactVersion);
         }
         return Map.copyOf(result);
     }
@@ -162,9 +166,7 @@ public final class ConvertedModCatalog {
 
     private static Optional<JsonObject> readJson(ModContainer container, String pathValue) {
         var path = container.findPath(pathValue);
-        if (path.isEmpty()) {
-            return Optional.empty();
-        }
+        if (path.isEmpty()) return Optional.empty();
         try (Reader reader = Files.newBufferedReader(path.get(), StandardCharsets.UTF_8)) {
             JsonElement parsed = JsonParser.parseReader(reader);
             return parsed.isJsonObject() ? Optional.of(parsed.getAsJsonObject()) : Optional.empty();

@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import dev.yinghuang.legacyforgebridge.convert.LegacyFmlModAnnotationAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.LegacyRegistryAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.api.ConversionContext;
 import dev.yinghuang.legacyforgebridge.convert.api.ConversionPass;
@@ -41,17 +42,67 @@ public final class GenericContentPass implements ConversionPass {
 
         String namespace = context.metadata().fabricId();
         JsonObject root = new JsonObject();
-        root.addProperty("schemaVersion", 1);
+        root.addProperty("schemaVersion", 2);
         root.addProperty("sourceSha256", context.sourceHash());
         root.addProperty("namespace", namespace);
+        LegacyFmlModAnnotationAnalyzer.Analysis fmlIdentity =
+                new LegacyFmlModAnnotationAnalyzer().analyze(context.sourceJar());
+        for (String diagnostic : fmlIdentity.diagnostics()) {
+            context.diagnostics().warning(
+                    "LFB-CONVERT-FML-IDENTITY-0002",
+                    SupportLevel.MANUAL_REQUIRED,
+                    diagnostic
+            );
+        }
+
         JsonArray legacyMods = new JsonArray();
-        context.metadata().mods().forEach(mod -> {
+        Set<String> emittedModIds = new LinkedHashSet<>();
+        int annotationVersions = 0;
+        int mismatchedMetadataVersions = 0;
+        for (var mod : context.metadata().mods()) {
+            var annotation = fmlIdentity.find(mod.modId()).orElse(null);
+            String networkVersion = annotation != null && !annotation.version().isBlank()
+                    ? annotation.version()
+                    : mod.version();
             JsonObject value = new JsonObject();
             value.addProperty("modid", mod.modId());
             value.addProperty("version", mod.version());
+            value.addProperty("networkVersion", networkVersion);
+            value.addProperty("networkVersionSource",
+                    annotation == null ? context.metadata().metadataSource() : "forge-mod-annotation");
+            if (annotation != null) {
+                annotationVersions++;
+                value.addProperty("sourceModClass", annotation.sourceClass());
+                value.addProperty("acceptableRemoteVersions", annotation.acceptableRemoteVersions());
+                value.addProperty("acceptedMinecraftVersions", annotation.acceptedMinecraftVersions());
+                if (!networkVersion.equals(mod.version())) mismatchedMetadataVersions++;
+            }
             legacyMods.add(value);
-        });
+            emittedModIds.add(mod.modId().toLowerCase(Locale.ROOT));
+        }
+        for (var annotation : fmlIdentity.mods()) {
+            if (!emittedModIds.add(annotation.modId().toLowerCase(Locale.ROOT))) continue;
+            JsonObject value = new JsonObject();
+            value.addProperty("modid", annotation.modId());
+            value.addProperty("version", annotation.version());
+            value.addProperty("networkVersion", annotation.version());
+            value.addProperty("networkVersionSource", "forge-mod-annotation");
+            value.addProperty("sourceModClass", annotation.sourceClass());
+            value.addProperty("acceptableRemoteVersions", annotation.acceptableRemoteVersions());
+            value.addProperty("acceptedMinecraftVersions", annotation.acceptedMinecraftVersions());
+            legacyMods.add(value);
+            annotationVersions++;
+        }
         root.add("legacyMods", legacyMods);
+        if (annotationVersions > 0) {
+            context.diagnostics().info(
+                    "LFB-CONVERT-FML-IDENTITY-0001",
+                    SupportLevel.ADAPTED,
+                    "Recovered exact Forge @Mod network identities: mods=" + annotationVersions
+                            + ", metadataVersionDifferences=" + mismatchedMetadataVersions
+                            + ". FML handshake advertisement uses the annotation version exactly."
+            );
+        }
 
         Set<String> itemPaths = new LinkedHashSet<>();
         Set<String> blockPaths = new LinkedHashSet<>();
