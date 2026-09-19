@@ -1,13 +1,14 @@
 package dev.yinghuang.legacyforgebridge.compat;
 
 import com.mojang.serialization.Codec;
-import dev.yinghuang.legacyforgebridge.LegacyForgeBridge;
 import net.minecraft.core.Registry;
 import net.minecraft.core.component.DataComponentType;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
+import dev.yinghuang.legacyforgebridge.convert.runtime.ConvertedStackPresentation;
+import dev.yinghuang.legacyforgebridge.LegacyForgeBridge;
 
 /**
  * LFB-owned modern stack state that must never be exposed as source 1.7.10 NBT.
@@ -61,7 +62,8 @@ public final class LegacyStackComponents {
 
     public static void set(ItemStack stack, int value) {
         if (stack == null || stack.isEmpty()) throw new IllegalArgumentException("Cannot attach legacy metadata to an empty stack");
-        if (value < 0 || value > Short.MAX_VALUE) throw new IllegalArgumentException("Legacy metadata outside 1.7.10 range: " + value);
+        LegacyStackMetadataPolicy.require(value);
         stack.set(legacyMeta(), value);
+        ConvertedStackPresentation.apply(stack, value);
     }
 }

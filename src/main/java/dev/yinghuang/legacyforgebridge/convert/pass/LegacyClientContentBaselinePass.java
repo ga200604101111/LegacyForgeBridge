@@ -156,6 +156,7 @@ public final class LegacyClientContentBaselinePass implements ConversionPass {
                 stats.textureBackedModels++;
                 stats.textureMatches.put(id.value(), match.texture.resource);
             }
+            LegacyPresentationOwnership.record(staging, model);
             stats.createdFiles++;
         } else {
             stats.preservedFiles++;
@@ -201,6 +202,7 @@ public final class LegacyClientContentBaselinePass implements ConversionPass {
                 stats.textureBackedModels++;
                 stats.textureMatches.put(id.value(), match.texture.resource);
             }
+            LegacyPresentationOwnership.record(staging, model);
             stats.createdFiles++;
         } else {
             stats.preservedFiles++;

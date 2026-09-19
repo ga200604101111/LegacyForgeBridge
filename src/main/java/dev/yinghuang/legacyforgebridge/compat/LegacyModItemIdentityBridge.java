@@ -10,11 +10,11 @@ import com.viaversion.viaversion.util.Key;
 import dev.yinghuang.legacyforgebridge.LegacyForgeBridge;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import net.minecraft.world.item.Items;
+import net.minecraft.resources.Identifier;
+import net.minecraft.core.registries.BuiltInRegistries;
 import dev.yinghuang.legacyforgebridge.convert.runtime.ConvertedIconModelCatalog;
 import dev.yinghuang.legacyforgebridge.convert.runtime.ConvertedItemNameCatalog;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
-import net.minecraft.world.item.Items;
 
 /** Keeps Forge identity in a vanilla paper carrier from the FIRST to the LAST Via boundary. */
 public final class LegacyModItemIdentityBridge {
@@ -47,6 +47,7 @@ public final class LegacyModItemIdentityBridge {
         var nativeItem=BuiltInRegistries.ITEM.getValue(modern);
         item.setIdentifier(BuiltInRegistries.ITEM.getId(nativeItem));
         int metadata=LegacyItemCarrierState.metadata(marker);
+        LegacyViaStackComponents.toClient(data,metadata);
         if(nativeItem.getDefaultInstance().isDamageableItem())data.set(StructuredDataKey.DAMAGE,metadata);
         else data.remove(StructuredDataKey.DAMAGE);
         String model=ConvertedIconModelCatalog.itemModel(modern.toString(),metadata);
@@ -67,13 +68,22 @@ public final class LegacyModItemIdentityBridge {
         CompoundTag custom=data.get(StructuredDataKey.CUSTOM_DATA);
         if(custom==null){custom=new CompoundTag();data.set(StructuredDataKey.CUSTOM_DATA,custom);}
         CompoundTag marker=custom.getCompoundTag(MARKER_KEY);
-        if(!LegacyItemCarrierState.matches(marker,modern.toString(),legacy)){
-            Integer damage=data.get(StructuredDataKey.DAMAGE);
-            int metadata=damage==null?0:damage;
-            if(metadata<0||metadata>65535)return false;
+        boolean carried=LegacyItemCarrierState.matches(marker,modern.toString(),legacy);
+        int metadata=LegacyStackMetadataPolicy.select(data.get(LegacyViaStackComponents.META),
+                data.get(StructuredDataKey.DAMAGE),carried?LegacyItemCarrierState.metadata(marker):null,
+                nativeItem.getDefaultInstance().isDamageableItem());
+        if(!carried){
+            // Locally generated subtype names are a display projection, not legacy display.Name.
+            String expected=ConvertedItemNameCatalog.translationKey(modern.toString(),metadata);
+            var currentName=data.get(StructuredDataKey.ITEM_NAME);
+            if(expected!=null && currentName instanceof CompoundTag name && name.size()==1
+                    && expected.equals(name.getString("translate")))data.remove(StructuredDataKey.ITEM_NAME);
             marker=LegacyItemCarrierState.capture(custom,modern.toString(),legacy,metadata);
             custom.put(MARKER_KEY,marker);
-        }
+        }else marker.putInt("legacy_data",metadata);
+        // This component is understood only by the native serializer and must be removed before
+        // the first downgrade, including an explicit removed-component marker.
+        data.remove(LegacyViaStackComponents.META);
         LegacyItemNameBridge.toServer(data,marker);
         data.remove(StructuredDataKey.DAMAGE);
         // Only bridge-owned model overrides are stripped. They are not legacy gameplay NBT.

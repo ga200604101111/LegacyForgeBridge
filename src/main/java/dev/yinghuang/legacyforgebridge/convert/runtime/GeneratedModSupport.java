@@ -193,8 +193,11 @@ public final class GeneratedModSupport {
         if(entries.isEmpty())return;Item icon=resolveItem(Identifier.parse(iconValue));if(icon==null)icon=entries.getFirst();
         Item finalIcon=icon;List<Item> snapshot=List.copyOf(entries);
         Component title=titleKey==null||titleKey.isBlank()?Component.literal(literalTitle):Component.translatable(titleKey);
-        CreativeModeTab tab=FabricItemGroup.builder().icon(()->new ItemStack(finalIcon)).title(title)
-                .displayItems((params,output)->snapshot.forEach(output::accept)).build();
+        CreativeModeTab tab=FabricItemGroup.builder().icon(()->ConvertedStackPresentation.create(finalIcon,0)).title(title)
+                .displayItems((params,output)->snapshot.forEach(item -> {
+                    String itemId=BuiltInRegistries.ITEM.getKey(item).toString();
+                    for(int metadata:ConvertedCreativeCatalog.metadata(itemId))output.accept(ConvertedStackPresentation.create(item,metadata));
+                })).build();
         Registry.register(BuiltInRegistries.CREATIVE_MODE_TAB,ResourceKey.create(BuiltInRegistries.CREATIVE_MODE_TAB.key(),id),tab);
         int[] counts=COUNTS.get(id.getNamespace());if(counts!=null)counts[2]++;
     }

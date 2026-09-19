@@ -14,7 +14,7 @@ import java.nio.file.*;
 import java.util.*;
 import java.util.stream.Stream;
 
-/** Replaces only converter-owned unresolved models, using source icon/metadata tables, never names. */
+/** Replaces hash-proven provisional models or explicit placeholders using source icon tables. */
 public final class LegacyIconPresentationPass implements ConversionPass {
     public static final String OUTPUT="legacyforgebridge/icon-presentation.json";
     private static final Gson JSON=new GsonBuilder().setPrettyPrinting().create();
@@ -31,13 +31,13 @@ public final class LegacyIconPresentationPass implements ConversionPass {
         }
         var registrations=new LegacyRegistryAnalyzer().analyze(context.sourceJar()).registrations();
         var analysis=new LegacyIconTableAnalyzer().analyze(context.sourceJar(),registrations);
-        int replaced=0, variantCount=0;Set<String> stillUnresolved=new TreeSet<>(), complete=new HashSet<>();
+        int replaced=0, placeholderReplaced=0, variantCount=0;Set<String> stillUnresolved=new TreeSet<>(), complete=new HashSet<>();
         for(var result:analysis){
             JsonObject def=definitions.get((result.block()?"blocks:":"items:")+result.registryName());if(def==null)continue;
             String id=def.get("id").getAsString();String[] parts=id.split(":",2);if(parts.length!=2)continue;
             String ns=parts[0],path=parts[1];
             Path mainModel=staging.resolve("assets/"+ns+"/models/"+(result.block()?"block/":"item/")+path+".json");
-            if(!isUnresolved(mainModel))continue; // Specialized/generated presentation remains authoritative.
+            if(!isUnresolved(mainModel) && !LegacyPresentationOwnership.owns(staging,mainModel))continue; // Never overwrite source/specialized models.
             // A specialized native item renderer remains authoritative even when its unused
             // backing block JSON is the old unresolved marker.
             if(!plainDefinition(staging.resolve("assets/"+ns+"/items/"+path+".json"),ns,path))continue;
@@ -88,7 +88,7 @@ public final class LegacyIconPresentationPass implements ConversionPass {
                 // Never publish a new default model unless meta zero actually resolved.
                 stillUnresolved.add(id);report.addProperty("defaultResolved",false);
             }else{
-                replaced++;report.addProperty("defaultResolved",true);items.add(id,variants);
+                replaced++;if(isUnresolvedObject(oldModel))placeholderReplaced++;report.addProperty("defaultResolved",true);items.add(id,variants);
                 if(result.block()){
                     for(int meta=0;meta<16;meta++)if(!states.has("legacy_meta="+meta)){
                         write(staging.resolve("assets/"+ns+"/models/block/"+path+"_lfb_unresolved.json"),oldModel);
@@ -105,7 +105,7 @@ public final class LegacyIconPresentationPass implements ConversionPass {
             results.add(id,report);
         }
         evidence.addProperty("schemaVersion",1);evidence.addProperty("sourceSha256",context.sourceHash());
-        evidence.addProperty("defaultPlaceholderModelsReplaced",replaced);evidence.addProperty("metadataItemDefinitionsGenerated",variantCount);
+        evidence.addProperty("defaultPlaceholderModelsReplaced",placeholderReplaced);evidence.addProperty("sourceDefaultModelsReplaced",replaced);evidence.addProperty("provisionalTextureModelsReplaced",replaced-placeholderReplaced);evidence.addProperty("metadataItemDefinitionsGenerated",variantCount);
         evidence.addProperty("fullRendererEquivalenceProven",false);evidence.add("items",items);evidence.add("results",results);
         evidence.add("remainingAnalyzedIdentities",JSON.toJsonTree(stillUnresolved));write(staging.resolve(OUTPUT),evidence);
         // Amend the baseline honestly: a present file is not evidence that every source metadata
@@ -123,6 +123,9 @@ public final class LegacyIconPresentationPass implements ConversionPass {
     }
     private static boolean isUnresolved(Path path)throws IOException{
         if(!Files.isRegularFile(path))return false;JsonObject json=read(path);
+        return isUnresolvedObject(json);
+    }
+    private static boolean isUnresolvedObject(JsonObject json){
         return json.size()==1&&json.has("parent")&&Set.of("minecraft:block/magenta_glazed_terracotta","minecraft:item/barrier").contains(json.get("parent").getAsString());
     }
     private static String resolve(Path staging,String raw,boolean block)throws IOException{

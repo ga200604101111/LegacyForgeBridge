@@ -16,7 +16,9 @@
     "LegacyHurtBehaviorMixin",
     "LegacyLocalPlayerSoundMixin",
     "LegacyNameTagBehaviorMixin",
-    "LegacyFuelValuesMixin"
+    "LegacyFuelValuesMixin",
+    "ViaTerminalBlockRewriteMixin",
+    "ViaNativeMetadataCodecMixin"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -207,6 +207,7 @@ public final class GenericContentPass implements ConversionPass {
         Path item = context.stagingDir().resolve("assets/" + namespace + "/items/" + path + ".json");
         Files.createDirectories(model.getParent()); Files.createDirectories(item.getParent());
         Files.writeString(model, "{\n  \"parent\": \"minecraft:item/generated\",\n  \"textures\": {\"layer0\": \"" + texture.resource() + "\"}\n}\n", StandardCharsets.UTF_8);
+        LegacyPresentationOwnership.record(context.stagingDir(), model);
         Files.writeString(item, "{\n  \"model\": {\"type\": \"minecraft:model\", \"model\": \"" + namespace + ":item/" + path + "\"}\n}\n", StandardCharsets.UTF_8);
     }
 
@@ -221,6 +222,7 @@ public final class GenericContentPass implements ConversionPass {
         Path item = context.stagingDir().resolve("assets/" + namespace + "/items/" + path + ".json");
         Files.createDirectories(model.getParent()); Files.createDirectories(state.getParent()); Files.createDirectories(itemModel.getParent()); Files.createDirectories(item.getParent());
         Files.writeString(model, "{\n  \"parent\": \"minecraft:block/cube_all\",\n  \"textures\": {\"all\": \"" + texture.resource() + "\"}\n}\n", StandardCharsets.UTF_8);
+        LegacyPresentationOwnership.record(context.stagingDir(), model);
         Files.writeString(state, "{\n  \"variants\": {\"\": {\"model\": \"" + namespace + ":block/" + path + "\"}}\n}\n", StandardCharsets.UTF_8);
         Files.writeString(itemModel, "{\n  \"parent\": \"" + namespace + ":block/" + path + "\"\n}\n", StandardCharsets.UTF_8);
         Files.writeString(item, "{\n  \"model\": {\"type\": \"minecraft:model\", \"model\": \"" + namespace + ":item/" + path + "\"}\n}\n", StandardCharsets.UTF_8);

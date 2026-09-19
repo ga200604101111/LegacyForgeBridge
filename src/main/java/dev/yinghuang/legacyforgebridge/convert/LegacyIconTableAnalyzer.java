@@ -40,6 +40,7 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
     private final Map<AbstractInsnNode,Object> values=new IdentityHashMap<>();
     private int budget;
     private boolean readOnly;
+    private Obj creativeOutput;
     private int symbolicRenderId=65536;
     private final Set<String> failedStatics=new HashSet<>();
     private static final class Unproven extends RuntimeException {
@@ -144,7 +145,7 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
     }
 
     private void load(Path jarPath) throws IOException {
-        classes.clear(); methods.clear(); statics.clear(); initialized.clear(); failedStatics.clear(); values.clear(); readOnly=false;symbolicRenderId=65536;
+        classes.clear(); methods.clear(); statics.clear(); initialized.clear(); failedStatics.clear(); values.clear(); readOnly=false;creativeOutput=null;symbolicRenderId=65536;
         try (JarFile jar=new JarFile(jarPath.toFile())) {
             var entries=jar.entries();
             while(entries.hasMoreElements()) {
@@ -211,6 +212,65 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
                 }
             } catch(RuntimeException excluded) {limitation=excluded.getMessage();}
             result.add(new NameResult(r.registryName(),block,keys,limitation));
+        }
+        return List.copyOf(result);
+    }
+
+    public record CreativeResult(String registryName, boolean block, List<Integer> metadata, boolean proven, String limitation) {
+        public CreativeResult { metadata=List.copyOf(metadata); }
+    }
+
+    /** Enumerates the actual source creative callback, not every value accepted by an icon getter. */
+    public List<CreativeResult> analyzeCreative(Path jarPath, List<LegacyRegistryAnalyzer.Registration> registrations) throws IOException {
+        load(jarPath); List<CreativeResult> result=new ArrayList<>();
+        for(var r:registrations) {
+            boolean block=r.kind()==LegacyRegistryAnalyzer.Kind.BLOCK;
+            List<Integer> metadata=new ArrayList<>(); String limitation=""; boolean proven=false;
+            try {
+                budget=200_000;readOnly=false;values.clear();
+                String type=r.implementationClass();if(type==null)throw fail("creative source class unavailable");
+                Obj object;
+                try {object=allocation(r);} catch(RuntimeException unavailable) {
+                    // A prototype has NO zero-initialized source fields. Only fields assigned by
+                    // a proved icon-registration method below may support a creative callback.
+                    object=new Obj(type);budget=200_000;values.clear();
+                }
+                Method method=find(type,block?List.of("getSubBlocks","func_149666_a"):List.of("getSubItems","func_150895_a"),
+                        "(Lnet/minecraft/item/Item;Lnet/minecraft/creativetab/CreativeTabs;Ljava/util/List;)V");
+                if(method==null) {
+                    String base=externalBase(type);
+                    if(!Set.of("net/minecraft/block/Block","net/minecraft/block/BlockStairs","net/minecraft/block/BlockContainer",
+                            "net/minecraft/item/Item","net/minecraft/item/ItemFood","net/minecraft/item/ItemSword","net/minecraft/item/ItemTool",
+                            "net/minecraft/item/ItemPickaxe","net/minecraft/item/ItemArmor","net/minecraft/item/ItemBow",
+                            "net/minecraft/item/ItemSeeds","net/minecraft/item/ItemSeedFood","net/minecraft/item/ItemReed").contains(base))
+                        throw fail("inherited creative callback not reconstructed: "+base);
+                    metadata.add(0);proven=true;
+                }else {
+                    Method icons=find(type,block?List.of("registerBlockIcons","func_149651_a"):List.of("registerIcons","func_94581_a"),
+                            "(Lnet/minecraft/client/renderer/texture/IIconRegister;)V");
+                    if(icons!=null)try{run(icons,object,List.of(new Symbol("lfb","icon-register")),0);}
+                    catch(RuntimeException unused){budget=200_000;object=new Obj(type);}
+                    Obj item=block?new Obj("net/minecraft/item/ItemBlock"):object;
+                    if(block){item.fields.put("$block",object);object.fields.put("$itemBlock",item);}
+                    Obj list=new Obj("java/util/ArrayList");List<Object> stacks=new ArrayList<>();list.fields.put("$list",stacks);
+                    // Unknown tab prevents silently choosing a branch that depends on a particular tab.
+                    creativeOutput=list;readOnly=true;
+                    try{run(method,object,Arrays.asList(item,U,list),0);}finally{creativeOutput=null;readOnly=false;}
+                    if(stacks.size()>4096)throw fail("creative output budget exceeded");
+                    LinkedHashSet<Integer> unique=new LinkedHashSet<>();
+                    for(Object value:stacks){
+                        if(!(value instanceof Obj stack)||!stack.type.equals("net/minecraft/item/ItemStack"))throw fail("non-stack creative output");
+                        Object identity=stack.fields.get("$item");
+                        if(identity!=item&&identity!=object)throw fail("creative callback returned a different item");
+                        int meta=num(stack.fields.get("$metadata")).intValue();
+                        if(meta<0||meta>65535)throw fail("creative metadata outside unsigned-short range");
+                        if(num(stack.fields.getOrDefault("$count",1)).intValue()!=1)throw fail("non-unit creative stack requires an explicit rule");
+                        unique.add(meta);
+                    }
+                    metadata.addAll(unique);proven=true;
+                }
+            }catch(RuntimeException unavailable){metadata.clear();limitation=unavailable.getMessage();}
+            result.add(new CreativeResult(r.registryName(),block,metadata,proven,limitation));
         }
         return List.copyOf(result);
     }
@@ -439,7 +499,7 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
                 return switch(name){case "put"->{if(readOnly)throw fail("stateful icon selector");yield map.put(args.get(0),args.get(1));}case "get"->map.get(args.getFirst());case "size"->map.size();case "containsKey"->map.containsKey(args.getFirst())?1:0;default->throw fail("unsupported map operation "+name);};
             }
             if(owner.equals("net/minecraft/item/ItemStack")) {
-                if(name.equals("<init>")){object.fields.put("$item",args.getFirst());object.fields.put("$metadata",args.size()>2?args.get(2):0);return null;}
+                if(name.equals("<init>")){object.fields.put("$item",args.getFirst());object.fields.put("$count",args.size()>1?args.get(1):1);object.fields.put("$metadata",args.size()>2?args.get(2):0);return null;}
                 if(Set.of("getItemDamage","func_77960_j").contains(name))return object.fields.getOrDefault("$metadata",U);
                 if(Set.of("getItem","func_77973_b").contains(name))return object.fields.getOrDefault("$item",U);
             }
@@ -454,7 +514,7 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
                 if(name.equals("<init>")){object.fields.put("$list",new ArrayList<>());return null;}
                 @SuppressWarnings("unchecked") List<Object> list=(List<Object>)object.fields.get("$list");
                 if(list==null)throw fail("list not initialized");
-                return switch(name){case "add"->{if(readOnly)throw fail("stateful icon selector");list.add(args.getFirst());yield 1;}case "get"->list.get(num(args.getFirst()).intValue());case "size"->list.size();case "toArray"->list.toArray();default->throw fail("unsupported list operation "+name);};
+                return switch(name){case "add"->{if(readOnly&&object!=creativeOutput)throw fail("stateful icon selector");if(list.size()>=4096)throw fail("creative/list output budget exceeded");list.add(args.getFirst());yield 1;}case "get"->list.get(num(args.getFirst()).intValue());case "size"->list.size();case "toArray"->list.toArray();default->throw fail("unsupported list operation "+name);};
             }
             Method target=name.equals("<init>")||opcode==INVOKESPECIAL?find(owner,List.of(name),desc):find(object.type,List.of(name),desc);
             if(target!=null)return run(target,object,args,depth+1);
