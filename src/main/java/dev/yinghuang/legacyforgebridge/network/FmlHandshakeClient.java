@@ -210,7 +210,7 @@ public final class FmlHandshakeClient {
         sender.accept(payload);
     }
 
-    private void transition(State next, FmlConnectionTrace, String cause) {
+    private void transition(State next, FmlConnectionTrace trace, String cause) {
         State previous = state;
         state = next;
         trace.state(previous.name(), next.name(), cause);
