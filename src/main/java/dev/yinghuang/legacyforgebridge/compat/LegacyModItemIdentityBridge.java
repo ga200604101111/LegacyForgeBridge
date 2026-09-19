@@ -11,6 +11,7 @@ import dev.yinghuang.legacyforgebridge.LegacyForgeBridge;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import dev.yinghuang.legacyforgebridge.convert.runtime.ConvertedIconModelCatalog;
+import dev.yinghuang.legacyforgebridge.convert.runtime.ConvertedItemNameCatalog;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Items;
@@ -50,6 +51,8 @@ public final class LegacyModItemIdentityBridge {
         else data.remove(StructuredDataKey.DAMAGE);
         String model=ConvertedIconModelCatalog.itemModel(modern.toString(),metadata);
         if(model!=null)data.set(StructuredDataKey.ITEM_MODEL,new ItemModel(Key.of(model)));
+        // ITEM_NAME is the translated default; CUSTOM_NAME belongs to the server/anvil/plugin.
+        LegacyItemNameBridge.toClient(data,marker,ConvertedItemNameCatalog.translationKey(modern.toString(),metadata));
         // Do not delete the state here: non-damageable subtypes cannot round-trip through DAMAGE.
         // It is removed at the final server edge, so the Forge server never receives bridge NBT.
         return true;
@@ -71,6 +74,7 @@ public final class LegacyModItemIdentityBridge {
             marker=LegacyItemCarrierState.capture(custom,modern.toString(),legacy,metadata);
             custom.put(MARKER_KEY,marker);
         }
+        LegacyItemNameBridge.toServer(data,marker);
         data.remove(StructuredDataKey.DAMAGE);
         // Only bridge-owned model overrides are stripped. They are not legacy gameplay NBT.
         ItemModel model=data.get(StructuredDataKey.ITEM_MODEL);

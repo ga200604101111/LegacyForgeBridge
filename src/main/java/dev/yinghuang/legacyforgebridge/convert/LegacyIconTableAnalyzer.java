@@ -16,8 +16,9 @@ import java.util.jar.JarFile;
  * ambiguous allocations, external state and custom world renderers remain explicit exclusions.
  */
 public final class LegacyIconTableAnalyzer implements Opcodes {
-    public record Variant(int metadata, List<String> faceIcons, List<Double> bounds, List<Double> inventoryBounds, int renderType) {
-        public Variant { faceIcons=List.copyOf(faceIcons); bounds=List.copyOf(bounds); inventoryBounds=List.copyOf(inventoryBounds); }
+    public record Variant(int metadata, List<String> faceIcons, List<Double> bounds, List<Double> inventoryBounds, int renderType, List<Integer> tints) {
+        public Variant { faceIcons=List.copyOf(faceIcons); bounds=List.copyOf(bounds); inventoryBounds=List.copyOf(inventoryBounds); tints=List.copyOf(tints); }
+        public Variant(int metadata,List<String> faceIcons,List<Double> bounds,List<Double> inventoryBounds,int renderType){this(metadata,faceIcons,bounds,inventoryBounds,renderType,Collections.nCopies(faceIcons.size(),0xFFFFFF));}
     }
     public record Result(String registryName, boolean block, List<Variant> variants, String limitation) {
         public Result { variants=List.copyOf(variants); }
@@ -25,6 +26,7 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
     private record Icon(String id) { }
     private record Symbol(String owner, String name) { }
     private enum Unknown { VALUE }
+    private enum Coordinate { X, Y, Z }
     private static final Object U=Unknown.VALUE;
     private static final class Obj {
         final String type; final Map<String,Object> fields=new HashMap<>();
@@ -38,25 +40,14 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
     private final Map<AbstractInsnNode,Object> values=new IdentityHashMap<>();
     private int budget;
     private boolean readOnly;
+    private int symbolicRenderId=65536;
     private final Set<String> failedStatics=new HashSet<>();
     private static final class Unproven extends RuntimeException {
         Unproven(String message) { super(message,null,false,false); }
     }
 
     public List<Result> analyze(Path jarPath, List<LegacyRegistryAnalyzer.Registration> registrations) throws IOException {
-        classes.clear(); methods.clear(); statics.clear(); initialized.clear(); failedStatics.clear(); values.clear(); readOnly=false;
-        try (JarFile jar=new JarFile(jarPath.toFile())) {
-            var entries=jar.entries();
-            while(entries.hasMoreElements()) {
-                var e=entries.nextElement();
-                if(!e.getName().endsWith(".class")) continue;
-                try(var in=jar.getInputStream(e)) {
-                    ClassNode c=new ClassNode(ASM9);
-                    new ClassReader(in.readAllBytes()).accept(c,ClassReader.SKIP_DEBUG|ClassReader.SKIP_FRAMES);
-                    classes.put(c.name,c);
-                }
-            }
-        }
+        load(jarPath);
         List<Result> out=new ArrayList<>();
         for(var r:registrations) {
             boolean block=r.kind()==LegacyRegistryAnalyzer.Kind.BLOCK;
@@ -74,7 +65,7 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
                     obj.fields.put(block?"field_149761_L":"field_77791_bV",new Icon(s));
                 }
                 Method getter=find(obj.type,block?List.of("getIcon","func_149691_a"):List.of("getIconFromDamage","func_77617_a"),block?"(II)Lnet/minecraft/util/IIcon;":"(I)Lnet/minecraft/util/IIcon;");
-                int render=0;
+                int render=0;boolean multipass=false;
                 if(block) {
                     Method rt=find(obj.type,List.of("getRenderType","func_149645_b"),"()I");
                     render=rt==null?baseRenderType(obj.type):num(run(rt,obj,List.of(),0)).intValue();
@@ -83,7 +74,7 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
                     if(subclass(obj.type,"net/minecraft/block/BlockContainer")) throw fail("BlockEntity renderer not represented by an icon table");
                 } else {
                     Method multi=find(obj.type,List.of("requiresMultipleRenderPasses","func_77623_v"),"()Z");
-                    if(multi!=null && num(run(multi,obj,List.of(),0)).intValue()!=0) throw fail("multi-pass item renderer requires layer conversion");
+                    multipass=multi!=null && num(run(multi,obj,List.of(),0)).intValue()!=0;
                     if(find(obj.type,List.of("getIcon"),"(Lnet/minecraft/item/ItemStack;I)Lnet/minecraft/util/IIcon;")!=null)
                         throw fail("stack-dependent getIcon override is not a metadata-only selector");
                 }
@@ -91,13 +82,31 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
                 for(int meta=0;meta<max;meta++) {
                     budget=50_000;
                     try {
-                        List<String> icons=new ArrayList<>();
-                        for(int side=0;side<(block?6:1);side++) {
+                        List<String> icons=new ArrayList<>();List<Integer> tints=new ArrayList<>();
+                        Method passCount=find(obj.type,List.of("getRenderPasses"),"(I)I");
+                        int count=block?6:multipass?(passCount==null?2:num(run(passCount,obj,List.of(meta),0)).intValue()):1;
+                        if(count<1||count>5 && !block)throw fail("unsupported number of item layers");
+                        Method passIcon=find(obj.type,List.of("getIconFromDamageForRenderPass","func_77618_c"),"(II)Lnet/minecraft/util/IIcon;");
+                        Method worldColor=block?find(obj.type,List.of("colorMultiplier","func_149720_d"),"(Lnet/minecraft/world/IBlockAccess;III)I"):null;
+                        Method worldIcon=block?find(obj.type,List.of("getIcon","func_149673_e"),"(Lnet/minecraft/world/IBlockAccess;IIII)Lnet/minecraft/util/IIcon;"):null;
+                        Method color=find(obj.type,block?List.of("getRenderColor","func_149741_i"):List.of("getColorFromItemStack","func_82790_a"),block?"(I)I":"(Lnet/minecraft/item/ItemStack;I)I");
+                        Obj stack=new Obj("net/minecraft/item/ItemStack");stack.fields.put("$metadata",meta);stack.fields.put("$item",obj);
+                        for(int side=0;side<count;side++) {
                             readOnly=true;
-                            Object value=getter==null?obj.fields.get(block?"blockIcon":"itemIcon"):
+                            Object value=!block&&multipass&&passIcon!=null?run(passIcon,obj,List.of(meta,side),0):getter==null?
+                                    obj.fields.getOrDefault(block?"blockIcon":"itemIcon",obj.fields.get(block?"field_149761_L":"field_77791_bV")):
                                     run(getter,obj,block?List.of(side,meta):List.of(meta),0);
                             if(!(value instanceof Icon icon)) throw fail("getter did not return a registered icon");
                             icons.add(icon.id());
+                            int tint=color==null?0xFFFFFF:num(run(color,obj,block?List.of(meta):List.of(stack,side),0)).intValue()&0xFFFFFF;
+                            if(block) {
+                                Object world=new Symbol("lfb-world",String.valueOf(meta));
+                                if(worldColor!=null && (num(run(worldColor,obj,List.of(world,Coordinate.X,Coordinate.Y,Coordinate.Z),0)).intValue()&0xFFFFFF)!=tint)
+                                    throw fail("world and inventory tints differ");
+                                if(worldIcon!=null && !value.equals(run(worldIcon,obj,List.of(world,Coordinate.X,Coordinate.Y,Coordinate.Z,side),0)))
+                                    throw fail("world and inventory icons differ");
+                            }
+                            tints.add(tint);
                         }
                         readOnly=false;
                         List<Double> bounds=List.of(0d,0d,0d,1d,1d,1d),inventoryBounds=bounds;
@@ -108,7 +117,7 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
                             if(inv.fields.get("$bounds") instanceof List<?> box){List<Double> coords=new ArrayList<>();for(Object n:box)coords.add(num(n).doubleValue());inventoryBounds=List.copyOf(coords);}
                             Obj state=copy(obj);
                             Method shape=find(obj.type,List.of("setBlockBoundsBasedOnState","func_149719_a"),"(Lnet/minecraft/world/IBlockAccess;III)V");
-                            if(shape!=null) run(shape,state,List.of(new Symbol("lfb-world",String.valueOf(meta)),0,0,0),0);
+                            if(shape!=null) run(shape,state,List.of(new Symbol("lfb-world",String.valueOf(meta)),Coordinate.X,Coordinate.Y,Coordinate.Z),0);
                             Object b=state.fields.get("$bounds");
                             if(b instanceof List<?> list) {
                                 List<Double> box=new ArrayList<>(); for(Object n:list) box.add(num(n).doubleValue());
@@ -119,7 +128,7 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
                                 throw fail("unsupported block bounds");
                         }
                         if(inventoryBounds.size()!=6||inventoryBounds.stream().anyMatch(d->!Double.isFinite(d)||d<0||d>1))throw fail("unsupported inventory bounds");
-                        table.add(new Variant(meta,icons,bounds,inventoryBounds,render));
+                        table.add(new Variant(meta,icons,bounds,inventoryBounds,render,tints));
                     } catch(RuntimeException unsupported) {
                         if(meta==0) throw fail("metadata 0: "+unsupported.getMessage());
                         limitation="some metadata values require unsupported state or lie outside a source icon table";
@@ -134,9 +143,96 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
         return List.copyOf(out);
     }
 
+    private void load(Path jarPath) throws IOException {
+        classes.clear(); methods.clear(); statics.clear(); initialized.clear(); failedStatics.clear(); values.clear(); readOnly=false;symbolicRenderId=65536;
+        try (JarFile jar=new JarFile(jarPath.toFile())) {
+            var entries=jar.entries();
+            while(entries.hasMoreElements()) {
+                var e=entries.nextElement();
+                if(!e.getName().endsWith(".class")) continue;
+                try(var in=jar.getInputStream(e)) {
+                    ClassNode c=new ClassNode(ASM9);
+                    new ClassReader(in.readAllBytes()).accept(c,ClassReader.SKIP_DEBUG|ClassReader.SKIP_FRAMES);
+                    classes.put(c.name,c);
+                }
+            }
+        }
+    }
+
+    public record NameResult(String registryName, boolean block, Map<Integer,String> keys, String limitation) {
+        public NameResult { keys=Collections.unmodifiableMap(new LinkedHashMap<>(keys)); }
+    }
+
+    /**
+     * Proves naming independently of rendering. A prototype has unknown source fields: this
+     * permits parameter-only naming methods without pretending an unsupported constructor ran.
+     * Its base name must be set by the actual registration helper, not inferred from an ID.
+     */
+    public List<NameResult> analyzeNames(Path jarPath, List<LegacyRegistryAnalyzer.Registration> registrations) throws IOException {
+        load(jarPath); List<NameResult> result=new ArrayList<>();
+        for(var r:registrations) {
+            Map<Integer,String> keys=new LinkedHashMap<>();String limitation="";
+            boolean block=r.kind()==LegacyRegistryAnalyzer.Kind.BLOCK;
+            try {
+                budget=200_000; readOnly=false; values.clear();
+                Obj named=new Obj(r.implementationClass()==null ? (block?"net/minecraft/block/Block":"net/minecraft/item/Item"):r.implementationClass());
+                Method helper=find(r.sourceOwner(),List.of(r.sourceMethod()),r.sourceDescriptor());
+                if(helper==null)throw fail("registration naming helper unavailable");
+                List<Object> args=new ArrayList<>();int textArgs=0,contentArgs=0;
+                for(Type type:Type.getArgumentTypes(r.sourceDescriptor())) {
+                    switch(type.getDescriptor()) {
+                        case "Ljava/lang/String;" -> {args.add(r.registryName());textArgs++;}
+                        case "Lnet/minecraft/block/Block;","Lnet/minecraft/item/Item;" -> {args.add(named);contentArgs++;}
+                        case "Ljava/lang/Class;" -> args.add(Type.getObjectType(r.itemBlockClass()==null?"net/minecraft/item/ItemBlock":r.itemBlockClass()));
+                        case "Lnet/minecraft/creativetab/CreativeTabs;" -> args.add(null);
+                        default -> args.add(U);
+                    }
+                }
+                if(textArgs!=1||contentArgs!=1)throw fail("ambiguous registry name parameter");
+                run(helper,new Obj(r.sourceOwner()),args,0);
+                if(!(named.fields.get("$name") instanceof String))throw fail("helper does not prove the unlocalized name");
+                Obj item=named;
+                if(block) {
+                    item=new Obj(r.itemBlockClass()==null?"net/minecraft/item/ItemBlock":r.itemBlockClass());
+                    item.fields.put("$block",named);item.fields.put("field_150939_a",named);
+                    item.fields.put("$name",named.fields.get("$name"));
+                }
+                Method display=find(item.type,List.of("getItemStackDisplayName","func_77653_i"),"(Lnet/minecraft/item/ItemStack;)Ljava/lang/String;");
+                if(display!=null)throw fail("custom display-name override requires a separate text rule");
+                for(int metadata=0;metadata<256;metadata++) {
+                    budget=30_000;readOnly=true;
+                    Obj stack=new Obj("net/minecraft/item/ItemStack");stack.fields.put("$metadata",metadata);stack.fields.put("$item",item);
+                    try {
+                        Method selector=find(item.type,List.of("getUnlocalizedName","func_77667_c"),"(Lnet/minecraft/item/ItemStack;)Ljava/lang/String;");
+                        Object key=selector==null?invoke(item.type,"func_77667_c","(Lnet/minecraft/item/ItemStack;)Ljava/lang/String;",item,List.of(stack),INVOKEVIRTUAL,0):run(selector,item,List.of(stack),0);
+                        if(!(key instanceof String text)||text.isBlank())throw fail("nonconstant name");
+                        keys.put(metadata,text+".name");
+                    } catch(RuntimeException excluded) {limitation="some metadata names depend on unsupported source state";}
+                }
+            } catch(RuntimeException excluded) {limitation=excluded.getMessage();}
+            result.add(new NameResult(r.registryName(),block,keys,limitation));
+        }
+        return List.copyOf(result);
+    }
+
+    /** JVM zero-initialization for source objects that are actually constructed by the interpreter. */
+    private Obj newObject(String type) {
+        Obj result=new Obj(type);Set<String> visited=new HashSet<>();String c=type;
+        while(classes.containsKey(c)&&visited.add(c)) {
+            ClassNode node=classes.get(c);
+            for(FieldNode f:node.fields)if((f.access&ACC_STATIC)==0) {
+                Object zero=switch(f.desc.charAt(0)) {case 'Z','B','C','S','I' -> 0;case 'J' -> 0L;case 'F' -> 0f;case 'D' -> 0d;default -> null;};
+                if(result.fields.containsKey(f.name))throw fail("shadowed source field requires owner-qualified analysis: "+f.name);
+                result.fields.put(f.name,zero);
+            }
+            c=node.superName;
+        }
+        return result;
+    }
+
     private Obj allocation(LegacyRegistryAnalyzer.Registration r) {
-        if(r.implementationClass()==null||!classes.containsKey(r.implementationClass())) throw fail("source implementation class unavailable");
-        List<Obj> candidates=new ArrayList<>();
+        if(r.implementationClass()==null) throw fail("source implementation class unavailable");
+        List<Obj> candidates=new ArrayList<>();String allocationFailure="";
         // Match a proved GameRegistry registration to its concrete call expression. A name alone
         // is never used as a texture: it is only an identity key from the existing registry proof.
         for(ClassNode c:classes.values()) for(MethodNode m:c.methods) {
@@ -161,7 +257,7 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
                     try {
                         Object v=value(method,frame.getStack(offset+a),0);
                         if(v instanceof Obj o && o.type.equals(r.implementationClass()) && !candidates.contains(o)) candidates.add(o);
-                    } catch(Unproven ignored) { }
+                    } catch(Unproven excluded) { allocationFailure=excluded.getMessage(); }
                 }
             }
         }
@@ -169,7 +265,7 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
         if(candidates.size()==1) return copy(candidates.getFirst());
         // A constructor alone cannot prove later fluent setters. Do not silently replace a
         // failed expression trace with an independently constructed, differently configured object.
-        throw fail("registered allocation and fluent configuration not proven");
+        throw fail("registered allocation and fluent configuration not proven"+(allocationFailure.isEmpty()?"":": "+allocationFailure));
     }
 
     private boolean registrationSink(String owner,String name,String desc,LegacyRegistryAnalyzer.Kind kind,Set<String> seen){
@@ -205,7 +301,7 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
         if(op>=FCONST_0&&op<=FCONST_2) return (float)(op-FCONST_0);
         if(op>=DCONST_0&&op<=DCONST_1) return (double)(op-DCONST_0);
         if(op==NEW && ins instanceof TypeInsnNode n) {
-            Obj obj=new Obj(n.desc); values.put(ins,obj);
+            Obj obj=newObject(n.desc); values.put(ins,obj);
             try {
                 for(int j=i+1;j<method.node().instructions.size();j++) {
                     AbstractInsnNode next=method.node().instructions.get(j);
@@ -251,7 +347,7 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
 
     private Object run(Method method,Obj self,List<Object> args,int depth) {
         tick(depth); MethodNode m=method.node();
-        if(!m.tryCatchBlocks.isEmpty())throw fail("exception-dependent presentation");
+        if(!m.tryCatchBlocks.isEmpty() && !(m.name.equals("<clinit>") && m.tryCatchBlocks.stream().allMatch(t->"java/lang/NoSuchFieldError".equals(t.type))))throw fail("exception-dependent presentation");
         Object[] locals=new Object[Math.max(m.maxLocals,32)]; Arrays.fill(locals,U);
         int slot=0;if((m.access&ACC_STATIC)==0)locals[slot++]=self;
         Type[] types=Type.getArgumentTypes(m.desc);
@@ -284,7 +380,7 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
             switch(op){
                 case NOP->{} case ACONST_NULL->stack.add(null);
                 case POP->pop(stack);case DUP->stack.add(stack.getLast());case DUP_X1->{Object a=pop(stack),b=pop(stack);stack.add(a);stack.add(b);stack.add(a);}case SWAP->{Object a=pop(stack),b=pop(stack);stack.add(a);stack.add(b);}
-                case NEW->stack.add(new Obj(((TypeInsnNode)ins).desc));
+                case NEW->stack.add(newObject(((TypeInsnNode)ins).desc));
                 case ANEWARRAY,NEWARRAY->{int size=num(pop(stack)).intValue();checkArray(size);stack.add(new Object[size]);}
                 case ARRAYLENGTH->{Object a=pop(stack);if(!(a instanceof Object[] array))throw fail("array length");stack.add(array.length);}
                 case AALOAD,IALOAD,FALOAD,DALOAD,BALOAD,SALOAD,CALOAD->{int at=num(pop(stack)).intValue();Object a=pop(stack);if(!(a instanceof Object[] array))throw fail("array read");Object v=array[at];stack.add(v==null&&op!=AALOAD?0:v);}
@@ -305,12 +401,50 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
         if(owner.equals("net/minecraft/client/renderer/texture/IIconRegister") && Set.of("registerIcon","func_94245_a").contains(name)) {
             if(args.size()!=1||!(args.getFirst() instanceof String s)||s.isBlank())throw fail("nonconstant icon name");return new Icon(s);
         }
+        if(opcode==INVOKESTATIC && owner.equals("cpw/mods/fml/client/registry/RenderingRegistry")) {
+            if(name.equals("getNextAvailableRenderId"))return symbolicRenderId++; // Never mistaken for a vanilla render type.
+            if(name.equals("registerBlockHandler"))return null;
+        }
+        if(receiver instanceof Symbol symbol && symbol.owner().equals("net/minecraft/init/Items") && Set.of("getIconFromDamage","func_77617_a").contains(name)) {
+            var vanilla=LegacyVanillaRegistry1710.resolve(symbol.owner(),symbol.name()).orElseThrow(()->fail("unmapped vanilla item field"));
+            if(Set.of("string","sugar","egg","feather","book","paper").contains(vanilla.registryName()))return new Icon("minecraft:"+vanilla.registryName());
+            throw fail("vanilla item icon semantics not mapped: "+vanilla.registryName());
+        }
         if(receiver instanceof Symbol s && s.owner().equals("lfb-world")) {
-            if(Set.of("getBlockMetadata","func_72805_g").contains(name))return Integer.parseInt(s.name());
+            if(Set.of("getBlockMetadata","func_72805_g").contains(name) && args.equals(List.of(Coordinate.X,Coordinate.Y,Coordinate.Z)))return Integer.parseInt(s.name());
             throw fail("world-dependent presentation: "+name);
         }
+        if(receiver instanceof Object[] array && name.equals("clone") && args.isEmpty())return array.clone();
+        if(receiver instanceof Number number) {
+            if(name.equals("intValue"))return number.intValue();
+            if(name.equals("shortValue"))return number.shortValue();
+        }
+        if(opcode==INVOKESTATIC && Set.of("java/lang/Integer","java/lang/Short","java/lang/Byte","java/lang/Character").contains(owner) && name.equals("valueOf"))return num(args.getFirst()).intValue();
+        if(opcode==INVOKESTATIC && owner.equals("java/lang/System") && name.equals("arraycopy")) {
+            if(readOnly)throw fail("stateful source array copy");
+            if(!(args.get(0) instanceof Object[] from)||!(args.get(2) instanceof Object[] to))throw fail("unproven source array copy");
+            System.arraycopy(from,num(args.get(1)).intValue(),to,num(args.get(3)).intValue(),num(args.get(4)).intValue());return null;
+        }
+        if(opcode==INVOKESTATIC && owner.equals("cpw/mods/fml/common/registry/GameRegistry") && Set.of("registerItem","registerBlock").contains(name))return args.getFirst();
         if(receiver instanceof Obj object) {
-            if(name.equals("<init>")&&owner.equals("java/lang/Object"))return null;
+            if(owner.equals("java/lang/Enum")||externalBase(owner).equals("java/lang/Enum")) {
+                if(owner.equals("java/lang/Enum")&&name.equals("<init>")){object.fields.put("$enumName",args.get(0));object.fields.put("$ordinal",args.get(1));return null;}
+                if(name.equals("ordinal"))return object.fields.getOrDefault("$ordinal",U);
+                if(name.equals("name"))return object.fields.getOrDefault("$enumName",U);
+            }
+            if(Set.of("java/util/HashMap","java/util/LinkedHashMap","java/util/Map").contains(owner)) {
+                if(name.equals("<init>")){object.fields.put("$map",new LinkedHashMap<>());return null;}
+                @SuppressWarnings("unchecked") Map<Object,Object> map=(Map<Object,Object>)object.fields.get("$map");
+                if(map==null)throw fail("map not initialized");
+                return switch(name){case "put"->{if(readOnly)throw fail("stateful icon selector");yield map.put(args.get(0),args.get(1));}case "get"->map.get(args.getFirst());case "size"->map.size();case "containsKey"->map.containsKey(args.getFirst())?1:0;default->throw fail("unsupported map operation "+name);};
+            }
+            if(owner.equals("net/minecraft/item/ItemStack")) {
+                if(name.equals("<init>")){object.fields.put("$item",args.getFirst());object.fields.put("$metadata",args.size()>2?args.get(2):0);return null;}
+                if(Set.of("getItemDamage","func_77960_j").contains(name))return object.fields.getOrDefault("$metadata",U);
+                if(Set.of("getItem","func_77973_b").contains(name))return object.fields.getOrDefault("$item",U);
+            }
+            if(name.equals("<init>")&&Set.of("java/lang/Object","java/util/Random").contains(owner))return null;
+            if(externalBase(owner).equals("net/minecraft/block/material/Material") && Set.of("setRequiresTool","func_76219_n","setImmovableMobility","func_76221_f","setNoPushMobility","func_76225_o","setTranslucent","func_76223_p").contains(name))return object;
             if(owner.equals("java/lang/StringBuilder")){
                 if(name.equals("<init>")){object.fields.put("$text",args.isEmpty()?"":text(args.getFirst()));return null;}
                 if(name.equals("append")){object.fields.put("$text",text(object.fields.getOrDefault("$text",""))+text(args.getFirst()));return object;}
@@ -326,16 +460,24 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
             if(target!=null)return run(target,object,args,depth+1);
             String platform=externalBase(owner);
             if(platform.startsWith("net/minecraft/block/")||platform.startsWith("net/minecraft/item/")) {
+                if(Set.of("setUnlocalizedName","func_77655_b","setBlockName","func_149663_c").contains(name)) {
+                    if(readOnly)throw fail("stateful name selector");
+                    object.fields.put("$name",(platform.startsWith("net/minecraft/block/")?"tile.":"item.")+text(args.getFirst()));return object;
+                }
+                if(Set.of("getUnlocalizedName","func_77658_a","func_77667_c","func_149739_a").contains(name)) {
+                    if(object.fields.get("$block") instanceof Obj b)return b.fields.getOrDefault("$name",U);
+                    return object.fields.getOrDefault("$name",U);
+                }
                 if(name.equals("<init>")) {
                     // Constructors of unknown vanilla subclasses may have visual semantics. A
                     // static icon can still be proved, but block geometry uses baseRenderType below.
                     object.fields.putIfAbsent("$bounds",List.of(0d,0d,0d,1d,1d,1d));return null;
                 }
-                if(Set.of("setTextureName","func_111206_d","setBlockTextureName","func_149658_d").contains(name)) {object.fields.put("$texture",args.getFirst());return object;}
+                if(Set.of("setTextureName","func_111206_d","setBlockTextureName","func_149658_d").contains(name)) {if(readOnly)throw fail("stateful texture selector");object.fields.put("$texture",args.getFirst());return object;}
                 if(Set.of("getIconString","func_111208_A","getTextureName","func_149641_N").contains(name))return object.fields.getOrDefault("$texture",U);
-                if(Set.of("setBlockBounds","func_149676_a").contains(name)){object.fields.put("$bounds",new ArrayList<>(args));return null;}
-                if(Set.of("getIconFromDamage","func_77617_a","getIcon","func_149691_a").contains(name))return object.fields.getOrDefault(platform.startsWith("net/minecraft/block/")?"blockIcon":"itemIcon",U);
-                if(Set.of("setUnlocalizedName","func_77655_b","setBlockName","func_149663_c","setHardness","func_149711_c","setResistance","func_149752_b","setCreativeTab","func_77637_a","func_149647_a","setMaxStackSize","func_77625_d","setMaxDamage","func_77656_e","setHasSubtypes","func_77627_a","setAlwaysEdible","func_77848_i","setStepSound","func_149672_a","setLightLevel","func_149715_a","setLightOpacity","func_149713_g","setTickRandomly","func_149675_a").contains(name))return Type.getReturnType(desc).getSort()==Type.VOID?null:object;
+                if(Set.of("setBlockBounds","func_149676_a").contains(name)){if(readOnly)throw fail("stateful bounds selector");object.fields.put("$bounds",new ArrayList<>(args));return null;}
+                if(Set.of("getIconFromDamage","func_77617_a","getIcon","func_149691_a").contains(name))return object.fields.getOrDefault(platform.startsWith("net/minecraft/block/")?"blockIcon":"itemIcon",object.fields.getOrDefault(platform.startsWith("net/minecraft/block/")?"field_149761_L":"field_77791_bV",U));
+                if(Set.of("setUnlocalizedName","func_77655_b","setBlockName","func_149663_c","setHardness","func_149711_c","setResistance","func_149752_b","setCreativeTab","func_77637_a","func_149647_a","setMaxStackSize","func_77625_d","setMaxDamage","func_77656_e","setHasSubtypes","func_77627_a","setAlwaysEdible","func_77848_i","disableStats","func_149649_H","setNoRepair","setContainerItem","func_77642_a","setStepSound","func_149672_a","setLightLevel","func_149715_a","setLightOpacity","func_149713_g","setTickRandomly","func_149675_a").contains(name))return Type.getReturnType(desc).getSort()==Type.VOID?null:object;
                 if(Set.of("registerIcons","func_94581_a","registerBlockIcons","func_149651_a").contains(name)){
                     Object texture=object.fields.get("$texture");if(!(texture instanceof String s))throw fail("base icon has no texture string");Icon icon=new Icon(s);object.fields.put(platform.startsWith("net/minecraft/block/")?"blockIcon":"itemIcon",icon);object.fields.put(platform.startsWith("net/minecraft/block/")?"field_149761_L":"field_77791_bV",icon);return null;
                 }
@@ -368,7 +510,7 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
     }
     private boolean subclass(String owner,String target){Set<String> visited=new HashSet<>();while(owner!=null&&visited.add(owner)){if(owner.equals(target))return true;ClassNode c=classes.get(owner);owner=c==null?null:c.superName;}return false;}
     private String externalBase(String owner){Set<String> seen=new HashSet<>();while(owner!=null&&classes.containsKey(owner)&&seen.add(owner))owner=classes.get(owner).superName;return owner==null?"":owner;}
-    private int baseRenderType(String owner){Set<String> visited=new HashSet<>();while(classes.containsKey(owner)&&visited.add(owner))owner=classes.get(owner).superName;if("net/minecraft/block/Block".equals(owner))return 0;if("net/minecraft/block/BlockBush".equals(owner))return 1;throw fail("vanilla superclass rendering not reconstructed: "+owner);}
+    private int baseRenderType(String owner){Set<String> visited=new HashSet<>();while(classes.containsKey(owner)&&visited.add(owner))owner=classes.get(owner).superName;if(Set.of("net/minecraft/block/Block","net/minecraft/block/BlockLeavesBase").contains(owner))return 0;if(Set.of("net/minecraft/block/BlockBush","net/minecraft/block/BlockSapling").contains(owner))return 1;throw fail("vanilla superclass rendering not reconstructed: "+owner);}
     private static Object field(Object obj,String name){if(!(obj instanceof Obj o))throw fail("external instance field "+name);return o.fields.getOrDefault(name,U);}
     private static Obj copy(Obj obj){Obj c=new Obj(obj.type);for(var e:obj.fields.entrySet()){Object v=e.getValue();c.fields.put(e.getKey(),v instanceof Object[] a?a.clone():v instanceof List<?> l?new ArrayList<>(l):v);}return c;}
     private static Object pop(List<Object> stack){if(stack.isEmpty())throw fail("operand stack underflow");return stack.removeLast();}
