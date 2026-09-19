@@ -148,6 +148,11 @@ tasks.withType(JavaCompile).configureEach {
 
 tasks.withType(Test).configureEach {
     useJUnitPlatform()
+    // CI #631 compiled successfully and passed the new regressions, then the aggregate
+    // compiler/Minecraft test worker exhausted its heap. Bound one test worker to 2 GiB;
+    // this affects verification only, never the user's Minecraft launch or shipped JAR.
+    maxHeapSize = '2g'
+    maxParallelForks = 1
     testLogging {
         events 'passed', 'skipped', 'failed'
         exceptionFormat = 'full'
