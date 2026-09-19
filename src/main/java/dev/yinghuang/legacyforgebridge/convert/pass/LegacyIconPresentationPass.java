@@ -128,7 +128,7 @@ public final class LegacyIconPresentationPass implements ConversionPass {
     private static boolean isUnresolvedObject(JsonObject json){
         return json.size()==1&&json.has("parent")&&Set.of("minecraft:block/magenta_glazed_terracotta","minecraft:item/barrier").contains(json.get("parent").getAsString());
     }
-    private static String resolve(Path staging,String raw,boolean block)throws IOException{
+    static String resolve(Path staging,String raw,boolean block)throws IOException{
         int colon=raw.indexOf(':');String ns=colon<0?"minecraft":raw.substring(0,colon),p=colon<0?raw:raw.substring(colon+1);
         if(p.endsWith(".png"))p=p.substring(0,p.length()-4);
         if(ns.equals("minecraft")&&!block) {
@@ -167,7 +167,7 @@ public final class LegacyIconPresentationPass implements ConversionPass {
             && Set.of(namespace+":item/"+id,namespace+":block/"+id).contains(model.get("model").getAsString());
     }
     /** Bake only a source-proven constant tint; preserve alpha and every animation frame. */
-    private static String tintSprite(Path staging,String sprite,int color)throws IOException {
+    static String tintSprite(Path staging,String sprite,int color)throws IOException {
         if(color==0xFFFFFF)return sprite;
         String[] id=sprite.split(":",2);Path source=staging.resolve("assets/"+id[0]+"/textures/"+id[1]+".png");
         if(!Files.isRegularFile(source))throw new IOException("Cannot bake source tint without its PNG: "+sprite);
@@ -189,6 +189,7 @@ public final class LegacyIconPresentationPass implements ConversionPass {
     }
     private static JsonObject blockModel(LegacyIconTableAnalyzer.Variant v,List<String> sprites){
         JsonObject model=new JsonObject(),textures=new JsonObject();
+        model.addProperty("parent","minecraft:block/block");
         if(v.renderType()==1||v.renderType()==6){model.addProperty("parent",v.renderType()==6?"minecraft:block/crop":"minecraft:block/cross");textures.addProperty(v.renderType()==6?"crop":"cross",sprites.getFirst());model.add("textures",textures);return model;}
         JsonObject element=new JsonObject(),faces=new JsonObject();JsonArray from=new JsonArray(),to=new JsonArray();
         for(int axis=0;axis<3;axis++){from.add(v.bounds().get(axis)*16);to.add(v.bounds().get(axis+3)*16);}element.add("from",from);element.add("to",to);

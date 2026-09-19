@@ -19,7 +19,8 @@
     "client": [
       "dev.yinghuang.legacyforgebridge.LegacyForgeBridgeClient",
       "dev.yinghuang.legacyforgebridge.ConvertedRenderingClient",
-      "dev.yinghuang.legacyforgebridge.behavior.LegacyBehaviorClient"
+      "dev.yinghuang.legacyforgebridge.behavior.LegacyBehaviorClient",
+      "dev.yinghuang.legacyforgebridge.render.ConvertedGeometryClient"
     ],
     "viafabricplus": [
       "dev.yinghuang.legacyforgebridge.protocol.ViaFabricPlusEntrypoint"

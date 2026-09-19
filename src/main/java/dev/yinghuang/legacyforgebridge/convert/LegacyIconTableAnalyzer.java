@@ -27,6 +27,19 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
     private record Symbol(String owner, String name) { }
     private enum Unknown { VALUE }
     private enum Coordinate { X, Y, Z }
+    // Geometry probes keep coordinates tainted: offsets may be added, but coordinates cannot
+    // silently become constants or be used to choose an arbitrary position-dependent branch.
+    private record Offset(Coordinate axis, int offset) { }
+    private record ProbeWorld(Obj self, int metadata) { }
+    private record Neighbour(int dx, int dy, int dz) { }
+    private boolean geometryMode;
+    private boolean geometryBoundsWrite;
+    private final Map<String,LegacyRegistryAnalyzer.Registration> geometryFields = new HashMap<>();
+    private final Map<String,Obj> geometryObjects = new HashMap<>();
+    private final Set<String> geometryConstructing = new HashSet<>();
+    private final Set<Obj> iconsReady = Collections.newSetFromMap(new IdentityHashMap<>());
+    private final Set<Obj> iconsInitializing = Collections.newSetFromMap(new IdentityHashMap<>());
+
     private static final Object U=Unknown.VALUE;
     private static final class Obj {
         final String type; final Map<String,Object> fields=new HashMap<>();
@@ -144,7 +157,156 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
         return List.copyOf(out);
     }
 
+    /** Geometry input data are not automatically evidence that an arbitrary custom renderer is a cube. */
+    public record GeometryInput(String registryName,String sourceClass,String platform,List<Variant> variants,
+                                Map<Integer,Integer> neighbourFaces,Map<Integer,Boolean> paneEdges,Map<Integer,String> collisions,
+                                Integer originalRenderType,Boolean opaque,String limitation) {
+        public GeometryInput { variants=List.copyOf(variants);neighbourFaces=Map.copyOf(neighbourFaces);paneEdges=Map.copyOf(paneEdges);collisions=Map.copyOf(collisions); }
+    }
+
+    public List<GeometryInput> analyzeGeometryInputs(Path jarPath,LegacyRegistryAnalyzer.Analysis registry) throws IOException {
+        load(jarPath); geometryMode=true;geometryBoundsWrite=false;
+        for(var binding:registry.fieldBindings()) {
+            var matches=registry.registrations().stream().filter(r->r.kind()==binding.kind()&&r.registryName().equals(binding.registryName())
+                    &&Objects.equals(r.implementationClass(),binding.implementationClass())).toList();
+            if(matches.size()==1)geometryFields.put(binding.owner()+"."+binding.name(),matches.getFirst());
+        }
+        List<GeometryInput> out=new ArrayList<>();
+        for(var r:registry.registrations()) {
+            if(r.kind()!=LegacyRegistryAnalyzer.Kind.BLOCK)continue;
+            List<Variant> variants=new ArrayList<>();Map<Integer,Integer> neighbours=new LinkedHashMap<>();Map<Integer,Boolean> edges=new LinkedHashMap<>();Map<Integer,String> collisions=new LinkedHashMap<>();
+            String limitation="";Integer originalRender=null;Boolean opaque=null;
+            try {
+                budget=500_000;values.clear();readOnly=false;
+                Obj obj=geometryObject(r);ensureGeometryIcons(obj,0);
+                Method opacity=find(obj.type,List.of("isOpaqueCube","func_149662_c"),"()Z");
+                if(opacity!=null) {readOnly=true;try{opaque=num(run(opacity,obj,List.of(),0)).intValue()!=0;}catch(RuntimeException unknown){opaque=null;}readOnly=false;}
+                else opaque=!Set.of("net/minecraft/block/BlockStairs","net/minecraft/block/BlockPane","net/minecraft/block/BlockLeavesBase").contains(externalBase(obj.type));
+                Method original=find(obj.type,List.of("getOriginalRenderType"),"()I");
+                if(original!=null){readOnly=true;originalRender=num(run(original,obj,List.of(),0)).intValue();readOnly=false;}
+                Method getter=find(obj.type,List.of("getIcon","func_149691_a"),"(II)Lnet/minecraft/util/IIcon;");
+                Method worldGetter=find(obj.type,List.of("getIcon","func_149673_e"),"(Lnet/minecraft/world/IBlockAccess;IIII)Lnet/minecraft/util/IIcon;");
+                for(int meta=0;meta<16;meta++)try {
+                    budget=100_000;List<String> icons=new ArrayList<>();List<Integer> tints=new ArrayList<>();
+                    Method color=find(obj.type,List.of("getRenderColor","func_149741_i"),"(I)I");
+                    readOnly=true;
+                    for(int face=0;face<6;face++) {
+                        Object value=getter==null?invoke(obj.type,"func_149691_a","(II)Lnet/minecraft/util/IIcon;",obj,List.of(face,meta),INVOKEVIRTUAL,0):run(getter,obj,List.of(face,meta),0);
+                        if(!(value instanceof Icon icon))throw fail("no proven inventory icon");icons.add(icon.id());
+                        tints.add(color==null?0xFFFFFF:num(run(color,obj,List.of(meta),0)).intValue()&0xFFFFFF);
+                    }
+                    Obj state=copy(obj),inventory=copy(obj);
+                    readOnly=true;geometryBoundsWrite=true;
+                    try {
+                        Method bounds=find(obj.type,List.of("setBlockBoundsBasedOnState","func_149719_a"),"(Lnet/minecraft/world/IBlockAccess;III)V");
+                        if(bounds!=null)run(bounds,state,List.of(new ProbeWorld(obj,meta),Coordinate.X,Coordinate.Y,Coordinate.Z),0);
+                        Method inventoryShape=find(obj.type,List.of("setBlockBoundsForItemRender","func_149683_g"),"()V");
+                        if(inventoryShape!=null)run(inventoryShape,inventory,List.of(),0);
+                    } finally {geometryBoundsWrite=false;}
+                    List<Double> box=geometryBox(state),inv=geometryBox(inventory);
+                    // This optional observation is admitted later only by a matching source-family proof.
+                    if(worldGetter!=null) {
+                        readOnly=true;Integer direction=null;
+                        boolean copied=true;
+                        for(int face=0;face<6;face++){
+                            Object v=run(worldGetter,obj,List.of(new ProbeWorld(obj,meta),Coordinate.X,Coordinate.Y,Coordinate.Z,face),0);
+                            if(!(v instanceof Icon icon))throw fail("unresolved world icon");
+                            if(!icon.id().startsWith("lfb-neighbour:")){
+                                if(!icon.id().equals(icons.get(face)))throw fail("world icon differs from inventory without a neighbour projection");
+                                copied=false;continue;
+                            }
+                            String[] parts=icon.id().substring(14).split(",");
+                            int dx=Integer.parseInt(parts[0]),dy=Integer.parseInt(parts[1]),dz=Integer.parseInt(parts[2]);
+                            int d=cardinal(dx,dy,dz);
+                            if(d<0||Integer.parseInt(parts[3])!=face||(direction!=null&&direction!=d))throw fail("inconsistent neighbour face source");
+                            direction=d;
+                        }
+                        if(!copied&&direction!=null)throw fail("mixed static and neighbour faces require a separate renderer");
+                        if(copied&&direction!=null)neighbours.put(meta,direction);
+                    }
+                    Method worldColor=find(obj.type,List.of("colorMultiplier","func_149720_d"),"(Lnet/minecraft/world/IBlockAccess;III)I");
+                    if(worldColor!=null&&!neighbours.containsKey(meta)) {
+                        readOnly=true;int tint=num(run(worldColor,obj,List.of(new ProbeWorld(obj,meta),Coordinate.X,Coordinate.Y,Coordinate.Z),0)).intValue()&0xFFFFFF;
+                        if(tints.stream().anyMatch(v->v!=tint))throw fail("world and inventory colors need a separate projection");
+                    }
+                    Method edge=find(obj.type,List.of("isSideRender"),"(Lnet/minecraft/world/IBlockAccess;III)Z");
+                    if(edge!=null){readOnly=true;edges.put(meta,num(run(edge,obj,List.of(new ProbeWorld(obj,meta),Coordinate.X,Coordinate.Y,Coordinate.Z),0)).intValue()!=0);}
+                    readOnly=true;
+                    String collision="inherited";
+                    Method collisionMethod=find(obj.type,List.of("addCollisionBoxesToList","func_149743_a"),"(Lnet/minecraft/world/World;IIILnet/minecraft/util/AxisAlignedBB;Ljava/util/List;Lnet/minecraft/entity/Entity;)V");
+                    if(collisionMethod!=null)try{
+                        Obj sample=copy(obj);sample.fields.put("$collisionCalls",0);
+                        geometryBoundsWrite=true;
+                        try{run(collisionMethod,sample,Arrays.asList(new ProbeWorld(obj,meta),Coordinate.X,Coordinate.Y,Coordinate.Z,U,U,U),0);}
+                        finally{geometryBoundsWrite=false;}
+                        int calls=num(sample.fields.get("$collisionCalls")).intValue();
+                        collision=calls==0?"empty":calls==1?"inherited":"unsupported";
+                    }catch(RuntimeException excluded){collision="unsupported";}
+                    Method collisionBox=find(obj.type,List.of("getCollisionBoundingBoxFromPool","func_149668_a"),"(Lnet/minecraft/world/World;III)Lnet/minecraft/util/AxisAlignedBB;");
+                    if(collisionBox!=null)try{
+                        readOnly=true;Object boxResult=run(collisionBox,obj,List.of(new ProbeWorld(obj,meta),Coordinate.X,Coordinate.Y,Coordinate.Z),0);
+                        collision=boxResult==null?"empty":"unsupported";
+                    }catch(RuntimeException excluded){collision="unsupported";}
+                    collisions.put(meta,collision);
+                    variants.add(new Variant(meta,icons,box,inv,0,tints));
+                }catch(RuntimeException excluded){limitation="metadata "+meta+": "+excluded.getMessage();}
+            }catch(RuntimeException excluded){limitation=excluded.getMessage();}
+            out.add(new GeometryInput(r.registryName(),r.implementationClass(),externalBase(r.implementationClass()),variants,neighbours,edges,collisions,originalRender,opaque,limitation));
+        }
+        geometryMode=false;return List.copyOf(out);
+    }
+
+    private Obj geometryObject(LegacyRegistryAnalyzer.Registration r) {
+        String key=r.kind()+":"+r.registryName();Obj cached=geometryObjects.get(key);if(cached!=null)return cached;
+        if(!geometryConstructing.add(key))throw fail("recursive registered geometry dependency");
+        boolean oldReadOnly=readOnly;readOnly=false;
+        try {Obj result=allocation(r);geometryObjects.put(key,result);return result;}
+        finally {geometryConstructing.remove(key);readOnly=oldReadOnly;}
+    }
+    private void ensureGeometryIcons(Obj obj,int depth) {
+        if(iconsReady.contains(obj)||iconsInitializing.contains(obj))return;
+        iconsInitializing.add(obj);boolean oldReadOnly=readOnly;readOnly=false;
+        try {
+            Method registration=find(obj.type,List.of("registerBlockIcons","func_149651_a"),"(Lnet/minecraft/client/renderer/texture/IIconRegister;)V");
+            if(registration!=null)run(registration,obj,List.of(new Symbol("lfb","icon-register")),depth+1);
+            else if(obj.fields.get("$texture") instanceof String texture){obj.fields.put("blockIcon",new Icon(texture));obj.fields.put("field_149761_L",new Icon(texture));}
+            else if(!obj.fields.containsKey("$stairModel"))throw fail("block icon initialization unavailable");
+            iconsReady.add(obj);
+        }finally{readOnly=oldReadOnly;iconsInitializing.remove(obj);}
+    }
+    private static List<Double> geometryBox(Obj object) {
+        Object value=object.fields.get("$bounds");if(!(value instanceof List<?> list)||list.size()!=6)throw fail("no geometry bounds");
+        List<Double> box=new ArrayList<>();for(Object coordinate:list)box.add(num(coordinate).doubleValue());
+        for(double v:box)if(!Double.isFinite(v)||v<0||v>1)throw fail("geometry bounds outside one block");
+        for(int axis=0;axis<3;axis++)if(box.get(axis)>=box.get(axis+3))throw fail("degenerate geometry bounds");
+        return List.copyOf(box);
+    }
+    private static int[] probeOffset(List<Object> args) {
+        if(args.size()!=3)throw fail("wrong geometry coordinate arity");int[] result=new int[3];
+        for(int axis=0;axis<3;axis++) {
+            Object arg=args.get(axis);Offset offset=arg instanceof Coordinate c?new Offset(c,0):arg instanceof Offset o?o:null;
+            if(offset==null||offset.axis().ordinal()!=axis||Math.abs(offset.offset())>1)throw fail("non-local or unproven geometry coordinates");
+            result[axis]=offset.offset();
+        }
+        return result;
+    }
+    private static int cardinal(int x,int y,int z){if(x==0&&y==-1&&z==0)return 0;if(x==0&&y==1&&z==0)return 1;if(x==0&&y==0&&z==-1)return 2;if(x==0&&y==0&&z==1)return 3;if(x==-1&&y==0&&z==0)return 4;if(x==1&&y==0&&z==0)return 5;return -1;}
+    private boolean implementsType(String type,String wanted,Set<String> visited){if(type==null||!visited.add(type))return false;if(type.equals(wanted))return true;ClassNode c=classes.get(type);if(c==null)return false;if(implementsType(c.superName,wanted,visited))return true;for(String i:c.interfaces)if(implementsType(i,wanted,visited))return true;return false;}
+    private static String vanillaBlockIcon(Symbol symbol,int side,int meta) {
+        var entry=LegacyVanillaRegistry1710.resolve(symbol.owner(),symbol.name()).orElseThrow(()->fail("unmapped vanilla block identity"));
+        String name=entry.registryName();
+        if(name.equals("planks")){String[] wood={"oak","spruce","birch","jungle","acacia","dark_oak"};if(meta<0||meta>=wood.length)throw fail("invalid vanilla plank metadata");return "minecraft:block/"+wood[meta]+"_planks";}
+        if(name.equals("log")||name.equals("log2")){
+            String[] wood=name.equals("log")?new String[]{"oak","spruce","birch","jungle"}:new String[]{"acacia","dark_oak"};int variant=meta&3;if(variant>=wood.length)throw fail("invalid vanilla log metadata");int axis=meta&12;
+            boolean end=axis==0&&side<2||axis==4&&(side==4||side==5)||axis==8&&(side==2||side==3);
+            return "minecraft:block/"+wood[variant]+"_log"+(end?"_top":"");
+        }
+        if(Set.of("glass","stone","cobblestone","dirt","sand","gravel","bricks","obsidian").contains(name))return "minecraft:block/"+name;
+        throw fail("vanilla block texture semantics not reconstructed: "+name);
+    }
+
     private void load(Path jarPath) throws IOException {
+        geometryMode=false; geometryFields.clear(); geometryObjects.clear(); geometryConstructing.clear(); iconsReady.clear(); iconsInitializing.clear();
         classes.clear(); methods.clear(); statics.clear(); initialized.clear(); failedStatics.clear(); values.clear(); readOnly=false;creativeOutput=null;symbolicRenderId=65536;
         try (JarFile jar=new JarFile(jarPath.toFile())) {
             var entries=jar.entries();
@@ -417,7 +579,7 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
             tick(depth); AbstractInsnNode ins=m.instructions.get(pc); int op=ins.getOpcode(); if(op<0)continue;
             if(ins instanceof LdcInsnNode l){stack.add(l.cst);continue;}
             if(ins instanceof VarInsnNode v){if(op>=ILOAD&&op<=ALOAD)stack.add(locals[v.var]);else if(op>=ISTORE&&op<=ASTORE)locals[v.var]=pop(stack);else throw fail("local opcode");continue;}
-            if(ins instanceof IincInsnNode inc){locals[inc.var]=num(locals[inc.var]).intValue()+inc.incr;continue;}
+            if(ins instanceof IincInsnNode inc){locals[inc.var]=binary(IADD,locals[inc.var],inc.incr);continue;}
             if(ins instanceof IntInsnNode n &&(op==BIPUSH||op==SIPUSH)){stack.add(n.operand);continue;}
             if(op>=ICONST_M1&&op<=ICONST_5){stack.add(op-ICONST_0);continue;}
             if(op>=FCONST_0&&op<=FCONST_2){stack.add((float)(op-FCONST_0));continue;}
@@ -445,7 +607,10 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
                 case ARRAYLENGTH->{Object a=pop(stack);if(!(a instanceof Object[] array))throw fail("array length");stack.add(array.length);}
                 case AALOAD,IALOAD,FALOAD,DALOAD,BALOAD,SALOAD,CALOAD->{int at=num(pop(stack)).intValue();Object a=pop(stack);if(!(a instanceof Object[] array))throw fail("array read");Object v=array[at];stack.add(v==null&&op!=AALOAD?0:v);}
                 case AASTORE,IASTORE,FASTORE,DASTORE,BASTORE,SASTORE,CASTORE->{if(readOnly)throw fail("stateful icon selector");Object val=pop(stack);int at=num(pop(stack)).intValue();Object a=pop(stack);if(!(a instanceof Object[] array))throw fail("array write");array[at]=val;}
-                case CHECKCAST->{} case INSTANCEOF->{Object a=pop(stack);if(a!=null)throw fail("instanceof hierarchy not proven");stack.add(0);}
+                case CHECKCAST->{} case INSTANCEOF->{Object a=pop(stack);
+                    if(geometryMode && a instanceof Neighbour){stack.add(0);}
+                    else if(geometryMode && a instanceof Obj obj){stack.add(implementsType(obj.type,((TypeInsnNode)ins).desc,new HashSet<>())?1:0);}
+                    else {if(a!=null)throw fail("instanceof hierarchy not proven");stack.add(0);}}
                 case I2F,D2F->stack.add(num(pop(stack)).floatValue());case I2D,F2D->stack.add(num(pop(stack)).doubleValue());case F2I,D2I->stack.add(num(pop(stack)).intValue());case I2B->stack.add((int)num(pop(stack)).byteValue());case I2S->stack.add((int)num(pop(stack)).shortValue());case I2C->stack.add((int)(char)num(pop(stack)).intValue());
                 case INEG->stack.add(-num(pop(stack)).intValue());case FNEG->stack.add(-num(pop(stack)).floatValue());case DNEG->stack.add(-num(pop(stack)).doubleValue());
                 case FCMPL,FCMPG,DCMPL,DCMPG->{double b=num(pop(stack)).doubleValue(),a=num(pop(stack)).doubleValue();stack.add(Double.isNaN(a)||Double.isNaN(b)?(op==FCMPL||op==DCMPL?-1:1):a==b?0:a<b?-1:1);}
@@ -458,6 +623,39 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
 
     private Object invoke(String owner,String name,String desc,Object receiver,List<Object> args,int opcode,int depth) {
         tick(depth);
+        if(geometryMode) {
+            if(receiver instanceof ProbeWorld world) {
+                int[] delta=probeOffset(args);
+                if(Set.of("getBlockMetadata","func_72805_g").contains(name)){
+                    if(delta[0]!=0||delta[1]!=0||delta[2]!=0)throw fail("neighbour metadata is not known");
+                    return world.metadata();
+                }
+                if(Set.of("getBlock","func_147439_a").contains(name))return delta[0]==0&&delta[1]==0&&delta[2]==0
+                        ?world.self():new Neighbour(delta[0],delta[1],delta[2]);
+                throw fail("unsupported geometry world query "+name);
+            }
+            if(receiver instanceof Neighbour n) {
+                if(Set.of("getMaterial","func_149688_o").contains(name))return new Symbol("lfb-probe","non-water-material");
+                if(Set.of("getIcon","func_149673_e").contains(name) && args.size()==5){
+                    int[] delta=probeOffset(args.subList(1,4));
+                    if(!Arrays.equals(delta,new int[]{n.dx(),n.dy(),n.dz()}))throw fail("different neighbour icon coordinates");
+                    return new Icon("lfb-neighbour:"+n.dx()+","+n.dy()+","+n.dz()+","+num(args.get(4)).intValue());
+                }
+                if(Set.of("colorMultiplier","func_149720_d").contains(name))return 0xFFFFFF;
+                throw fail("unsupported neighbour operation "+name);
+            }
+            if(receiver instanceof Symbol symbol && symbol.owner().equals("net/minecraft/init/Blocks")
+                    && Set.of("getIcon","func_149691_a").contains(name) && args.size()==2)
+                return new Icon(vanillaBlockIcon(symbol,num(args.get(0)).intValue(),num(args.get(1)).intValue()));
+            if(receiver instanceof Obj object && Set.of("getIcon","func_149691_a").contains(name)
+                    && args.size()==2 && externalBase(object.type).startsWith("net/minecraft/block/")) {
+                ensureGeometryIcons(object,depth+1);
+                if(find(object.type,List.of("getIcon","func_149691_a"),"(II)Lnet/minecraft/util/IIcon;")==null
+                        && object.fields.containsKey("$stairModel"))
+                    return invoke("net/minecraft/block/Block","func_149691_a","(II)Lnet/minecraft/util/IIcon;",
+                            object.fields.get("$stairModel"),List.of(args.get(0),object.fields.get("$stairMeta")),INVOKEVIRTUAL,depth+1);
+            }
+        }
         if(owner.equals("net/minecraft/client/renderer/texture/IIconRegister") && Set.of("registerIcon","func_94245_a").contains(name)) {
             if(args.size()!=1||!(args.getFirst() instanceof String s)||s.isBlank())throw fail("nonconstant icon name");return new Icon(s);
         }
@@ -528,14 +726,24 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
                     if(object.fields.get("$block") instanceof Obj b)return b.fields.getOrDefault("$name",U);
                     return object.fields.getOrDefault("$name",U);
                 }
+                if(geometryMode && Set.of("addCollisionBoxesToList","func_149743_a").contains(name)){
+                    if(args.size()!=7||!(args.get(0) instanceof ProbeWorld))throw fail("unproven collision forwarding");
+                    int[] offset=probeOffset(args.subList(1,4));
+                    if(offset[0]!=0||offset[1]!=0||offset[2]!=0)throw fail("shifted collision forwarding");
+                    object.fields.put("$collisionCalls",num(object.fields.getOrDefault("$collisionCalls",0)).intValue()+1);return null;
+                }
                 if(name.equals("<init>")) {
                     // Constructors of unknown vanilla subclasses may have visual semantics. A
                     // static icon can still be proved, but block geometry uses baseRenderType below.
-                    object.fields.putIfAbsent("$bounds",List.of(0d,0d,0d,1d,1d,1d));return null;
+                    object.fields.putIfAbsent("$bounds",List.of(0d,0d,0d,1d,1d,1d));
+                    if(geometryMode && platform.equals("net/minecraft/block/BlockStairs") && args.size()==2){
+                        object.fields.put("$stairModel",args.get(0));object.fields.put("$stairMeta",args.get(1));
+                    }
+                    return null;
                 }
                 if(Set.of("setTextureName","func_111206_d","setBlockTextureName","func_149658_d").contains(name)) {if(readOnly)throw fail("stateful texture selector");object.fields.put("$texture",args.getFirst());return object;}
                 if(Set.of("getIconString","func_111208_A","getTextureName","func_149641_N").contains(name))return object.fields.getOrDefault("$texture",U);
-                if(Set.of("setBlockBounds","func_149676_a").contains(name)){if(readOnly)throw fail("stateful bounds selector");object.fields.put("$bounds",new ArrayList<>(args));return null;}
+                if(Set.of("setBlockBounds","func_149676_a").contains(name)){if(readOnly&&!(geometryMode&&geometryBoundsWrite))throw fail("stateful bounds selector");object.fields.put("$bounds",new ArrayList<>(args));return null;}
                 if(Set.of("getIconFromDamage","func_77617_a","getIcon","func_149691_a").contains(name))return object.fields.getOrDefault(platform.startsWith("net/minecraft/block/")?"blockIcon":"itemIcon",object.fields.getOrDefault(platform.startsWith("net/minecraft/block/")?"field_149761_L":"field_77791_bV",U));
                 if(Set.of("setUnlocalizedName","func_77655_b","setBlockName","func_149663_c","setHardness","func_149711_c","setResistance","func_149752_b","setCreativeTab","func_77637_a","func_149647_a","setMaxStackSize","func_77625_d","setMaxDamage","func_77656_e","setHasSubtypes","func_77627_a","setAlwaysEdible","func_77848_i","disableStats","func_149649_H","setNoRepair","setContainerItem","func_77642_a","setStepSound","func_149672_a","setLightLevel","func_149715_a","setLightOpacity","func_149713_g","setTickRandomly","func_149675_a").contains(name))return Type.getReturnType(desc).getSort()==Type.VOID?null:object;
                 if(Set.of("registerIcons","func_94581_a","registerBlockIcons","func_149651_a").contains(name)){
@@ -553,6 +761,7 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
     }
     private Object readStatic(String owner,String name,int depth) {
         String key=owner+"."+name;
+        if(geometryMode && geometryFields.containsKey(key))return geometryObject(geometryFields.get(key));
         if(failedStatics.contains(owner))throw fail("unproven class initializer "+owner);
         if(statics.containsKey(key))return statics.get(key);
         ClassNode c=classes.get(owner);
@@ -579,7 +788,12 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
     private static void checkArray(int size){if(size<0||size>4096)throw fail("array allocation outside bounded presentation limit");}
     private void tick(int depth){if(depth>32||--budget<0)throw fail("bounded presentation analysis limit");}
     private static Unproven fail(String why){return new Unproven(why);}
-    private static Object binary(int op,Object av,Object bv){Number a=num(av),b=num(bv);return switch(op){
+    private static Object binary(int op,Object av,Object bv){
+        if(av instanceof Coordinate c)av=new Offset(c,0);
+        if(bv instanceof Coordinate c)bv=new Offset(c,0);
+        if(av instanceof Offset a && bv instanceof Integer b && (op==IADD||op==ISUB))return new Offset(a.axis(),Math.addExact(a.offset(),op==IADD?b:-b));
+        if(av instanceof Integer a && bv instanceof Offset b && op==IADD)return new Offset(b.axis(),Math.addExact(b.offset(),a));
+        Number a=num(av),b=num(bv);return switch(op){
         case IADD->a.intValue()+b.intValue();case ISUB->a.intValue()-b.intValue();case IMUL->a.intValue()*b.intValue();case IDIV->a.intValue()/b.intValue();case IREM->a.intValue()%b.intValue();case IAND->a.intValue()&b.intValue();case IOR->a.intValue()|b.intValue();case IXOR->a.intValue()^b.intValue();case ISHL->a.intValue()<<b.intValue();case ISHR->a.intValue()>>b.intValue();case IUSHR->a.intValue()>>>b.intValue();
         case FADD->a.floatValue()+b.floatValue();case FSUB->a.floatValue()-b.floatValue();case FMUL->a.floatValue()*b.floatValue();case FDIV->a.floatValue()/b.floatValue();case FREM->a.floatValue()%b.floatValue();case DADD->a.doubleValue()+b.doubleValue();case DSUB->a.doubleValue()-b.doubleValue();case DMUL->a.doubleValue()*b.doubleValue();case DDIV->a.doubleValue()/b.doubleValue();case DREM->a.doubleValue()%b.doubleValue();default->throw fail("unsupported arithmetic opcode "+op);};}
 }
