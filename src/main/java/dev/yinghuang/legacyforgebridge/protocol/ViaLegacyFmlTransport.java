@@ -11,8 +11,6 @@ import com.viaversion.viaversion.api.type.Types;
 import dev.yinghuang.legacyforgebridge.LegacyForgeBridge;
 import dev.yinghuang.legacyforgebridge.network.FmlConnectionTrace;
 
-import java.nio.charset.StandardCharsets;
-
 /**
  * Sends Forge 1.7.10 plugin messages to the active ViaVersion client connection.
  *
@@ -29,28 +27,18 @@ public final class ViaLegacyFmlTransport {
             "com.viaversion.viaversion.protocols.v1_12_2to1_13.Protocol1_12_2To1_13";
     private static final String SERVERBOUND_PACKETS_CLASS =
             "com.viaversion.viaversion.protocols.v1_12_2to1_13.packet.ServerboundPackets1_13";
-
-    /** Minecraft 1.7.10 serverbound C17PacketCustomPayload packet id. */
-    private static final int LEGACY_CUSTOM_PAYLOAD_PACKET_ID = 0x17;
-    private static final String LEGACY_FML_HS = "FML|HS";
-    private static final String LEGACY_REGISTER = "REGISTER";
     private static final String MODERN_FML_HS = "legacyforgebridge:fml_hs";
     private static final String MODERN_REGISTER = "minecraft:register";
-
-    private static final byte[] LEGACY_CLIENT_CHANNEL_REGISTRATION = String.join(
-            "\0", "FML|HS", "FML", "FORGE"
-    ).getBytes(StandardCharsets.UTF_8);
     private static final byte[] MODERN_CLIENT_CHANNEL_REGISTRATION = String.join(
             "\0",
             "legacyforgebridge:fml_hs",
             "legacyforgebridge:fml",
             "legacyforgebridge:forge"
-    ).getBytes(StandardCharsets.UTF_8);
+    ).getBytes(java.nio.charset.StandardCharsets.UTF_8);
 
     private volatile Handles handles;
 
-    private ViaLegacyFmlTransport() {
-    }
+    private ViaLegacyFmlTransport() { }
 
     /** Sends the exact channel registration emitted by a Forge 1.7.10 client. */
     public boolean sendClientRegistration(FmlConnectionTrace trace) {
@@ -60,13 +48,15 @@ public final class ViaLegacyFmlTransport {
             return false;
         }
 
+        byte[] registration = LegacyFmlWireConstants.clientChannelRegistration();
         trace.packet(
                 "OUT-RAW-1.7.10",
-                LEGACY_REGISTER,
-                LEGACY_CLIENT_CHANNEL_REGISTRATION,
+                LegacyFmlWireConstants.REGISTER_CHANNEL,
+                registration,
                 "Client channel registration: FML|HS, FML, FORGE"
         );
-        if (sendRawLegacyPluginMessage(user, LEGACY_REGISTER, LEGACY_CLIENT_CHANNEL_REGISTRATION, trace)) {
+        if (sendRawLegacyPluginMessage(
+                user, LegacyFmlWireConstants.REGISTER_CHANNEL, registration, trace)) {
             return true;
         }
 
@@ -82,7 +72,8 @@ public final class ViaLegacyFmlTransport {
             return false;
         }
 
-        if (sendRawLegacyPluginMessage(user, LEGACY_FML_HS, payload, trace)) {
+        if (sendRawLegacyPluginMessage(
+                user, LegacyFmlWireConstants.HANDSHAKE_CHANNEL, payload, trace)) {
             return true;
         }
 
@@ -107,7 +98,8 @@ public final class ViaLegacyFmlTransport {
 
         try {
             @SuppressWarnings("deprecation")
-            PacketWrapper wrapper = PacketWrapper.create(LEGACY_CUSTOM_PAYLOAD_PACKET_ID, null, user);
+            PacketWrapper wrapper = PacketWrapper.create(
+                    LegacyFmlWireConstants.CUSTOM_PAYLOAD_PACKET_ID, null, user);
             wrapper.write(Types.STRING, legacyChannel);
             wrapper.write(Types.SHORT, (short) payload.length);
             wrapper.write(Types.REMAINING_BYTES, payload);
@@ -221,14 +213,5 @@ public final class ViaLegacyFmlTransport {
         }
     }
 
-    static byte[] legacyClientChannelRegistrationForTest() {
-        return LEGACY_CLIENT_CHANNEL_REGISTRATION.clone();
-    }
-
-    static int legacyCustomPayloadPacketIdForTest() {
-        return LEGACY_CUSTOM_PAYLOAD_PACKET_ID;
-    }
-
-    private record Handles(Class<? extends Protocol> protocolClass, PacketType customPayloadPacket) {
-    }
+    private record Handles(Class<? extends Protocol> protocolClass, PacketType customPayloadPacket) { }
 }

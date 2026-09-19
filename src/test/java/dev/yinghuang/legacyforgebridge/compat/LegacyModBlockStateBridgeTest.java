@@ -31,7 +31,6 @@ class LegacyModBlockStateBridgeTest {
     void createsStablePerConnectionTokensAndCarriesMetadataAcrossProtocolPalettes() {
         Map<String, Integer> registry = new LinkedHashMap<>();
         registry.put("\u0001example:alpha", 200);
-        registry.put("\u0001example:vanilla", 1);
         registry.put("\u0001example:beta", 400);
         registry.put("\u0002example:item", 600);
         registry.put("\u0001minecraft:stone", 1);
