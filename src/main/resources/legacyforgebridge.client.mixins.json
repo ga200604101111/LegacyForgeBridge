@@ -9,6 +9,8 @@
     "ViaLegacyGameModeMessageMixin",
     "ViaLegacyModItemBoundaryMixin",
     "ViaModernModItemBoundaryMixin",
+    "ViaLegacyModBlockBoundaryMixin",
+    "ViaBlockStateMappingBoundaryMixin",
     "SpecialModelRenderersMixin",
     "LegacyLivingBehaviorMixin",
     "LegacyHurtBehaviorMixin",

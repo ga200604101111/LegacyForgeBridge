@@ -20,8 +20,15 @@ public final class LegacyModItemRegistryMap {
 
     private LegacyModItemRegistryMap() { }
 
+    public static int install(Map<String, Integer> registryIds) {
+        return install(registryIds, Map.of());
+    }
+
     /** Installs only non-vanilla ITEM identities from one FML registry synchronization. */
-    public static synchronized int install(Map<String, Integer> registryIds) {
+    public static synchronized int install(
+            Map<String, Integer> registryIds,
+            Map<String, Identifier> conversionAliases
+    ) {
         Map<Integer, Identifier> byLegacyId = new LinkedHashMap<>();
         Map<Identifier, Integer> byModernId = new LinkedHashMap<>();
 
@@ -35,8 +42,11 @@ public final class LegacyModItemRegistryMap {
                         || legacyId == null
                         || legacyId < 0) continue;
 
-                Identifier modernId = LegacyRegistryIdentity.normalize(rawIdentity.substring(1));
-                if (modernId == null || "minecraft".equals(modernId.getNamespace())) continue;
+                String unprefixed = rawIdentity.substring(1);
+                Identifier legacyIdentity = LegacyRegistryIdentity.normalize(unprefixed);
+                if (legacyIdentity == null || "minecraft".equals(legacyIdentity.getNamespace())) continue;
+                Identifier modernId = LegacyRegistryIdentity.resolve(unprefixed, conversionAliases);
+                if (modernId == null) continue;
 
                 byLegacyId.put(legacyId, modernId);
                 byModernId.put(modernId, legacyId);

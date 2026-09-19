@@ -1,6 +1,7 @@
 package dev.yinghuang.legacyforgebridge.network;
 
 import dev.yinghuang.legacyforgebridge.compat.LegacyModBlockRegistryMap;
+import dev.yinghuang.legacyforgebridge.compat.LegacyModBlockStateBridge;
 import dev.yinghuang.legacyforgebridge.compat.LegacyModItemRegistryMap;
 import dev.yinghuang.legacyforgebridge.convert.runtime.ConvertedModCatalog;
 
@@ -63,6 +64,7 @@ public final class FmlHandshakeClient {
         serverHello = null;
         serverMods = Map.of();
         registryData = null;
+        LegacyModBlockStateBridge.reset();
         LegacyModBlockRegistryMap.clear();
         LegacyModItemRegistryMap.clear();
     }
@@ -165,9 +167,18 @@ public final class FmlHandshakeClient {
                         + " itemSubstitutions=" + registryData.itemSubstitutions().size()
         );
         trace.registry(registryData);
-        int mappedBlocks = LegacyModBlockRegistryMap.install(registryData.ids());
-        int mappedItems = LegacyModItemRegistryMap.install(registryData.ids());
+
+        LegacyModBlockStateBridge.reset();
+        int mappedBlocks = LegacyModBlockRegistryMap.install(
+                registryData.ids(),
+                ConvertedModCatalog.legacyBlockRegistryAliases()
+        );
+        int mappedItems = LegacyModItemRegistryMap.install(
+                registryData.ids(),
+                ConvertedModCatalog.legacyItemRegistryAliases()
+        );
         trace.event("Legacy mod registry identity bridge installed blocks=" + mappedBlocks
+                + ", blockStateTokens=" + LegacyModBlockRegistryMap.stateTokenCount()
                 + ", items=" + mappedItems);
 
         send(sender, trace, FmlWireCodec.encodeAck(3), "HandshakeAck phase=3 WAITING_SERVER_COMPLETE");
@@ -199,7 +210,7 @@ public final class FmlHandshakeClient {
         sender.accept(payload);
     }
 
-    private void transition(State next, FmlConnectionTrace trace, String cause) {
+    private void transition(State next, FmlConnectionTrace, String cause) {
         State previous = state;
         state = next;
         trace.state(previous.name(), next.name(), cause);

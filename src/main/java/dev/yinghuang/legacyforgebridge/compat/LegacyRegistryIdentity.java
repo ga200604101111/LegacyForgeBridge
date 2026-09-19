@@ -3,12 +3,25 @@ package dev.yinghuang.legacyforgebridge.compat;
 import net.minecraft.resources.Identifier;
 
 import java.util.Locale;
+import java.util.Map;
 
-/** Normalizes Forge 1.7.x registry names to the same modern identity shape used by conversion. */
-final class LegacyRegistryIdentity {
+/** Normalizes Forge 1.7.x registry names and resolves conversion-manifest aliases. */
+public final class LegacyRegistryIdentity {
     private LegacyRegistryIdentity() { }
 
-    static Identifier normalize(String rawIdentity) {
+    public static Identifier resolve(String rawIdentity, Map<String, Identifier> aliases) {
+        Identifier normalized = normalize(rawIdentity);
+        if (normalized == null) return null;
+        Identifier aliased = aliases == null ? null : aliases.get(normalized.toString());
+        return aliased == null ? normalized : aliased;
+    }
+
+    public static String canonical(String rawIdentity) {
+        Identifier normalized = normalize(rawIdentity);
+        return normalized == null ? null : normalized.toString();
+    }
+
+    public static Identifier normalize(String rawIdentity) {
         if (rawIdentity == null) return null;
         String raw = rawIdentity.trim();
         int separator = raw.indexOf(':');
