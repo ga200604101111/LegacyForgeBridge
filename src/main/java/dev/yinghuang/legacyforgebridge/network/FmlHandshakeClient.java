@@ -1,5 +1,6 @@
 package dev.yinghuang.legacyforgebridge.network;
 
+import dev.yinghuang.legacyforgebridge.compat.LegacyModBlockRegistryMap;
 import dev.yinghuang.legacyforgebridge.compat.LegacyModItemRegistryMap;
 import dev.yinghuang.legacyforgebridge.convert.runtime.ConvertedModCatalog;
 
@@ -62,6 +63,7 @@ public final class FmlHandshakeClient {
         serverHello = null;
         serverMods = Map.of();
         registryData = null;
+        LegacyModBlockRegistryMap.clear();
         LegacyModItemRegistryMap.clear();
     }
 
@@ -163,8 +165,10 @@ public final class FmlHandshakeClient {
                         + " itemSubstitutions=" + registryData.itemSubstitutions().size()
         );
         trace.registry(registryData);
+        int mappedBlocks = LegacyModBlockRegistryMap.install(registryData.ids());
         int mappedItems = LegacyModItemRegistryMap.install(registryData.ids());
-        trace.event("Legacy mod item identity bridge installed mappings=" + mappedItems);
+        trace.event("Legacy mod registry identity bridge installed blocks=" + mappedBlocks
+                + ", items=" + mappedItems);
 
         send(sender, trace, FmlWireCodec.encodeAck(3), "HandshakeAck phase=3 WAITING_SERVER_COMPLETE");
         transition(State.WAITING_SERVER_ACK_AFTER_REGISTRY, trace, "Registry data received");
