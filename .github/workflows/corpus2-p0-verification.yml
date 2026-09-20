@@ -25,7 +25,7 @@ jobs:
             echo "Cloth Config blocking-pose source patch already landed."
             exit 0
           fi
-          cat .github/patches/blocking-pose-145/part-*.b64 | base64 -d | gzip -dc > /tmp/blocking-pose-145.diff
+          gzip -dc .github/patches/blocking-pose-145/blocking-pose-145.diff.gz > /tmp/blocking-pose-145.diff
           git apply --check /tmp/blocking-pose-145.diff
           git apply /tmp/blocking-pose-145.diff
           git diff --check
