@@ -12,7 +12,7 @@ import java.util.jar.*;
  * by native generated/cross/crop block models. Complex or stateful custom renderers remain closed.
  */
 public final class LegacySimpleBlockRendererAnalyzer {
-    public enum Mode { CROSS, CROP, META_ZERO_CROP_ELSE_STANDARD }
+    public enum Mode { CROSS, CROP, META_ZERO_CROP_ELSE_STANDARD, HELD_ITEM_CROSS }
     public record Rule(String registryName,String sourceBlockClass,String sourceRendererClass,Mode mode) { }
     public record Analysis(List<Rule> rules,List<String> diagnostics) {
         public Analysis { rules=List.copyOf(rules);diagnostics=List.copyOf(diagnostics); }
@@ -21,11 +21,12 @@ public final class LegacySimpleBlockRendererAnalyzer {
 
     public Analysis analyze(Path jarPath)throws IOException{
         Map<String,ClassNode> classes=loadClasses(jarPath);var identities=new LegacyRegisteredBlockRenderTypeAnalyzer().analyze(jarPath);
+        Set<String> heldItemVisibleClasses=new HashSet<>();for(var rule:new LegacyHeldItemVisibilityAnalyzer().analyze(jarPath).rules())heldItemVisibleClasses.add(rule.sourceBlockClass());
         List<Rule> rules=new ArrayList<>();LinkedHashSet<String> diagnostics=new LinkedHashSet<>();
         for(var block:identities.rules()){
             var id=block.renderIdentity();if(id.fieldOwner()==null)continue;
             String renderer=rendererForField(classes,id.fieldOwner(),id.fieldName());if(renderer==null)continue;
-            Mode mode=classify(classes,renderer,block.sourceBlockClass());
+            Mode mode=classify(classes,renderer,block.sourceBlockClass(),heldItemVisibleClasses.contains(block.sourceBlockClass()));
             if(mode!=null)rules.add(new Rule(block.registryName(),block.sourceBlockClass(),renderer,mode));
             else diagnostics.add("Custom block renderer is outside the simple native cross/crop family: "+block.registryName()+" renderer="+renderer);
         }
@@ -47,7 +48,7 @@ public final class LegacySimpleBlockRendererAnalyzer {
         renderers.remove(fieldOwner);return renderers.size()==1?renderers.getFirst():null;
     }
 
-    private static Mode classify(Map<String,ClassNode> classes,String renderer,String blockClass){
+    private static Mode classify(Map<String,ClassNode> classes,String renderer,String blockClass,boolean heldItemVisible){
         ClassNode node=classes.get(renderer);if(node==null)return null;MethodNode render=null;
         for(MethodNode method:node.methods)if(method.desc.equals(RENDER_DESC)){if(render!=null)return null;render=method;}
         if(render==null)return null;Set<String> renderCalls=new LinkedHashSet<>();List<MethodInsnNode> sourceCalls=new ArrayList<>();
@@ -59,6 +60,7 @@ public final class LegacySimpleBlockRendererAnalyzer {
         boolean crop=renderCalls.stream().anyMatch(n->Set.of("renderBlockCrops","renderBlockCropsImpl").contains(n));
         boolean standard=renderCalls.contains("renderStandardBlock");
         if(crop&&standard&&!cross&&sourceCalls.isEmpty()&&callsMetadata(render))return Mode.META_ZERO_CROP_ELSE_STANDARD;
+        if(heldItemVisible&&cross&&!crop&&!standard&&sourceCalls.size()==1&&sourceCalls.getFirst().desc.equals("()Z"))return Mode.HELD_ITEM_CROSS;
         if(cross&&!crop&&!standard&&sourceCalls.isEmpty())return Mode.CROSS;
         if(crop&&!cross&&!standard&&sourceCalls.isEmpty())return Mode.CROP;
         if(cross&&crop&&!standard&&sourceCalls.size()==1){
