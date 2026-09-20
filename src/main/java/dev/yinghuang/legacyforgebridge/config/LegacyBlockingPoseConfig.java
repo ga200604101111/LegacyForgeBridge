@@ -244,7 +244,7 @@ public final class LegacyBlockingPoseConfig {
                     true,
                     true,
                     new Transform(Vec3.ZERO, new Vec3(0.0F, 20.0F, 0.0F)),
-                    new Transform(Vec3.ZERO, new Vec3(-30.0F, 40.0F, 40.0F))
+                    new Transform(new Vec3(-0.15F, -0.17F, 0.0F), new Vec3(-30.0F, 40.0F, 40.0F))
             );
         }
     }

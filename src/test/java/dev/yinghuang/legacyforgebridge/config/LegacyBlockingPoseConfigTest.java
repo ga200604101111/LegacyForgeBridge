@@ -15,6 +15,7 @@ class LegacyBlockingPoseConfigTest {
         assertTrue(defaults.mirrorLeftHand());
         assertEquals(new LegacyBlockingPoseConfig.Vec3(0, 0, 0), defaults.firstPerson().translation());
         assertEquals(new LegacyBlockingPoseConfig.Vec3(0, 20, 0), defaults.firstPerson().rotationDegrees());
+        assertEquals(new LegacyBlockingPoseConfig.Vec3(-0.15F, -0.17F, 0.0F), defaults.thirdPerson().translation());
         assertEquals(new LegacyBlockingPoseConfig.Vec3(-30, 40, 40), defaults.thirdPerson().rotationDegrees());
         var document = LegacyBlockingPoseConfig.document(defaults);
         assertEquals(2, document.get("schemaVersion").getAsInt());
