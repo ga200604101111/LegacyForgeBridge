@@ -15,19 +15,19 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Apply global blocking-pose source patch when not landed yet
+      - name: Apply Cloth Config blocking-pose source patch when not landed yet
         shell: bash
         run: |
           set -euo pipefail
-          marker='2026-09-20.144-global-blocking-pose'
+          marker='2026-09-20.145-cloth-blocking-pose'
           build_info='src/main/java/dev/yinghuang/legacyforgebridge/BuildInfo.java'
           if grep -q "$marker" "$build_info"; then
-            echo "Global blocking-pose source patch already landed."
+            echo "Cloth Config blocking-pose source patch already landed."
             exit 0
           fi
-          cat .github/patches/blocking-pose-144/part-*.b64 | base64 -d | gzip -dc > /tmp/blocking-pose-144.diff
-          git apply --check /tmp/blocking-pose-144.diff
-          git apply /tmp/blocking-pose-144.diff
+          cat .github/patches/blocking-pose-145/part-*.b64 | base64 -d | gzip -dc > /tmp/blocking-pose-145.diff
+          git apply --check /tmp/blocking-pose-145.diff
+          git apply /tmp/blocking-pose-145.diff
           git diff --check
 
       - uses: actions/setup-java@v5
@@ -45,24 +45,24 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: success()
         with:
-          name: LegacyForgeBridge-corpus2-p0
+          name: LegacyForgeBridge-cloth-blocking-pose-145
           path: build/libs/*.jar
           if-no-files-found: error
 
-      - name: Commit verified global blocking-pose source back to branch
+      - name: Commit verified Cloth Config blocking-pose source back to branch
         if: success()
         shell: bash
         run: |
           set -euo pipefail
-          if git diff --quiet && [ -z "$(git ls-files --others --exclude-standard docs src)" ]; then
+          if git diff --quiet && [ -z "$(git ls-files --others --exclude-standard build.gradle gradle.properties docs src)" ]; then
             echo "No verified source changes to commit."
             exit 0
           fi
           git config user.name "LegacyForgeBridge CI"
           git config user.email "actions@users.noreply.github.com"
-          git add docs src
+          git add build.gradle gradle.properties docs src
           git diff --cached --check
-          git commit -m "fix(render): add global configurable blocking pose (.144)"
+          git commit -m "feat(config): add Cloth blocking-pose sliders and vanilla scope (.145)"
           git push origin "HEAD:${GITHUB_REF_NAME}"
 
       - name: Preserve reproducible verification inputs
