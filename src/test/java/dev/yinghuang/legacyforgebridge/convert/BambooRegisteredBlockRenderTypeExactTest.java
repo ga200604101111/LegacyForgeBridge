@@ -29,4 +29,16 @@ class BambooRegisteredBlockRenderTypeExactTest {
             assertNull(rule.renderIdentity().constant(),name);
         }
     }
+
+    @Test
+    void exactBambooProvesSimpleCrossCropRendererFamilies() throws Exception {
+        String input=System.getProperty("lfb.exactCorpus.jar");assertNotNull(input,"exact Bamboo corpus is required");
+        Path source=Path.of(input);assertTrue(Files.isRegularFile(source));assertEquals(BAMBOO_SHA256,Hashing.sha256(source));
+        var analysis=new LegacySimpleBlockRendererAnalyzer().analyze(source);
+        Map<String,LegacySimpleBlockRendererAnalyzer.Rule> byName=analysis.rules().stream()
+                .collect(Collectors.toMap(LegacySimpleBlockRendererAnalyzer.Rule::registryName,Function.identity(),(a,b)->a));
+        assertEquals(LegacySimpleBlockRendererAnalyzer.Mode.CROSS,byName.get("blockbambooshoot").mode());
+        assertEquals(LegacySimpleBlockRendererAnalyzer.Mode.META_ZERO_CROP_ELSE_STANDARD,byName.get("singleTexDeco").mode());
+        assertFalse(byName.containsKey("kitunebi"),"held-item visibility renderer must not collapse to always-visible cross");
+    }
 }

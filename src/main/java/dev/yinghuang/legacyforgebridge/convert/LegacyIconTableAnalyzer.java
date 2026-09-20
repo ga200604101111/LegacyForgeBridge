@@ -64,6 +64,8 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
 
     public List<Result> analyze(Path jarPath, List<LegacyRegistryAnalyzer.Registration> registrations) throws IOException {
         load(jarPath);
+        Map<String,LegacySimpleBlockRendererAnalyzer.Mode> simpleRenderModes=new HashMap<>();
+        for(var rule:new LegacySimpleBlockRendererAnalyzer().analyze(jarPath).rules())simpleRenderModes.put(rule.registryName(),rule.mode());
         List<Result> out=new ArrayList<>();
         for(var r:registrations) {
             boolean block=r.kind()==LegacyRegistryAnalyzer.Kind.BLOCK;
@@ -85,7 +87,7 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
                 if(block) {
                     Method rt=find(obj.type,List.of("getRenderType","func_149645_b"),"()I");
                     render=rt==null?baseRenderType(obj.type):num(run(rt,obj,List.of(),0)).intValue();
-                    if(render!=0 && render!=1 && render!=6) throw fail("custom world/inventory renderer requires geometric conversion; renderType="+render);
+                    if(render!=0 && render!=1 && render!=6 && !simpleRenderModes.containsKey(r.registryName())) throw fail("custom world/inventory renderer requires geometric conversion; renderType="+render);
                     // A tile renderer can add geometry even if getRenderType happens to be zero.
                     if(subclass(obj.type,"net/minecraft/block/BlockContainer")) throw fail("BlockEntity renderer not represented by an icon table");
                 } else {
@@ -144,7 +146,10 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
                                 throw fail("unsupported block bounds");
                         }
                         if(inventoryBounds.size()!=6||inventoryBounds.stream().anyMatch(d->!Double.isFinite(d)||d<0||d>1))throw fail("unsupported inventory bounds");
-                        table.add(new Variant(meta,icons,bounds,inventoryBounds,render,tints));
+                        int presentationRender=render;
+                        LegacySimpleBlockRendererAnalyzer.Mode simpleMode=simpleRenderModes.get(r.registryName());
+                        if(block&&render!=0&&render!=1&&render!=6&&simpleMode!=null)presentationRender=switch(simpleMode){case CROSS->1;case CROP->6;case META_ZERO_CROP_ELSE_STANDARD->meta==0?6:0;};
+                        table.add(new Variant(meta,icons,bounds,inventoryBounds,presentationRender,tints));
                     } catch(RuntimeException unsupported) {
                         if(meta==0) throw fail("metadata 0: "+unsupported.getMessage());
                         limitation="some metadata values require unsupported state or lie outside a source icon table";
