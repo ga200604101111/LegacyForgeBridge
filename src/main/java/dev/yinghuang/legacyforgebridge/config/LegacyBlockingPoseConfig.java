@@ -13,27 +13,30 @@ import net.fabricmc.loader.api.FabricLoader;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.attribute.FileTime;
+import java.nio.file.StandardCopyOption;
+import java.util.Set;
 
 /**
- * Global, client-only visual correction applied after Via/vanilla has selected the blocking pose.
+ * Client-only visual correction applied after Via/vanilla has selected a BLOCK use animation.
  *
- * <p>This class never changes item use, packets, attack blocking, animation selection or damage.
- * It only appends an affine transform immediately before an actively used converted item is
- * submitted to the renderer.</p>
+ * <p>The file is loaded once during client startup. Cloth Config writes a complete validated
+ * snapshot and installs it immediately; there is deliberately no tick-time file polling.</p>
  */
 public final class LegacyBlockingPoseConfig {
     public static final String FILE_NAME = "legacyforgebridge-client.json";
+    public static final float TRANSLATION_MIN = -2.0F;
+    public static final float TRANSLATION_MAX = 2.0F;
+    public static final float ROTATION_MIN = -180.0F;
+    public static final float ROTATION_MAX = 180.0F;
+
     private static final Gson JSON = new GsonBuilder().setPrettyPrinting().create();
-    private static final int SCHEMA_VERSION = 1;
-    private static final int RELOAD_INTERVAL_TICKS = 20;
+    private static final int SCHEMA_VERSION = 2;
 
     private static volatile Settings current = Settings.defaults();
     private static Path path;
-    private static FileTime lastModified;
-    private static int reloadTicks;
 
     private LegacyBlockingPoseConfig() { }
 
@@ -43,33 +46,40 @@ public final class LegacyBlockingPoseConfig {
         try {
             Files.createDirectories(path.getParent());
             if (Files.notExists(path)) {
-                Files.writeString(path, JSON.toJson(defaultDocument()) + "\n", StandardCharsets.UTF_8);
+                writeDocument(Settings.defaults());
             }
-            reload(true);
-            LegacyForgeBridge.LOGGER.info("Global converted-weapon blocking pose config: {}", path);
+            JsonObject root = JsonParser.parseString(Files.readString(path, StandardCharsets.UTF_8)).getAsJsonObject();
+            Settings parsed = parse(root);
+            current = parsed;
+            if (integer(root, "schemaVersion") != SCHEMA_VERSION) {
+                writeDocument(parsed); // one-time .144 schema migration; scale is intentionally discarded
+            }
+            LegacyForgeBridge.LOGGER.info("Blocking-pose config loaded once; Cloth Config owns runtime updates: {}", path);
         } catch (IOException | RuntimeException failure) {
             current = Settings.defaults();
-            LegacyForgeBridge.LOGGER.warn("Could not initialize blocking pose config {}; zero-offset defaults remain active.", path, failure);
+            LegacyForgeBridge.LOGGER.warn("Could not initialize blocking-pose config {}; built-in defaults remain active.", path, failure);
         }
     }
 
-    /** Cheap client-tick polling permits angle tuning without restarting Minecraft. */
-    public static void tick() {
-        if (path == null) initialize();
-        if (++reloadTicks < RELOAD_INTERVAL_TICKS) return;
-        reloadTicks = 0;
-        synchronized (LegacyBlockingPoseConfig.class) {
-            try {
-                FileTime modified = Files.getLastModifiedTime(path);
-                if (!modified.equals(lastModified)) reload(false);
-            } catch (IOException | RuntimeException failure) {
-                LegacyForgeBridge.LOGGER.warn("Could not reload blocking pose config {}; keeping the last valid values.", path, failure);
-            }
-        }
+    public static Settings current() {
+        return current;
     }
 
     public static boolean enabled() {
         return current.enabled();
+    }
+
+    /** Save from the Cloth Config screen and install the same immutable snapshot immediately. */
+    public static synchronized void save(Settings settings) {
+        if (settings == null) throw new IllegalArgumentException("Blocking-pose settings are required");
+        if (path == null) initialize();
+        try {
+            writeDocument(settings);
+            current = settings;
+            LegacyForgeBridge.LOGGER.info("Saved and applied blocking-pose config: {}", path);
+        } catch (IOException | RuntimeException failure) {
+            LegacyForgeBridge.LOGGER.error("Could not save blocking-pose config {}; keeping the previous values.", path, failure);
+        }
     }
 
     public static void applyFirstPerson(PoseStack matrices, boolean leftHand) {
@@ -85,14 +95,16 @@ public final class LegacyBlockingPoseConfig {
     static Settings parse(JsonObject root) {
         requireOnly(root, "schemaVersion", "swordBlockingPose");
         int schema = integer(root, "schemaVersion");
-        if (schema != SCHEMA_VERSION) throw new IllegalArgumentException("Unsupported blocking pose schemaVersion=" + schema);
+        if (schema != 1 && schema != SCHEMA_VERSION) {
+            throw new IllegalArgumentException("Unsupported blocking pose schemaVersion=" + schema);
+        }
         JsonObject section = object(root, "swordBlockingPose");
         requireOnly(section, "enabled", "mirrorLeftHand", "firstPerson", "thirdPerson");
         return new Settings(
                 bool(section, "enabled"),
                 bool(section, "mirrorLeftHand"),
-                transform(object(section, "firstPerson"), "firstPerson"),
-                transform(object(section, "thirdPerson"), "thirdPerson")
+                transform(object(section, "firstPerson"), "firstPerson", schema),
+                transform(object(section, "thirdPerson"), "thirdPerson", schema)
         );
     }
 
@@ -108,48 +120,49 @@ public final class LegacyBlockingPoseConfig {
         return root;
     }
 
-    static Settings settingsForTests() {
-        return current;
-    }
-
     static void installForTests(Settings settings) {
         current = settings;
     }
 
-    private static synchronized void reload(boolean initial) throws IOException {
-        JsonObject root = JsonParser.parseString(Files.readString(path, StandardCharsets.UTF_8)).getAsJsonObject();
-        Settings parsed = parse(root);
-        current = parsed;
-        lastModified = Files.getLastModifiedTime(path);
-        if (!initial) LegacyForgeBridge.LOGGER.info("Reloaded global converted-weapon blocking pose config: {}", path);
-    }
-
-    private static JsonObject defaultDocument() {
-        return document(Settings.defaults());
-    }
-
-    private static Transform transform(JsonObject value, String name) {
-        requireOnly(value, "translation", "rotationDegrees", "scale");
-        Vec3 translation = vector(value, "translation", -4.0F, 4.0F);
-        Vec3 rotation = vector(value, "rotationDegrees", -360.0F, 360.0F);
-        Vec3 scale = vector(value, "scale", 0.05F, 4.0F);
-        if (scale.x() == 0 || scale.y() == 0 || scale.z() == 0) {
-            throw new IllegalArgumentException(name + ".scale cannot contain zero");
+    private static void writeDocument(Settings settings) throws IOException {
+        JsonObject output = document(settings);
+        // Re-parse before publication so the UI cannot persist a value outside runtime policy.
+        parse(output);
+        Path temporary = path.resolveSibling(path.getFileName() + ".tmp");
+        Files.writeString(temporary, JSON.toJson(output) + "\n", StandardCharsets.UTF_8);
+        try {
+            Files.move(temporary, path, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        } catch (AtomicMoveNotSupportedException ignored) {
+            Files.move(temporary, path, StandardCopyOption.REPLACE_EXISTING);
         }
-        return new Transform(translation, rotation, scale);
+    }
+
+    private static Transform transform(JsonObject value, String name, int schema) {
+        if (schema == 1) {
+            allowOnly(value, "translation", "rotationDegrees", "scale");
+            requireKeys(value, "translation", "rotationDegrees");
+            if (value.has("scale")) vector(value, "scale", 0.05F, 4.0F); // validate, then discard
+        } else {
+            requireOnly(value, "translation", "rotationDegrees");
+        }
+        return new Transform(
+                vector(value, "translation", TRANSLATION_MIN, TRANSLATION_MAX),
+                vector(value, "rotationDegrees", ROTATION_MIN, ROTATION_MAX)
+        );
     }
 
     private static JsonObject transformDocument(Transform transform) {
         JsonObject value = new JsonObject();
         value.add("translation", array(transform.translation()));
         value.add("rotationDegrees", array(transform.rotationDegrees()));
-        value.add("scale", array(transform.scale()));
         return value;
     }
 
     private static JsonArray array(Vec3 vector) {
         JsonArray result = new JsonArray();
-        result.add(vector.x()); result.add(vector.y()); result.add(vector.z());
+        result.add(vector.x());
+        result.add(vector.y());
+        result.add(vector.z());
         return result;
     }
 
@@ -175,10 +188,18 @@ public final class LegacyBlockingPoseConfig {
     }
 
     private static void requireOnly(JsonObject object, String... keys) {
-        java.util.Set<String> allowed = java.util.Set.of(keys);
+        allowOnly(object, keys);
+        requireKeys(object, keys);
+    }
+
+    private static void allowOnly(JsonObject object, String... keys) {
+        Set<String> allowed = Set.of(keys);
         for (String key : object.keySet()) {
             if (!allowed.contains(key)) throw new IllegalArgumentException("Unknown blocking pose config key: " + key);
         }
+    }
+
+    private static void requireKeys(JsonObject object, String... keys) {
         for (String key : keys) {
             if (!object.has(key)) throw new IllegalArgumentException("Missing blocking pose config key: " + key);
         }
@@ -213,39 +234,53 @@ public final class LegacyBlockingPoseConfig {
         public Settings {
             if (firstPerson == null || thirdPerson == null) throw new IllegalArgumentException("Blocking pose transforms are required");
         }
+
         public static Settings defaults() {
-            return new Settings(true, true, Transform.identity(), Transform.identity());
+            return new Settings(
+                    true,
+                    true,
+                    new Transform(Vec3.ZERO, new Vec3(0.0F, 20.0F, 0.0F)),
+                    new Transform(Vec3.ZERO, new Vec3(-30.0F, 40.0F, 40.0F))
+            );
         }
     }
 
-    public record Transform(Vec3 translation, Vec3 rotationDegrees, Vec3 scale) {
+    public record Transform(Vec3 translation, Vec3 rotationDegrees) {
         public Transform {
-            if (translation == null || rotationDegrees == null || scale == null) {
+            if (translation == null || rotationDegrees == null) {
                 throw new IllegalArgumentException("Transform vectors are required");
             }
+            translation.validate("translation", TRANSLATION_MIN, TRANSLATION_MAX);
+            rotationDegrees.validate("rotationDegrees", ROTATION_MIN, ROTATION_MAX);
         }
-        public static Transform identity() {
-            return new Transform(Vec3.ZERO, Vec3.ZERO, Vec3.ONE);
-        }
+
         public Transform mirrored() {
             return new Transform(
                     new Vec3(-translation.x(), translation.y(), translation.z()),
-                    new Vec3(rotationDegrees.x(), -rotationDegrees.y(), -rotationDegrees.z()),
-                    scale
+                    new Vec3(rotationDegrees.x(), -rotationDegrees.y(), -rotationDegrees.z())
             );
         }
+
         public void apply(PoseStack matrices, boolean mirror) {
             Transform value = mirror ? mirrored() : this;
-            matrices.translate(value.translation.x(), value.translation.y(), value.translation.z());
+            // translateLocal pre-multiplies the offset, keeping X/Y/Z in the parent/screen axes
+            // instead of rotating the offset through Via/vanilla's already-established sword pose.
+            matrices.last().pose().translateLocal(value.translation.x(), value.translation.y(), value.translation.z());
             if (value.rotationDegrees.x() != 0) matrices.mulPose(Axis.XP.rotationDegrees(value.rotationDegrees.x()));
             if (value.rotationDegrees.y() != 0) matrices.mulPose(Axis.YP.rotationDegrees(value.rotationDegrees.y()));
             if (value.rotationDegrees.z() != 0) matrices.mulPose(Axis.ZP.rotationDegrees(value.rotationDegrees.z()));
-            matrices.scale(value.scale.x(), value.scale.y(), value.scale.z());
         }
     }
 
     public record Vec3(float x, float y, float z) {
-        private static final Vec3 ZERO = new Vec3(0, 0, 0);
-        private static final Vec3 ONE = new Vec3(1, 1, 1);
+        private static final Vec3 ZERO = new Vec3(0.0F, 0.0F, 0.0F);
+
+        private void validate(String name, float minimum, float maximum) {
+            for (float value : new float[]{x, y, z}) {
+                if (!Float.isFinite(value) || value < minimum || value > maximum) {
+                    throw new IllegalArgumentException(name + " value outside " + minimum + ".." + maximum + ": " + value);
+                }
+            }
+        }
     }
 }

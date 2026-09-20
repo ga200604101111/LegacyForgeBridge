@@ -1,22 +1,28 @@
 package dev.yinghuang.legacyforgebridge.config;
 
 import com.google.gson.JsonParser;
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.math.Axis;
+import org.joml.Vector4f;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class LegacyBlockingPoseConfigTest {
-    @Test void defaultsAreAnExactNoOpAndRoundTrip() {
+    @Test void requestedDefaultsRoundTripWithoutScale() {
         var defaults = LegacyBlockingPoseConfig.Settings.defaults();
         assertTrue(defaults.enabled());
         assertTrue(defaults.mirrorLeftHand());
-        assertEquals(defaults, LegacyBlockingPoseConfig.parse(LegacyBlockingPoseConfig.document(defaults)));
-        assertEquals(new LegacyBlockingPoseConfig.Vec3(0,0,0), defaults.firstPerson().translation());
-        assertEquals(new LegacyBlockingPoseConfig.Vec3(0,0,0), defaults.thirdPerson().rotationDegrees());
-        assertEquals(new LegacyBlockingPoseConfig.Vec3(1,1,1), defaults.firstPerson().scale());
+        assertEquals(new LegacyBlockingPoseConfig.Vec3(0, 0, 0), defaults.firstPerson().translation());
+        assertEquals(new LegacyBlockingPoseConfig.Vec3(0, 20, 0), defaults.firstPerson().rotationDegrees());
+        assertEquals(new LegacyBlockingPoseConfig.Vec3(-30, 40, 40), defaults.thirdPerson().rotationDegrees());
+        var document = LegacyBlockingPoseConfig.document(defaults);
+        assertEquals(2, document.get("schemaVersion").getAsInt());
+        assertFalse(document.toString().contains("scale"));
+        assertEquals(defaults, LegacyBlockingPoseConfig.parse(document));
     }
 
-    @Test void oneGenericConfigControlsBothViewsAndMirrorsLeftHand() {
+    @Test void oldScaleSchemaMigratesButScaleNoLongerAffectsRuntime() {
         var value = LegacyBlockingPoseConfig.parse(JsonParser.parseString("""
                 {
                   "schemaVersion": 1,
@@ -36,28 +42,43 @@ class LegacyBlockingPoseConfigTest {
                   }
                 }
                 """).getAsJsonObject());
+        assertEquals(new LegacyBlockingPoseConfig.Vec3(0.25F, -0.5F, 1.0F), value.firstPerson().translation());
+        assertFalse(LegacyBlockingPoseConfig.document(value).toString().contains("scale"));
         var left = value.firstPerson().mirrored();
-        assertEquals(new LegacyBlockingPoseConfig.Vec3(-0.25F,-0.5F,1.0F), left.translation());
-        assertEquals(new LegacyBlockingPoseConfig.Vec3(10,-20,30), left.rotationDegrees());
-        assertEquals(value.firstPerson().scale(), left.scale());
-        assertEquals(45, value.thirdPerson().rotationDegrees().y());
+        assertEquals(new LegacyBlockingPoseConfig.Vec3(-0.25F, -0.5F, 1.0F), left.translation());
+        assertEquals(new LegacyBlockingPoseConfig.Vec3(10, -20, 30), left.rotationDegrees());
+    }
+
+    @Test void translationUsesParentAxesAfterVanillaRotation() {
+        PoseStack matrices = new PoseStack();
+        matrices.mulPose(Axis.YP.rotationDegrees(90));
+        new LegacyBlockingPoseConfig.Transform(
+                new LegacyBlockingPoseConfig.Vec3(0.25F, -0.5F, 0.75F),
+                new LegacyBlockingPoseConfig.Vec3(0, 0, 0)
+        ).apply(matrices, false);
+        Vector4f origin = matrices.last().pose().transform(new Vector4f(0, 0, 0, 1));
+        assertEquals(0.25F, origin.x, 0.0001F);
+        assertEquals(-0.5F, origin.y, 0.0001F);
+        assertEquals(0.75F, origin.z, 0.0001F);
     }
 
     @Test void malformedOrDangerousValuesAreRejected() {
-        rejects("{\"schemaVersion\":2,\"swordBlockingPose\":{}}");
-        rejects(document("[0,0]", "[0,0,0]", "[1,1,1]"));
-        rejects(document("[0,0,0]", "[0,361,0]", "[1,1,1]"));
-        rejects(document("[0,0,0]", "[0,0,0]", "[0,1,1]"));
-        rejects(document("[0,0,0]", "[0,0,0]", "[5,1,1]"));
-        rejects(document("[0,0,0]", "[0,0,0]", "[1,1,1]").replace("\"thirdPerson\"", "\"unknown\":0,\"thirdPerson\""));
+        rejects("{\"schemaVersion\":3,\"swordBlockingPose\":{}}");
+        rejects(document("[0,0]", "[0,0,0]"));
+        rejects(document("[0,0,0]", "[0,181,0]"));
+        rejects(document("[2.01,0,0]", "[0,0,0]"));
+        rejects(document("[0,0,0]", "[0,0,0]").replace("\"thirdPerson\"", "\"unknown\":0,\"thirdPerson\""));
+        rejects(document("[0,0,0]", "[0,0,0]").replace("\"rotationDegrees\":[0,0,0]", "\"rotationDegrees\":[0,0,0],\"scale\":[1,1,1]"));
     }
 
-    private static String document(String translation,String rotation,String scale) {
-        String transform="{\"translation\":"+translation+",\"rotationDegrees\":"+rotation+",\"scale\":"+scale+"}";
-        return "{\"schemaVersion\":1,\"swordBlockingPose\":{\"enabled\":true,\"mirrorLeftHand\":true,"
-                +"\"firstPerson\":"+transform+",\"thirdPerson\":"+transform+"}}";
+    private static String document(String translation, String rotation) {
+        String transform = "{\"translation\":" + translation + ",\"rotationDegrees\":" + rotation + "}";
+        return "{\"schemaVersion\":2,\"swordBlockingPose\":{\"enabled\":true,\"mirrorLeftHand\":true,"
+                + "\"firstPerson\":" + transform + ",\"thirdPerson\":" + transform + "}}";
     }
+
     private static void rejects(String json) {
-        assertThrows(RuntimeException.class,()->LegacyBlockingPoseConfig.parse(JsonParser.parseString(json).getAsJsonObject()));
+        assertThrows(RuntimeException.class,
+                () -> LegacyBlockingPoseConfig.parse(JsonParser.parseString(json).getAsJsonObject()));
     }
 }

@@ -24,6 +24,9 @@
     ],
     "viafabricplus": [
       "dev.yinghuang.legacyforgebridge.protocol.ViaFabricPlusEntrypoint"
+    ],
+    "modmenu": [
+      "dev.yinghuang.legacyforgebridge.config.LegacyForgeBridgeModMenu"
     ]
   },
   "mixins": [
@@ -35,6 +38,10 @@
     "java": ">=21",
     "fabric-api": "*",
     "team_reborn_energy": ">=4.2.0",
-    "viafabricplus": ">=4.4.15"
+    "viafabricplus": ">=4.4.15",
+    "cloth-config": ">=21.11.153"
+  },
+  "suggests": {
+    "modmenu": ">=17.0.0"
   }
 }
