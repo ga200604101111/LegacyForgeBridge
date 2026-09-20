@@ -49,17 +49,41 @@ class LegacyBlockingPoseConfigTest {
         assertEquals(new LegacyBlockingPoseConfig.Vec3(10, -20, 30), left.rotationDegrees());
     }
 
-    @Test void translationUsesParentAxesAfterVanillaRotation() {
+    @Test void firstPersonTranslationStillUsesScreenAxesAfterVanillaRotation() {
         PoseStack matrices = new PoseStack();
         matrices.mulPose(Axis.YP.rotationDegrees(90));
         new LegacyBlockingPoseConfig.Transform(
                 new LegacyBlockingPoseConfig.Vec3(0.25F, -0.5F, 0.75F),
                 new LegacyBlockingPoseConfig.Vec3(0, 0, 0)
-        ).apply(matrices, false);
+        ).applyScreenSpace(matrices, false);
         Vector4f origin = matrices.last().pose().transform(new Vector4f(0, 0, 0, 1));
         assertEquals(0.25F, origin.x, 0.0001F);
         assertEquals(-0.5F, origin.y, 0.0001F);
         assertEquals(0.75F, origin.z, 0.0001F);
+    }
+
+    @Test void thirdPersonTranslationFollowsRotatedPlayerArmAxes() {
+        var translation = new LegacyBlockingPoseConfig.Vec3(0.25F, -0.5F, 0.75F);
+        var transform = new LegacyBlockingPoseConfig.Transform(
+                translation,
+                new LegacyBlockingPoseConfig.Vec3(0, 0, 0)
+        );
+
+        PoseStack expectedMatrices = new PoseStack();
+        expectedMatrices.mulPose(Axis.YP.rotationDegrees(90));
+        Vector4f expected = expectedMatrices.last().pose().transform(
+                new Vector4f(translation.x(), translation.y(), translation.z(), 1));
+
+        PoseStack actualMatrices = new PoseStack();
+        actualMatrices.mulPose(Axis.YP.rotationDegrees(90));
+        transform.applyArmLocalSpace(actualMatrices, false);
+        Vector4f actual = actualMatrices.last().pose().transform(new Vector4f(0, 0, 0, 1));
+
+        assertEquals(expected.x, actual.x, 0.0001F);
+        assertEquals(expected.y, actual.y, 0.0001F);
+        assertEquals(expected.z, actual.z, 0.0001F);
+        assertNotEquals(translation.x(), actual.x, 0.0001F,
+                "third-person translation must rotate with the player/arm transform");
     }
 
     @Test void malformedOrDangerousValuesAreRejected() {

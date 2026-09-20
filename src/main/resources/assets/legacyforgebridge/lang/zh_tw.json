@@ -9,7 +9,7 @@
   "legacyforgebridge.config.blocking_pose.mirror_left": "左手自動鏡像",
   "legacyforgebridge.config.blocking_pose.mirror_left.tooltip": "左手時自動反轉 X 位置與 Y/Z 旋轉。",
   "legacyforgebridge.config.blocking_pose.scope": "套用到所有實際使用 BLOCK 劍擋動畫的非盾牌武器，包含原版/Via 武器與轉換模組武器。儲存後立即生效。",
-  "legacyforgebridge.config.blocking_pose.translation.tooltip": "位置使用畫面／父層座標：X 左右、Y 上下、Z 前後。每格 0.01。",
+  "legacyforgebridge.config.blocking_pose.translation.tooltip": "第一人稱位置使用畫面座標；第三人稱位置使用玩家／手臂局部座標，會隨角色旋轉。X 左右、Y 上下、Z 前後，每格 0.01。",
   "legacyforgebridge.config.blocking_pose.rotation.tooltip": "旋轉單位為度數。",
   "legacyforgebridge.config.blocking_pose.translation_x": "位置 X（左右）",
   "legacyforgebridge.config.blocking_pose.translation_y": "位置 Y（上下）",

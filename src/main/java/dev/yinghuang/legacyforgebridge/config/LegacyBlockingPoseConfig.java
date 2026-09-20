@@ -84,12 +84,16 @@ public final class LegacyBlockingPoseConfig {
 
     public static void applyFirstPerson(PoseStack matrices, boolean leftHand) {
         Settings snapshot = current;
-        if (snapshot.enabled()) snapshot.firstPerson().apply(matrices, leftHand && snapshot.mirrorLeftHand());
+        if (snapshot.enabled()) {
+            snapshot.firstPerson().applyScreenSpace(matrices, leftHand && snapshot.mirrorLeftHand());
+        }
     }
 
     public static void applyThirdPerson(PoseStack matrices, boolean leftHand) {
         Settings snapshot = current;
-        if (snapshot.enabled()) snapshot.thirdPerson().apply(matrices, leftHand && snapshot.mirrorLeftHand());
+        if (snapshot.enabled()) {
+            snapshot.thirdPerson().applyArmLocalSpace(matrices, leftHand && snapshot.mirrorLeftHand());
+        }
     }
 
     static Settings parse(JsonObject root) {
@@ -261,14 +265,30 @@ public final class LegacyBlockingPoseConfig {
             );
         }
 
-        public void apply(PoseStack matrices, boolean mirror) {
+        /** First person keeps its offset in screen/parent axes, independent of the sword rotation. */
+        public void applyScreenSpace(PoseStack matrices, boolean mirror) {
             Transform value = mirror ? mirrored() : this;
-            // translateLocal pre-multiplies the offset, keeping X/Y/Z in the parent/screen axes
-            // instead of rotating the offset through Via/vanilla's already-established sword pose.
-            matrices.last().pose().translateLocal(value.translation.x(), value.translation.y(), value.translation.z());
-            if (value.rotationDegrees.x() != 0) matrices.mulPose(Axis.XP.rotationDegrees(value.rotationDegrees.x()));
-            if (value.rotationDegrees.y() != 0) matrices.mulPose(Axis.YP.rotationDegrees(value.rotationDegrees.y()));
-            if (value.rotationDegrees.z() != 0) matrices.mulPose(Axis.ZP.rotationDegrees(value.rotationDegrees.z()));
+            matrices.last().pose().translateLocal(
+                    value.translation.x(), value.translation.y(), value.translation.z());
+            applyRotations(matrices, value.rotationDegrees());
+        }
+
+        /** Third person follows the already-established player arm transform and turns with it. */
+        public void applyArmLocalSpace(PoseStack matrices, boolean mirror) {
+            Transform value = mirror ? mirrored() : this;
+            matrices.translate(value.translation.x(), value.translation.y(), value.translation.z());
+            applyRotations(matrices, value.rotationDegrees());
+        }
+
+        /** Compatibility alias for earlier internal callers; retains first-person screen-space behavior. */
+        public void apply(PoseStack matrices, boolean mirror) {
+            applyScreenSpace(matrices, mirror);
+        }
+
+        private static void applyRotations(PoseStack matrices, Vec3 rotation) {
+            if (rotation.x() != 0) matrices.mulPose(Axis.XP.rotationDegrees(rotation.x()));
+            if (rotation.y() != 0) matrices.mulPose(Axis.YP.rotationDegrees(rotation.y()));
+            if (rotation.z() != 0) matrices.mulPose(Axis.ZP.rotationDegrees(rotation.z()));
         }
     }
 

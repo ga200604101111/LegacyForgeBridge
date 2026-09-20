@@ -9,7 +9,7 @@
   "legacyforgebridge.config.blocking_pose.mirror_left": "Mirror left hand",
   "legacyforgebridge.config.blocking_pose.mirror_left.tooltip": "Mirrors X translation and Y/Z rotation for the left hand.",
   "legacyforgebridge.config.blocking_pose.scope": "Applies to every non-shield item actively using the BLOCK animation, including vanilla/Via and converted mod weapons. Save applies immediately.",
-  "legacyforgebridge.config.blocking_pose.translation.tooltip": "Parent/screen-space translation: X left/right, Y up/down, Z forward/back. Step 0.01.",
+  "legacyforgebridge.config.blocking_pose.translation.tooltip": "First-person translation uses screen axes; third-person translation uses player/arm-local axes and turns with the character. X left/right, Y up/down, Z forward/back. Step 0.01.",
   "legacyforgebridge.config.blocking_pose.rotation.tooltip": "Rotation values are degrees.",
   "legacyforgebridge.config.blocking_pose.translation_x": "Position X (left/right)",
   "legacyforgebridge.config.blocking_pose.translation_y": "Position Y (up/down)",
