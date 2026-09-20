@@ -72,6 +72,7 @@ class GeneratedModEntrypointPassTest {
         assertTrue(methods.contains("onInitialize()V"));
         assertTrue(methods.contains("onInitializeClient()V"));
         assertTrue(mainCalls.contains("dev/yinghuang/legacyforgebridge/compat/LegacyPlainEntityRegistry#loadMod(Ljava/lang/String;)V"));
+        assertTrue(clientCalls.contains("dev/yinghuang/legacyforgebridge/compat/LegacyHeldItemVisibilityRegistry#loadMod(Ljava/lang/String;)V"));
         assertTrue(clientCalls.contains("dev/yinghuang/legacyforgebridge/render/ConvertedGridPotPresentationRuntime#initializeMod(Ljava/lang/String;)V"));
         assertTrue(clientCalls.contains("dev/yinghuang/legacyforgebridge/render/ConvertedPlainEntityPresentationRuntime#initializeMod(Ljava/lang/String;)V"));
         assertTrue(clientCalls.contains("dev/yinghuang/legacyforgebridge/render/ConvertedSeatBedPresentationRuntime#initializeMod(Ljava/lang/String;)V"));

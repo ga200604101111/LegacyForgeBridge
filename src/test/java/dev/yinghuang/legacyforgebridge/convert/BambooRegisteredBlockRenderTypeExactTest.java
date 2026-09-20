@@ -39,6 +39,15 @@ class BambooRegisteredBlockRenderTypeExactTest {
                 .collect(Collectors.toMap(LegacySimpleBlockRendererAnalyzer.Rule::registryName,Function.identity(),(a,b)->a));
         assertEquals(LegacySimpleBlockRendererAnalyzer.Mode.CROSS,byName.get("blockbambooshoot").mode());
         assertEquals(LegacySimpleBlockRendererAnalyzer.Mode.META_ZERO_CROP_ELSE_STANDARD,byName.get("singleTexDeco").mode());
-        assertFalse(byName.containsKey("kitunebi"),"held-item visibility renderer must not collapse to always-visible cross");
+        assertEquals(LegacySimpleBlockRendererAnalyzer.Mode.HELD_ITEM_CROSS,byName.get("kitunebi").mode());
+    }
+
+    @Test
+    void exactBambooProvesHeldOwnBlockItemFoxfireVisibility() throws Exception {
+        String input=System.getProperty("lfb.exactCorpus.jar");assertNotNull(input,"exact Bamboo corpus is required");
+        Path source=Path.of(input);assertTrue(Files.isRegularFile(source));assertEquals(BAMBOO_SHA256,Hashing.sha256(source));
+        var rules=new LegacyHeldItemVisibilityAnalyzer().analyze(source).rules();
+        var rule=rules.stream().filter(value->value.registryName().equals("kitunebi")).findFirst().orElseThrow();
+        assertEquals(8,rule.visibleOrMask());assertEquals(7,rule.hiddenAndMask());
     }
 }
