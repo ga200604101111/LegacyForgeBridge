@@ -10,6 +10,7 @@ import dev.yinghuang.legacyforgebridge.protocol.ViaFabricPlusBackend;
 import dev.yinghuang.legacyforgebridge.protocol.ViaLegacyFmlTransport;
 import dev.yinghuang.legacyforgebridge.convert.runtime.ConvertedLegacyProcessorScreen;
 import dev.yinghuang.legacyforgebridge.convert.runtime.LegacyProcessorMenuSupport;
+import dev.yinghuang.legacyforgebridge.config.LegacyBlockingPoseConfig;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientConfigurationConnectionEvents;
@@ -31,8 +32,11 @@ public final class LegacyForgeBridgeClient implements ClientModInitializer {
         LegacyProcessorMenuSupport.bootstrap();
         MenuScreens.register(LegacyProcessorMenuSupport.type(), ConvertedLegacyProcessorScreen::new);
 
+        LegacyBlockingPoseConfig.initialize();
+
         LegacyPluginChannelMappings.installIfReady();
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            LegacyBlockingPoseConfig.tick();
             if (!LegacyPluginChannelMappings.installed()) {
                 LegacyPluginChannelMappings.installIfReady();
             }

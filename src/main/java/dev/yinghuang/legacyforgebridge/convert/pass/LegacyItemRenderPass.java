@@ -82,10 +82,9 @@ public final class LegacyItemRenderPass implements ConversionPass {
                     String neutralBase = writeNeutralHandBase(context.stagingDir(), base);
                     for (boolean left : List.of(false,true)) {
                         addHandCase(cases, left?"firstperson_lefthand":"firstperson_righthand", source.contexts().get("EQUIPPED_FIRST_PERSON"),
-                                old,nativeIcon,neutralBase,LegacyHandSpace.firstPerson(left),null,left);
+                                old,nativeIcon,neutralBase,LegacyHandSpace.firstPerson(left),left);
                         addHandCase(cases, left?"thirdperson_lefthand":"thirdperson_righthand", source.contexts().get("EQUIPPED"),
-                                old,nativeIcon,neutralBase,LegacyHandSpace.thirdPerson(item.full3D(),item.rotates(),false,left),
-                                LegacyHandSpace.thirdPerson(item.full3D(),item.rotates(),true,left),left);
+                                old,nativeIcon,neutralBase,LegacyHandSpace.thirdPerson(item.full3D(),item.rotates(),left),left);
                     }
                 } else {
                     addCase(cases,List.of("firstperson_righthand","firstperson_lefthand"),source.contexts().get("EQUIPPED_FIRST_PERSON"),"EQUIPPED_FIRST_PERSON",old,nativeIcon);
@@ -156,17 +155,10 @@ public final class LegacyItemRenderPass implements ConversionPass {
         return namespace+":"+path;
     }
     private static void addHandCase(JsonArray cases,String name,Context context,JsonObject template,JsonObject icon,
-                                    String base,List<Operation> normal,List<Operation> blocking,boolean left) {
+                                    String base,List<Operation> normal,boolean left) {
         JsonObject entry=new JsonObject();entry.addProperty("when",name);
         if(!context.custom()){entry.add("model",icon.deepCopy());cases.add(entry);return;}
-        JsonElement ordinary=handModel(context,template,base,normal,left);
-        if(blocking!=null){
-            JsonObject blockComponent=new JsonObject();blockComponent.addProperty("type","minecraft:condition");
-            blockComponent.addProperty("property","minecraft:has_component");blockComponent.addProperty("component","minecraft:blocks_attacks");
-            blockComponent.add("on_true",handModel(context,template,base,blocking,left));blockComponent.add("on_false",ordinary.deepCopy());
-            JsonObject using=new JsonObject();using.addProperty("type","minecraft:condition");using.addProperty("property","minecraft:using_item");
-            using.add("on_true",blockComponent);using.add("on_false",ordinary);entry.add("model",using);
-        }else entry.add("model",ordinary);
+        entry.add("model",handModel(context,template,base,normal,left));
         cases.add(entry);
     }
     private static JsonElement handModel(Context context,JsonObject template,String base,List<Operation> prefix,boolean left){

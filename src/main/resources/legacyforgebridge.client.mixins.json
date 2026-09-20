@@ -19,7 +19,9 @@
     "LegacyFuelValuesMixin",
     "ViaTerminalBlockRewriteMixin",
     "ViaNativeMetadataCodecMixin",
-    "LegacyMimicBlockUpdateMixin"
+    "LegacyMimicBlockUpdateMixin",
+    "LegacyFirstPersonBlockingPoseMixin",
+    "LegacyThirdPersonBlockingPoseMixin"
   ],
   "injectors": {
     "defaultRequire": 1

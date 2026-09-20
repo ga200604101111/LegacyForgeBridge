@@ -7,7 +7,7 @@ import dev.yinghuang.legacyforgebridge.convert.LegacyItemRenderAnalyzer.Operatio
 /** Affine basis conversion, not per-weapon visual offsets. Matrices post-multiply, as legacy GL did. */
 public final class LegacyHandSpace {
     private LegacyHandSpace() { }
-    public static List<Operation> thirdPerson(boolean full3D,boolean rotates,boolean blocking,boolean left){
+    public static List<Operation> thirdPerson(boolean full3D,boolean rotates,boolean left){
         List<Operation> ops=new ArrayList<>();
         // Inverse of ItemInHandLayer's transform after the animated hand attachment.
         ops.add(Operation.of("translate",-.0625F,-.125F,.625F));
@@ -17,10 +17,6 @@ public final class LegacyHandSpace {
         ops.add(Operation.of("translate",-.0625F,.4375F,.0625F));
         if(full3D){
             if(rotates){ops.add(Operation.of("rotate",180,0,0,1));ops.add(Operation.of("translate",0,-.125F,0));}
-            if(blocking){
-                ops.add(Operation.of("translate",.05F,0,-.1F));
-                ops.add(Operation.of("rotate",-50,0,1,0));ops.add(Operation.of("rotate",-10,1,0,0));ops.add(Operation.of("rotate",-60,0,0,1));
-            }
             ops.add(Operation.of("translate",0,.1875F,0));ops.add(Operation.of("scale",.625F,-.625F,.625F));
             ops.add(Operation.of("rotate",-100,1,0,0));ops.add(Operation.of("rotate",45,0,1,0));
         }else{

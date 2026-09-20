@@ -38,6 +38,9 @@ class LegacyItemRenderPassTest {
             assertEquals("scale",transforms.get(1).getAsJsonObject().get("op").getAsString());
             assertEquals("rotate",transforms.get(2).getAsJsonObject().get("op").getAsString());
         }
+        String generated=Files.readString(context.stagingDir().resolve("assets/alchemy/items/tool.json"));
+        assertFalse(generated.contains("minecraft:using_item"),"Via/vanilla owns blocking pose selection");
+        assertFalse(generated.contains("minecraft:blocks_attacks"),"LFB must not bake a second blocking transform");
         assertTrue(Files.isRegularFile(context.stagingDir().resolve("legacyforgebridge/item-render-analysis.json")));
     }
     @Test void dynamicSourceAndMissingTextureRetainExistingModelWithDiagnostics() throws Exception {

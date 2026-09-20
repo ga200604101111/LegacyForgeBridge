@@ -6,27 +6,26 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** Compare complete affine chains at the hand, not just a list of preferred constants. */
 class LegacyHandSpaceTest {
-    @Test void modernAttachmentTimesBridgeEqualsLegacyAttachmentForEveryPose() {
-        for(boolean full:List.of(false,true)) for(boolean rotates:List.of(false,true)) for(boolean block:List.of(false,true)) {
+    @Test void modernAttachmentTimesBridgeEqualsLegacyNeutralAttachmentForEveryItemBasis() {
+        for(boolean full:List.of(false,true)) for(boolean rotates:List.of(false,true)) {
             Matrix modern=new Matrix().r(-90,1,0,0).r(180,0,1,0).t(1D/16,.125,-.625);
-            Matrix bridged=modern.mul(operations(LegacyHandSpace.thirdPerson(full,rotates,block,false)));
+            Matrix bridged=modern.mul(operations(LegacyHandSpace.thirdPerson(full,rotates,false)));
             Matrix old=new Matrix().t(-1D/16,7D/16,1D/16);
             if(full){
                 if(rotates)old.r(180,0,0,1).t(0,-.125,0);
-                if(block)old.t(.05,0,-.1).r(-50,0,1,0).r(-10,1,0,0).r(-60,0,0,1);
                 old.t(0,3D/16,0).s(.625,-.625,.625).r(-100,1,0,0).r(45,0,1,0);
             }else old.t(.25,3D/16,-3D/16).s(.375,.375,.375).r(60,0,0,1).r(-90,1,0,0).r(20,0,1,0);
             old.t(0,-.3,0).s(1.5,1.5,1.5).r(50,0,1,0).r(335,0,0,1).t(-15D/16,-1D/16,0);
-            assertArrayEquals(old.a,bridged.a,1E-6,"full="+full+", rotate="+rotates+", block="+block);
-            // The origin and arbitrary authored grip are both preserved, not only direction.
+            assertArrayEquals(old.a,bridged.a,1E-6,"full="+full+", rotate="+rotates);
+            // Blocking belongs to Via/vanilla. LFB only converts the neutral source hand basis.
             assertArrayEquals(old.point(.17,-.4,1.2),bridged.point(.17,-.4,1.2),1E-6);
         }
     }
     @Test void leftHandIsReflectionConjugateAndSourceOperationOrderIsRetained() {
         Matrix reflect=new Matrix().s(-1,1,1);
-        var right=LegacyHandSpace.thirdPerson(true,false,false,false);
+        var right=LegacyHandSpace.thirdPerson(true,false,false);
         assertArrayEquals(new Matrix().mul(reflect).mul(operations(right)).mul(reflect).a,
-                operations(LegacyHandSpace.thirdPerson(true,false,false,true)).a,1E-6);
+                operations(LegacyHandSpace.thirdPerson(true,false,true)).a,1E-6);
         var authored=List.of(LegacyItemRenderAnalyzer.Operation.of("translate",2,3,4),
                 LegacyItemRenderAnalyzer.Operation.of("rotate",37,0,1,0),LegacyItemRenderAnalyzer.Operation.of("scale",2,1,3));
         assertArrayEquals(new Matrix().mul(reflect).mul(operations(authored)).mul(reflect).a,
