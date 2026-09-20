@@ -15,19 +15,19 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Apply Bamboo runtime source patch when not landed yet
+      - name: Apply global blocking-pose source patch when not landed yet
         shell: bash
         run: |
           set -euo pipefail
-          marker='2026-09-20.143-bamboo-runtime'
+          marker='2026-09-20.144-global-blocking-pose'
           build_info='src/main/java/dev/yinghuang/legacyforgebridge/BuildInfo.java'
           if grep -q "$marker" "$build_info"; then
-            echo "Bamboo runtime source patch already landed."
+            echo "Global blocking-pose source patch already landed."
             exit 0
           fi
-          cat .github/patches/bamboo-runtime-143/part-*.patchfrag > /tmp/bamboo-runtime-143.patch
-          git apply --check /tmp/bamboo-runtime-143.patch
-          git apply /tmp/bamboo-runtime-143.patch
+          gzip -dc .github/patches/blocking-pose-144/blocking-pose-144.diff.gz > /tmp/blocking-pose-144.diff
+          git apply --check /tmp/blocking-pose-144.diff
+          git apply /tmp/blocking-pose-144.diff
           git diff --check
 
       - uses: actions/setup-java@v5
@@ -49,20 +49,20 @@ jobs:
           path: build/libs/*.jar
           if-no-files-found: error
 
-      - name: Commit verified Bamboo runtime source back to branch
+      - name: Commit verified global blocking-pose source back to branch
         if: success()
         shell: bash
         run: |
           set -euo pipefail
-          if git diff --quiet && [ -z "$(git ls-files --others --exclude-standard src)" ]; then
+          if git diff --quiet && [ -z "$(git ls-files --others --exclude-standard docs src)" ]; then
             echo "No verified source changes to commit."
             exit 0
           fi
           git config user.name "LegacyForgeBridge CI"
           git config user.email "actions@users.noreply.github.com"
-          git add src
+          git add docs src
           git diff --cached --check
-          git commit -m "fix(bamboo): restore combat items and exclusive special rendering (.143)"
+          git commit -m "fix(render): add global configurable blocking pose (.144)"
           git push origin "HEAD:${GITHUB_REF_NAME}"
 
       - name: Preserve reproducible verification inputs
