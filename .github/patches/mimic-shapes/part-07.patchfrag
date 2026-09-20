@@ -1,0 +1,121 @@
++        var root=JsonParser.parseString(Files.readString(stage.resolve(LegacyGeometrySpec.PATH))).getAsJsonObject();
++        var rules=LegacyGeometrySpec.parse(root);
++        require(rules.size()==21,"geometry families");
++        require(rules.values().stream().mapToInt(r->r.variants().size()).sum()==327,"metadata coverage");
++        require(root.get("inventoryMaterialFallbackVariants").getAsInt()==8,"material fallback count");
++        for(String name:new String[]{"delude_width","delude_height","delude_stair","delude_plate","decocarpet"})
++            require(rules.get("bamboomod:"+name).variants().size()==16,"lost state: "+name);
++        require(rules.get("bamboomod:bamboopanel").pane(),"panel became cube family");
++        require(rules.get("bamboomod:bamboopanel").variants().size()==7,"invented unsupported panel states");
++        int count=0;
++        try(var jar=new JarFile(source.toFile())){
++            var entries=jar.entries();
++            while(entries.hasMoreElements()){
++                var entry=entries.nextElement();String name=entry.getName();
++                if(!name.endsWith(".png")&&!name.endsWith(".png.mcmeta"))continue;
++                Path asset=stage.resolve(name).normalize();
++                require(asset.startsWith(stage.normalize()),"unsafe asset path");
++                try(var in=jar.getInputStream(entry)){require(Arrays.equals(in.readAllBytes(),Files.readAllBytes(asset)),"modified source asset: "+name);}
++                count++;
++            }
++        }
++        require(count==223,"source image/animation count");
++        System.out.println("PASS 21 rules / 327 states / 8 explicit material fallbacks / 223 unchanged source assets");
++    }
++    private static void require(boolean value,String message){if(!value)throw new AssertionError(message);}
++}
+diff --git a/src/test/java/dev/yinghuang/legacyforgebridge/convert/MimicShapeExactCorpusTest.java b/src/test/java/dev/yinghuang/legacyforgebridge/convert/MimicShapeExactCorpusTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..646e74412153396a6f1b30bcd7094a913762c5f5
+--- /dev/null
++++ b/src/test/java/dev/yinghuang/legacyforgebridge/convert/MimicShapeExactCorpusTest.java
+@@ -0,0 +1,17 @@
++package dev.yinghuang.legacyforgebridge.convert;
++
++import java.nio.file.Path;
++import org.junit.jupiter.api.Tag;
++import org.junit.jupiter.api.Test;
++import org.junit.jupiter.api.io.TempDir;
++
++@Tag("exact-corpus")
++final class MimicShapeExactCorpusTest {
++    @TempDir Path temporary;
++    @Test void suppliedMimicAndThinPanelCorpusRetainsPresentation() throws Exception {
++        String source=System.getProperty("lfb.exactCorpus.jar");
++        if(source==null||source.isBlank())source=System.getenv("LFB_EXACT_CORPUS_JAR");
++        if(source==null||source.isBlank())throw new IllegalStateException("Set -PlfbExactCorpusJar or LFB_EXACT_CORPUS_JAR");
++        MimicShapeExactCorpusChecks.run(Path.of(source),temporary.resolve("presentation"));
++    }
++}
+diff --git a/tools/geometry/verify_bamboo_geometry_continuation.py b/tools/geometry/verify_bamboo_geometry_continuation.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..3adb39f896b391af537342d6a1caee74ac1c4083
+--- /dev/null
++++ b/tools/geometry/verify_bamboo_geometry_continuation.py
+@@ -0,0 +1,132 @@
++#!/usr/bin/env python3
++"""Verify supplied Bamboo 2.6.8.5 presentation outputs; never execute source JAR code.
++Usage: python tools/geometry/verify_bamboo_geometry_continuation.py \
++    --source-jar Bamboo.jar --baseline baseline-stage --patched patched-stage --report validation.json
++The directories must be outputs of the presentation pass pipeline, not installed game directories.
++This exact-corpus verifier is intentionally fixture-specific; production adapters are generic.
++"""
++from __future__ import annotations
++import argparse
++import hashlib
++import json
++import math
++from pathlib import Path
++import zipfile
++
++SOURCE_SHA = "bcceb588950f911398cfc94856a45527b4aa17b6e130927b2e0516fdf059b402"
++BASE_COMMIT = "fd75cadf77bd25ab7f46ff6fb887412921737f18"
++
++
++def require(ok: bool, message: str) -> None:
++    if not ok:
++        raise AssertionError(message)
++
++
++def read(path: Path) -> dict:
++    return json.loads(path.read_text(encoding="utf-8"))
++
++
++def main() -> None:
++    p = argparse.ArgumentParser(description=__doc__)
++    p.add_argument("--source-jar", type=Path, required=True)
++    p.add_argument("--baseline", type=Path, required=True)
++    p.add_argument("--patched", type=Path, required=True)
++    p.add_argument("--report", type=Path, required=True)
++    a = p.parse_args()
++    sha = hashlib.sha256(a.source_jar.read_bytes()).hexdigest()
++    require(sha == SOURCE_SHA, "Not the exact supplied Bamboo 2.6.8.5 fixture")
++    before = read(a.baseline / "legacyforgebridge/block-geometry.json")
++    after = read(a.patched / "legacyforgebridge/block-geometry.json")
++    require(after["sourceSha256"] == sha, "Generated source hash mismatch")
++    old, new = before["blocks"], after["blocks"]
++    count = lambda blocks: sum(len(v["variants"]) for v in blocks.values())
++    require((len(old), count(old)) == (19, 287), "Unexpected baseline coverage")
++    require((len(new), count(new)) == (21, 327), "Unexpected patched coverage")
++    for block_id, block in old.items():
++        require(block_id in new and block["family"] == new[block_id]["family"], f"Lost family {block_id}")
++        for meta, variant in block["variants"].items():
++            require(new[block_id]["variants"][meta] == variant, f"Changed prior geometry {block_id}/{meta}")
++    fallback = []
++    for block_id, block in new.items():
++        for meta, v in block["variants"].items():
++            for bounds in (v["bounds"], v["inventoryBounds"]):
++                require(len(bounds) == 6 and all(math.isfinite(x) and 0 <= x <= 1 for x in bounds), "Invalid bounds")
++                require(all(bounds[i] < bounds[i+3] for i in range(3)), "Empty bounds")
++            if "materialMode" in v:
++                require(block["family"].startswith("mimic_") and v["copyFace"] == -1, "Unscoped fallback")
++                require(v["materialMode"] == "inventory_fallback" and v["materialFallbackReason"].strip(), "Unmarked fallback")
++                fallback.append(f"{block_id}/{meta}")
++    expected = {f"bamboomod:delude_{name}/{m}" for name in ("width", "height") for m in (6,7,14,15)}
++    require(set(fallback) == expected and after["inventoryMaterialFallbackVariants"] == 8, "Fallback budget changed")
++    variants = lambda name: new["bamboomod:" + name]["variants"]
++    for name in ("delude_width", "delude_height", "delude_stair", "delude_plate", "decocarpet"):
++        require(set(variants(name)) == {str(m) for m in range(16)}, f"Incomplete {name}")
++    for m in range(16):
++        width = variants("delude_width")[str(m)]["bounds"]
++        require(width == ([0,.5,0,1,1,1] if m & 8 else [0,0,0,1,.5,1]), "Mimic slab half bit")

@@ -1,0 +1,66 @@
++        require(variants("halfdirsquare")[str(m)]["bounds"] == [0,0,0,1,.5,1], "Tatami has source-fixed lower half")
++        require(variants("halfdeco")[str(m)]["bounds"] == ([0,.5,0,1,1,1] if m & 8 else [0,0,0,1,.5,1]), "Decoration slab half bit")
++        plate = variants("delude_plate")[str(m)]
++        require(plate["bounds"] == [1/16,0,1/16,15/16,1/32 if m == 1 else 1/16,15/16], "Plate shape")
++        require(plate["copyFace"] == 0 and plate["collision"] == "empty", "Plate projection/collision")
++        require(variants("decocarpet")[str(m)]["bounds"] == [0,0,0,1,1/16,1], "Carpet shape")
++        require(variants("decocarpet")[str(m)]["collision"] == "empty", "Carpet collision")
++    require(new["bamboomod:bamboopanel"]["family"] == "pane", "Bamboo panel became cube family")
++    require(set(variants("bamboopanel")) == {str(m) for m in range(7)}, "Invented pane variants")
++    # Every referenced native generated geometry model exists; all owned texture references resolve.
++    texture_references = 0
++    model_count = 0
++    for block_id, block in new.items():
++        ns, name = block_id.split(":", 1)
++        states = read(a.patched / f"assets/{ns}/blockstates/{name}.json")["variants"]
++        for meta in block["variants"]:
++            require(states[f"legacy_meta={meta}"]["model"] == f"{ns}:block/lfb_geometry/{name}/{meta}", "State fell back")
++            for kind in ("block", "item"):
++                path = a.patched / f"assets/{ns}/models/{kind}/lfb_geometry/{name}/{meta}.json"
++                model = read(path)
++                model_count += 1
++                require(model.get("elements"), f"Empty model {path}")
++                for sprite in model["textures"].values():
++                    if sprite.startswith("#"):
++                        continue
++                    tns, tname = sprite.split(":", 1)
++                    if tns != "minecraft":
++                        require((a.patched / f"assets/{tns}/textures/{tname}.png").is_file(), f"Missing texture {sprite}")
++                        texture_references += 1
++                for part in model["elements"]:
++                    lo, hi = part["from"], part["to"]
++                    require(all(0 <= lo[i] <= hi[i] <= 16 for i in range(3)), "Invalid model coordinates")
++                    require(sum(lo[i] == hi[i] for i in range(3)) == 1, "Non-planar/degenerate model quad")
++                    if name == "bamboopanel" and meta in ("4", "5"):
++                        require(lo[0] == hi[0] == 8 or lo[2] == hi[2] == 8, "Curtain has slab thickness")
++    unchanged = 0
++    with zipfile.ZipFile(a.source_jar) as jar:
++        for name in jar.namelist():
++            if name.endswith((".png", ".png.mcmeta")):
++                require((a.patched / name).read_bytes() == jar.read(name), f"Changed original asset {name}")
++                unchanged += 1
++    require(unchanged == 223, "Unexpected source image/animation count")
++    report = {
++        "status": "passed", "base_commit": BASE_COMMIT, "source_sha256": sha,
++        "source_description": "BambooMod Minecraft 1.7.10 v2.6.8.5 (user supplied)",
++        "before": {"geometry_rules": len(old), "metadata_variants": count(old)},
++        "after": {"geometry_rules": len(new), "metadata_variants": count(new)},
++        "existing_variants_preserved": 287, "new_metadata_variants": 40,
++        "explicit_inventory_material_fallbacks": sorted(fallback),
++        "geometry_model_files_checked": model_count,
++        "owned_texture_references_checked": texture_references,
++        "missing_owned_texture_references": 0,
++        "original_png_and_animation_entries_byte_identical": unchanged,
++        "pure_java_checks": "MimicShapeRegressionChecks: material schema; 256 stair shapes; 32 pane/curtain meshes; held curtain",
++        "presentation_passes_executed": 9,
++        "scope": "Standalone presentation pipeline and source/model regression checks, not full conversion/game acceptance",
++        "not_verified": ["Full Gradle/JUnit suite", "Minecraft-dependent client compilation", "Full conversion engine", "In-game rendering and interactions"],
++        "github_push_performed": False,
++    }
++    a.report.parent.mkdir(parents=True, exist_ok=True)
++    a.report.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
++    print(json.dumps(report, indent=2, ensure_ascii=False))
++
++
++if __name__ == "__main__":
++    main()

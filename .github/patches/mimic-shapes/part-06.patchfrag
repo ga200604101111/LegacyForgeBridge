@@ -1,0 +1,109 @@
++                require(volume == .5 + Integer.bitCount(mask)*.125, "stair volume");
++                validateFaces(LegacyGeometry.surfaces(boxes));
++            }
++            require(LegacyGeometry.stairs(meta).stream().noneMatch(LegacyGeometry.Box::full), "straight stair became cube");
++        }
++        var sprites=Collections.nCopies(6,"minecraft:block/stone");
++        for (int mask=0; mask<16; mask++) {
++            require(LegacyGeometry.paneFaces(mask,true).equals(LegacyGeometry.surfaces(LegacyGeometry.panes(mask))),"thick pane mismatch");
++            require(LegacyGeometry.paneFaces(mask,false).equals(LegacyGeometry.curtainFaces(mask)),"curtain mismatch");
++            validateFaces(LegacyGeometry.paneFaces(mask,true));
++            validateFaces(LegacyGeometry.paneFaces(mask,false));
++            var model=LegacyBlockGeometryPass.faceModel(LegacyGeometry.paneFaces(mask,false),sprites);
++            require(model.getAsJsonArray("elements").size()==2*Integer.bitCount(mask==0?15:mask),"curtain face count");
++        }
++        var held=LegacyBlockGeometryPass.faceModel(LegacyGeometry.curtainFaces(12),sprites);
++        require(held.getAsJsonArray("elements").size()==4,"two-sided held curtain halves");
++        for (var e:held.getAsJsonArray("elements")) {
++            var part=e.getAsJsonObject();
++            require(part.getAsJsonArray("from").get(2).getAsDouble()==8 && part.getAsJsonArray("to").get(2).getAsDouble()==8,"held curtain thickness");
++        }
++        rejects(() -> LegacyGeometry.paneFaces(-1,false));
++        rejects(() -> LegacyGeometry.paneFaces(16,false));
++        rejects(() -> LegacyGeometry.paneFaces(16,true));
++    }
++    private static void validateFaces(List<LegacyGeometry.Face> faces) {
++        require(!faces.isEmpty(),"empty mesh");
++        var unique=new HashSet<LegacyGeometry.Face>();
++        for (var f:faces) {
++            require(unique.add(f),"duplicate quad");
++            for (double v:f.positions()) require(Double.isFinite(v)&&v>=0&&v<=1,"invalid vertex");
++            for (double v:f.uv()) require(Double.isFinite(v)&&v>=0&&v<=1,"invalid UV");
++            var p=f.positions();
++            double ax=p.get(3)-p.get(0),ay=p.get(4)-p.get(1),az=p.get(5)-p.get(2);
++            double bx=p.get(6)-p.get(0),by=p.get(7)-p.get(1),bz=p.get(8)-p.get(2);
++            double nx=ay*bz-az*by,ny=az*bx-ax*bz,nz=ax*by-ay*bx;
++            double outward=switch(f.side()){case 0->-ny;case 1->ny;case 2->-nz;case 3->nz;case 4->-nx;default->nx;};
++            require(outward>0,"degenerate/inverted quad");
++        }
++    }
++    private static JsonObject spec(String family,int copy,String mode,String reason) {
++        var root=new JsonObject();root.addProperty("schemaVersion",1);
++        var blocks=new JsonObject();root.add("blocks",blocks);
++        var block=new JsonObject();blocks.add("fixture:mimic",block);
++        block.addProperty("family",family);block.addProperty("opaque",false);
++        var variants=new JsonObject();block.add("variants",variants);
++        var v=new JsonObject();variants.add("0",v);
++        var bounds=new JsonArray();for(double n:new double[]{0,0,0,1,.5,1})bounds.add(n);
++        v.add("bounds",bounds);v.add("inventoryBounds",bounds.deepCopy());
++        v.addProperty("copyFace",copy);v.addProperty("edges",true);v.addProperty("collision","inherited");
++        if(mode!=null)v.addProperty("materialMode",mode);
++        if(reason!=null)v.addProperty("materialFallbackReason",reason);
++        return root;
++    }
++    private static void require(boolean value,String reason){if(!value)throw new AssertionError(reason);}
++    private static void rejects(Runnable action){try{action.run();}catch(IllegalArgumentException expected){return;}throw new AssertionError("Invalid input was admitted");}
++}
+diff --git a/src/test/java/dev/yinghuang/legacyforgebridge/compat/MimicShapeRegressionTest.java b/src/test/java/dev/yinghuang/legacyforgebridge/compat/MimicShapeRegressionTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..4ddec80b8ae232fb22911bee8d68c4573d07eec6
+--- /dev/null
++++ b/src/test/java/dev/yinghuang/legacyforgebridge/compat/MimicShapeRegressionTest.java
+@@ -0,0 +1,12 @@
++package dev.yinghuang.legacyforgebridge.compat;
++
++import org.junit.jupiter.api.Test;
++
++final class MimicShapeRegressionTest {
++    @Test void explicitMaterialFallbackIsStrictlyValidated() {
++        MimicShapeRegressionChecks.checkSchema();
++    }
++    @Test void stairsAndThinPanelsRetainTheirGeometry() {
++        MimicShapeRegressionChecks.checkGeometry();
++    }
++}
+diff --git a/src/test/java/dev/yinghuang/legacyforgebridge/convert/MimicShapeExactCorpusChecks.java b/src/test/java/dev/yinghuang/legacyforgebridge/convert/MimicShapeExactCorpusChecks.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..31bdaf8314cc8247241eb382939c2fd78c91fc70
+--- /dev/null
++++ b/src/test/java/dev/yinghuang/legacyforgebridge/convert/MimicShapeExactCorpusChecks.java
+@@ -0,0 +1,55 @@
++package dev.yinghuang.legacyforgebridge.convert;
++
++import dev.yinghuang.legacyforgebridge.compat.LegacyGeometrySpec;
++import dev.yinghuang.legacyforgebridge.convert.api.*;
++import dev.yinghuang.legacyforgebridge.convert.pass.*;
++import com.google.gson.JsonParser;
++import java.nio.file.*;
++import java.util.Arrays;
++import java.util.jar.JarFile;
++
++/** External-fixture presentation checks; never loads or executes the input mod's classes. */
++public final class MimicShapeExactCorpusChecks {
++    private MimicShapeExactCorpusChecks() { }
++    public static void main(String[] args) throws Exception {
++        if(args.length!=2)throw new IllegalArgumentException("Expected: source.jar staging-directory");
++        run(Path.of(args[0]),Path.of(args[1]));
++    }
++    public static void run(Path source, Path stage) throws Exception {
++        String hash=Hashing.sha256(source);
++        if(!hash.equals("bcceb588950f911398cfc94856a45527b4aa17b6e130927b2e0516fdf059b402"))
++            throw new IllegalArgumentException("This regression requires the supplied BambooMod 2.6.8.5 corpus, unchanged");
++        Files.createDirectories(stage);
++        var context=new ConversionContext(source,stage,stage.resolveSibling("unused-presentation-candidate.jar"),hash,
++                Files.size(source),LegacyModMetadata.read(source),new LegacyJarAnalyzer().analyze(source),
++                new DiagnosticCollector(),"generic-forge-1.7.10");
++        ConversionPass[] passes={new CopyLegacyJarPass(),new LegacyLanguagePass(),new GenericContentPass(),
++                new LegacyClientContentBaselinePass(),new LegacyIconPresentationPass(),new LegacyItemNamePass(),
++                new LegacyCreativeVariantsPass(),new LegacyBlockGeometryPass(),new LegacyTextureAtlasPass()};
++        for(var pass:passes){pass.apply(context);System.out.println("PASS "+pass.id());}

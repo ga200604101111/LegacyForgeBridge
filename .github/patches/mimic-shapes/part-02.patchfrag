@@ -1,0 +1,70 @@
++            }else if(render!=null && render.isConstant(0) && Set.of("net/minecraft/block/Block","net/minecraft/block/BlockLeavesBase","net/minecraft/block/BlockLog","net/minecraft/block/BlockCarpet","net/minecraft/block/BlockPressurePlate").contains(input.platform())
++                    && input.neighbourFaces().isEmpty() && input.materialFallbacks().isEmpty()) {
+                 family="box";proof="Source metadata bounds, inventory bounds and six face icons under vanilla render type 0";
+             }
+             if(family==null){excluded.put(input.registryName(),"No admitted geometric renderer family; "+input.limitation());continue;}
+diff --git a/src/main/java/dev/yinghuang/legacyforgebridge/convert/LegacyIconTableAnalyzer.java b/src/main/java/dev/yinghuang/legacyforgebridge/convert/LegacyIconTableAnalyzer.java
+index f883ed13f66483a41ba68e3d84837e021da75b71..ed4f2643bcb72d1c1258f15cdc3892b0a8d3a3fa 100644
+--- a/src/main/java/dev/yinghuang/legacyforgebridge/convert/LegacyIconTableAnalyzer.java
++++ b/src/main/java/dev/yinghuang/legacyforgebridge/convert/LegacyIconTableAnalyzer.java
+@@ -160,8 +160,13 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
+     /** Geometry input data are not automatically evidence that an arbitrary custom renderer is a cube. */
+     public record GeometryInput(String registryName,String sourceClass,String platform,List<Variant> variants,
+                                 Map<Integer,Integer> neighbourFaces,Map<Integer,Boolean> paneEdges,Map<Integer,String> collisions,
+-                                Integer originalRenderType,Boolean opaque,String limitation) {
+-        public GeometryInput { variants=List.copyOf(variants);neighbourFaces=Map.copyOf(neighbourFaces);paneEdges=Map.copyOf(paneEdges);collisions=Map.copyOf(collisions); }
++                                Integer originalRenderType,Boolean opaque,String limitation,Map<Integer,String> materialFallbacks) {
++        public GeometryInput { variants=List.copyOf(variants);neighbourFaces=Map.copyOf(neighbourFaces);paneEdges=Map.copyOf(paneEdges);collisions=Map.copyOf(collisions);materialFallbacks=Map.copyOf(materialFallbacks); }
++        public GeometryInput(String registryName,String sourceClass,String platform,List<Variant> variants,
++                             Map<Integer,Integer> neighbourFaces,Map<Integer,Boolean> paneEdges,Map<Integer,String> collisions,
++                             Integer originalRenderType,Boolean opaque,String limitation) {
++            this(registryName,sourceClass,platform,variants,neighbourFaces,paneEdges,collisions,originalRenderType,opaque,limitation,Map.of());
++        }
+     }
+ 
+     public List<GeometryInput> analyzeGeometryInputs(Path jarPath,LegacyRegistryAnalyzer.Analysis registry) throws IOException {
+@@ -175,13 +180,13 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
+         for(var r:registry.registrations()) {
+             if(r.kind()!=LegacyRegistryAnalyzer.Kind.BLOCK)continue;
+             List<Variant> variants=new ArrayList<>();Map<Integer,Integer> neighbours=new LinkedHashMap<>();Map<Integer,Boolean> edges=new LinkedHashMap<>();Map<Integer,String> collisions=new LinkedHashMap<>();
+-            String limitation="";Integer originalRender=null;Boolean opaque=null;
++            String limitation="";Integer originalRender=null;Boolean opaque=null;Map<Integer,String> materialFallbacks=new LinkedHashMap<>();
+             try {
+                 budget=500_000;values.clear();readOnly=false;
+                 Obj obj=geometryObject(r);ensureGeometryIcons(obj,0);
+                 Method opacity=find(obj.type,List.of("isOpaqueCube","func_149662_c"),"()Z");
+                 if(opacity!=null) {readOnly=true;try{opaque=num(run(opacity,obj,List.of(),0)).intValue()!=0;}catch(RuntimeException unknown){opaque=null;}readOnly=false;}
+-                else opaque=!Set.of("net/minecraft/block/BlockStairs","net/minecraft/block/BlockPane","net/minecraft/block/BlockLeavesBase").contains(externalBase(obj.type));
++                else opaque=!Set.of("net/minecraft/block/BlockStairs","net/minecraft/block/BlockPane","net/minecraft/block/BlockLeavesBase","net/minecraft/block/BlockCarpet","net/minecraft/block/BlockPressurePlate").contains(externalBase(obj.type));
+                 Method original=find(obj.type,List.of("getOriginalRenderType"),"()I");
+                 if(original!=null){readOnly=true;originalRender=num(run(original,obj,List.of(),0)).intValue();readOnly=false;}
+                 Method getter=find(obj.type,List.of("getIcon","func_149691_a"),"(II)Lnet/minecraft/util/IIcon;");
+@@ -200,12 +205,15 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
+                     try {
+                         Method bounds=find(obj.type,List.of("setBlockBoundsBasedOnState","func_149719_a"),"(Lnet/minecraft/world/IBlockAccess;III)V");
+                         if(bounds!=null)run(bounds,state,List.of(new ProbeWorld(obj,meta),Coordinate.X,Coordinate.Y,Coordinate.Z),0);
++                        else inheritedGeometryBounds(state,meta,false);
+                         Method inventoryShape=find(obj.type,List.of("setBlockBoundsForItemRender","func_149683_g"),"()V");
+                         if(inventoryShape!=null)run(inventoryShape,inventory,List.of(),0);
++                        else inheritedGeometryBounds(inventory,meta,true);
+                     } finally {geometryBoundsWrite=false;}
+                     List<Double> box=geometryBox(state),inv=geometryBox(inventory);
+                     // This optional observation is admitted later only by a matching source-family proof.
+-                    if(worldGetter!=null) {
++                    String materialFallback=null;
++                    if(worldGetter!=null) try {
+                         readOnly=true;Integer direction=null;
+                         boolean copied=true;
+                         for(int face=0;face<6;face++){
+@@ -223,16 +231,24 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
+                         }
+                         if(!copied&&direction!=null)throw fail("mixed static and neighbour faces require a separate renderer");
+                         if(copied&&direction!=null)neighbours.put(meta,direction);
++                    } catch(Unproven unsupportedMaterial) {
++                        // No source renderer is executed and no configuration value is invented.
++                        // Only an independently admitted mimic family may publish this shape, with
++                        // an explicit inventory-material fallback; ordinary renderers remain closed.
++                        if(originalRender==null || (originalRender!=0 && originalRender!=10))throw unsupportedMaterial;
++                        materialFallback=unsupportedMaterial.getMessage();
++                        budget=100_000;
+                     }

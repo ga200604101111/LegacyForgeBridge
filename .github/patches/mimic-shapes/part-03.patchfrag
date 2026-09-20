@@ -1,0 +1,78 @@
+                     Method worldColor=find(obj.type,List.of("colorMultiplier","func_149720_d"),"(Lnet/minecraft/world/IBlockAccess;III)I");
+-                    if(worldColor!=null&&!neighbours.containsKey(meta)) {
++                    if(worldColor!=null&&!neighbours.containsKey(meta)&&materialFallback==null) {
+                         readOnly=true;int tint=num(run(worldColor,obj,List.of(new ProbeWorld(obj,meta),Coordinate.X,Coordinate.Y,Coordinate.Z),0)).intValue()&0xFFFFFF;
+                         if(tints.stream().anyMatch(v->v!=tint))throw fail("world and inventory colors need a separate projection");
+                     }
+                     Method edge=find(obj.type,List.of("isSideRender"),"(Lnet/minecraft/world/IBlockAccess;III)Z");
+                     if(edge!=null){readOnly=true;edges.put(meta,num(run(edge,obj,List.of(new ProbeWorld(obj,meta),Coordinate.X,Coordinate.Y,Coordinate.Z),0)).intValue()!=0);}
+                     readOnly=true;
+-                    String collision="inherited";
++                    String collision=Set.of("net/minecraft/block/BlockCarpet","net/minecraft/block/BlockPressurePlate")
++                            .contains(externalBase(obj.type))?"empty":"inherited";
+                     Method collisionMethod=find(obj.type,List.of("addCollisionBoxesToList","func_149743_a"),"(Lnet/minecraft/world/World;IIILnet/minecraft/util/AxisAlignedBB;Ljava/util/List;Lnet/minecraft/entity/Entity;)V");
+                     if(collisionMethod!=null)try{
+                         Obj sample=copy(obj);sample.fields.put("$collisionCalls",0);
+@@ -249,9 +265,10 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
+                     }catch(RuntimeException excluded){collision="unsupported";}
+                     collisions.put(meta,collision);
+                     variants.add(new Variant(meta,icons,box,inv,0,tints));
++                    if(materialFallback!=null)materialFallbacks.put(meta,materialFallback);
+                 }catch(RuntimeException excluded){limitation="metadata "+meta+": "+excluded.getMessage();}
+             }catch(RuntimeException excluded){limitation=excluded.getMessage();}
+-            out.add(new GeometryInput(r.registryName(),r.implementationClass(),externalBase(r.implementationClass()),variants,neighbours,edges,collisions,originalRender,opaque,limitation));
++            out.add(new GeometryInput(r.registryName(),r.implementationClass(),externalBase(r.implementationClass()),variants,neighbours,edges,collisions,originalRender,opaque,limitation,materialFallbacks));
+         }
+         geometryMode=false;return List.copyOf(out);
+     }
+@@ -270,10 +287,29 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
+             Method registration=find(obj.type,List.of("registerBlockIcons","func_149651_a"),"(Lnet/minecraft/client/renderer/texture/IIconRegister;)V");
+             if(registration!=null)run(registration,obj,List.of(new Symbol("lfb","icon-register")),depth+1);
+             else if(obj.fields.get("$texture") instanceof String texture){obj.fields.put("blockIcon",new Icon(texture));obj.fields.put("field_149761_L",new Icon(texture));}
+-            else if(!obj.fields.containsKey("$stairModel"))throw fail("block icon initialization unavailable");
++            else if(!obj.fields.containsKey("$stairModel")
++                    && find(obj.type,List.of("getIcon","func_149691_a"),"(II)Lnet/minecraft/util/IIcon;")==null)
++                throw fail("block icon initialization unavailable");
++            // A source-owned getter may delegate all six faces to another proven registered block.
++            // Do not invent a texture here: each returned face still has to be an actual Icon token.
+             iconsReady.add(obj);
+         }finally{readOnly=oldReadOnly;iconsInitializing.remove(obj);}
+     }
++    /** Exact inherited 1.7.10 presentation only; no pressure/redstone gameplay is synthesized. */
++    private void inheritedGeometryBounds(Obj object,int metadata,boolean inventory) {
++        String platform=externalBase(object.type);
++        if(platform.equals("net/minecraft/block/BlockPressurePlate")) {
++            if(find(object.type,List.of("func_150063_b"),"(I)V")!=null
++                    ||find(object.type,List.of("func_150060_c"),"(I)I")!=null)
++                throw fail("source overrides inherited pressure-plate shape/power metadata");
++            object.fields.put("$bounds",inventory?List.of(0d,3d/8,0d,1d,5d/8,1d)
++                    :List.of(1d/16,0d,1d/16,15d/16,metadata==1?1d/32:1d/16,15d/16));
++        } else if(platform.equals("net/minecraft/block/BlockCarpet")) {
++            if(find(object.type,List.of("func_150089_b"),"(I)V")!=null)
++                throw fail("source overrides inherited carpet shape");
++            object.fields.put("$bounds",List.of(0d,0d,0d,1d,1d/16,1d));
++        }
++    }
+     private static List<Double> geometryBox(Obj object) {
+         Object value=object.fields.get("$bounds");if(!(value instanceof List<?> list)||list.size()!=6)throw fail("no geometry bounds");
+         List<Double> box=new ArrayList<>();for(Object coordinate:list)box.add(num(coordinate).doubleValue());
+@@ -736,6 +772,15 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
+                     // Constructors of unknown vanilla subclasses may have visual semantics. A
+                     // static icon can still be proved, but block geometry uses baseRenderType below.
+                     object.fields.putIfAbsent("$bounds",List.of(0d,0d,0d,1d,1d,1d));
++                    if(geometryMode && platform.equals("net/minecraft/block/BlockPressurePlate")
++                            && args.size()==3 && args.getFirst() instanceof String texture){
++                        // BlockBasePressurePlate's private icon name is supplied by the constructor,
++                        // not by Block.setBlockTextureName.
++                        object.fields.put("$texture",texture);
++                        inheritedGeometryBounds(object,1,false);
++                    }
++                    if(geometryMode && platform.equals("net/minecraft/block/BlockCarpet") && args.isEmpty())
++                        inheritedGeometryBounds(object,0,false);
+                     if(geometryMode && platform.equals("net/minecraft/block/BlockStairs") && args.size()==2){
+                         object.fields.put("$stairModel",args.get(0));object.fields.put("$stairMeta",args.get(1));
+                     }
+diff --git a/src/main/java/dev/yinghuang/legacyforgebridge/convert/pass/LegacyBlockGeometryPass.java b/src/main/java/dev/yinghuang/legacyforgebridge/convert/pass/LegacyBlockGeometryPass.java
+index 08cae9928b97b684cf248fd1279cff96e797686f..a260f633f2417cb349f0a67aa4d700af6e078c15 100644
+--- a/src/main/java/dev/yinghuang/legacyforgebridge/convert/pass/LegacyBlockGeometryPass.java
++++ b/src/main/java/dev/yinghuang/legacyforgebridge/convert/pass/LegacyBlockGeometryPass.java
