@@ -3,65 +3,20 @@ on:
   push:
     branches: [ 'feature/generic-conversion-bamboo-corpus2' ]
 permissions:
-  contents: write
+  contents: read
 concurrency:
   group: corpus2-p0-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   verify:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
         with:
-          fetch-depth: 0
+          fetch-depth: 2
 
-      - name: Apply Cloth Config blocking-pose source patch when not landed yet
-        shell: bash
-        run: |
-          set -euo pipefail
-          marker='2026-09-20.145-cloth-blocking-pose'
-          build_info='src/main/java/dev/yinghuang/legacyforgebridge/BuildInfo.java'
-          if grep -q "$marker" "$build_info"; then
-            echo "Cloth Config blocking-pose source patch already landed."
-            exit 0
-          fi
-
-          # The three text fragments are the complete, previously apply-checked gzip payload.
-          # Decode them directly instead of relying on the truncated binary upload.
-          cat .github/patches/blocking-pose-145/part-*.b64 | base64 -d > /tmp/blocking-pose-145.diff.gz
-          gzip -t /tmp/blocking-pose-145.diff.gz
-          gzip -dc /tmp/blocking-pose-145.diff.gz > /tmp/blocking-pose-145.diff
-          git apply --check /tmp/blocking-pose-145.diff
-          git apply /tmp/blocking-pose-145.diff
-
-          # Repair the Java string escaping damaged when the generated patch was serialized.
-          python3 - <<'PY'
-          from pathlib import Path
-
-          path = Path('src/test/java/dev/yinghuang/legacyforgebridge/config/LegacyBlockingPoseConfigTest.java')
-          text = path.read_text(encoding='utf-8')
-          replacements = {
-              'rejects("{"schemaVersion":3,"swordBlockingPose":{}}");':
-                  'rejects("{\\"schemaVersion\\":3,\\"swordBlockingPose\\":{}}");',
-              '.replace(""thirdPerson"", ""unknown":0,"thirdPerson"")':
-                  '.replace("\\"thirdPerson\\"", "\\"unknown\\":0,\\"thirdPerson\\"")',
-              '.replace(""rotationDegrees":[0,0,0]", ""rotationDegrees":[0,0,0],"scale":[1,1,1]")':
-                  '.replace("\\"rotationDegrees\\":[0,0,0]", "\\"rotationDegrees\\":[0,0,0],\\"scale\\":[1,1,1]")',
-              'String transform = "{"translation":" + translation + ","rotationDegrees":" + rotation + "}";':
-                  'String transform = "{\\"translation\\":" + translation + ",\\"rotationDegrees\\":" + rotation + "}";',
-              'return "{"schemaVersion":2,"swordBlockingPose":{"enabled":true,"mirrorLeftHand":true,"':
-                  'return "{\\"schemaVersion\\":2,\\"swordBlockingPose\\":{\\"enabled\\":true,\\"mirrorLeftHand\\":true,"',
-              '+ ""firstPerson":" + transform + ","thirdPerson":" + transform + "}}";':
-                  '+ "\\"firstPerson\\":" + transform + ",\\"thirdPerson\\":" + transform + "}}";',
-          }
-          for old, new in replacements.items():
-              if old not in text:
-                  raise SystemExit(f'Expected malformed test fragment was not found: {old}')
-              text = text.replace(old, new, 1)
-          path.write_text(text, encoding='utf-8')
-          PY
-
-          git diff --check
+      - name: Verify committed source diff hygiene
+        run: git diff --check HEAD^
 
       - uses: actions/setup-java@v5
         with:
@@ -82,40 +37,16 @@ jobs:
           path: build/libs/*.jar
           if-no-files-found: error
 
-      - name: Commit verified Cloth Config blocking-pose source back to branch
-        if: success()
-        shell: bash
-        run: |
-          set -euo pipefail
-          if git diff --quiet && [ -z "$(git ls-files --others --exclude-standard build.gradle gradle.properties docs src)" ]; then
-            echo "No verified source changes to commit."
-            exit 0
-          fi
-          git config user.name "LegacyForgeBridge CI"
-          git config user.email "actions@users.noreply.github.com"
-          git add build.gradle gradle.properties docs src
-          git diff --cached --check
-          git commit -m "feat(config): add Cloth blocking-pose sliders and vanilla scope (.145)"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
-
-      - name: Preserve reproducible verification inputs
+      - name: Preserve test reports
         if: always()
-        run: |
-          mkdir -p build/verification-support/source build/verification-support/lib
-          tar --exclude=.git --exclude=build -cf - . | tar -xf - -C build/verification-support/source
-          for group in org.ow2.asm com.google.code.gson org.slf4j; do
-            root="$HOME/.gradle/caches/modules-2/files-2.1/$group"
-            if [ -d "$root" ]; then
-              find "$root" -type f -name '*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar' -exec cp -n {} build/verification-support/lib/ \;
-            fi
-          done
+        run: mkdir -p build/verification-support
 
       - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: LegacyForgeBridge-verification-support
           path: |
-            build/verification-support/
             build/test-results/test/*.xml
+            build/reports/tests/test/
           retention-days: 7
-          if-no-files-found: error
+          if-no-files-found: warn
