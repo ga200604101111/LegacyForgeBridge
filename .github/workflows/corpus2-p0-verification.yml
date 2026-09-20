@@ -15,87 +15,19 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Apply mimic / held-model source patch when not landed yet
+      - name: Apply Bamboo runtime source patch when not landed yet
         shell: bash
         run: |
           set -euo pipefail
-          marker='2026-09-20.142-mimic-shapes'
+          marker='2026-09-20.143-bamboo-runtime'
           build_info='src/main/java/dev/yinghuang/legacyforgebridge/BuildInfo.java'
           if grep -q "$marker" "$build_info"; then
-            echo "Mimic source patch already landed."
+            echo "Bamboo runtime source patch already landed."
             exit 0
           fi
-
-          cat .github/patches/mimic-shapes/part-*.patchfrag > /tmp/mimic-shapes.patch
-
-          python3 - <<'PY'
-          from pathlib import Path
-          source = Path("/tmp/mimic-shapes.patch").read_text(encoding="utf-8")
-          excluded = {
-              "src/main/java/dev/yinghuang/legacyforgebridge/BuildInfo.java",
-              "src/main/java/dev/yinghuang/legacyforgebridge/render/ConvertedGeometryClient.java",
-          }
-          chunks = source.split("diff --git ")
-          kept = [chunks[0]]
-          for chunk in chunks[1:]:
-              first = chunk.splitlines()[0]
-              left = first.split(" b/", 1)[0]
-              path = left[2:] if left.startswith("a/") else left
-              if path not in excluded:
-                  kept.append("diff --git " + chunk)
-          Path("/tmp/mimic-shapes-reduced.patch").write_text("".join(kept), encoding="utf-8")
-          PY
-
-          git apply --check /tmp/mimic-shapes-reduced.patch
-          git apply /tmp/mimic-shapes-reduced.patch
-
-          python3 - <<'PY'
-          from pathlib import Path
-
-          build = Path("src/main/java/dev/yinghuang/legacyforgebridge/BuildInfo.java")
-          text = build.read_text(encoding="utf-8")
-          old = 'public static final String CONVERTER_REVISION = "2026-09-20.142";'
-          new = 'public static final String CONVERTER_REVISION = "2026-09-20.142-mimic-shapes";'
-          if old not in text:
-              raise SystemExit("BuildInfo revision baseline changed unexpectedly")
-          build.write_text(text.replace(old, new, 1), encoding="utf-8")
-
-          client = Path("src/main/java/dev/yinghuang/legacyforgebridge/render/ConvertedGeometryClient.java")
-          text = client.read_text(encoding="utf-8")
-          replacements = [
-              ("import net.minecraft.tags.FluidTags;", "import net.minecraft.world.level.block.Blocks;"),
-              (
-                  'if(rule.pane()&&!variant.edges())faces=LegacyGeometry.curtainFaces(LegacyBlockGeometryRegistry.paneMask(world,pos,state));',
-                  'if(rule.pane())faces=LegacyGeometry.paneFaces(LegacyBlockGeometryRegistry.paneMask(world,pos,state),variant.edges());'
-              ),
-              ("if(rule.mimic()){", "if(rule.mimic()&&variant.copyFace()>=0){"),
-              (
-                  "return result.isAir()||result.getFluidState().is(FluidTags.WATER)?null:new Target(target,result);",
-                  "// A waterlogged solid is still a material source. Checking its fluid state would\n"
-                  "        // incorrectly reject waterlogged stairs/slabs/panes as though the block were water.\n"
-                  "        return result.isAir()||result.is(Blocks.WATER)?null:new Target(target,result);"
-              ),
-          ]
-          for old, new in replacements:
-              if old not in text:
-                  raise SystemExit(f"ConvertedGeometryClient baseline changed; missing: {old}")
-              text = text.replace(old, new, 1)
-          client.write_text(text, encoding="utf-8")
-
-          report = Path("docs/mimic-shapes-validation-2026-09-20.json")
-          if report.exists():
-              text = report.read_text(encoding="utf-8").replace('"github_push_performed": false', '"github_push_performed": true')
-              report.write_text(text, encoding="utf-8")
-          doc = Path("docs/mimic-shapes-continuation-2026-09-20.md")
-          if doc.exists():
-              text = doc.read_text(encoding="utf-8")
-              text = text.replace(
-                  "尚未推送 GitHub、未執行完整 Gradle/JUnit suite、未完成 Minecraft 客戶端編譯與遊戲內驗收。",
-                  "本修補將由 GitHub Actions 執行完整 Gradle/JUnit 建置；遊戲內驗收仍需實機確認。"
-              )
-              doc.write_text(text, encoding="utf-8")
-          PY
-
+          cat .github/patches/bamboo-runtime-143/part-*.patchfrag > /tmp/bamboo-runtime-143.patch
+          git apply --check /tmp/bamboo-runtime-143.patch
+          git apply /tmp/bamboo-runtime-143.patch
           git diff --check
 
       - uses: actions/setup-java@v5
@@ -117,23 +49,23 @@ jobs:
           path: build/libs/*.jar
           if-no-files-found: error
 
-      - name: Commit verified source patch back to branch
+      - name: Commit verified Bamboo runtime source back to branch
         if: success()
         shell: bash
         run: |
           set -euo pipefail
-          if git diff --quiet && [ -z "$(git ls-files --others --exclude-standard docs src tools)" ]; then
+          if git diff --quiet && [ -z "$(git ls-files --others --exclude-standard src)" ]; then
             echo "No verified source changes to commit."
             exit 0
           fi
           git config user.name "LegacyForgeBridge CI"
           git config user.email "actions@users.noreply.github.com"
-          git add docs src tools
+          git add src
           git diff --cached --check
-          git commit -m "fix(render): preserve mimic shapes and 3D held block models"
+          git commit -m "fix(bamboo): restore combat items and exclusive special rendering (.143)"
           git push origin "HEAD:${GITHUB_REF_NAME}"
 
-      - name: Preserve reproducible offline presentation verification inputs
+      - name: Preserve reproducible verification inputs
         if: always()
         run: |
           mkdir -p build/verification-support/source build/verification-support/lib
