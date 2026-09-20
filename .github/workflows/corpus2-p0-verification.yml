@@ -25,9 +25,42 @@ jobs:
             echo "Cloth Config blocking-pose source patch already landed."
             exit 0
           fi
-          gzip -dc .github/patches/blocking-pose-145/blocking-pose-145.diff.gz > /tmp/blocking-pose-145.diff
+
+          # The three text fragments are the complete, previously apply-checked gzip payload.
+          # Decode them directly instead of relying on the truncated binary upload.
+          cat .github/patches/blocking-pose-145/part-*.b64 | base64 -d > /tmp/blocking-pose-145.diff.gz
+          gzip -t /tmp/blocking-pose-145.diff.gz
+          gzip -dc /tmp/blocking-pose-145.diff.gz > /tmp/blocking-pose-145.diff
           git apply --check /tmp/blocking-pose-145.diff
           git apply /tmp/blocking-pose-145.diff
+
+          # Repair the Java string escaping damaged when the generated patch was serialized.
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/test/java/dev/yinghuang/legacyforgebridge/config/LegacyBlockingPoseConfigTest.java')
+          text = path.read_text(encoding='utf-8')
+          replacements = {
+              'rejects("{"schemaVersion":3,"swordBlockingPose":{}}");':
+                  'rejects("{\\"schemaVersion\\":3,\\"swordBlockingPose\\":{}}");',
+              '.replace(""thirdPerson"", ""unknown":0,"thirdPerson"")':
+                  '.replace("\\"thirdPerson\\"", "\\"unknown\\":0,\\"thirdPerson\\"")',
+              '.replace(""rotationDegrees":[0,0,0]", ""rotationDegrees":[0,0,0],"scale":[1,1,1]")':
+                  '.replace("\\"rotationDegrees\\":[0,0,0]", "\\"rotationDegrees\\":[0,0,0],\\"scale\\":[1,1,1]")',
+              'String transform = "{"translation":" + translation + ","rotationDegrees":" + rotation + "}";':
+                  'String transform = "{\\"translation\\":" + translation + ",\\"rotationDegrees\\":" + rotation + "}";',
+              'return "{"schemaVersion":2,"swordBlockingPose":{"enabled":true,"mirrorLeftHand":true,"':
+                  'return "{\\"schemaVersion\\":2,\\"swordBlockingPose\\":{\\"enabled\\":true,\\"mirrorLeftHand\\":true,"',
+              '+ ""firstPerson":" + transform + ","thirdPerson":" + transform + "}}";':
+                  '+ "\\"firstPerson\\":" + transform + ",\\"thirdPerson\\":" + transform + "}}";',
+          }
+          for old, new in replacements.items():
+              if old not in text:
+                  raise SystemExit(f'Expected malformed test fragment was not found: {old}')
+              text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
+          PY
+
           git diff --check
 
       - uses: actions/setup-java@v5
@@ -69,7 +102,7 @@ jobs:
         if: always()
         run: |
           mkdir -p build/verification-support/source build/verification-support/lib
-          git archive HEAD | tar -x -C build/verification-support/source
+          tar --exclude=.git --exclude=build -cf - . | tar -xf - -C build/verification-support/source
           for group in org.ow2.asm com.google.code.gson org.slf4j; do
             root="$HOME/.gradle/caches/modules-2/files-2.1/$group"
             if [ -d "$root" ]; then
