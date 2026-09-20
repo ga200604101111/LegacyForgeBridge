@@ -8,6 +8,7 @@ import dev.yinghuang.legacyforgebridge.compat.LegacyStackComponents;
 import dev.yinghuang.legacyforgebridge.compat.LegacyBlockGeometryRegistry;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
+import net.minecraft.util.RandomSource;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
@@ -127,6 +128,9 @@ public class ConvertedLegacyBlock extends Block {
         if (handled == null) return super.useWithoutItem(state, level, pos, player, hitResult);
         return handled ? InteractionResult.SUCCESS : InteractionResult.PASS;
     }
+
+    /** Client mixins may attach source-proven random-display presentation without affecting server behavior. */
+    @Override public void animateTick(BlockState state, Level level, BlockPos pos, RandomSource random){super.animateTick(state,level,pos,random);}
 
     @Override
     protected VoxelShape getShape(BlockState state, BlockGetter world, BlockPos pos, CollisionContext context) {

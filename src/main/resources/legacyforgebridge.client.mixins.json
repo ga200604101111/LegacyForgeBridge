@@ -21,7 +21,8 @@
     "ViaNativeMetadataCodecMixin",
     "LegacyMimicBlockUpdateMixin",
     "LegacyFirstPersonBlockingPoseMixin",
-    "LegacyThirdPersonBlockingPoseMixin"
+    "LegacyThirdPersonBlockingPoseMixin",
+    "LegacyHeldItemVisibilityMixin"
   ],
   "injectors": {
     "defaultRequire": 1
