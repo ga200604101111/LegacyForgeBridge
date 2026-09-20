@@ -13,6 +13,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ItemBlockRenderTypes;
 import net.minecraft.client.renderer.block.model.BlockStateModel;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
+import net.minecraft.client.renderer.chunk.RenderChunkRegion;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -31,6 +32,7 @@ public final class ConvertedGeometryClient implements ClientModInitializer {
     private static final Map<BlockStateModel,Material[]> MATERIALS=new ConcurrentHashMap<>();
     private static final Map<List<LegacyGeometry.Box>,List<LegacyGeometry.Face>> SURFACES=new ConcurrentHashMap<>();
     @Override public void onInitializeClient() {
+        LegacyMimicInvalidationClient.initialize();
         ModelLoadingPlugin.register(plugin->{
             MATERIALS.clear();
             plugin.modifyBlockModelAfterBake().register(ModelModifier.WRAP_PHASE,(model,context)->{
@@ -86,6 +88,11 @@ public final class ConvertedGeometryClient implements ClientModInitializer {
      * Complex neighbor multi-layer model equivalence and source interaction forwarding are not claimed.
      */
     private static Target referenced(BlockAndTintGetter world,BlockPos position,BlockState state){
+        // A traversal budget alone does not bound snapshot array indices. Check all axes
+        // BEFORE reading, including the terminal. Unknown views get only a local allowance.
+        var window=world instanceof RenderChunkRegion
+                ?LegacyMimicReadWindow.sectionSnapshot(position.getX(),position.getY(),position.getZ())
+                :LegacyMimicReadWindow.immediateNeighbors(position.getX(),position.getY(),position.getZ());
         BlockPos target=LegacyMimicResolver.resolve(position.immutable(),pos->{
             BlockState current=pos.equals(position)?state:world.getBlockState(pos);
             var rule=LegacyBlockGeometryRegistry.rule(current);
@@ -93,7 +100,8 @@ public final class ConvertedGeometryClient implements ClientModInitializer {
             if(!current.hasProperty(ConvertedLegacyBlock.LEGACY_META))return -2;
             var variant=rule.variant(ConvertedLegacyBlock.legacyMeta(current));
             return variant==null?-2:variant.copyFace();
-        },(pos,face)->pos.relative(DIRECTIONS[face]),256);
+        },(pos,face)->pos.relative(DIRECTIONS[face]),256,
+                pos->window.contains(pos.getX(),pos.getY(),pos.getZ()));
         if(target==null)return null;BlockState result=world.getBlockState(target);
         return result.isAir()||result.getFluidState().is(FluidTags.WATER)?null:new Target(target,result);
     }

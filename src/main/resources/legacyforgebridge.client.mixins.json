@@ -18,7 +18,8 @@
     "LegacyNameTagBehaviorMixin",
     "LegacyFuelValuesMixin",
     "ViaTerminalBlockRewriteMixin",
-    "ViaNativeMetadataCodecMixin"
+    "ViaNativeMetadataCodecMixin",
+    "LegacyMimicBlockUpdateMixin"
   ],
   "injectors": {
     "defaultRequire": 1
