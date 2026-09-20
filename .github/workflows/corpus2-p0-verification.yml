@@ -31,3 +31,23 @@ jobs:
           name: LegacyForgeBridge-corpus2-p0
           path: build/libs/*.jar
           if-no-files-found: error
+      - name: Preserve reproducible offline presentation verification inputs
+        if: always()
+        run: |
+          mkdir -p build/verification-support/source build/verification-support/lib
+          git archive HEAD | tar -x -C build/verification-support/source
+          for group in org.ow2.asm com.google.code.gson org.slf4j; do
+            root="$HOME/.gradle/caches/modules-2/files-2.1/$group"
+            if [ -d "$root" ]; then
+              find "$root" -type f -name '*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar' -exec cp -n {} build/verification-support/lib/ \;
+            fi
+          done
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: LegacyForgeBridge-verification-support
+          path: |
+            build/verification-support/
+            build/test-results/test/*.xml
+          retention-days: 7
+          if-no-files-found: error
