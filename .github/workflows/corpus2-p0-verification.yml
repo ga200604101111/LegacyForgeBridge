@@ -25,7 +25,7 @@ jobs:
             echo "Global blocking-pose source patch already landed."
             exit 0
           fi
-          gzip -dc .github/patches/blocking-pose-144/blocking-pose-144.diff.gz > /tmp/blocking-pose-144.diff
+          cat .github/patches/blocking-pose-144/part-*.b64 | base64 -d | gzip -dc > /tmp/blocking-pose-144.diff
           git apply --check /tmp/blocking-pose-144.diff
           git apply /tmp/blocking-pose-144.diff
           git diff --check
