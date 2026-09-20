@@ -39,6 +39,8 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
     private final Set<String> geometryConstructing = new HashSet<>();
     private final Set<Obj> iconsReady = Collections.newSetFromMap(new IdentityHashMap<>());
     private final Set<Obj> iconsInitializing = Collections.newSetFromMap(new IdentityHashMap<>());
+    /** Exact registry field identities temporarily bound during dynamic item-presentation probes. */
+    private final Map<String,Obj> provenRegistryFields = new HashMap<>();
 
     private static final Object U=Unknown.VALUE;
     private static final class Obj {
@@ -155,6 +157,77 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
             out.add(new Result(r.registryName(),block,table,limitation));
         }
         return List.copyOf(out);
+    }
+
+
+    public record UseDurationStage(int minimumElapsedTicks,String icon) {
+        public UseDurationStage {
+            if(minimumElapsedTicks<1||icon==null||icon.isBlank())throw new IllegalArgumentException("Invalid use-duration stage");
+        }
+    }
+    public record UseDurationResult(String registryName,String sourceClass,String baseIcon,List<UseDurationStage> stages,String limitation) {
+        public UseDurationResult { stages=List.copyOf(stages); }
+    }
+
+    /**
+     * Proves item icons selected only by "currently using this registered item" and elapsed use ticks.
+     * This is intentionally narrower than arbitrary stack-dependent rendering: the interpreter binds
+     * exact registry fields, supplies one synthetic ItemStack identity, and admits only simple integer
+     * threshold control flow. No source class is defined or executed.
+     */
+    public List<UseDurationResult> analyzeUseDurationIcons(Path jarPath,LegacyRegistryAnalyzer.Analysis registry) throws IOException {
+        load(jarPath);List<UseDurationResult> out=new ArrayList<>();
+        for(var r:registry.registrations()){
+            if(r.kind()!=LegacyRegistryAnalyzer.Kind.ITEM)continue;
+            String limitation="";
+            try{
+                budget=300_000;values.clear();readOnly=false;provenRegistryFields.clear();
+                Obj item=allocation(r);
+                for(var binding:registry.fieldBindings())if(binding.kind()==LegacyRegistryAnalyzer.Kind.ITEM
+                        &&Objects.equals(binding.registryName(),r.registryName())
+                        &&Objects.equals(binding.implementationClass(),r.implementationClass()))
+                    provenRegistryFields.put(binding.owner()+"."+binding.name(),item);
+                Method registration=find(item.type,List.of("registerIcons","func_94581_a"),"(Lnet/minecraft/client/renderer/texture/IIconRegister;)V");
+                if(registration!=null)run(registration,item,List.of(new Symbol("lfb","icon-register")),0);
+                else if(item.fields.get("$texture") instanceof String texture){Icon icon=new Icon(texture);item.fields.put("itemIcon",icon);item.fields.put("field_77791_bV",icon);}
+                Method dynamic=find(item.type,List.of("getIcon"),"(Lnet/minecraft/item/ItemStack;ILnet/minecraft/entity/player/EntityPlayer;Lnet/minecraft/item/ItemStack;I)Lnet/minecraft/util/IIcon;");
+                if(dynamic==null)continue;
+                if(hasComplexUseArithmetic(dynamic.node()))throw fail("use-duration selector contains non-threshold integer arithmetic");
+                Obj stack=new Obj("net/minecraft/item/ItemStack");stack.fields.put("$metadata",0);stack.fields.put("$item",item);stack.fields.put("$maxUseDuration",1_000_000);
+                Obj player=new Obj("net/minecraft/entity/player/EntityPlayer");
+                readOnly=true;
+                Object baseValue=run(dynamic,item,List.of(stack,0,player,null,1_000_000),0);
+                if(!(baseValue instanceof Icon base))throw fail("non-using branch does not return one registered icon");
+                TreeSet<Integer> probes=new TreeSet<>(List.of(0,1,999_999));
+                for(int constant:integerConstants(dynamic.node()))if(constant>=0&&constant<999_999)
+                    for(int delta=-2;delta<=2;delta++){long value=(long)constant+delta;if(value>=0&&value<1_000_000)probes.add((int)value);}
+                String prior=base.id();int priorTick=0;List<UseDurationStage> stages=new ArrayList<>();
+                for(int elapsed:probes){
+                    Object value=run(dynamic,item,List.of(stack,0,player,stack,1_000_000-elapsed),0);
+                    if(!(value instanceof Icon icon))throw fail("using branch does not return one registered icon");
+                    if(!icon.id().equals(prior)){
+                        if(elapsed!=priorTick+1)throw fail("icon transition is not pinned to a probed integer threshold");
+                        if(elapsed==0)throw fail("using selector changes icon at zero elapsed ticks");
+                        stages.add(new UseDurationStage(elapsed,icon.id()));prior=icon.id();
+                        if(stages.size()>8)throw fail("too many use-duration icon stages");
+                    }
+                    priorTick=elapsed;
+                }
+                if(stages.isEmpty())continue;
+                out.add(new UseDurationResult(r.registryName(),r.implementationClass(),base.id(),stages,""));
+            }catch(RuntimeException excluded){limitation=excluded.getMessage();out.add(new UseDurationResult(r.registryName(),r.implementationClass(),null,List.of(),limitation));}
+        }
+        provenRegistryFields.clear();return List.copyOf(out);
+    }
+    private static boolean hasComplexUseArithmetic(MethodNode method){
+        for(AbstractInsnNode insn:method.instructions)if(Set.of(IMUL,IDIV,IREM,ISHL,ISHR,IUSHR,IAND,IOR,IXOR).contains(insn.getOpcode()))return true;
+        return false;
+    }
+    private static Set<Integer> integerConstants(MethodNode method){
+        LinkedHashSet<Integer> values=new LinkedHashSet<>();for(AbstractInsnNode insn:method.instructions){
+            Integer value=switch(insn.getOpcode()){case ICONST_M1->-1;case ICONST_0->0;case ICONST_1->1;case ICONST_2->2;case ICONST_3->3;case ICONST_4->4;case ICONST_5->5;case BIPUSH,SIPUSH->((IntInsnNode)insn).operand;case LDC->insn instanceof LdcInsnNode ldc&&ldc.cst instanceof Integer v?v:null;default->null;};
+            if(value!=null)values.add(value);
+        }return values;
     }
 
     /** Geometry input data are not automatically evidence that an arbitrary custom renderer is a cube. */
@@ -342,7 +415,7 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
     }
 
     private void load(Path jarPath) throws IOException {
-        geometryMode=false; geometryFields.clear(); geometryObjects.clear(); geometryConstructing.clear(); iconsReady.clear(); iconsInitializing.clear();
+        geometryMode=false; geometryFields.clear(); geometryObjects.clear(); geometryConstructing.clear(); iconsReady.clear(); iconsInitializing.clear(); provenRegistryFields.clear();
         classes.clear(); methods.clear(); statics.clear(); initialized.clear(); failedStatics.clear(); values.clear(); readOnly=false;creativeOutput=null;symbolicRenderId=65536;
         try (JarFile jar=new JarFile(jarPath.toFile())) {
             var entries=jar.entries();
@@ -736,6 +809,7 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
                 if(name.equals("<init>")){object.fields.put("$item",args.getFirst());object.fields.put("$count",args.size()>1?args.get(1):1);object.fields.put("$metadata",args.size()>2?args.get(2):0);return null;}
                 if(Set.of("getItemDamage","func_77960_j").contains(name))return object.fields.getOrDefault("$metadata",U);
                 if(Set.of("getItem","func_77973_b").contains(name))return object.fields.getOrDefault("$item",U);
+                if(Set.of("getMaxItemUseDuration","func_77988_m").contains(name))return object.fields.getOrDefault("$maxUseDuration",U);
             }
             if(name.equals("<init>")&&Set.of("java/lang/Object","java/util/Random").contains(owner))return null;
             if(externalBase(owner).equals("net/minecraft/block/material/Material") && Set.of("setRequiresTool","func_76219_n","setImmovableMobility","func_76221_f","setNoPushMobility","func_76225_o","setTranslucent","func_76223_p").contains(name))return object;
@@ -806,6 +880,7 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
     }
     private Object readStatic(String owner,String name,int depth) {
         String key=owner+"."+name;
+        if(provenRegistryFields.containsKey(key))return provenRegistryFields.get(key);
         if(geometryMode && geometryFields.containsKey(key))return geometryObject(geometryFields.get(key));
         if(failedStatics.contains(owner))throw fail("unproven class initializer "+owner);
         if(statics.containsKey(key))return statics.get(key);
