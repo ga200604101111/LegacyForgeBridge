@@ -9,7 +9,7 @@ public record LegacyMimicReadWindow(long minX, long minY, long minZ,
         }
     }
 
-    /** Exact vanilla 1.21.11 RenderChunkRegion: center section plus one section on every axis. */
+    /** Exact vanilla 1.21.11 RenderSectionRegion: center section plus one section on every axis. */
     public static LegacyMimicReadWindow sectionSnapshot(int x, int y, int z) {
         long bx = ((long) (x >> 4)) << 4;
         long by = ((long) (y >> 4)) << 4;

@@ -6,7 +6,7 @@ Converter revision: `2026-09-20.142`. Parent: `fd75cadf77bd25ab7f46ff6fb88741292
 
 Revision .141 bounded a directional material walk to 256 inspected positions but did not bound
 its world reads to the renderer's snapshot. A traversal budget is not a spatial array-index
-guard. The supported vanilla 1.21.11 RenderChunkRegion is a three-by-three-by-three section
+guard. The supported vanilla 1.21.11 RenderSectionRegion is a three-by-three-by-three section
 snapshot; its X, Y and Z bounds all matter. Normal immediate block rerenders also do not cover
 every owner section that can read a changed terminal or intermediate block.
 
@@ -16,7 +16,7 @@ every owner section that can read a changed terminal or intermediate block.
   predicate runs before every direction/world callback, including the first and terminal
   positions. Null, unresolved, cyclic, out-of-window and over-budget paths retain the existing
   fallback behavior. No exception-based retry reads the live world.
-* LegacyMimicReadWindow grants the wider section halo only to vanilla RenderChunkRegion.
+* LegacyMimicReadWindow grants the wider section halo only to vanilla RenderSectionRegion.
   Other BlockAndTintGetter implementations get a conservative immediate-neighbor allowance,
   not an assumption that their backing arrays match vanilla. Arithmetic uses long bounds and
   floor-aligned sections, including negative coordinates. This is a renderer safety limit,
@@ -67,6 +67,11 @@ These require the normal Gradle/CI Minecraft classpath; they were not run in the
 which has no Gradle distribution or Minecraft runtime. The branch's existing push workflow runs
 full build/tests/remap for this atomic change. Its result must be checked separately; this document
 does not pre-declare CI success.
+
+CI #636 rejected the obsolete Mojang class name RenderChunkRegion during compileJava.
+The follow-up changes the import, instanceof check and bytecode target to the actual 1.21.11
+RenderSectionRegion name. The same wiring test now also pins its RADIUS=1 and SIZE=3 constants.
+No guard was disabled to bypass this failure; converter revision remains .142.
 
 No exact Bamboo input JAR or live Minecraft client was available in this workspace. There is no
 new exact-corpus conversion count and no live visual/performance certification. The .141 CI

@@ -13,7 +13,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ItemBlockRenderTypes;
 import net.minecraft.client.renderer.block.model.BlockStateModel;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
-import net.minecraft.client.renderer.chunk.RenderChunkRegion;
+import net.minecraft.client.renderer.chunk.RenderSectionRegion;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -90,7 +90,7 @@ public final class ConvertedGeometryClient implements ClientModInitializer {
     private static Target referenced(BlockAndTintGetter world,BlockPos position,BlockState state){
         // A traversal budget alone does not bound snapshot array indices. Check all axes
         // BEFORE reading, including the terminal. Unknown views get only a local allowance.
-        var window=world instanceof RenderChunkRegion
+        var window=world instanceof RenderSectionRegion
                 ?LegacyMimicReadWindow.sectionSnapshot(position.getX(),position.getY(),position.getZ())
                 :LegacyMimicReadWindow.immediateNeighbors(position.getX(),position.getY(),position.getZ());
         BlockPos target=LegacyMimicResolver.resolve(position.immutable(),pos->{

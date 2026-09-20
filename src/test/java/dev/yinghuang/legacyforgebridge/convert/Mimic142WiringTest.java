@@ -56,7 +56,10 @@ class Mimic142WiringTest {
         ClassNode renderer = read("net/minecraft/client/renderer/LevelRenderer");
         assertNotEquals(0, method(renderer, "setSectionDirty", "(III)V").access & Opcodes.ACC_PUBLIC);
         assertNotEquals(0, method(renderer, "allChanged", "()V").access & Opcodes.ACC_PUBLIC);
-        method(read("net/minecraft/client/renderer/chunk/RenderChunkRegion"), "getBlockState", "(" + POS + ")" + STATE);
+        ClassNode region = read("net/minecraft/client/renderer/chunk/RenderSectionRegion");
+        method(region, "getBlockState", "(" + POS + ")" + STATE);
+        assertEquals(1, region.fields.stream().filter(f -> f.name.equals("RADIUS")).findFirst().orElseThrow().value);
+        assertEquals(3, region.fields.stream().filter(f -> f.name.equals("SIZE")).findFirst().orElseThrow().value);
     }
 
     @Test void bothMixinCallbacksAreNonCancellingTailObservers() throws Exception {
