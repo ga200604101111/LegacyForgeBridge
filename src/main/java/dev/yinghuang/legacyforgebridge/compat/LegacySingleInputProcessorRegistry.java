@@ -36,6 +36,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class LegacySingleInputProcessorRegistry {
     private static final Map<Identifier, Rule> RULES=new ConcurrentHashMap<>();
     private static final Map<Identifier, BlockEntityType<ConvertedLegacyProcessorBlockEntity>> TYPES=new ConcurrentHashMap<>();
+    private static final java.util.Set<Identifier> WORLD_PRESENTATION=ConcurrentHashMap.newKeySet();
     private LegacySingleInputProcessorRegistry() { }
 
     public record LegacyInput(String kind,String namespace,String registryName,int count,int meta,boolean wildcardMeta){
@@ -95,13 +96,15 @@ public final class LegacySingleInputProcessorRegistry {
             for(JsonElement element:machines){if(!element.isJsonObject())continue;JsonObject value=element.getAsJsonObject();
                 if(!bool(value,"runtimeProofComplete")||!bool(value,"baseRuntimeComplete")||integer(value,"materializedRecipeCount",-1)!=integer(value,"sourceRecipeCount",-2))continue;
                 Rule rule=parse(value);if(rule==null||!rule.id().getNamespace().equals(modId))continue;
-                Rule previous=RULES.putIfAbsent(rule.id(),rule);if(previous!=null&&!sameRule(previous,rule))throw new IllegalStateException("Conflicting converted processor rule for "+rule.id());loaded++;
+                Rule previous=RULES.putIfAbsent(rule.id(),rule);if(previous!=null&&!sameRule(previous,rule))throw new IllegalStateException("Conflicting converted processor rule for "+rule.id());
+                if(bool(value,"worldPresentationRuntimeComplete"))WORLD_PRESENTATION.add(rule.id());loaded++;
             }
             if(loaded>0)LegacyForgeBridge.LOGGER.info("Loaded converted processor runtime rules: mod={}, machines={}",modId,loaded);
         }catch(Exception exception){LegacyForgeBridge.LOGGER.error("Failed to load converted processor rules for {}",modId,exception);}
     }
 
     public static boolean hasRule(Identifier id){return id!=null&&RULES.containsKey(id);}
+    public static boolean hasWorldPresentation(Identifier id){return id!=null&&WORLD_PRESENTATION.contains(id);}
     public static Rule rule(Identifier id){return id==null?null:RULES.get(id);}
     public static Rule requireRule(Block block){Identifier id=BuiltInRegistries.BLOCK.getKey(block);Rule rule=RULES.get(id);if(rule==null)throw new IllegalStateException("No converted processor rule for "+id);return rule;}
     public static int presentationKey(Identifier id){if(id==null)return 0;int value=id.toString().hashCode();return value==0?1:value;}
@@ -195,5 +198,5 @@ public final class LegacySingleInputProcessorRegistry {
     private static int integer(JsonObject object,String key,int fallback){JsonElement value=object.get(key);return value!=null&&value.isJsonPrimitive()?value.getAsInt():fallback;}
     private static double decimal(JsonObject object,String key,double fallback){JsonElement value=object.get(key);return value!=null&&value.isJsonPrimitive()?value.getAsDouble():fallback;}
     private static boolean bool(JsonObject object,String key){JsonElement value=object.get(key);return value!=null&&value.isJsonPrimitive()&&value.getAsBoolean();}
-    static synchronized void clearForTests(){RULES.clear();TYPES.clear();}
+    static synchronized void clearForTests(){RULES.clear();TYPES.clear();WORLD_PRESENTATION.clear();}
 }

@@ -2,6 +2,7 @@ package dev.yinghuang.legacyforgebridge.convert.runtime;
 
 import dev.yinghuang.legacyforgebridge.LegacyForgeBridge;
 import dev.yinghuang.legacyforgebridge.behavior.ConvertedBehaviorItem;
+import dev.yinghuang.legacyforgebridge.behavior.ConvertedLegacyBowItem;
 import dev.yinghuang.legacyforgebridge.behavior.LegacyBehaviorRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyBlockActivationEffectsRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyBlockActivationRegistry;
@@ -56,6 +57,7 @@ public final class GeneratedModSupport {
 
     public static void beginMod(String modId){
         LegacyStackComponents.bootstrap();
+        LegacyOscillatingModelBootstrap.bootstrapMod(modId);
         LegacyVariantSnowballRuntimeRegistry.loadMod(modId);
         LegacyPlantRuntimeRegistry.loadMod(modId);
         LegacyPlantPlacementRegistry.loadMod(modId);
@@ -118,6 +120,7 @@ public final class GeneratedModSupport {
         Item.Properties properties=new Item.Properties().setId(key).overrideDescription(descriptionKey)
                 .component(LegacyStackComponents.legacyMeta(),0);
         if("snowball".equals(kind))properties.stacksTo(16);
+        if("bow".equals(kind))properties.stacksTo(1);
         var plantingRule=LegacyPlantPlacementRegistry.rule(id);
         var seatBedRule=LegacySeatBedRegistry.placementItemRule(id);
         var variantSnowballRule=LegacyVariantSnowballRuntimeRegistry.rule(id);
@@ -170,7 +173,8 @@ public final class GeneratedModSupport {
             if(!(target instanceof ConvertedLegacySeatBedBlock seatBlock))
                 throw new IllegalStateException("Seat-bed placement item registered before specialized target block: "+id+" -> "+seatBedRule.id());
             item=new ConvertedLegacySeatBedItem(seatBlock,properties);
-        }else item=new ConvertedBehaviorItem(properties);
+        }else if("bow".equals(kind))item=new ConvertedLegacyBowItem(properties);
+        else item=new ConvertedBehaviorItem(properties);
         Registry.register(BuiltInRegistries.ITEM,key,item);
         ITEMS.put(id,item);
         int[] counts=COUNTS.get(id.getNamespace());if(counts!=null)counts[0]++;

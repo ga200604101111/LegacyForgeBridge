@@ -76,7 +76,7 @@ public final class LegacyOscillatingModelBlockPass implements ConversionPass {
             world.diagnostics().forEach(worldDiagnostics::add);
             value.add("presentationDiagnostics",worldDiagnostics);
 
-            boolean inventoryComplete=false;
+            boolean inventoryComplete=false,runtimeComplete=false;
             if(worldComplete){
                 worldProofs++;
                 var presentation=world.presentation().orElseThrow();
@@ -88,16 +88,20 @@ public final class LegacyOscillatingModelBlockPass implements ConversionPass {
                 value.add("inventoryPresentationDiagnostics",inventoryDiagnostics);
                 if(inventoryComplete){
                     inventoryProofs++;
-                    value.add("inventoryPresentation",inventoryJson(inventory.proof().orElseThrow()));
+                    var inventoryProof=inventory.proof().orElseThrow();
+                    value.add("inventoryPresentation",inventoryJson(inventoryProof));
+                    writeInventoryPresentation(context.stagingDir(),id,presentation,inventoryProof);
+                    LegacySpecialBlockModelWriter.write(context.stagingDir(),id,"minecraft:block/red_wool");
+                    runtimeComplete=true;
                 }
             }else{
                 value.add("inventoryPresentationDiagnostics",new JsonArray());
             }
 
             value.addProperty("inventoryPresentationProofComplete",inventoryComplete);
-            value.addProperty("worldPresentationRuntimeComplete",false);
-            value.addProperty("inventoryPresentationRuntimeComplete",false);
-            value.addProperty("runtimeComplete",false);
+            value.addProperty("worldPresentationRuntimeComplete",runtimeComplete);
+            value.addProperty("inventoryPresentationRuntimeComplete",runtimeComplete);
+            value.addProperty("runtimeComplete",runtimeComplete);
             rules.add(value);
             emitted++;
         }
@@ -126,6 +130,44 @@ public final class LegacyOscillatingModelBlockPass implements ConversionPass {
                         +" block(s), worldPresentationProof="+worldProofs
                         +", inventoryPresentationProof="+inventoryProofs
                         +"; runtime remains gated.");
+    }
+
+    private static void writeInventoryPresentation(Path staging,String idValue,
+                                                   LegacyOscillatingModelPresentationAnalyzer.Presentation p,
+                                                   LegacyOscillatingModelInventoryAnalyzer.Proof inventory)throws Exception{
+        int separator=idValue.indexOf(':');
+        if(separator<=0||separator==idValue.length()-1)throw new IllegalArgumentException("Invalid oscillating id "+idValue);
+        String namespace=idValue.substring(0,separator),path=idValue.substring(separator+1),baseName=path+"_oscillating_base";
+        JsonObject base=new JsonObject();base.addProperty("parent","minecraft:block/block");
+        writeJson(staging.resolve("assets/"+namespace+"/models/item/"+baseName+".json"),base);
+        JsonObject special=new JsonObject();
+        special.addProperty("type","legacyforgebridge:oscillating_model");
+        special.addProperty("texture",p.texture());
+        special.addProperty("texture_width",p.modelTextureWidth());
+        special.addProperty("texture_height",p.modelTextureHeight());
+        JsonArray parts=new JsonArray();
+        for(var source:p.parts()){
+            JsonObject part=new JsonObject();
+            part.addProperty("field",source.field());part.addProperty("u",source.u());part.addProperty("v",source.v());
+            part.addProperty("x",source.x());part.addProperty("y",source.y());part.addProperty("z",source.z());
+            part.addProperty("width",source.width());part.addProperty("height",source.height());part.addProperty("depth",source.depth());
+            part.addProperty("pivot_x",source.pivotX());part.addProperty("pivot_y",source.pivotY());part.addProperty("pivot_z",source.pivotZ());
+            part.addProperty("mirror",source.mirror());part.addProperty("base_x_rot",source.baseXRot());
+            part.addProperty("base_y_rot",source.baseYRot());part.addProperty("base_z_rot",source.baseZRot());part.addProperty("animated",source.animated());
+            parts.add(part);
+        }
+        special.add("parts",parts);
+        special.addProperty("yaw_degrees",inventory.yawDegrees());
+        special.addProperty("translate_y",inventory.translateY());
+        special.addProperty("scale",inventory.scale());
+        special.addProperty("dynamic_angle_degrees",inventory.dynamicAngleDegrees());
+        JsonObject model=new JsonObject();model.addProperty("type","minecraft:special");model.addProperty("base",namespace+":item/"+baseName);model.add("model",special);
+        JsonObject item=new JsonObject();item.add("model",model);
+        writeJson(staging.resolve("assets/"+namespace+"/items/"+path+".json"),item);
+    }
+
+    private static void writeJson(Path path,JsonObject value)throws Exception{
+        Files.createDirectories(path.getParent());Files.writeString(path,GSON.toJson(value)+"\n",StandardCharsets.UTF_8);
     }
 
     private static JsonObject presentationJson(LegacyOscillatingModelPresentationAnalyzer.Presentation p){

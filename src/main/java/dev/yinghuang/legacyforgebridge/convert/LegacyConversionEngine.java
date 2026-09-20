@@ -118,6 +118,7 @@ public final class LegacyConversionEngine {
             builder.add(new LegacyCreativeVariantsPass());
             builder.add(new LegacyBlockGeometryPass());
             builder.add(new LegacyTextureAtlasPass());
+            builder.add(new LegacyCombatItemPass());
             builder.add(new GeneratedSemanticCodePass());
             builder.add(new GeneratedModEntrypointPass());
             builder.add(new LegacyClassDependencyAnalysisPass());

@@ -25,7 +25,7 @@ public final class MimicShapeExactCorpusChecks {
                 new DiagnosticCollector(),"generic-forge-1.7.10");
         ConversionPass[] passes={new CopyLegacyJarPass(),new LegacyLanguagePass(),new GenericContentPass(),
                 new LegacyClientContentBaselinePass(),new LegacyIconPresentationPass(),new LegacyItemNamePass(),
-                new LegacyCreativeVariantsPass(),new LegacyBlockGeometryPass(),new LegacyTextureAtlasPass()};
+                new LegacyCreativeVariantsPass(),new LegacyBlockGeometryPass(),new LegacyTextureAtlasPass(),new LegacyCombatItemPass()};
         for(var pass:passes){pass.apply(context);System.out.println("PASS "+pass.id());}
         var root=JsonParser.parseString(Files.readString(stage.resolve(LegacyGeometrySpec.PATH))).getAsJsonObject();
         var rules=LegacyGeometrySpec.parse(root);
@@ -36,6 +36,16 @@ public final class MimicShapeExactCorpusChecks {
             require(rules.get("bamboomod:"+name).variants().size()==16,"lost state: "+name);
         require(rules.get("bamboomod:bamboopanel").pane(),"panel became cube family");
         require(rules.get("bamboomod:bamboopanel").variants().size()==7,"invented unsupported panel states");
+        var combat=JsonParser.parseString(Files.readString(stage.resolve(LegacyCombatItemPass.OUTPUT))).getAsJsonObject();
+        require(combat.getAsJsonArray("rules").size()==2,"combat item proof count");
+        var content=JsonParser.parseString(Files.readString(stage.resolve(LegacyClientContentBaselinePass.CONTENT))).getAsJsonObject();
+        java.util.Map<String,com.google.gson.JsonObject> itemById=new java.util.HashMap<>();
+        for(var element:content.getAsJsonArray("items")){var item=element.getAsJsonObject();itemById.put(item.get("id").getAsString(),item);}
+        require(itemById.get("bamboomod:katana").get("attackDamage").getAsFloat()==4F,"katana attack damage");
+        require(itemById.get("bamboomod:katana").get("durability").getAsInt()==150,"katana durability");
+        require(itemById.get("bamboomod:bamboobow").get("durability").getAsInt()==300,"bow durability");
+        require(Files.readString(stage.resolve("assets/bamboomod/models/item/katana.json")).contains("minecraft:item/handheld"),"katana held parent");
+        require(Files.readString(stage.resolve("assets/bamboomod/items/bamboobow.json")).contains("minecraft:using_item"),"bow pulling condition");
         int count=0;
         try(var jar=new JarFile(source.toFile())){
             var entries=jar.entries();
@@ -49,7 +59,7 @@ public final class MimicShapeExactCorpusChecks {
             }
         }
         require(count==223,"source image/animation count");
-        System.out.println("PASS 21 rules / 327 states / 8 explicit material fallbacks / 223 unchanged source assets");
+        System.out.println("PASS 21 rules / 327 states / 8 material fallbacks / katana+bow semantics / 223 unchanged source assets");
     }
     private static void require(boolean value,String message){if(!value)throw new AssertionError(message);}
 }

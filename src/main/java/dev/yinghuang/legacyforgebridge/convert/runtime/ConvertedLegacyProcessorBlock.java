@@ -12,6 +12,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.EntityBlock;
+import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityTicker;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -21,12 +22,20 @@ import net.minecraft.world.phys.BlockHitResult;
 
 /** Modern block host for an admitted generic three-slot legacy processor. */
 public final class ConvertedLegacyProcessorBlock extends ConvertedLegacyBlock implements EntityBlock {
+    private final Identifier convertedId;
     private final LegacySingleInputProcessorRegistry.Rule processorRule;
 
     public ConvertedLegacyProcessorBlock(Identifier convertedId,BlockBehaviour.Properties properties){
         super(convertedId,properties);
+        this.convertedId=convertedId;
         processorRule=LegacySingleInputProcessorRegistry.rule(convertedId);
         if(processorRule==null)throw new IllegalArgumentException("Missing processor rule for "+convertedId);
+    }
+
+    @Override
+    public RenderShape getRenderShape(BlockState state){
+        return LegacySingleInputProcessorRegistry.hasWorldPresentation(convertedId)
+                ?RenderShape.INVISIBLE:RenderShape.MODEL;
     }
 
     @Override public BlockEntity newBlockEntity(BlockPos pos,BlockState state){

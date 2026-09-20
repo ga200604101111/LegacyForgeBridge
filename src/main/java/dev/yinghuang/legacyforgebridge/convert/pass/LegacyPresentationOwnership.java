@@ -24,6 +24,17 @@ public final class LegacyPresentationOwnership {
         Files.writeString(manifest, root + "\n", StandardCharsets.UTF_8);
     }
 
+    public static void revoke(Path staging, Path model) throws IOException {
+        Path manifest = staging.resolve(PATH);
+        if (!Files.isRegularFile(manifest)) return;
+        JsonObject root;
+        try { root = JsonParser.parseString(Files.readString(manifest, StandardCharsets.UTF_8)).getAsJsonObject(); }
+        catch (RuntimeException invalid) { return; }
+        if (root.remove(relative(staging, model)) != null) {
+            Files.writeString(manifest, root + "\n", StandardCharsets.UTF_8);
+        }
+    }
+
     public static boolean owns(Path staging, Path model) throws IOException {
         Path manifest = staging.resolve(PATH);
         if (!Files.isRegularFile(manifest) || !Files.isRegularFile(model)) return false;

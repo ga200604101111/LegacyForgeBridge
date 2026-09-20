@@ -14,6 +14,8 @@ import java.util.*;
 public final class LegacyBlockGeometryPass implements ConversionPass {
     private static final Gson JSON=new GsonBuilder().setPrettyPrinting().create();
     private static final List<String> FACES=List.of("down","up","north","south","west","east");
+    // Matches the vanilla inventory stair silhouette (upper step on the west/left side).
+    private static final int HELD_STAIR_METADATA=1;
     @Override public String id(){return "source-block-geometry";}
     @Override public void apply(ConversionContext context)throws IOException {
         Path staging=context.stagingDir(),manifest=staging.resolve(LegacyClientContentBaselinePass.CONTENT);
@@ -56,7 +58,7 @@ public final class LegacyBlockGeometryPass implements ConversionPass {
                 LegacyGeometry.Box box=LegacyGeometry.Box.from(v.bounds()),inv=LegacyGeometry.Box.from(v.inventoryBounds());
                 boolean stairs=rule.family().endsWith("stairs"),pane=rule.family().equals("pane");
                 List<LegacyGeometry.Box> world=stairs?LegacyGeometry.stairs(metadata):pane?LegacyGeometry.panes(0):List.of(box);
-                List<LegacyGeometry.Box> held=stairs?LegacyGeometry.stairs(0):pane?List.of(new LegacyGeometry.Box(0,0,7d/16,1,1,9d/16)):List.of(inv);
+                List<LegacyGeometry.Box> held=stairs?LegacyGeometry.stairs(HELD_STAIR_METADATA):pane?List.of(new LegacyGeometry.Box(0,0,7d/16,1,1,9d/16)):List.of(inv);
                 String worldId=ns+":block/lfb_geometry/"+path+"/"+metadata,heldId=ns+":item/lfb_geometry/"+path+"/"+metadata;
                 boolean paneEdges=input.paneEdges().getOrDefault(metadata,true);
                 JsonObject worldModel=pane?faceModel(LegacyGeometry.paneFaces(0,paneEdges),sprites):model(world,sprites);

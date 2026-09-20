@@ -39,7 +39,7 @@ public final class LegacySeatBedPresentationPass implements ConversionPass {
                 analysis.diagnostics().forEach(message->context.diagnostics().warning("LFB-CONVERT-SEATBED-PRESENT-0002",SupportLevel.MANUAL_REQUIRED,id+": "+message));
                 continue;
             }
-            JsonObject value=presentationJson(analysis.presentation().orElseThrow());value.addProperty("id",id);value.addProperty("sourceBlockClass",rule.sourceBlockClass());value.addProperty("presentationProofComplete",true);value.addProperty("runtimeImplementationWired",true);rules.add(value);complete++;
+            JsonObject value=presentationJson(analysis.presentation().orElseThrow());value.addProperty("id",id);value.addProperty("sourceBlockClass",rule.sourceBlockClass());value.addProperty("presentationProofComplete",true);value.addProperty("runtimeImplementationWired",true);LegacySpecialBlockModelWriter.write(context.stagingDir(),id,"minecraft:block/white_wool");rules.add(value);complete++;
         }
         root.add("rules",rules);root.addProperty("presentationRuntimeCompleteRules",complete);
         Path output=context.stagingDir().resolve(OUTPUT);Files.createDirectories(output.getParent());Files.writeString(output,GSON.toJson(root)+"\n",StandardCharsets.UTF_8);
