@@ -15,7 +15,10 @@ class LegacyHeldItemVisibilityMixinBytecodeTest {
                     if(!name.contains("heldOwnBlockVisibility"))return null;
                     return new MethodVisitor(Opcodes.ASM9){@Override public void visitMethodInsn(int opcode,String owner,String method,String descriptor,boolean itf){
                         if(owner.endsWith("/LegacyHeldItemVisibilityRegistry")&&method.equals("rule"))rule[0]=true;
-                        if(owner.endsWith("/Player")&&method.equals("getMainHandItem"))hand[0]=true;
+                        // Minecraft.player is typed as LocalPlayer, while getMainHandItem is inherited.
+                        // javac may therefore use LocalPlayer, Player or LivingEntity as the call owner;
+                        // pin the exact semantic method descriptor instead of one incidental owner.
+                        if(method.equals("getMainHandItem")&&descriptor.equals("()Lnet/minecraft/world/item/ItemStack;"))hand[0]=true;
                         if(owner.equals("net/minecraft/world/level/Level")&&method.equals("setBlock"))set[0]=true;
                         if(owner.endsWith("/ConvertedLegacyBlock")&&method.equals("withLegacyMeta"))meta[0]=true;
                     }};
