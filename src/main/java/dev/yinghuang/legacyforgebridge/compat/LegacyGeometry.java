@@ -61,7 +61,12 @@ public final class LegacyGeometry {
         if((m&8)!=0)out.add(new Box(hi,0,lo,1,1,hi));
         return List.copyOf(out);
     }
+    /** Use the same thin-panel semantics for baked fallback/held and native world models. */
+    public static List<Face> paneFaces(int connections, boolean edges) {
+        return edges ? surfaces(panes(connections)) : curtainFaces(connections);
+    }
     public static List<Face> curtainFaces(int connections) {
+        if(connections<0||connections>15)throw new IllegalArgumentException("Invalid connection mask");
         int m=connections==0?15:connections;List<Face> out=new ArrayList<>();
         if((m&1)!=0){out.add(face(4,.5,0,0,.5,1,.5));out.add(face(5,.5,0,0,.5,1,.5));}
         if((m&2)!=0){out.add(face(4,.5,0,.5,.5,1,1));out.add(face(5,.5,0,.5,.5,1,1));}

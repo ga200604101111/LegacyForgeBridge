@@ -17,7 +17,7 @@ import net.minecraft.client.renderer.chunk.RenderSectionRegion;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.tags.FluidTags;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.BlockAndTintGetter;
 import net.minecraft.world.level.block.state.BlockState;
@@ -56,11 +56,11 @@ public final class ConvertedGeometryClient implements ClientModInitializer {
             int meta=ConvertedLegacyBlock.legacyMeta(state);var variant=rule.variant(meta);
             if(variant==null){super.emitQuads(emitter,world,pos,state,random,cullTest);return;}
             List<LegacyGeometry.Face> faces;
-            if(rule.pane()&&!variant.edges())faces=LegacyGeometry.curtainFaces(LegacyBlockGeometryRegistry.paneMask(world,pos,state));
+            if(rule.pane())faces=LegacyGeometry.paneFaces(LegacyBlockGeometryRegistry.paneMask(world,pos,state),variant.edges());
             else faces=surfaces(LegacyBlockGeometryRegistry.boxes(rule,meta,world,pos,state));
             Material[] chosen=materials;BlockState tintState=state;BlockPos tintPos=pos;
             ChunkSectionLayer layer=ChunkSectionLayer.CUTOUT;
-            if(rule.mimic()){
+            if(rule.mimic()&&variant.copyFace()>=0){
                 Target target=referenced(world,pos,state);
                 if(target!=null){
                     BlockStateModel targetModel=Minecraft.getInstance().getBlockRenderer().getBlockModel(target.state());
@@ -103,7 +103,9 @@ public final class ConvertedGeometryClient implements ClientModInitializer {
         },(pos,face)->pos.relative(DIRECTIONS[face]),256,
                 pos->window.contains(pos.getX(),pos.getY(),pos.getZ()));
         if(target==null)return null;BlockState result=world.getBlockState(target);
-        return result.isAir()||result.getFluidState().is(FluidTags.WATER)?null:new Target(target,result);
+        // A waterlogged solid is still a material source. Checking its fluid state would
+        // incorrectly reject waterlogged stairs/slabs/panes as though the block were water.
+        return result.isAir()||result.is(Blocks.WATER)?null:new Target(target,result);
     }
 
     private static Material[] materials(BlockStateModel model){

@@ -6,6 +6,7 @@ import java.util.*;
 /** Strict optional candidate-owned presentation schema. No numeric registry ID is serialized. */
 public final class LegacyGeometrySpec {
     public static final String PATH="legacyforgebridge/block-geometry.json";
+    public static final String INVENTORY_FALLBACK="inventory_fallback";
     private static final Set<String> FAMILIES=Set.of("box","stairs","pane","mimic_box","mimic_stairs");
     public record Variant(LegacyGeometry.Box bounds,LegacyGeometry.Box inventory,int copyFace,boolean edges,String collision) {
         public Variant {if(copyFace < -1||copyFace>5||!Set.of("inherited","empty","unsupported").contains(collision))throw new IllegalArgumentException("Invalid geometry variant");}
@@ -27,7 +28,16 @@ public final class LegacyGeometrySpec {
             for(var ve:o.getAsJsonObject("variants").entrySet()){
                 int meta=Integer.parseInt(ve.getKey());if(meta<0||meta>15||!ve.getKey().equals(String.valueOf(meta)))throw new IllegalArgumentException("Metadata outside legacy range");
                 JsonObject v=ve.getValue().getAsJsonObject();int copy=integer(v.get("copyFace"));
-                if(family.startsWith("mimic_")?copy<0:copy!=-1)throw new IllegalArgumentException("Mimic without source direction");
+                boolean fallback=v.has("materialMode");
+                if(fallback&&(!v.get("materialMode").isJsonPrimitive()
+                        ||!v.get("materialMode").getAsJsonPrimitive().isString()
+                        ||!INVENTORY_FALLBACK.equals(v.get("materialMode").getAsString())))
+                    throw new IllegalArgumentException("Unknown geometry material mode");
+                if(family.startsWith("mimic_")?(copy<0&&!fallback):(copy!=-1||fallback))
+                    throw new IllegalArgumentException("Mimic without source direction or explicit material fallback");
+                if(fallback&&(copy!=-1||!v.has("materialFallbackReason")||!v.get("materialFallbackReason").isJsonPrimitive()
+                        ||!v.get("materialFallbackReason").getAsJsonPrimitive().isString()||v.get("materialFallbackReason").getAsString().isBlank()))
+                    throw new IllegalArgumentException("Invalid inventory material fallback");
                 variants.put(meta,new Variant(box(v.getAsJsonArray("bounds")),box(v.getAsJsonArray("inventoryBounds")),copy,v.get("edges").getAsBoolean(),v.get("collision").getAsString()));
             }
             out.put(entry.getKey(),new Rule(entry.getKey(),family,o.get("opaque").getAsBoolean(),variants));

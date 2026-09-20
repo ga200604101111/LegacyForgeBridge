@@ -37,7 +37,7 @@ public final class LegacyBlockGeometryAnalyzer {
                 Integer inherited=switch(input.platform()) {
                     case "net/minecraft/block/BlockStairs" -> 10;
                     case "net/minecraft/block/BlockPane" -> 18;
-                    case "net/minecraft/block/BlockLeavesBase", "net/minecraft/block/BlockLog" -> 0;
+                    case "net/minecraft/block/BlockLeavesBase", "net/minecraft/block/BlockLog", "net/minecraft/block/BlockCarpet", "net/minecraft/block/BlockPressurePlate" -> 0;
                     default -> null;
                 };
                 if(inherited!=null)render=new LegacyRegisteredBlockRenderTypeAnalyzer.RenderIdentity(inherited,null,null);
@@ -47,7 +47,7 @@ public final class LegacyBlockGeometryAnalyzer {
             boolean mimic=render!=null && render.constant()==null && !input.neighbourFaces().isEmpty()
                     && Objects.equals(input.originalRenderType(),stairs?10:0)
                     && boundRendererCalls(classes,render,"getOriginalRenderType");
-            if(mimic && (stairs||input.platform().equals("net/minecraft/block/Block"))) {
+            if(mimic && (stairs||Set.of("net/minecraft/block/Block","net/minecraft/block/BlockPressurePlate").contains(input.platform()))) {
                 family=stairs?"mimic_stairs":"mimic_box";dynamic=true;
                 proof="Source original render type, bound delegate renderer and tainted-coordinate per-face neighbour projection";
             }else if(stairs && render!=null && render.isConstant(10)) {
@@ -57,8 +57,8 @@ public final class LegacyBlockGeometryAnalyzer {
                     && (render.isConstant(18)||boundRendererCalls(classes,render,"func_150098_a")||boundRendererCalls(classes,render,"canPaneConnectToBlock"))) {
                 family="pane";dynamic=true;
                 proof="Inherited BlockPane connection predicate plus uniquely bound pane renderer; thin-panel native adaptation";
-            }else if(render!=null && render.isConstant(0) && Set.of("net/minecraft/block/Block","net/minecraft/block/BlockLeavesBase","net/minecraft/block/BlockLog").contains(input.platform())
-                    && input.neighbourFaces().isEmpty()) {
+            }else if(render!=null && render.isConstant(0) && Set.of("net/minecraft/block/Block","net/minecraft/block/BlockLeavesBase","net/minecraft/block/BlockLog","net/minecraft/block/BlockCarpet","net/minecraft/block/BlockPressurePlate").contains(input.platform())
+                    && input.neighbourFaces().isEmpty() && input.materialFallbacks().isEmpty()) {
                 family="box";proof="Source metadata bounds, inventory bounds and six face icons under vanilla render type 0";
             }
             if(family==null){excluded.put(input.registryName(),"No admitted geometric renderer family; "+input.limitation());continue;}
