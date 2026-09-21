@@ -174,7 +174,7 @@ public final class LegacyMicroBlockContainerAnalyzer {
 
     private static boolean readsS35(MethodNode method) {
         return calls(method, "net/minecraft/network/play/server/S35PacketUpdateTileEntity",
-                Set.of("func_148857_g", "func_148857_g", "getNbtCompound", "getTag"));
+                Set.of("func_148857_g", "getNbtCompound", "getTag"));
     }
 
     private static boolean rendererProof(Map<String,ClassNode> classes, ClassNode renderer, String blockClass, String tileClass) {
