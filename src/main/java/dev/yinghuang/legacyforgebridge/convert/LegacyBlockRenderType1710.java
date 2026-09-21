@@ -14,6 +14,7 @@ public final class LegacyBlockRenderType1710 {
     private static final Map<String,Integer> EFFECTIVE = Map.of(
             "net/minecraft/block/Block", 0,
             "net/minecraft/block/BlockContainer", 0,
+            "net/minecraft/block/BlockLiquid", 4,
             "net/minecraft/block/BlockBush", 1,
             "net/minecraft/block/BlockCactus", 13,
             "net/minecraft/block/BlockDoublePlant", 40
