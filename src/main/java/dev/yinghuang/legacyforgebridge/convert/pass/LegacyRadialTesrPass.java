@@ -38,7 +38,9 @@ public final class LegacyRadialTesrPass implements ConversionPass {
             value.addProperty("inventoryTranslateY",rule.inventoryTranslateY());value.addProperty("inventoryScale",rule.inventoryScale());
             value.addProperty("conditionalModelCalls",rule.conditionalModelCalls());
             value.addProperty("basePresentationRuntimeComplete",true);
+            value.addProperty("inventoryPresentationRuntimeComplete",true);
             value.addProperty("sourcePresentationComplete",rule.conditionalModelCalls()==0);
+            writeInventoryPresentation(context.stagingDir(),id,rule);
             LegacySpecialBlockModelWriter.write(context.stagingDir(),id,"minecraft:block/stone");
             rules.add(value);runtime++;
         }
@@ -48,6 +50,42 @@ public final class LegacyRadialTesrPass implements ConversionPass {
         Path output=context.stagingDir().resolve(OUTPUT);Files.createDirectories(output.getParent());Files.writeString(output,JSON.toJson(root)+"\n",StandardCharsets.UTF_8);
         if(runtime>0)context.diagnostics().info("LFB-CONVERT-RADIAL-0001",SupportLevel.ADAPTED,
                 "Source-proven radial TESR base runtime rules="+runtime+"; conditional model groups remain explicitly separate.");
+    }
+
+    private static void writeInventoryPresentation(Path staging,String idValue,LegacyRadialTesrAnalyzer.Rule rule)throws Exception{
+        int separator=idValue.indexOf(':');
+        if(separator<=0||separator==idValue.length()-1)throw new IllegalArgumentException("Invalid radial id "+idValue);
+        String namespace=idValue.substring(0,separator),path=idValue.substring(separator+1),baseName=path+"_radial_base";
+
+        JsonObject base=new JsonObject();base.addProperty("parent","minecraft:block/block");
+        writeJson(staging.resolve("assets/"+namespace+"/models/item/"+baseName+".json"),base);
+
+        JsonObject special=new JsonObject();
+        special.addProperty("type","legacyforgebridge:radial_model");
+        special.addProperty("texture",rule.texture());
+        special.addProperty("texture_width",rule.textureWidth());
+        special.addProperty("texture_height",rule.textureHeight());
+        var source=rule.cuboid();JsonObject cuboid=new JsonObject();
+        cuboid.addProperty("u",source.u());cuboid.addProperty("v",source.v());
+        cuboid.addProperty("x",source.x());cuboid.addProperty("y",source.y());cuboid.addProperty("z",source.z());
+        cuboid.addProperty("width",source.width());cuboid.addProperty("height",source.height());cuboid.addProperty("depth",source.depth());
+        cuboid.addProperty("pivot_x",source.pivotX());cuboid.addProperty("pivot_y",source.pivotY());cuboid.addProperty("pivot_z",source.pivotZ());
+        special.add("cuboid",cuboid);
+        JsonArray poses=new JsonArray();for(var sourcePose:rule.poses()){
+            JsonObject pose=new JsonObject();pose.addProperty("x_rot",sourcePose.xRot());pose.addProperty("y_rot",sourcePose.yRot());pose.addProperty("z_rot",sourcePose.zRot());poses.add(pose);
+        }
+        special.add("poses",poses);
+        special.addProperty("translate_y",rule.inventoryTranslateY());
+        special.addProperty("scale",rule.inventoryScale());
+
+        JsonObject model=new JsonObject();model.addProperty("type","minecraft:special");model.addProperty("base",namespace+":item/"+baseName);model.add("model",special);
+        JsonObject item=new JsonObject();item.add("model",model);
+        writeJson(staging.resolve("assets/"+namespace+"/items/"+path+".json"),item);
+    }
+
+    private static void writeJson(Path path,JsonObject value)throws Exception{
+        Files.createDirectories(path.getParent());
+        Files.writeString(path,JSON.toJson(value)+"\n",StandardCharsets.UTF_8);
     }
 
     private static Map<String,String> blockIds(Path staging)throws Exception{
