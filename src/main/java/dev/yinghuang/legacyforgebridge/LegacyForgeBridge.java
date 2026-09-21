@@ -27,8 +27,6 @@ public final class LegacyForgeBridge implements ModInitializer {
                     "LegacyForgeBridge could not open logs/legacyforgebridge.log; dedicated LFB diagnostics are unavailable.",
                     LOGGER.initializationFailure()
             );
-        } else {
-            GAME_LOGGER.info("LegacyForgeBridge dedicated log: {}", logPath.toAbsolutePath().normalize());
         }
         LOGGER.info("Initializing LegacyForgeBridge {}", BuildInfo.VERSION);
 

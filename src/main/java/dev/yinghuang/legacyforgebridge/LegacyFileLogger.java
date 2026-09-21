@@ -29,7 +29,7 @@ public final class LegacyFileLogger {
     private BufferedWriter writer;
     private Path logPath;
     private Throwable initializationFailure;
-    private boolean terminalWriteFailure;
+    private boolean initializationAttempted;
 
     public LegacyFileLogger() {
         this(null);
@@ -41,7 +41,8 @@ public final class LegacyFileLogger {
 
     public synchronized Path initializeForLaunch() {
         if (writer != null) return logPath;
-        if (terminalWriteFailure) return null;
+        if (initializationAttempted) return null;
+        initializationAttempted = true;
         try {
             logPath = fixedPath != null
                     ? fixedPath
@@ -63,7 +64,6 @@ public final class LegacyFileLogger {
             rawInternal("policy=LFB internal diagnostics and Forge/FML trace are kept here and are not mirrored to the Minecraft game log");
             rawInternal("");
             flushInternal();
-            initializationFailure = null;
             return logPath;
         } catch (IOException | RuntimeException exception) {
             initializationFailure = exception;
@@ -188,8 +188,7 @@ public final class LegacyFileLogger {
     }
 
     private void failWriter(Throwable failure) {
-        initializationFailure = failure;
-        terminalWriteFailure = true;
+        if (initializationFailure == null) initializationFailure = failure;
         closeWriterQuietly();
         logPath = null;
     }

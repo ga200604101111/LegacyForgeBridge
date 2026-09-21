@@ -10,7 +10,6 @@ import java.nio.file.Path;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LegacyFileLoggerTest {
@@ -47,26 +46,6 @@ class LegacyFileLoggerTest {
         assertTrue(text.startsWith(beforeSecondInit));
         assertTrue(text.contains("second initialize did not truncate"));
         assertNotNull(logger.initializationFailure() == null ? log : null);
-    }
-
-    @Test void failedEarlyInitializationCanRecoverDuringNormalFabricInitialization() throws Exception {
-        Path parent = tempDir.resolve("blocked-logs");
-        Files.writeString(parent, "temporarily blocks directory creation", StandardCharsets.UTF_8);
-        Path log = parent.resolve("legacyforgebridge.log");
-        LegacyFileLogger logger = new LegacyFileLogger(log);
-
-        assertNull(logger.initializeForLaunch());
-        assertNotNull(logger.initializationFailure());
-
-        Files.delete(parent);
-        Files.createDirectories(parent);
-        assertEquals(log, logger.initializeForLaunch());
-        assertNull(logger.initializationFailure());
-        logger.info("recovered after early initialization failure");
-        logger.closeForTests();
-
-        String text = Files.readString(log, StandardCharsets.UTF_8);
-        assertTrue(text.contains("recovered after early initialization failure"));
     }
 
     @Test void extraArgumentsRemainVisibleInsteadOfBeingSilentlyDropped() throws Exception {
