@@ -32,7 +32,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: success()
         with:
-          name: LegacyForgeBridge-processor-world-ownership-165
+          name: LegacyForgeBridge-live-render-ownership-166
           path: build/libs/*.jar
           if-no-files-found: error
 
