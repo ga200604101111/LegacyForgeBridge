@@ -1,6 +1,9 @@
 name: corpus2-p0-verification
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - feature/generic-conversion-bamboo-corpus2
 permissions:
   contents: read
 concurrency:
