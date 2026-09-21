@@ -88,8 +88,11 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
                     Method rt=find(obj.type,List.of("getRenderType","func_149645_b"),"()I");
                     render=rt==null?baseRenderType(obj.type):num(run(rt,obj,List.of(),0)).intValue();
                     if(render!=0 && render!=1 && render!=6 && !simpleRenderModes.containsKey(r.registryName())) throw fail("custom world/inventory renderer requires geometric conversion; renderType="+render);
-                    // A tile renderer can add geometry even if getRenderType happens to be zero.
-                    if(subclass(obj.type,"net/minecraft/block/BlockContainer")) throw fail("BlockEntity renderer not represented by an icon table");
+                    // BlockContainer alone is not evidence of custom geometry: many 1.7 blocks use
+                    // a TileEntity only for gameplay/state while still rendering as an ordinary
+                    // renderType-0 block. Exclude only when the source actually binds a TESR.
+                    if(subclass(obj.type,"net/minecraft/block/BlockContainer")&&hasCustomTileRenderer(obj.type))
+                        throw fail("BlockEntity renderer not represented by an icon table");
                 } else {
                     Method multi=find(obj.type,List.of("requiresMultipleRenderPasses","func_77623_v"),"()Z");
                     multipass=multi!=null && num(run(multi,obj,List.of(),0)).intValue()!=0;
@@ -351,6 +354,39 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
         geometryMode=false;return List.copyOf(out);
     }
 
+
+    private boolean hasCustomTileRenderer(String blockClass) {
+        Method create=find(blockClass,List.of("createNewTileEntity","func_149915_a"),
+                "(Lnet/minecraft/world/World;I)Lnet/minecraft/tileentity/TileEntity;");
+        if(create==null)return true;
+        LinkedHashSet<String> tileTypes=new LinkedHashSet<>();
+        for(AbstractInsnNode insn:create.node().instructions)
+            if(insn instanceof TypeInsnNode type&&type.getOpcode()==NEW)tileTypes.add(type.desc);
+        if(tileTypes.size()!=1)return true;
+        String tile=tileTypes.getFirst();boolean sawRegistration=false;
+        for(ClassNode owner:classes.values())for(MethodNode method:owner.methods)for(AbstractInsnNode insn:method.instructions){
+            if(!(insn instanceof MethodInsnNode call)||call.getOpcode()!=INVOKESTATIC
+                    ||!call.owner.equals("cpw/mods/fml/client/registry/ClientRegistry")
+                    ||!call.name.equals("registerTileEntity")
+                    ||!call.desc.equals("(Ljava/lang/Class;Ljava/lang/String;Lnet/minecraft/client/renderer/tileentity/TileEntitySpecialRenderer;)V"))continue;
+            sawRegistration=true;
+            LegacyDirectCallArguments.ClassStringNew args=LegacyDirectCallArguments.classStringNew(owner,method,call);
+            if(args==null)return true;
+            if(args.classInternalName().equals(tile))return true;
+        }
+        return false;
+    }
+
+    private static String vanillaNamedBlockIcon1710(String icon) {
+        return switch(icon){
+            case "piston_top_normal"->"minecraft:block/piston_top";
+            case "piston_inner"->"minecraft:block/piston_inner";
+            case "piston_bottom"->"minecraft:block/piston_bottom";
+            case "piston_side"->"minecraft:block/piston_side";
+            default->throw fail("unmapped 1.7 vanilla named block icon: "+icon);
+        };
+    }
+
     private Obj geometryObject(LegacyRegistryAnalyzer.Registration r) {
         String key=r.kind()+":"+r.registryName();Obj cached=geometryObjects.get(key);if(cached!=null)return cached;
         if(!geometryConstructing.add(key))throw fail("recursive registered geometry dependency");
@@ -414,6 +450,9 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
             String[] wood=name.equals("log")?new String[]{"oak","spruce","birch","jungle"}:new String[]{"acacia","dark_oak"};int variant=meta&3;if(variant>=wood.length)throw fail("invalid vanilla log metadata");int axis=meta&12;
             boolean end=axis==0&&side<2||axis==4&&(side==4||side==5)||axis==8&&(side==2||side==3);
             return "minecraft:block/"+wood[variant]+"_log"+(end?"_top":"");
+        }
+        if(name.equals("piston")){
+            return "minecraft:block/"+(side==0?"piston_bottom":side==1?"piston_top":"piston_side");
         }
         if(Set.of("glass","stone","cobblestone","dirt","sand","gravel","bricks","obsidian").contains(name))return "minecraft:block/"+name;
         throw fail("vanilla block texture semantics not reconstructed: "+name);
@@ -772,6 +811,12 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
         }
         if(owner.equals("net/minecraft/client/renderer/texture/IIconRegister") && Set.of("registerIcon","func_94245_a").contains(name)) {
             if(args.size()!=1||!(args.getFirst() instanceof String s)||s.isBlank())throw fail("nonconstant icon name");return new Icon(s);
+        }
+        if(opcode==INVOKESTATIC && owner.equals("net/minecraft/block/BlockPistonBase")
+                && Set.of("getPistonIcon","func_150074_e").contains(name)
+                && desc.equals("(Ljava/lang/String;)Lnet/minecraft/util/IIcon;")){
+            if(args.size()!=1||!(args.getFirst() instanceof String icon))throw fail("nonconstant piston icon name");
+            return new Icon(vanillaNamedBlockIcon1710(icon));
         }
         if(opcode==INVOKESTATIC && owner.equals("cpw/mods/fml/client/registry/RenderingRegistry")) {
             if(name.equals("getNextAvailableRenderId"))return symbolicRenderId++; // Never mistaken for a vanilla render type.
