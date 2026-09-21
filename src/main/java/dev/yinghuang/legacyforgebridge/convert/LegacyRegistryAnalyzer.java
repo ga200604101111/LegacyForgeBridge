@@ -67,6 +67,13 @@ public final class LegacyRegistryAnalyzer {
     }
 
     public record ConstructorArgument(String descriptor, Object value) { }
+    /** Exact static-field provenance retained for constructor object arguments such as Blocks.log. */
+    public record StaticFieldReference(String owner,String name,String descriptor) {
+        public StaticFieldReference {
+            if(owner==null||owner.isBlank()||name==null||name.isBlank()||descriptor==null||descriptor.isBlank())
+                throw new IllegalArgumentException("Invalid static field reference");
+        }
+    }
 
     public record FieldBinding(String owner, String name, String descriptor, Kind kind, String registryName,
                                String legacyNamespace, String implementationClass) { }
@@ -91,8 +98,12 @@ public final class LegacyRegistryAnalyzer {
     private record TextSymbol(String value) implements Symbol { }
     private record NumberSymbol(Number value) implements Symbol { }
     private record TypeSymbol(String internalName) implements Symbol { }
-    private record ObjectSymbol(String internalName, String constructorDescriptor, List<Symbol> constructorArgs) implements Symbol {
-        ObjectSymbol(String internalName) { this(internalName, null, List.of()); }
+    private record ObjectSymbol(String internalName, String constructorDescriptor, List<Symbol> constructorArgs,
+                                StaticFieldReference staticField) implements Symbol {
+        ObjectSymbol(String internalName) { this(internalName, null, List.of(), null); }
+        ObjectSymbol(String internalName,String constructorDescriptor,List<Symbol> constructorArgs) {
+            this(internalName,constructorDescriptor,constructorArgs,null);
+        }
         ObjectSymbol { constructorArgs = List.copyOf(constructorArgs); }
     }
     private record ParamSymbol(int local) implements Symbol { }
@@ -355,7 +366,7 @@ public final class LegacyRegistryAnalyzer {
         if (symbol instanceof ParamSymbol param) return substitution.getOrDefault(param.local(), UnknownSymbol.INSTANCE);
         if (symbol instanceof ObjectSymbol object && !object.constructorArgs().isEmpty()) {
             List<Symbol> args = object.constructorArgs().stream().map(value -> substitute(value, substitution)).toList();
-            return new ObjectSymbol(object.internalName(), object.constructorDescriptor(), args);
+            return new ObjectSymbol(object.internalName(), object.constructorDescriptor(), args, object.staticField());
         }
         return symbol;
     }
@@ -379,6 +390,7 @@ public final class LegacyRegistryAnalyzer {
                     Symbol value = concreteObject.constructorArgs().get(i);
                     Object raw = value instanceof TextSymbol text ? text.value()
                             : value instanceof NumberSymbol number ? number.value()
+                            : value instanceof ObjectSymbol object && object.staticField()!=null ? object.staticField()
                             : value == NullSymbol.INSTANCE ? null : null;
                     constructor.add(new ConstructorArgument(argumentTypes[i].getDescriptor(), raw));
                 }
@@ -506,7 +518,8 @@ public final class LegacyRegistryAnalyzer {
                 }
             }
             Type fieldType = Type.getType(field.desc);
-            if (fieldType.getSort() == Type.OBJECT) return new ObjectSymbol(fieldType.getInternalName());
+            if (fieldType.getSort() == Type.OBJECT)
+                return new ObjectSymbol(fieldType.getInternalName(),null,List.of(),new StaticFieldReference(field.owner,field.name,field.desc));
             return UnknownSymbol.INSTANCE;
         }
         if (producer instanceof MethodInsnNode call) {
