@@ -27,11 +27,20 @@ public final class LegacyConnectedCuboidRendererAnalyzer {
     private static final String COLLISION_LIST_DESC="(Lnet/minecraft/world/World;IIILnet/minecraft/util/AxisAlignedBB;Ljava/util/List;Lnet/minecraft/entity/Entity;)V";
     private static final String COLLISION_BOX_DESC="(Lnet/minecraft/world/World;III)Lnet/minecraft/util/AxisAlignedBB;";
 
+    public record MaterialSource(String mode,LegacyRegistryAnalyzer.StaticFieldReference field,int metadata) {
+        public MaterialSource {
+            if(!Set.of("self","fixed_static_block","state_indexed_static_block").contains(mode))
+                throw new IllegalArgumentException("Invalid connected material mode");
+            if(!mode.equals("self")&&field==null)throw new IllegalArgumentException("Missing connected material field");
+            if(mode.equals("fixed_static_block")&&(metadata<0||metadata>15))throw new IllegalArgumentException("Invalid fixed material metadata");
+        }
+        public boolean metadataFromState(){return mode.equals("state_indexed_static_block");}
+    }
     public record Rule(String registryName,String sourceClass,String rendererClass,String interfaceClass,
                        double minWidth,double maxWidth,double minHeight,double maxHeight,
                        boolean axisLocked,boolean sameMetadataOnly,
                        boolean connectFullBlocks,boolean connectWood,boolean connectRock,
-                       String collision,String proof) {
+                       String collision,MaterialSource materialSource,String proof) {
         public Rule {
             if(registryName==null||registryName.isBlank()||sourceClass==null||sourceClass.isBlank()
                     ||rendererClass==null||rendererClass.isBlank()||interfaceClass==null||interfaceClass.isBlank())
@@ -40,6 +49,7 @@ public final class LegacyConnectedCuboidRendererAnalyzer {
                 throw new IllegalArgumentException("Invalid connected cuboid dimensions");
             if(!Set.of("empty","full","inherited").contains(collision))
                 throw new IllegalArgumentException("Invalid connected cuboid collision");
+            if(materialSource==null)throw new IllegalArgumentException("Missing connected cuboid material proof");
             if(proof==null||proof.isBlank())throw new IllegalArgumentException("Missing connected cuboid proof");
         }
         public double size(){return maxWidth-minWidth;}
@@ -88,10 +98,12 @@ public final class LegacyConnectedCuboidRendererAnalyzer {
                 diagnostics.add("Connected cuboid link predicate has no admitted neighbour source: "+registration.implementationClass());
                 continue;
             }
+            MaterialSource material=materialSource(classes,registration);
+            if(material==null){diagnostics.add("Connected cuboid material source is not proven: "+registration.registryName());continue;}
             out.add(new Rule(render.registryName(),registration.implementationClass(),renderer,iface,
                     dimensions[0],dimensions[1],dimensions[2],dimensions[3],
-                    axisLocked,sameMetadataOnly,fullBlocks,wood,rock,collision,
-                    "Bound custom renderer + six-direction connected-cuboid interface + constructor-derived dimensions + source link/collision policy"));
+                    axisLocked,sameMetadataOnly,fullBlocks,wood,rock,collision,material,
+                    "Bound custom renderer + six-direction connected-cuboid interface + constructor-derived dimensions + source link/collision policy + source-proven material provider"));
         }
         return new Analysis(out,List.copyOf(diagnostics));
     }
@@ -170,6 +182,75 @@ public final class LegacyConnectedCuboidRendererAnalyzer {
             if(code.get(i+4) instanceof FieldInsnNode field&&field.getOpcode()==Opcodes.PUTFIELD&&"F".equals(field.desc))return true;
         }
         return false;
+    }
+
+    private static MaterialSource materialSource(Map<String,ClassNode> classes,LegacyRegistryAnalyzer.Registration registration){
+        MaterialSource fixed=constructorMaterialSource(classes,registration);if(fixed!=null)return fixed;
+        MaterialSource indexed=reflectedIconArraySource(classes,registration.implementationClass());if(indexed!=null)return indexed;
+        // A source-owned icon array without a reflected external provider uses the block's own
+        // model material. This is safe only when its icon registration method is source-owned.
+        MethodNode icons=effectiveByDescriptor(classes,registration.implementationClass(),
+                "(Lnet/minecraft/client/renderer/texture/IIconRegister;)V");
+        return icons!=null?new MaterialSource("self",null,-1):null;
+    }
+
+    private static MaterialSource constructorMaterialSource(Map<String,ClassNode> classes,LegacyRegistryAnalyzer.Registration registration){
+        String desc=registration.constructorDescriptor();if(desc==null)return null;Type[] args=Type.getArgumentTypes(desc);
+        if(args.length!=registration.constructorArguments().size())return null;
+        int blockArg=-1,metaArg=-1;
+        for(int i=0;i<args.length;i++){
+            if(args[i].getSort()==Type.OBJECT&&args[i].getInternalName().equals("net/minecraft/block/Block"))blockArg=i;
+            else if(args[i].getSort()==Type.INT)metaArg=i;
+        }
+        if(blockArg<0||metaArg<0)return null;
+        Object blockValue=registration.constructorArguments().get(blockArg).value();
+        Object metaValue=registration.constructorArguments().get(metaArg).value();
+        if(!(blockValue instanceof LegacyRegistryAnalyzer.StaticFieldReference field)||!(metaValue instanceof Number number))return null;
+        int meta=number.intValue();if(meta<0||meta>15)return null;
+        ClassNode node=classes.get(registration.implementationClass());if(node==null)return null;
+        MethodNode ctor=find(node,"<init>",desc);if(ctor==null)return null;
+        int blockLocal=localForArgument(desc,blockArg),metaLocal=localForArgument(desc,metaArg);
+        String blockField=null,metaField=null;List<AbstractInsnNode> code=real(ctor);
+        for(int i=0;i+2<code.size();i++){
+            if(!(code.get(i) instanceof VarInsnNode self)||self.getOpcode()!=Opcodes.ALOAD||self.var!=0)continue;
+            if(code.get(i+1) instanceof VarInsnNode load&&code.get(i+2) instanceof FieldInsnNode put&&put.getOpcode()==Opcodes.PUTFIELD){
+                if(load.getOpcode()==Opcodes.ALOAD&&load.var==blockLocal&&put.desc.equals("Lnet/minecraft/block/Block;"))blockField=put.name;
+                if(load.getOpcode()==Opcodes.ILOAD&&load.var==metaLocal&&put.desc.equals("I"))metaField=put.name;
+            }
+        }
+        if(blockField==null||metaField==null)return null;
+        MethodNode icon=effectiveByDescriptor(classes,registration.implementationClass(),"(II)Lnet/minecraft/util/IIcon;");
+        if(icon==null)return null;boolean readsBlock=false,readsMeta=false,delegates=false;
+        for(AbstractInsnNode insn:icon.instructions){
+            if(insn instanceof FieldInsnNode get&&get.getOpcode()==Opcodes.GETFIELD&&get.owner.equals(registration.implementationClass())){
+                if(get.name.equals(blockField)&&get.desc.equals("Lnet/minecraft/block/Block;"))readsBlock=true;
+                if(get.name.equals(metaField)&&get.desc.equals("I"))readsMeta=true;
+            }
+            if(insn instanceof MethodInsnNode call&&call.owner.equals("net/minecraft/block/Block")
+                    &&Set.of("getIcon","func_149691_a").contains(call.name)&&call.desc.equals("(II)Lnet/minecraft/util/IIcon;"))delegates=true;
+        }
+        return readsBlock&&readsMeta&&delegates?new MaterialSource("fixed_static_block",field,meta):null;
+    }
+
+    private static int localForArgument(String descriptor,int wanted){
+        int local=1;Type[] args=Type.getArgumentTypes(descriptor);
+        for(int i=0;i<wanted;i++)local+=args[i].getSize();return local;
+    }
+
+    private static MaterialSource reflectedIconArraySource(Map<String,ClassNode> classes,String sourceClass){
+        MethodNode method=effectiveByDescriptor(classes,sourceClass,"(Lnet/minecraft/client/renderer/texture/IIconRegister;)V");
+        if(method==null||method.tryCatchBlocks==null||method.tryCatchBlocks.isEmpty())return null;
+        LinkedHashSet<LegacyRegistryAnalyzer.StaticFieldReference> fields=new LinkedHashSet<>();
+        boolean reflected=false,arrayAssigned=false;
+        for(AbstractInsnNode insn:method.instructions){
+            if(insn instanceof FieldInsnNode get&&get.getOpcode()==Opcodes.GETSTATIC&&get.owner.equals("net/minecraft/init/Blocks")
+                    &&get.desc.equals("Lnet/minecraft/block/Block;"))
+                fields.add(new LegacyRegistryAnalyzer.StaticFieldReference(get.owner,get.name,get.desc));
+            if(insn instanceof MethodInsnNode call&&call.owner.equals("java/lang/reflect/Field")&&call.name.equals("get")
+                    &&call.desc.equals("(Ljava/lang/Object;)Ljava/lang/Object;"))reflected=true;
+            if(insn instanceof FieldInsnNode put&&put.getOpcode()==Opcodes.PUTFIELD&&put.desc.equals("[Lnet/minecraft/util/IIcon;"))arrayAssigned=true;
+        }
+        return fields.size()==1&&reflected&&arrayAssigned?new MaterialSource("state_indexed_static_block",fields.getFirst(),-1):null;
     }
 
     private static String collisionPolicy(Map<String,ClassNode> classes,String sourceClass){
