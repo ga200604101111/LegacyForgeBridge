@@ -43,7 +43,7 @@ public final class LegacyRandomDisplayParticleAnalyzer {
     public Analysis analyze(Path jarPath)throws IOException{
         Map<String,ClassNode> classes=load(jarPath);
         var registry=new LegacyRegistryAnalyzer().analyze(jarPath);
-        List<Rule> rules=new ArrayList<>(),dummy=rules; // keeps declaration formatting compact
+        List<Rule> rules=new ArrayList<>();
         List<Skipped> skipped=new ArrayList<>();
         for(var registration:registry.blocks()){
             String source=registration.implementationClass();if(source==null)continue;
