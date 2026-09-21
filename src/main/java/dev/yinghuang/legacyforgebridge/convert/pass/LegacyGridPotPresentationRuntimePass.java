@@ -6,6 +6,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import dev.yinghuang.legacyforgebridge.convert.LegacyVanillaStackDataFix;
 import dev.yinghuang.legacyforgebridge.convert.api.ConversionContext;
 import dev.yinghuang.legacyforgebridge.convert.api.ConversionPass;
 import dev.yinghuang.legacyforgebridge.convert.api.SupportLevel;
@@ -65,14 +66,25 @@ public final class LegacyGridPotPresentationRuntimePass implements ConversionPas
                 continue;
             }
             JsonArray offsets = proof.getAsJsonArray("gridOffsets");
-            if (offsets == null || offsets.size() != 3 || !finite(proof, "contentTranslateY") || !finite(proof, "crossedScale")) {
+            String legacyCarrier=string(proof,"cellCarrierLegacyRegistryName");
+            if (offsets == null || offsets.size() != 3 || legacyCarrier==null
+                    || !finite(proof, "contentTranslateY") || !finite(proof, "crossedScale")) {
                 addSkipped(skipped, id, source, "GridPot presentation proof has malformed transforms.");
+                continue;
+            }
+            final String modernCarrier;
+            try{modernCarrier=LegacyVanillaStackDataFix.upgrade(legacyCarrier,0).id();}
+            catch(RuntimeException unsupported){
+                addSkipped(skipped,id,source,"GridPot enabled-cell carrier could not be migrated through vanilla DFU: "+unsupported.getMessage());
                 continue;
             }
             JsonObject value = new JsonObject();
             value.addProperty("id", id);
             value.addProperty("sourceBlockClass", source);
             value.addProperty("sourceRendererClass", string(proof, "sourceRendererClass"));
+            value.addProperty("cellCarrierItemId",modernCarrier);
+            value.addProperty("cellBodyWidth",1.0F/integer(core,"gridWidth",0));
+            value.addProperty("cellBodyHeight",core.get("cellHeight").getAsFloat());
             value.add("gridOffsets", offsets.deepCopy());
             value.addProperty("contentTranslateY", proof.get("contentTranslateY").getAsFloat());
             value.addProperty("sourceContentScale", proof.get("crossedScale").getAsFloat());
