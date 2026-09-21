@@ -27,10 +27,27 @@ public final class ConvertedLegacyVisualEntity extends Entity {
 
     public boolean applyLegacyWatcher(int type,int id,Object value){
         if(id<0||id>=legacyWatchers.length||value==null)return false;
-        return switch(rule.adapter()){
+        boolean semantic=switch(rule.adapter()){
             case SLIDE_PANEL -> applySlide(type,id,value);
             case TINTED_CUSHION -> applyCushion(type,id,value);
             case TRAY_ITEMS -> applyTray(type,id,value);
+        };
+        if(semantic)return true;
+        Integer expected=rule.watcherTypes().get(id);
+        if(expected==null||expected!=type||!wireValue(type,value))return false;
+        legacyWatchers[id]=value;return true;
+    }
+
+    private static boolean wireValue(int type,Object value){
+        return switch(type){
+            case 0->value instanceof Byte;
+            case 1->value instanceof Short;
+            case 2->value instanceof Integer;
+            case 3->value instanceof Float;
+            case 4->value instanceof String;
+            case 5->value instanceof FmlRuntimeCodec.LegacyItemStack;
+            case 6->true;
+            default->false;
         };
     }
 
