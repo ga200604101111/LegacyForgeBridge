@@ -44,7 +44,7 @@ public final class LegacySimpleBlockPresentationPass implements ConversionPass {
             if(texture==null)continue;
 
             JsonObject evidence=new JsonObject();evidence.addProperty("id",id);evidence.addProperty("legacyRegistryName",rule.registryName());
-            evidence.addProperty("sourceBlockClass",rule.sourceBlockClass());evidence.addProperty("sourceRendererClass",rule.rendererClass());
+            evidence.addProperty("sourceBlockClass",rule.sourceBlockClass());evidence.addProperty("sourceRendererClass",rule.sourceRendererClass());
             evidence.addProperty("mode",rule.mode().name());evidence.addProperty("texture",texture);
 
             switch(rule.mode()){
