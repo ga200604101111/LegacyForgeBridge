@@ -31,10 +31,10 @@ public final class LegacyVisibleEntityPresentationAnalyzer {
     public record Rule(String registryName,String sourceClass,String rendererClass,Adapter adapter,
                        int legacyNumericId,int trackingRange,int updateFrequency,boolean velocityUpdates,
                        float width,float height,int modelTextureWidth,int modelTextureHeight,List<Part> parts,
-                       String fixedTexture,Map<String,Integer> watcherIndices,List<TextureVariant> textureVariants,
-                       List<Integer> palette,int itemWatcherBase,int itemWatcherCount,String proof) {
+                       String fixedTexture,Map<String,Integer> watcherIndices,Map<Integer,Integer> watcherTypes,
+                       List<TextureVariant> textureVariants,List<Integer> palette,int itemWatcherBase,int itemWatcherCount,String proof) {
         public Rule {
-            parts=List.copyOf(parts);watcherIndices=Map.copyOf(watcherIndices);
+            parts=List.copyOf(parts);watcherIndices=Map.copyOf(watcherIndices);watcherTypes=Map.copyOf(watcherTypes);
             textureVariants=List.copyOf(textureVariants);palette=List.copyOf(palette);
         }
     }
@@ -45,11 +45,13 @@ public final class LegacyVisibleEntityPresentationAnalyzer {
     private record ModelProof(int textureWidth,int textureHeight,List<Part> parts) { }
 
     private final Map<String,ClassNode> classes=new LinkedHashMap<>();
+    private final Map<String,LegacyEntityDataWatcherAnalyzer.Rule> watcherSchemas=new HashMap<>();
     private final List<String> diagnostics=new ArrayList<>();
     private Path source;
 
     public Analysis analyze(Path sourceJar)throws IOException{
-        source=sourceJar;classes.clear();diagnostics.clear();load(sourceJar);
+        source=sourceJar;classes.clear();watcherSchemas.clear();diagnostics.clear();load(sourceJar);
+        for(var rule:new LegacyEntityDataWatcherAnalyzer().analyze(sourceJar).rules())watcherSchemas.put(rule.sourceClass(),rule);
         Map<String,List<LegacyEntityPresentationAnalyzer.Registration>> renderers=new LinkedHashMap<>();
         var presentation=new LegacyEntityPresentationAnalyzer().analyze(sourceJar);
         diagnostics.addAll(presentation.diagnostics());
@@ -105,9 +107,11 @@ public final class LegacyVisibleEntityPresentationAnalyzer {
         if(variants.size()<2)return null;
         for(TextureVariant variant:variants)if(!resourceExists(variant.texture()))return null;
         Map<String,Integer> watchers=new LinkedHashMap<>();watchers.put("direction",direction);watchers.put("mirror",mirror);watchers.put("texture",doorId);
+        Map<Integer,Integer> watcherTypes=sourceWatcherTypes(entity.name);
+        if(watcherTypes==null||watcherTypes.get(direction)!=0||watcherTypes.get(mirror)!=0||watcherTypes.get(doorId)!=1)return null;
         return new Rule(reg.name(),reg.sourceClass(),renderer.name,Adapter.SLIDE_PANEL,reg.numericId(),reg.tracking(),reg.update(),reg.velocity(),
-                size[0],size[1],model.textureWidth(),model.textureHeight(),model.parts(),null,watchers,variants,List.of(),-1,0,
-                "Source-bound dual-mirror single-cuboid renderer; direction/mirror/texture watchers and enum texture/translucency table proven");
+                size[0],size[1],model.textureWidth(),model.textureHeight(),model.parts(),null,watchers,watcherTypes,variants,List.of(),-1,0,
+                "Source-bound dual-mirror single-cuboid renderer; complete source-proven watcher schema plus direction/mirror/texture semantics and enum texture/translucency table");
     }
 
     private Rule proveTintedCushion(Registration reg,ClassNode renderer,ClassNode entity,float[] size)throws IOException{
@@ -131,15 +135,17 @@ public final class LegacyVisibleEntityPresentationAnalyzer {
         }
         List<Integer> palette=parseColorEnum(colorEnum);
         if(color==null||palette.size()!=16)return null;
-        Map<String,Integer> watchers=Map.of("color",color);
+        Map<String,Integer> watchers=Map.of("color",color);Map<Integer,Integer> watcherTypes=sourceWatcherTypes(entity.name);
+        if(watcherTypes==null||watcherTypes.get(color)!=0)return null;
         return new Rule(reg.name(),reg.sourceClass(),renderer.name,Adapter.TINTED_CUSHION,reg.numericId(),reg.tracking(),reg.update(),reg.velocity(),
-                size[0],size[1],model.textureWidth(),model.textureHeight(),model.parts(),texture,watchers,List.of(),palette,-1,0,
-                "Source-bound single-cuboid renderer with fixed texture, entity yaw/pitch transform and 16-entry watcher-selected source palette");
+                size[0],size[1],model.textureWidth(),model.textureHeight(),model.parts(),texture,watchers,watcherTypes,List.of(),palette,-1,0,
+                "Source-bound single-cuboid renderer with fixed texture, complete source-proven watcher schema, entity yaw/pitch transform and 16-entry watcher-selected source palette");
     }
 
     private Rule proveTray(Registration reg,ClassNode renderer,ClassNode entity,float[] size)throws IOException{
         String modelType=uniqueModelType(renderer);if(modelType==null)return null;
-        ModelProof model=parseModel(classes.get(modelType));if(model==null||model.parts().size()<5||model.textureWidth()!=64||model.textureHeight()!=32)return null;
+        ClassNode modelNode=classes.get(modelType);ModelProof model=parseModel(modelNode);if(model==null)model=parseDeclaredModel(modelNode);
+        if(model==null||model.parts().size()<5||model.textureWidth()!=64||model.textureHeight()!=32)return null;
         MethodNode render=renderMethod(renderer,entity.name);if(render==null||!containsFloat(render,.2F)||!containsFloat(render,.7F)||!containsFloat(render,180F)||!containsFloat(render,.0625F)
                 ||!calls(render,"org/lwjgl/opengl/GL11","glScalef","(FFF)V")||!calls(render,"org/lwjgl/opengl/GL11","glRotatef","(FFFF)V"))return null;
         String itemGetter=null;
@@ -149,9 +155,10 @@ public final class LegacyVisibleEntityPresentationAnalyzer {
         MethodNode getter=effectiveMethod(entity.name,itemGetter,"(I)Lnet/minecraft/item/ItemStack;");int[] range=itemWatcherRange(getter);
         if(range==null||range[1]!=5||!provesItemWatcherDefinitions(entity,range[0],range[1]))return null;
         String texture=fixedTexture(renderer);if(texture==null||!resourceExists(texture))return null;
+        Map<Integer,Integer> watcherTypes=new LinkedHashMap<>();for(int i=0;i<range[1];i++)watcherTypes.put(range[0]+i,5);
         return new Rule(reg.name(),reg.sourceClass(),renderer.name,Adapter.TRAY_ITEMS,reg.numericId(),reg.tracking(),reg.update(),reg.velocity(),
-                size[0],size[1],model.textureWidth(),model.textureHeight(),model.parts(),texture,Map.of(),List.of(),List.of(),range[0],range[1],
-                "Source-bound fixed multi-cuboid tray renderer plus five consecutive legacy ItemStack watcher slots and radial modern-item presentation adapter");
+                size[0],size[1],model.textureWidth(),model.textureHeight(),model.parts(),texture,Map.of(),watcherTypes,List.of(),List.of(),range[0],range[1],
+                "Source-bound fixed multi-cuboid tray renderer plus bounded five-slot ItemStack watcher range and radial modern-item presentation adapter");
     }
 
     private List<Registration> registrations(Path jar)throws IOException{
@@ -169,6 +176,15 @@ public final class LegacyVisibleEntityPresentationAnalyzer {
     private static Boolean bool(LegacyLifecycleAnalyzer.Value v){
         if(v instanceof LegacyLifecycleAnalyzer.BooleanValue b)return b.value();
         Integer i=integer(v);if(i==null||i<0||i>1)return null;return i==1;
+    }
+
+    private Map<Integer,Integer> sourceWatcherTypes(String sourceClass){
+        var schema=watcherSchemas.get(sourceClass);if(schema==null)return null;Map<Integer,Integer> out=new LinkedHashMap<>();
+        for(var entry:schema.entries()){
+            Integer wire=switch(entry.valueKind()){case "byte"->0;case "short"->1;case "int"->2;case "float"->3;case "string"->4;default->null;};
+            if(wire==null||out.putIfAbsent(entry.index(),wire)!=null)return null;
+        }
+        return Map.copyOf(out);
     }
 
     private float[] directSize(ClassNode entity){
@@ -239,6 +255,51 @@ public final class LegacyVisibleEntityPresentationAnalyzer {
         if(rendered.isEmpty())return null;List<Part> out=new ArrayList<>();
         for(String name:rendered){MutablePart p=parts.get(name);if(p==null||p.u==null||p.v==null||!p.box)return null;out.add(p.build());}
         return new ModelProof(tw,th,out);
+    }
+
+    /** Fallback parser: every declared ModelRenderer part must be source-constructed, boxed and rendered. */
+    private ModelProof parseDeclaredModel(ClassNode model){
+        if(model==null||!inherits(model.name,MODEL_BASE))return null;MethodNode ctor=find(model,"<init>","()V");if(ctor==null)return null;
+        int tw=64,th=32;List<AbstractInsnNode> code=real(ctor);Map<String,MutablePart> parts=new LinkedHashMap<>();
+        for(FieldNode field:model.fields)if(("L"+MODEL_RENDERER+";").equals(field.desc)&&(field.access&Opcodes.ACC_STATIC)==0)parts.put(field.name,new MutablePart(field.name));
+        for(int i=0;i<code.size();i++){
+            AbstractInsnNode insn=code.get(i);
+            if(insn instanceof FieldInsnNode put&&put.getOpcode()==Opcodes.PUTFIELD&&put.owner.equals(model.name)&&parts.containsKey(put.name)){
+                for(int j=Math.max(0,i-10);j<i;j++)if(code.get(j) instanceof MethodInsnNode call&&call.owner.equals(MODEL_RENDERER)&&call.name.equals("<init>")
+                        &&call.desc.equals("(Lnet/minecraft/client/model/ModelBase;II)V")){
+                    Integer u=intConst(code.get(j-2)),v=intConst(code.get(j-1));if(u!=null&&v!=null){parts.get(put.name).u=u;parts.get(put.name).v=v;}
+                }
+            }
+            if(insn instanceof FieldInsnNode put&&put.getOpcode()==Opcodes.PUTFIELD&&"I".equals(put.desc)&&i>0){
+                Integer value=intConst(code.get(i-1));if(value!=null){
+                    if(Set.of("textureWidth","field_78090_t").contains(put.name))tw=value;
+                    if(Set.of("textureHeight","field_78089_u").contains(put.name))th=value;
+                }
+            }
+            if(insn instanceof MethodInsnNode call&&call.owner.equals(MODEL_RENDERER)&&call.desc.equals("(FFFIII)Lnet/minecraft/client/model/ModelRenderer;")){
+                FieldInsnNode receiver=nearestModelField(code,i,model.name,8);if(receiver!=null&&parts.containsKey(receiver.name))assignBox(parts.get(receiver.name),code,i);
+            }
+            if(insn instanceof MethodInsnNode call&&call.owner.equals(MODEL_RENDERER)&&call.desc.equals("(FFF)V")){
+                FieldInsnNode receiver=nearestModelField(code,i,model.name,6);if(receiver!=null&&parts.containsKey(receiver.name)){
+                    Float x=floatConst(code.get(i-3)),y=floatConst(code.get(i-2)),z=floatConst(code.get(i-1));
+                    if(x!=null&&y!=null&&z!=null){var p=parts.get(receiver.name);p.px=x;p.py=y;p.pz=z;}
+                }
+            }
+        }
+        LinkedHashSet<String> rendered=new LinkedHashSet<>();
+        for(MethodNode method:model.methods)if(method.desc.equals("(Lnet/minecraft/entity/Entity;FFFFFF)V"))
+            for(AbstractInsnNode insn:method.instructions)if(insn instanceof MethodInsnNode call&&call.owner.equals(MODEL_RENDERER)&&call.desc.equals("(F)V")){
+                AbstractInsnNode previous=insn.getPrevious();while(previous!=null&&previous.getOpcode()<0)previous=previous.getPrevious();
+                if(previous instanceof VarInsnNode){previous=previous.getPrevious();while(previous!=null&&previous.getOpcode()<0)previous=previous.getPrevious();}
+                if(previous instanceof FieldInsnNode field&&field.getOpcode()==Opcodes.GETFIELD&&field.owner.equals(model.name))rendered.add(field.name);
+            }
+        if(rendered.isEmpty()||!rendered.equals(parts.keySet()))return null;List<Part> out=new ArrayList<>();
+        for(String name:rendered){MutablePart p=parts.get(name);if(p==null||p.u==null||p.v==null||!p.box)return null;out.add(p.build());}
+        return new ModelProof(tw,th,out);
+    }
+    private static FieldInsnNode nearestModelField(List<AbstractInsnNode> code,int callIndex,String owner,int budget){
+        for(int i=callIndex-1;i>=0&&budget-->0;i--)if(code.get(i) instanceof FieldInsnNode field&&field.getOpcode()==Opcodes.GETFIELD&&field.owner.equals(owner))return field;
+        return null;
     }
 
     private static void assignBox(MutablePart p,List<AbstractInsnNode> code,int i){
