@@ -67,6 +67,9 @@ class BambooGridPotPresentationRuntimeExactTest {
         assertNotNull(rule, "Exact Bamboo MultiPot presentation runtime was not admitted: " + root);
         assertTrue(rule.get("storedContentPresentationProven").getAsBoolean());
         assertTrue(rule.get("storedContentPresentationRuntimeWired").getAsBoolean());
+        assertEquals("minecraft:flower_pot",rule.get("cellCarrierItemId").getAsString());
+        assertEquals(1.0F/3.0F,rule.get("cellBodyWidth").getAsFloat(),0.0001F);
+        assertEquals(0.375F,rule.get("cellBodyHeight").getAsFloat(),0.0001F);
         assertFalse(rule.get("exactLegacyGeometry").getAsBoolean());
     }
 }
