@@ -38,6 +38,17 @@ class LegacyCandidateReferenceAnalyzerTest {
         assertTrue(renderer.resourceReferences().contains("assets/foreign/config.txt"));
     }
 
+    @Test void genericSignatureReferencesRemainPartOfCandidateRetirementClosure() throws Exception {
+        Path staging=tempDir.resolve("generic-signature");Files.createDirectories(staging);
+        writeClass(staging,"foreign/Orb",plain("foreign/Orb","java/lang/Object"));
+        writeClass(staging,"modern/GenericHolder",genericHolder("modern/GenericHolder","foreign/Orb"));
+
+        var analysis=new LegacyCandidateReferenceAnalyzer().analyze(staging,Set.of("foreign/Orb"));
+        assertTrue(analysis.complete());
+        assertTrue(analysis.forTarget("foreign/Orb").incomingClassReferences().contains("modern/GenericHolder"),
+                "A source class referenced only from a generic Signature attribute must still block retirement");
+    }
+
     @Test void rewrittenCandidateReferenceDisappearsWithoutConsultingOriginalSourceGraph() throws Exception {
         Path staging=tempDir.resolve("rewritten");Files.createDirectories(staging);
         writeClass(staging,"foreign/Orb",plain("foreign/Orb","net/minecraft/entity/Entity"));
@@ -51,6 +62,11 @@ class LegacyCandidateReferenceAnalyzerTest {
     }
     private static byte[] plain(String name,String superName){
         ClassWriter w=new ClassWriter(0);w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,name,null,superName,null);w.visitEnd();return w.toByteArray();
+    }
+    private static byte[] genericHolder(String name,String target){
+        ClassWriter w=new ClassWriter(0);w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,name,null,"java/lang/Object",null);
+        w.visitField(Opcodes.ACC_PRIVATE,"values","Ljava/util/List;","Ljava/util/List<L"+target+";>;",null).visitEnd();
+        w.visitEnd();return w.toByteArray();
     }
     private static byte[] renderer(String name,String entity){
         ClassWriter w=new ClassWriter(0);w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,name,null,"java/lang/Object",null);

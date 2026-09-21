@@ -164,12 +164,14 @@ public final class LegacyClassDependencyAnalyzer {
             new ClassReader(bytes).accept(node, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
             Set<String> refs = new TreeSet<>(), strings = new TreeSet<>(), dynamic = new TreeSet<>();
             add(refs, node.superName); node.interfaces.forEach(v -> add(refs, v));
+            LegacySignatureReferenceCollector.classOrMethod(refs, node.signature);
             annotations(node.visibleAnnotations, refs, strings); annotations(node.invisibleAnnotations, refs, strings);
             for (FieldNode field : node.fields) {
-                descriptor(refs, field.desc); annotations(field.visibleAnnotations, refs, strings); annotations(field.invisibleAnnotations, refs, strings);
+                descriptor(refs, field.desc); LegacySignatureReferenceCollector.field(refs, field.signature);
+                annotations(field.visibleAnnotations, refs, strings); annotations(field.invisibleAnnotations, refs, strings);
             }
             for (MethodNode method : node.methods) {
-                methodDescriptor(refs, method.desc);
+                methodDescriptor(refs, method.desc); LegacySignatureReferenceCollector.classOrMethod(refs, method.signature);
                 if (method.exceptions != null) method.exceptions.forEach(v -> add(refs, v));
                 annotations(method.visibleAnnotations, refs, strings); annotations(method.invisibleAnnotations, refs, strings);
                 if ((method.access & Opcodes.ACC_NATIVE) != 0) dynamic.add("native method: " + method.name + method.desc);

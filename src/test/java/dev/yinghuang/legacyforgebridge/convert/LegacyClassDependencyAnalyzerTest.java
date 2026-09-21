@@ -89,6 +89,23 @@ class LegacyClassDependencyAnalyzerTest {
     }
 
     @Test
+    void genericSignaturesParticipateInSourceDependencyReachability() throws Exception {
+        Map<String, byte[]> classes = new LinkedHashMap<>();
+        classes.put("signature/Root", genericSignatureModRoot());
+        classes.put("signature/Target", plainClass("signature/Target", "java/lang/Object", null));
+        Path source = writeJar(tempDir.resolve("generic-signature.jar"), classes, null);
+
+        LegacyClassDependencyAnalyzer.Analysis result = new LegacyClassDependencyAnalyzer().analyze(source);
+        var root = dependency(result, "signature/Root");
+        var target = dependency(result, "signature/Target");
+
+        assertTrue(root.sourceReferences().contains("signature/Target"));
+        assertTrue(target.incomingSourceReferences().contains("signature/Root"));
+        assertEquals(LegacyClassDependencyAnalyzer.Reachability.POTENTIALLY_REACHABLE, target.reachability(),
+                "A generic Signature edge from an FML root must participate in conservative reachability");
+    }
+
+    @Test
     void reflectionIsReportedAndDormantTransformerIsNotActivatedWithoutManifest() throws Exception {
         Path source = writeJar(tempDir.resolve("fixture.jar"), fixtureClasses(), null);
         LegacyClassDependencyAnalyzer.Analysis result = new LegacyClassDependencyAnalyzer().analyze(source);
@@ -144,6 +161,18 @@ class LegacyClassDependencyAnalyzerTest {
         sided.visit("serverSide", "example.CommonProxy");
         sided.visitEnd();
         proxy.visitEnd();
+        defaultConstructor(writer, "java/lang/Object");
+        writer.visitEnd();
+        return writer.toByteArray();
+    }
+
+    private static byte[] genericSignatureModRoot() {
+        ClassWriter writer = base("signature/Root", "java/lang/Object", null);
+        AnnotationVisitor mod = writer.visitAnnotation("Lcpw/mods/fml/common/Mod;", true);
+        mod.visit("modid", "signature");
+        mod.visitEnd();
+        writer.visitField(Opcodes.ACC_PRIVATE, "targets", "Ljava/util/List;",
+                "Ljava/util/List<Lsignature/Target;>;", null).visitEnd();
         defaultConstructor(writer, "java/lang/Object");
         writer.visitEnd();
         return writer.toByteArray();

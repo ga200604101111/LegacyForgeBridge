@@ -98,15 +98,18 @@ public final class LegacyCandidateReferenceAnalyzer {
         Set<String> references = new TreeSet<>(), strings = new TreeSet<>();
         add(references, node.superName);
         if (node.interfaces != null) node.interfaces.forEach(value -> add(references, value));
+        LegacySignatureReferenceCollector.classOrMethod(references, node.signature);
         annotations(node.visibleAnnotations, references, strings);
         annotations(node.invisibleAnnotations, references, strings);
         for (FieldNode field : node.fields) {
             descriptor(references, field.desc);
+            LegacySignatureReferenceCollector.field(references, field.signature);
             annotations(field.visibleAnnotations, references, strings);
             annotations(field.invisibleAnnotations, references, strings);
         }
         for (MethodNode method : node.methods) {
             methodDescriptor(references, method.desc);
+            LegacySignatureReferenceCollector.classOrMethod(references, method.signature);
             if (method.exceptions != null) method.exceptions.forEach(value -> add(references, value));
             annotations(method.visibleAnnotations, references, strings);
             annotations(method.invisibleAnnotations, references, strings);
