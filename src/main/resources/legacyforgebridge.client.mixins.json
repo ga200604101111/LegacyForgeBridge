@@ -23,7 +23,8 @@
     "LegacyMimicBlockUpdateMixin",
     "LegacyFirstPersonBlockingPoseMixin",
     "LegacyThirdPersonBlockingPoseMixin",
-    "LegacyHeldItemVisibilityMixin"
+    "LegacyHeldItemVisibilityMixin",
+    "LegacyRandomDisplayParticleMixin"
   ],
   "injectors": {
     "defaultRequire": 1
