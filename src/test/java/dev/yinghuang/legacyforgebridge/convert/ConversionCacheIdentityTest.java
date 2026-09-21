@@ -151,6 +151,13 @@ class ConversionCacheIdentityTest {
     }
 
     @Test
+    void currentRevisionInvalidatesPreLivePresentationOutputProofCandidateCache() {
+        String stale = ConversionCacheIdentity.fingerprint(
+                "0.2.0-alpha.27", 2, "2026-09-21.166-live-render-ownership", SOURCE_A);
+        assertNotEquals(stale, ConversionCacheIdentity.current(SOURCE_A));
+    }
+
+    @Test
     void malformedIdentityInputsFailClosed() {
         assertThrows(IllegalArgumentException.class,
                 () -> ConversionCacheIdentity.fingerprint("", 2, "r1", SOURCE_A));
