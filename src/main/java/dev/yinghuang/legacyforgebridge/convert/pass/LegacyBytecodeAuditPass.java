@@ -1,6 +1,7 @@
 package dev.yinghuang.legacyforgebridge.convert.pass;
 
 import dev.yinghuang.legacyforgebridge.convert.LegacyCoremodActivationAnalyzer;
+import dev.yinghuang.legacyforgebridge.convert.LegacyGeneratedBytecodeLinkageAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.api.ConversionContext;
 import dev.yinghuang.legacyforgebridge.convert.api.ConversionPass;
 import dev.yinghuang.legacyforgebridge.convert.api.SupportLevel;
@@ -36,15 +37,38 @@ public final class LegacyBytecodeAuditPass implements ConversionPass {
             }
         }
 
-        // Generated wrapper classes are modern bytecode produced by LFB itself and are expected to
-        // remain. The safety question is whether any original Forge 1.7.10 class survived.
-        if (remainingLegacyClasses == 0) {
-            context.diagnostics().info(
-                    "LFB-CONVERT-BYTECODE-0002",
-                    SupportLevel.ADAPTED,
-                    "No original legacy class files remain after semantic conversion; generated modern Fabric wrapper classes="
-                            + generatedClasses + "."
+        var generatedAudit = new LegacyGeneratedBytecodeLinkageAnalyzer().analyze(context.stagingDir());
+        if (!generatedAudit.complete()) {
+            context.diagnostics().error(
+                    "LFB-CONVERT-BYTECODE-0004",
+                    SupportLevel.UNSUPPORTED,
+                    "Generated wrapper bytecode linkage audit was incomplete: " + generatedAudit.diagnostics()
             );
+        }
+        if (!generatedAudit.findings().isEmpty()) {
+            var details = generatedAudit.findings().stream().limit(12)
+                    .map(value -> value.generatedClass() + " -> " + value.legacyReferences()).toList();
+            String suffix = generatedAudit.findings().size() > details.size()
+                    ? " (+" + (generatedAudit.findings().size() - details.size()) + " more)" : "";
+            context.diagnostics().error(
+                    "LFB-CONVERT-BYTECODE-0003",
+                    SupportLevel.UNSUPPORTED,
+                    "Generated modern wrappers still link legacy Forge/FML/LaunchWrapper APIs: "
+                            + details + suffix + "."
+            );
+        }
+
+        // Generated wrapper classes are expected to remain, but a source-clean candidate is only
+        // loader-safe when those wrappers are also free of direct legacy loader/API linkage.
+        if (remainingLegacyClasses == 0) {
+            if (generatedAudit.clean()) {
+                context.diagnostics().info(
+                        "LFB-CONVERT-BYTECODE-0002",
+                        SupportLevel.ADAPTED,
+                        "No original legacy class files remain after semantic conversion; generated modern Fabric wrapper classes="
+                                + generatedClasses + "; legacyApiLinkage=false."
+                );
+            }
             return;
         }
 
