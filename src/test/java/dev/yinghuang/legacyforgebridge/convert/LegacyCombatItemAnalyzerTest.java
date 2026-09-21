@@ -65,7 +65,7 @@ class LegacyCombatItemAnalyzerTest {
     private static byte[] bootstrap(){
         ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
         w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,"foreign/weapons/Bootstrap",null,"java/lang/Object",null);
-        MethodVisitor m=w.visitMethod(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"register","()V",null,null);
+        MethodVisitor m=w.visitMethod(Opcodes.ACC_STATIC,"<clinit>","()V",null,null);
         m.visitCode();register(m,"foreign/weapons/Blade","foreign_blade");register(m,"foreign/weapons/AmbiguousBlade","ambiguous_blade");
         m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
     }
