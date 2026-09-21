@@ -74,15 +74,14 @@ public final class LegacyCombatItemAnalyzer {
             String source = item.implementationClass();
             if (source == null) continue;
             String classified = registryAnalyzer.classifyItem(source);
-            Kind kind = switch (classified) {
-                case "sword" -> Kind.SWORD;
-                case "bow" -> Kind.BOW;
-                default -> null;
-            };
+            Float attributeDamage = uniqueAttackDamage(source);
+            Float directDamage = uniqueDirectEntityDamage(source);
+            Kind kind = "bow".equals(classified) ? Kind.BOW
+                    : ("sword".equals(classified) || attributeDamage != null || directDamage != null ? Kind.SWORD : null);
             if (kind == null) continue;
             int durability = uniqueDurability(source);
             if (kind == Kind.SWORD) {
-                Float damage = uniqueAttackDamage(source);
+                Float damage = attributeDamage != null ? attributeDamage : directDamage;
                 if (damage == null || damage <= 0F) {
                     skipped.add(new Skipped(item.registryName(), source,
                             "No unique source attack-damage AttributeModifier was proven."));
@@ -147,6 +146,55 @@ public final class LegacyCombatItemAnalyzer {
             }
         }
         return values.size() == 1 ? values.iterator().next() : null;
+    }
+
+    /**
+     * Legacy mods frequently implement weapons as plain Item/ItemSword subclasses and expose their
+     * actual attack value through a source-owned getDamageVsEntity(Entity) method instead of
+     * getItemAttributeModifiers(). Admit only the conservative leading-base-value shape:
+     * a positive numeric constant stored to a float local before any branch/call/field access.
+     *
+     * <p>This is intentionally behavior-based rather than class/name based, so custom weapons from
+     * unrelated mods are discovered without adding per-item allowlists.</p>
+     */
+    private Float uniqueDirectEntityDamage(String sourceClass) {
+        Set<Float> values = new LinkedHashSet<>();
+        for (ClassNode node : sourceLineage(sourceClass)) for (MethodNode method : node.methods) {
+            if (!"getDamageVsEntity".equals(method.name)
+                    || !"(Lnet/minecraft/entity/Entity;)F".equals(method.desc)) continue;
+            AbstractInsnNode cursor = firstReal(method.instructions.getFirst());
+            int budget = 0;
+            while (cursor != null && budget++ < 8) {
+                Number number = numberConstant(cursor);
+                if (number != null && Float.isFinite(number.floatValue()) && number.floatValue() > 0F) {
+                    AbstractInsnNode next = nextReal(cursor.getNext());
+                    if (next != null && next.getOpcode() >= Opcodes.FSTORE && next.getOpcode() <= Opcodes.ASTORE) {
+                        values.add(number.floatValue());
+                    }
+                    break;
+                }
+                int opcode = cursor.getOpcode();
+                if (cursor instanceof MethodInsnNode || cursor instanceof FieldInsnNode
+                        || (opcode >= Opcodes.IFEQ && opcode <= Opcodes.IF_ACMPNE)
+                        || opcode == Opcodes.GOTO || opcode == Opcodes.TABLESWITCH || opcode == Opcodes.LOOKUPSWITCH) {
+                    break;
+                }
+                cursor = nextReal(cursor.getNext());
+            }
+        }
+        return values.size() == 1 ? values.iterator().next() : null;
+    }
+
+    private static AbstractInsnNode firstReal(AbstractInsnNode instruction) {
+        AbstractInsnNode current = instruction;
+        while (current != null && current.getOpcode() < 0) current = current.getNext();
+        return current;
+    }
+
+    private static AbstractInsnNode nextReal(AbstractInsnNode instruction) {
+        AbstractInsnNode current = instruction;
+        while (current != null && current.getOpcode() < 0) current = current.getNext();
+        return current;
     }
 
     private String uniquePullTexturePrefix(String sourceClass) {
