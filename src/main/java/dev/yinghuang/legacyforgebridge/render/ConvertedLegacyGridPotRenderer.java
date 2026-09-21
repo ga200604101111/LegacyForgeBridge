@@ -11,6 +11,8 @@ import net.minecraft.client.renderer.item.ItemModelResolver;
 import net.minecraft.client.renderer.item.ItemStackRenderState;
 import net.minecraft.client.renderer.state.CameraRenderState;
 import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.AABB;
@@ -30,11 +32,15 @@ public final class ConvertedLegacyGridPotRenderer
         implements BlockEntityRenderer<ConvertedLegacyGridPotBlockEntity, ConvertedLegacyGridPotRenderer.State> {
     private final ItemModelResolver itemModelResolver;
     private final ConvertedGridPotPresentationRuntime.Presentation presentation;
+    private final ItemStack cellCarrierStack;
 
     public ConvertedLegacyGridPotRenderer(BlockEntityRendererProvider.Context context,
                                           ConvertedGridPotPresentationRuntime.Presentation presentation) {
         this.itemModelResolver = context.itemModelResolver();
         this.presentation = presentation;
+        Item carrier=BuiltInRegistries.ITEM.getValue(presentation.cellCarrierItemId());
+        if(carrier==null)throw new IllegalStateException("Missing GridPot cell carrier item "+presentation.cellCarrierItemId());
+        this.cellCarrierStack=new ItemStack(carrier);
     }
 
     @Override public State createRenderState() { return new State(); }
@@ -45,7 +51,16 @@ public final class ConvertedLegacyGridPotRenderer
         BlockEntityRenderer.super.extractRenderState(blockEntity, state, tickProgress, cameraPos, crumblingOverlay);
         int seed = blockEntity.getBlockPos().hashCode();
         for (int slot = 0; slot < state.items.length; slot++) {
-            ItemStack stack = slot < blockEntity.cells() && blockEntity.isEnabled(slot) ? blockEntity.item(slot) : ItemStack.EMPTY;
+            boolean enabled=slot < blockEntity.cells() && blockEntity.isEnabled(slot);
+            state.enabled[slot]=enabled;
+            if(enabled){
+                ItemStackRenderState carrier=state.carriers[slot];
+                if(carrier==null)carrier=new ItemStackRenderState();
+                itemModelResolver.updateForTopItem(carrier,cellCarrierStack,ItemDisplayContext.NONE,
+                        blockEntity.getLevel(),null,seed*67+slot);
+                state.carriers[slot]=carrier.isEmpty()?null:carrier;
+            }else state.carriers[slot]=null;
+            ItemStack stack = enabled ? blockEntity.item(slot) : ItemStack.EMPTY;
             if (stack.isEmpty()) {
                 state.items[slot] = null;
                 continue;
@@ -62,12 +77,14 @@ public final class ConvertedLegacyGridPotRenderer
     public void submit(State state, PoseStack poseStack, SubmitNodeCollector submitNodeCollector, CameraRenderState camera) {
         List<Float> offsets = presentation.gridOffsets();
         for (int slot = 0; slot < state.items.length; slot++) {
+            int gridX=slot%3,gridZ=slot/3;
+            float x=0.5F+offsets.get(gridX),z=0.5F+offsets.get(gridZ);
+            ItemStackRenderState carrier=state.carriers[slot];
+            if(state.enabled[slot]&&carrier!=null&&!carrier.isEmpty())submitCarrier(carrier,x,z,state,poseStack,submitNodeCollector);
             ItemStackRenderState itemState = state.items[slot];
             if (itemState == null || itemState.isEmpty()) continue;
-            int gridX = slot % 3;
-            int gridZ = slot / 3;
             poseStack.pushPose();
-            poseStack.translate(0.5F + offsets.get(gridX), presentation.contentTranslateY(), 0.5F + offsets.get(gridZ));
+            poseStack.translate(x, presentation.contentTranslateY(), z);
             float scale = presentation.sourceContentScale();
             poseStack.scale(scale, scale, scale);
             AABB bounds = itemState.getModelBoundingBox();
@@ -79,7 +96,22 @@ public final class ConvertedLegacyGridPotRenderer
         }
     }
 
+    private void submitCarrier(ItemStackRenderState carrier,float x,float z,State state,PoseStack pose,SubmitNodeCollector queue){
+        AABB bounds=carrier.getModelBoundingBox();
+        double width=Math.max(1.0E-6D,bounds.maxX-bounds.minX);
+        double height=Math.max(1.0E-6D,bounds.maxY-bounds.minY);
+        double depth=Math.max(1.0E-6D,bounds.maxZ-bounds.minZ);
+        float sx=(float)(presentation.cellBodyWidth()/width);
+        float sy=(float)(presentation.cellBodyHeight()/height);
+        float sz=(float)(presentation.cellBodyWidth()/depth);
+        double centerX=(bounds.minX+bounds.maxX)*0.5D,centerZ=(bounds.minZ+bounds.maxZ)*0.5D;
+        pose.pushPose();pose.translate(x,0D,z);pose.scale(sx,sy,sz);pose.translate(-centerX,-bounds.minY,-centerZ);
+        carrier.submit(pose,queue,state.lightCoords,OverlayTexture.NO_OVERLAY,0);pose.popPose();
+    }
+
     public static final class State extends BlockEntityRenderState {
+        final ItemStackRenderState[] carriers = new ItemStackRenderState[9];
         final ItemStackRenderState[] items = new ItemStackRenderState[9];
+        final boolean[] enabled = new boolean[9];
     }
 }
