@@ -39,6 +39,7 @@ public final class LegacyVisibleEntityPresentationPass implements ConversionPass
                 p.addProperty("xRot",part.xRot());p.addProperty("yRot",part.yRot());p.addProperty("zRot",part.zRot());p.addProperty("mirror",part.mirror());parts.add(p);
             }value.add("parts",parts);
             JsonObject watchers=new JsonObject();rule.watcherIndices().forEach(watchers::addProperty);value.add("watchers",watchers);
+            JsonObject watcherTypes=new JsonObject();rule.watcherTypes().forEach((index,type)->watcherTypes.addProperty(String.valueOf(index),type));value.add("watcherTypes",watcherTypes);
             JsonArray textures=new JsonArray();for(var texture:rule.textureVariants()){
                 JsonObject t=new JsonObject();t.addProperty("value",texture.value());t.addProperty("texture",texture.texture());t.addProperty("translucent",texture.translucent());textures.add(t);
             }value.add("textureVariants",textures);
