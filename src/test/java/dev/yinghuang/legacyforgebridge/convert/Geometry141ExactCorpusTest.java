@@ -13,7 +13,7 @@ class Geometry141ExactCorpusTest {
         String input=System.getProperty("lfb.exactCorpus.jar");assertNotNull(input,"Explicit original corpus required");
         Path jar=Path.of(input);assertEquals("bcceb588950f911398cfc94856a45527b4aa17b6e130927b2e0516fdf059b402",Hashing.sha256(jar));
         var analysis=new LegacyBlockGeometryAnalyzer().analyze(jar);Map<String,LegacyBlockGeometryAnalyzer.Rule> rules=new HashMap<>();
-        analysis.rules().forEach(r->rules.put(r.input().registryName(),r));assertEquals(19,rules.size());
+        analysis.rules().forEach(r->rules.put(r.input().registryName(),r));assertEquals(37,rules.size());
         for(String name:List.of("halfDeco","halfTwoDirDeco")){
             var v=rules.get(name).input().variants();assertEquals(16,v.size());assertEquals(.5,v.get(0).bounds().get(4));assertEquals(.5,v.get(8).bounds().get(1));assertEquals(0d,v.get(8).inventoryBounds().get(1));
         }
@@ -27,6 +27,16 @@ class Geometry141ExactCorpusTest {
         for(String name:List.of("delude_width","delude_height","delude_stair")){
             var r=rules.get(name);assertTrue(r.family().startsWith("mimic_"));assertEquals(5,r.input().neighbourFaces().get(0));
         }
-        assertFalse(rules.containsKey("singleTexDeco"));assertFalse(rules.containsKey("bambooLiangThick"));
+        for(String name:List.of("thickSakuraPillar","thickOrcPillar","thickSprucePillar","thickBirchPillar",
+                "thinSakuraPillar","thinOrcPillar","thinSprucePillar","thinBirchPillar")){
+            var r=rules.get(name);assertNotNull(r,name);assertEquals("connected_cuboid",r.family());assertNotNull(r.connectedCuboid());
+            assertTrue(r.connectedCuboid().axisLocked());assertEquals("empty",r.connectedCuboid().collision());
+        }
+        for(String name:List.of("bambooLiangThick","bambooLiangVLogThick","bambooLiangVLog2Thick","bambooLiangVWoodThick",
+                "bambooLiangThin","bambooLiangVLogThin","bambooLiangVLog2Thin","bambooLiangVWoodThin")){
+            var r=rules.get(name);assertNotNull(r,name);assertEquals("connected_cuboid",r.family());assertNotNull(r.connectedCuboid());
+            assertFalse(r.connectedCuboid().axisLocked());assertEquals("full",r.connectedCuboid().collision());
+        }
+        assertFalse(rules.containsKey("singleTexDeco"));
     }
 }

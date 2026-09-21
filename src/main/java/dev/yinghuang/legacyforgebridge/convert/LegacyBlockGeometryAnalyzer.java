@@ -9,7 +9,12 @@ import org.objectweb.asm.tree.*;
 
 /** Selects explicit geometric adapters; a texture alone is never evidence for a cube. */
 public final class LegacyBlockGeometryAnalyzer {
-    public record Rule(LegacyIconTableAnalyzer.GeometryInput input,String family,String proof,boolean dynamic) { }
+    public record Rule(LegacyIconTableAnalyzer.GeometryInput input,String family,String proof,boolean dynamic,
+                       LegacyConnectedCuboidRendererAnalyzer.Rule connectedCuboid) {
+        public Rule(LegacyIconTableAnalyzer.GeometryInput input,String family,String proof,boolean dynamic) {
+            this(input,family,proof,dynamic,null);
+        }
+    }
     public record Analysis(List<Rule> rules,Map<String,String> excluded) {
         public Analysis {rules=List.copyOf(rules);excluded=Map.copyOf(excluded);}
     }
@@ -20,6 +25,8 @@ public final class LegacyBlockGeometryAnalyzer {
         var inputs=new LegacyIconTableAnalyzer().analyzeGeometryInputs(source,registry);
         Map<String,LegacyRegisteredBlockRenderTypeAnalyzer.RenderIdentity> renderIds=new HashMap<>();
         for(var r:new LegacyRegisteredBlockRenderTypeAnalyzer().analyze(source).rules())renderIds.put(r.registryName(),r.renderIdentity());
+        Map<String,LegacyConnectedCuboidRendererAnalyzer.Rule> connected=new HashMap<>();
+        for(var r:new LegacyConnectedCuboidRendererAnalyzer().analyze(source).rules())connected.put(r.registryName(),r);
         Map<String,ClassNode> classes=new HashMap<>();
         try(var jar=new JarFile(source.toFile())){
             var entries=jar.entries();while(entries.hasMoreElements()){
@@ -30,6 +37,7 @@ public final class LegacyBlockGeometryAnalyzer {
         List<Rule> out=new ArrayList<>();Map<String,String> excluded=new TreeMap<>();
         for(var input:inputs) {
             String family=null,proof="";boolean dynamic=false;
+            LegacyConnectedCuboidRendererAnalyzer.Rule connectedRule=connected.get(input.registryName());
             var render=renderIds.get(input.registryName());
             // The general gameplay render table intentionally has a smaller admission surface.
             // This presentation adapter recognizes these inherited platform families independently.
@@ -47,7 +55,9 @@ public final class LegacyBlockGeometryAnalyzer {
             boolean mimic=render!=null && render.constant()==null && !input.neighbourFaces().isEmpty()
                     && Objects.equals(input.originalRenderType(),stairs?10:0)
                     && boundRendererCalls(classes,render,"getOriginalRenderType");
-            if(mimic && (stairs||Set.of("net/minecraft/block/Block","net/minecraft/block/BlockPressurePlate").contains(input.platform()))) {
+            if(connectedRule!=null) {
+                family="connected_cuboid";dynamic=true;proof=connectedRule.proof();
+            }else if(mimic && (stairs||Set.of("net/minecraft/block/Block","net/minecraft/block/BlockPressurePlate").contains(input.platform()))) {
                 family=stairs?"mimic_stairs":"mimic_box";dynamic=true;
                 proof="Source original render type, bound delegate renderer and tainted-coordinate per-face neighbour projection";
             }else if(stairs && render!=null && render.isConstant(10)) {
@@ -65,7 +75,7 @@ public final class LegacyBlockGeometryAnalyzer {
             if(stairs && sourceOverrides(classes,input.sourceClass(),Set.of("func_150145_f","func_150144_g","func_150147_e","func_150146_f"))) {
                 excluded.put(input.registryName(),"Source changes the inherited stair geometric algorithm");continue;
             }
-            out.add(new Rule(input,family,proof,dynamic));
+            out.add(new Rule(input,family,proof,dynamic,connectedRule));
         }
         return new Analysis(out,excluded);
     }

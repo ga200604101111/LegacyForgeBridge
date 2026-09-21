@@ -8,6 +8,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.StairBlock;
@@ -27,6 +28,7 @@ public final class LegacyBlockGeometryRegistry {
     private static volatile Map<String,LegacyGeometrySpec.Rule> rules;
     private static final Map<List<LegacyGeometry.Box>,VoxelShape> SHAPES=new ConcurrentHashMap<>();
     private static final Direction[] HORIZONTAL={Direction.NORTH,Direction.SOUTH,Direction.WEST,Direction.EAST};
+    private static final Direction[] LEGACY_DIRECTIONS={Direction.DOWN,Direction.UP,Direction.NORTH,Direction.SOUTH,Direction.WEST,Direction.EAST};
     private LegacyBlockGeometryRegistry() { }
     public static Map<String,LegacyGeometrySpec.Rule> all(){
         var current=rules;if(current==null)synchronized(LegacyBlockGeometryRegistry.class){if(rules==null)rules=load();current=rules;}return current;
@@ -42,7 +44,11 @@ public final class LegacyBlockGeometryRegistry {
     public static VoxelShape shape(Identifier id,BlockState state,BlockGetter world,BlockPos pos,boolean collision){
         var rule=rule(id);if(rule==null||!state.hasProperty(ConvertedLegacyBlock.LEGACY_META))return null;
         int meta=ConvertedLegacyBlock.legacyMeta(state);var variant=rule.variant(meta);if(variant==null)return null;
-        if(collision){if(variant.collision().equals("empty"))return Shapes.empty();if(variant.collision().equals("unsupported"))return null;}
+        if(collision){
+            if(variant.collision().equals("empty"))return Shapes.empty();
+            if(variant.collision().equals("full"))return shape(List.of(LegacyGeometry.FULL));
+            if(variant.collision().equals("unsupported"))return null;
+        }
         return shape(boxes(rule,meta,world,pos,state));
     }
     public static List<LegacyGeometry.Box> boxes(LegacyGeometrySpec.Rule rule,int meta,BlockGetter world,BlockPos pos,BlockState self){
@@ -50,6 +56,36 @@ public final class LegacyBlockGeometryRegistry {
         if(rule.stairs())return LegacyGeometry.stairs(meta,LegacyGeometry.stairMask(meta,(dx,dz)->stairMeta(world.getBlockState(pos.offset(dx,0,dz)))));
         if(rule.pane())return LegacyGeometry.panes(paneMask(world,pos,self));
         return List.of(v.bounds());
+    }
+    /** Presentation-only dynamic boxes. Collision/outline stay on source-proven variant bounds. */
+    public static List<LegacyGeometry.Box> renderBoxes(LegacyGeometrySpec.Rule rule,int meta,BlockGetter world,BlockPos pos,BlockState self){
+        if(!rule.connected())return boxes(rule,meta,world,pos,self);
+        var c=rule.connectedCuboid();if(c==null||c.axisLocked()&&(meta<0||meta>5))return List.of();
+        List<LegacyGeometry.Box> out=new ArrayList<>();out.add(LegacyGeometry.connectedCore(c,meta));
+        for(int direction=0;direction<6;direction++){
+            if(c.axisLocked()&&(direction==meta||direction==(meta^1)))continue;
+            BlockPos target=pos.relative(LEGACY_DIRECTIONS[direction]);BlockState neighbour=world.getBlockState(target);
+            var neighbourRule=rule(neighbour);LegacyGeometrySpec.ConnectedCuboid arm=c;
+            boolean linked=false;
+            if(neighbourRule!=null&&neighbourRule.connected()&&neighbour.hasProperty(ConvertedLegacyBlock.LEGACY_META)){
+                var other=neighbourRule.connectedCuboid();int otherMeta=ConvertedLegacyBlock.legacyMeta(neighbour);
+                if(!(c.axisLocked()&&!other.axisLocked())&&(!c.sameMetadataOnly()||meta==otherMeta)){
+                    linked=true;if(c.size()>other.size())arm=other;
+                }
+            }else if(c.connectFullBlocks()&&neighbour.canOcclude()&&neighbour.isCollisionShapeFullBlock(world,target))linked=true;
+            else if(c.connectWood()&&woodLike(neighbour))linked=true;
+            else if(c.connectRock()&&rockLike(neighbour))linked=true;
+            if(!linked)continue;
+            LegacyGeometry.Box extension=LegacyGeometry.connectedArm(arm.minWidth(),arm.maxWidth(),arm.minHeight(),arm.maxHeight(),c.axisLocked(),meta,direction);
+            if(extension!=null)out.add(extension);
+        }
+        return List.copyOf(out);
+    }
+    private static boolean woodLike(BlockState state){
+        return state.is(BlockTags.LOGS)||state.is(BlockTags.PLANKS);
+    }
+    private static boolean rockLike(BlockState state){
+        return state.is(BlockTags.BASE_STONE_OVERWORLD)||state.is(BlockTags.BASE_STONE_NETHER);
     }
     public static int paneMask(BlockGetter world,BlockPos pos,BlockState self){
         int mask=0;

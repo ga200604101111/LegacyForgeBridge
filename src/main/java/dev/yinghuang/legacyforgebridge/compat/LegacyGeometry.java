@@ -50,6 +50,39 @@ public final class LegacyGeometry {
         return List.copyOf(out);
     }
     public static List<Box> stairs(int metadata){return stairs(metadata,HALVES[metadata&3]);}
+    /** Source-proven connected-cuboid core. ForgeDirection metadata uses 0/1, 2/3, 4/5 opposite pairs. */
+    public static Box connectedCore(LegacyGeometrySpec.ConnectedCuboid spec,int metadata) {
+        return connectedCore(spec.minWidth(),spec.maxWidth(),spec.minHeight(),spec.maxHeight(),spec.axisLocked(),metadata);
+    }
+    public static Box connectedCore(double minWidth,double maxWidth,double minHeight,double maxHeight,boolean axisLocked,int metadata) {
+        if(!axisLocked)return new Box(minWidth,minHeight,minWidth,maxWidth,maxHeight,maxWidth);
+        return switch(metadata) {
+            case 0 -> new Box(minWidth,maxHeight,minWidth,maxWidth,1,maxWidth);
+            case 1 -> new Box(minWidth,0,minWidth,maxWidth,minHeight,maxWidth);
+            case 2 -> new Box(minWidth,minWidth,maxHeight,maxWidth,maxWidth,1);
+            case 3 -> new Box(minWidth,minWidth,0,maxWidth,maxWidth,minHeight);
+            case 4 -> new Box(maxHeight,minWidth,minWidth,1,maxWidth,maxWidth);
+            case 5 -> new Box(0,minWidth,minWidth,minHeight,maxWidth,maxWidth);
+            default -> throw new IllegalArgumentException("Unsupported axis-locked metadata");
+        };
+    }
+    /** Extends the selected core cross-section to one block edge, matching the bounded six-direction renderer family. */
+    public static Box connectedArm(double minWidth,double maxWidth,double minHeight,double maxHeight,
+                                   boolean axisLocked,int metadata,int direction) {
+        if(direction<0||direction>5)throw new IllegalArgumentException("Invalid connected direction");
+        Box core=connectedCore(minWidth,maxWidth,minHeight,maxHeight,axisLocked,metadata);
+        double x0=core.x0(),y0=core.y0(),z0=core.z0(),x1=core.x1(),y1=core.y1(),z1=core.z1();
+        return switch(direction) {
+            case 0 -> core.y0()<=0?null:new Box(x0,0,z0,x1,core.y0(),z1);
+            case 1 -> core.y1()>=1?null:new Box(x0,core.y1(),z0,x1,1,z1);
+            case 2 -> core.z0()<=0?null:new Box(x0,y0,0,x1,y1,core.z0());
+            case 3 -> core.z1()>=1?null:new Box(x0,y0,core.z1(),x1,y1,1);
+            case 4 -> core.x0()<=0?null:new Box(0,y0,z0,core.x0(),y1,z1);
+            case 5 -> core.x1()>=1?null:new Box(core.x1(),y0,z0,1,y1,z1);
+            default -> throw new IllegalArgumentException("Invalid connected direction");
+        };
+    }
+
     /** Bits: north, south, west, east. A legacy isolated pane is a full cross, not a post. */
     public static List<Box> panes(int connections) {
         if(connections<0||connections>15)throw new IllegalArgumentException("Invalid connection mask");

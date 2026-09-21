@@ -41,7 +41,7 @@ public final class ConvertedGeometryClient implements ClientModInitializer {
                 return new GeometryModel(model,rule);
             });
         });
-        LegacyForgeBridge.LOGGER.info("Native geometric model projection enabled: stairs, slabs, connected panes and directional neighbour materials; rules={}",LegacyBlockGeometryRegistry.all().size());
+        LegacyForgeBridge.LOGGER.info("Native geometric model projection enabled: stairs, slabs, connected panes, connected cuboids and directional neighbour materials; rules={}",LegacyBlockGeometryRegistry.all().size());
     }
     private static final class GeometryModel extends WrapperBlockStateModel {
         private final LegacyGeometrySpec.Rule rule;
@@ -57,7 +57,7 @@ public final class ConvertedGeometryClient implements ClientModInitializer {
             if(variant==null){super.emitQuads(emitter,world,pos,state,random,cullTest);return;}
             List<LegacyGeometry.Face> faces;
             if(rule.pane())faces=LegacyGeometry.paneFaces(LegacyBlockGeometryRegistry.paneMask(world,pos,state),variant.edges());
-            else faces=surfaces(LegacyBlockGeometryRegistry.boxes(rule,meta,world,pos,state));
+            else faces=surfaces(LegacyBlockGeometryRegistry.renderBoxes(rule,meta,world,pos,state));
             Material[] chosen=materials;BlockState tintState=state;BlockPos tintPos=pos;
             ChunkSectionLayer layer=ChunkSectionLayer.CUTOUT;
             if(rule.mimic()&&variant.copyFace()>=0){

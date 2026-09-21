@@ -29,13 +29,17 @@ public final class MimicShapeExactCorpusChecks {
         for(var pass:passes){pass.apply(context);System.out.println("PASS "+pass.id());}
         var root=JsonParser.parseString(Files.readString(stage.resolve(LegacyGeometrySpec.PATH))).getAsJsonObject();
         var rules=LegacyGeometrySpec.parse(root);
-        require(rules.size()==21,"geometry families");
-        require(rules.values().stream().mapToInt(r->r.variants().size()).sum()==327,"metadata coverage");
+        require(rules.size()==37,"geometry families");
+        require(rules.values().stream().mapToInt(r->r.variants().size()).sum()==503,"metadata coverage");
         require(root.get("inventoryMaterialFallbackVariants").getAsInt()==8,"material fallback count");
         for(String name:new String[]{"delude_width","delude_height","delude_stair","delude_plate","decocarpet"})
             require(rules.get("bamboomod:"+name).variants().size()==16,"lost state: "+name);
         require(rules.get("bamboomod:bamboopanel").pane(),"panel became cube family");
         require(rules.get("bamboomod:bamboopanel").variants().size()==7,"invented unsupported panel states");
+        require(rules.get("bamboomod:thicksakurapillar").connected(),"thick pillar family missing");
+        require(rules.get("bamboomod:thinsakurapillar").connected(),"thin pillar family missing");
+        require(rules.get("bamboomod:bambooliangthick").connected(),"thick beam family missing");
+        require(rules.get("bamboomod:bambooliangthin").connected(),"thin beam family missing");
         var combat=JsonParser.parseString(Files.readString(stage.resolve(LegacyCombatItemPass.OUTPUT))).getAsJsonObject();
         require(combat.getAsJsonArray("rules").size()==2,"combat item proof count");
         var content=JsonParser.parseString(Files.readString(stage.resolve(LegacyClientContentBaselinePass.CONTENT))).getAsJsonObject();
@@ -59,7 +63,7 @@ public final class MimicShapeExactCorpusChecks {
             }
         }
         require(count==223,"source image/animation count");
-        System.out.println("PASS 21 rules / 327 states / 8 material fallbacks / katana+bow semantics / 223 unchanged source assets");
+        System.out.println("PASS 37 rules / 503 states / connected pillar+beam families / 8 material fallbacks / katana+bow semantics / 223 unchanged source assets");
     }
     private static void require(boolean value,String message){if(!value)throw new AssertionError(message);}
 }

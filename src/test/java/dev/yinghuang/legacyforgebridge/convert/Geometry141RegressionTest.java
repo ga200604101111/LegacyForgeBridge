@@ -6,6 +6,7 @@ class Geometry141RegressionTest {
  @TempDir Path temp;
  @Test void cubeAndWinding(){Geometry141Checks.cubeAndWinding();}
  @Test void slabDimensions(){Geometry141Checks.slabDimensions();}
+ @Test void connectedCuboidDimensions(){Geometry141Checks.connectedCuboidDimensions();}
  @Test void everyStairOrientation(){Geometry141Checks.everyStairOrientation();}
  @Test void outerAndInnerCorners(){Geometry141Checks.outerAndInnerCorners();}
  @Test void cornerContinuationGuard(){Geometry141Checks.cornerContinuationGuard();}

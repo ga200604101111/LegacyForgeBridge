@@ -26,6 +26,15 @@ public final class Geometry141Checks {
         for(var f:faces){double[] a=new double[3],b=new double[3];for(int i=0;i<3;i++){a[i]=f.positions().get(3+i)-f.positions().get(i);b[i]=f.positions().get(6+i)-f.positions().get(i);}double[] n={a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]};for(int i=0;i<3;i++)same(normal[f.side()][i],n[i]);}
     }
     public static void slabDimensions(){LegacyGeometry.Box lower=new LegacyGeometry.Box(0,0,0,1,.5,1),upper=new LegacyGeometry.Box(0,.5,0,1,1,1);same(.5,volume(List.of(lower)));same(.5,volume(List.of(upper)));same(4,area(LegacyGeometry.surfaces(List.of(lower))));}
+    public static void connectedCuboidDimensions(){
+        var liang=new LegacyGeometrySpec.ConnectedCuboid(.15,.85,.15,.85,false,false,true,true,true);
+        check(LegacyGeometry.connectedCore(liang,0).equals(new LegacyGeometry.Box(.15,.15,.15,.85,.85,.85)),"liang core");
+        check(LegacyGeometry.connectedArm(.15,.85,.15,.85,false,0,5).equals(new LegacyGeometry.Box(.85,.15,.15,1,.85,.85)),"liang east arm");
+        var pillar=new LegacyGeometrySpec.ConnectedCuboid(.3,.7,.2,.8,true,true,false,true,false);
+        check(LegacyGeometry.connectedCore(pillar,1).equals(new LegacyGeometry.Box(.3,0,.3,.7,.2,.7)),"pillar up core");
+        check(LegacyGeometry.connectedArm(.3,.7,.2,.8,true,1,5).equals(new LegacyGeometry.Box(.7,0,.3,1,.2,.7)),"pillar east arm");
+        rejects(()->LegacyGeometry.connectedCore(pillar,6));
+    }
     public static void everyStairOrientation(){for(int meta=0;meta<16;meta++){var b=LegacyGeometry.stairs(meta);same(.75,volume(b));same(5.5,area(LegacyGeometry.surfaces(b)));check(LegacyGeometry.stairs(meta&7).equals(b),"bit 3 belongs to source state, not shape orientation");}}
     public static void outerAndInnerCorners(){
         int outer=LegacyGeometry.stairMask(0,(x,z)->x==1&&z==0?2:-1);same(.625,volume(LegacyGeometry.stairs(0,outer)));
@@ -92,5 +101,5 @@ public final class Geometry141Checks {
             out.putNextEntry(new JarEntry("assets/other/textures/blocks/surface.png"));BufferedImage image=new BufferedImage(16,16,BufferedImage.TYPE_INT_ARGB);for(int x=0;x<16;x++)for(int y=0;y<16;y++)image.setRGB(x,y,0xFF775533);ImageIO.write(image,"PNG",out);out.closeEntry();
         }return jar;
     }
-    public static void main(String[]args)throws Exception {cubeAndWinding();slabDimensions();everyStairOrientation();outerAndInnerCorners();cornerContinuationGuard();everyPaneConnection();curtainsHaveNoHorizontalCaps();invalidGeometryRejected();heldModelsUseBlockTransforms();strictSchema();mimicDirectionsCyclesAndBudget();sourceGeometry(Files.createTempDirectory("lfb-shape-source"));sourcePassAndSpecialOwnership(Files.createTempDirectory("lfb-shape-pass"));System.out.println("13 geometry checks passed");}
+    public static void main(String[]args)throws Exception {cubeAndWinding();slabDimensions();connectedCuboidDimensions();everyStairOrientation();outerAndInnerCorners();cornerContinuationGuard();everyPaneConnection();curtainsHaveNoHorizontalCaps();invalidGeometryRejected();heldModelsUseBlockTransforms();strictSchema();mimicDirectionsCyclesAndBudget();sourceGeometry(Files.createTempDirectory("lfb-shape-source"));sourcePassAndSpecialOwnership(Files.createTempDirectory("lfb-shape-pass"));System.out.println("14 geometry checks passed");}
 }

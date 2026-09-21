@@ -51,13 +51,18 @@ public final class LegacyBlockGeometryPass implements ConversionPass {
                 }
                 if(!valid)continue;
                 int metadata=v.metadata(),copy=input.neighbourFaces().getOrDefault(metadata,-1);
-                if(input.collisions().getOrDefault(metadata,"unsupported").equals("unsupported"))continue;
+                var connectedRule=rule.connectedCuboid();
+                if(connectedRule!=null&&connectedRule.axisLocked()&&metadata>5)continue;
+                String collision=connectedRule==null?input.collisions().getOrDefault(metadata,"unsupported"):connectedRule.collision();
+                if(collision.equals("unsupported"))continue;
                 boolean materialFallback=input.materialFallbacks().containsKey(metadata);
                 if(materialFallback&&!rule.family().startsWith("mimic_"))continue;
                 if(rule.family().startsWith("mimic_")&&copy<0&&!materialFallback)continue;
                 LegacyGeometry.Box box=LegacyGeometry.Box.from(v.bounds()),inv=LegacyGeometry.Box.from(v.inventoryBounds());
-                boolean stairs=rule.family().endsWith("stairs"),pane=rule.family().equals("pane");
-                List<LegacyGeometry.Box> world=stairs?LegacyGeometry.stairs(metadata):pane?LegacyGeometry.panes(0):List.of(box);
+                boolean stairs=rule.family().endsWith("stairs"),pane=rule.family().equals("pane"),connected=rule.family().equals("connected_cuboid");
+                List<LegacyGeometry.Box> world=stairs?LegacyGeometry.stairs(metadata):pane?LegacyGeometry.panes(0)
+                        :connected?List.of(LegacyGeometry.connectedCore(connectedRule.minWidth(),connectedRule.maxWidth(),connectedRule.minHeight(),connectedRule.maxHeight(),connectedRule.axisLocked(),metadata))
+                        :List.of(box);
                 List<LegacyGeometry.Box> held=stairs?LegacyGeometry.stairs(HELD_STAIR_METADATA):pane?List.of(new LegacyGeometry.Box(0,0,7d/16,1,1,9d/16)):List.of(inv);
                 String worldId=ns+":block/lfb_geometry/"+path+"/"+metadata,heldId=ns+":item/lfb_geometry/"+path+"/"+metadata;
                 boolean paneEdges=input.paneEdges().getOrDefault(metadata,true);
@@ -68,7 +73,7 @@ public final class LegacyBlockGeometryPass implements ConversionPass {
                 String item=ns+":lfb_geometry/"+path+"/"+metadata;
                 JsonObject nativeItem=new JsonObject(),modelRef=new JsonObject();modelRef.addProperty("type","minecraft:model");modelRef.addProperty("model",heldId);nativeItem.add("model",modelRef);
                 write(staging.resolve("assets/"+ns+"/items/lfb_geometry/"+path+"/"+metadata+".json"),nativeItem);itemVariants.addProperty(String.valueOf(metadata),item);
-                JsonObject spec=new JsonObject();spec.add("bounds",JSON.toJsonTree(box.values()));spec.add("inventoryBounds",JSON.toJsonTree(inv.values()));spec.addProperty("copyFace",copy);spec.addProperty("edges",input.paneEdges().getOrDefault(metadata,true));spec.addProperty("collision",input.collisions().getOrDefault(metadata,"unsupported"));
+                JsonObject spec=new JsonObject();spec.add("bounds",JSON.toJsonTree(box.values()));spec.add("inventoryBounds",JSON.toJsonTree(inv.values()));spec.addProperty("copyFace",copy);spec.addProperty("edges",input.paneEdges().getOrDefault(metadata,true));spec.addProperty("collision",collision);
                 if(materialFallback){spec.addProperty("materialMode",LegacyGeometrySpec.INVENTORY_FALLBACK);spec.addProperty("materialFallbackReason",input.materialFallbacks().get(metadata));materialFallbackCount++;}
                 variants.add(String.valueOf(metadata),spec);
                 if(metadata==0){write(main,worldModel);write(staging.resolve("assets/"+ns+"/models/item/"+path+".json"),heldModel);write(itemDef,nativeItem);}
@@ -80,7 +85,16 @@ public final class LegacyBlockGeometryPass implements ConversionPass {
                 else {String unknown=ns+":block/lfb_geometry/"+path+"/unsupported";write(modelPath(staging,unknown),oldModel);JsonObject value=new JsonObject();value.addProperty("model",unknown);states.add("legacy_meta="+m,value);}
             }
             JsonObject blockstates=new JsonObject();blockstates.add("variants",states);write(staging.resolve("assets/"+ns+"/blockstates/"+path+".json"),blockstates);
-            JsonObject spec=new JsonObject();spec.addProperty("family",rule.family());spec.addProperty("opaque",Boolean.TRUE.equals(input.opaque()));spec.addProperty("sourceClass",input.sourceClass());spec.addProperty("proof",rule.proof());spec.addProperty("sourceRendererEquivalent",false);spec.add("variants",variants);blocks.add(id,spec);
+            JsonObject spec=new JsonObject();spec.addProperty("family",rule.family());spec.addProperty("opaque",Boolean.TRUE.equals(input.opaque()));spec.addProperty("sourceClass",input.sourceClass());spec.addProperty("proof",rule.proof());spec.addProperty("sourceRendererEquivalent",false);
+            if(rule.connectedCuboid()!=null){
+                var c=rule.connectedCuboid();JsonObject connected=new JsonObject();
+                connected.addProperty("minWidth",c.minWidth());connected.addProperty("maxWidth",c.maxWidth());
+                connected.addProperty("minHeight",c.minHeight());connected.addProperty("maxHeight",c.maxHeight());
+                connected.addProperty("axisLocked",c.axisLocked());connected.addProperty("sameMetadataOnly",c.sameMetadataOnly());
+                connected.addProperty("connectFullBlocks",c.connectFullBlocks());connected.addProperty("connectWood",c.connectWood());connected.addProperty("connectRock",c.connectRock());
+                spec.add("connectedCuboid",connected);
+            }
+            spec.add("variants",variants);blocks.add(id,spec);
             JsonObject merged=itemMap.has(id)?itemMap.getAsJsonObject(id):new JsonObject();itemVariants.entrySet().forEach(e->merged.add(e.getKey(),e.getValue()));itemMap.add(id,merged);count++;
         }
         root.addProperty("schemaVersion",1);root.addProperty("sourceSha256",context.sourceHash());root.addProperty("nativeGeometryAdapters",count);root.addProperty("inventoryMaterialFallbackVariants",materialFallbackCount);root.addProperty("fullRendererEquivalenceProven",false);root.add("blocks",blocks);root.add("excluded",exclusions);
