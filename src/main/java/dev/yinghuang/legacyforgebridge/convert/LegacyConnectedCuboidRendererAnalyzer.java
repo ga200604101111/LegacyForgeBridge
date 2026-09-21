@@ -279,7 +279,7 @@ public final class LegacyConnectedCuboidRendererAnalyzer {
             }
             if(put&&candidate!=null&&classes.containsKey(candidate))renderers.add(candidate);
         }
-        return renderers.size()==1?renderers.getFirst():null;
+        return renderers.size()==1?renderers.iterator().next():null;
     }
 
     private static MethodNode find(ClassNode owner,String name,String desc){
