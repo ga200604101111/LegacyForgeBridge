@@ -14,7 +14,7 @@ class ConvertedGridPotPresentationRuntimeTest {
     void parsesBoundedAdaptedPresentationRule() {
         JsonObject value = JsonParser.parseString("""
                 {
-                  "id":"foreign:grid",
+                  "id":"foreign:grid","cellCarrierItemId":"minecraft:flower_pot","cellBodyWidth":0.33333334,"cellBodyHeight":0.375,
                   "gridOffsets":[-0.333,0.0,0.333],
                   "contentTranslateY":0.25,
                   "sourceContentScale":0.75,
@@ -27,6 +27,9 @@ class ConvertedGridPotPresentationRuntimeTest {
         var presentation = ConvertedGridPotPresentationRuntime.parseForTests(value);
         assertNotNull(presentation);
         assertEquals("foreign:grid", presentation.id().toString());
+        assertEquals("minecraft:flower_pot",presentation.cellCarrierItemId().toString());
+        assertEquals(1.0F/3.0F,presentation.cellBodyWidth(),0.0001F);
+        assertEquals(0.375F,presentation.cellBodyHeight(),0.0001F);
         assertEquals(3, presentation.gridOffsets().size());
         assertEquals(-0.333F, presentation.gridOffsets().get(0), 0.0001F);
         assertEquals(0.25F, presentation.contentTranslateY(), 0.0001F);
@@ -39,14 +42,14 @@ class ConvertedGridPotPresentationRuntimeTest {
     @Test
     void rejectsRulesThatPretendLegacyGeometryIsExactOrUseWrongDisplayContext() {
         JsonObject exact = JsonParser.parseString("""
-                {"id":"foreign:grid","gridOffsets":[-0.333,0.0,0.333],"contentTranslateY":0.25,
+                {"id":"foreign:grid","cellCarrierItemId":"minecraft:flower_pot","cellBodyWidth":0.33333334,"cellBodyHeight":0.375,"gridOffsets":[-0.333,0.0,0.333],"contentTranslateY":0.25,
                  "sourceContentScale":0.75,"itemDisplayContext":"NONE","boundingBoxCentered":true,
                  "boundingBoxBottomAligned":true,"exactLegacyGeometry":true}
                 """).getAsJsonObject();
         assertNull(ConvertedGridPotPresentationRuntime.parseForTests(exact));
 
         JsonObject wrongContext = JsonParser.parseString("""
-                {"id":"foreign:grid","gridOffsets":[-0.333,0.0,0.333],"contentTranslateY":0.25,
+                {"id":"foreign:grid","cellCarrierItemId":"minecraft:flower_pot","cellBodyWidth":0.33333334,"cellBodyHeight":0.375,"gridOffsets":[-0.333,0.0,0.333],"contentTranslateY":0.25,
                  "sourceContentScale":0.75,"itemDisplayContext":"GUI","boundingBoxCentered":true,
                  "boundingBoxBottomAligned":true,"exactLegacyGeometry":false}
                 """).getAsJsonObject();
@@ -56,7 +59,7 @@ class ConvertedGridPotPresentationRuntimeTest {
     @Test
     void rejectsMalformedOffsetsAndTransforms() {
         JsonObject malformed = JsonParser.parseString("""
-                {"id":"foreign:grid","gridOffsets":[0.0,0.333],"contentTranslateY":0.25,
+                {"id":"foreign:grid","cellCarrierItemId":"minecraft:flower_pot","cellBodyWidth":0.33333334,"cellBodyHeight":0.375,"gridOffsets":[0.0,0.333],"contentTranslateY":0.25,
                  "sourceContentScale":0.75,"itemDisplayContext":"NONE","boundingBoxCentered":true,
                  "boundingBoxBottomAligned":true,"exactLegacyGeometry":false}
                 """).getAsJsonObject();
