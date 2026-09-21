@@ -27,6 +27,8 @@ public final class LegacyBlockGeometryPass implements ConversionPass {
         JsonObject icons=Files.isRegularFile(iconPath)?read(iconPath):new JsonObject();
         JsonObject itemMap=icons.has("items")?icons.getAsJsonObject("items"):new JsonObject();
         var analysis=new LegacyBlockGeometryAnalyzer().analyze(context.sourceJar());
+        Map<String,dev.yinghuang.legacyforgebridge.convert.LegacyUvRotatedBoxAnalyzer.Rule> uvRotated=new HashMap<>();
+        for(var uv:new dev.yinghuang.legacyforgebridge.convert.LegacyUvRotatedBoxAnalyzer().analyze(context.sourceJar()).rules())uvRotated.put(uv.registryName(),uv);
         analysis.excluded().forEach(exclusions::addProperty);int count=0,materialFallbackCount=0;
         for(var rule:analysis.rules()) {
             var input=rule.input();JsonObject def=definitions.get(input.registryName());if(def==null)continue;
@@ -66,7 +68,9 @@ public final class LegacyBlockGeometryPass implements ConversionPass {
                 List<LegacyGeometry.Box> held=stairs?LegacyGeometry.stairs(HELD_STAIR_METADATA):pane?List.of(new LegacyGeometry.Box(0,0,7d/16,1,1,9d/16)):List.of(inv);
                 String worldId=ns+":block/lfb_geometry/"+path+"/"+metadata,heldId=ns+":item/lfb_geometry/"+path+"/"+metadata;
                 boolean paneEdges=input.paneEdges().getOrDefault(metadata,true);
-                JsonObject worldModel=pane?faceModel(LegacyGeometry.paneFaces(0,paneEdges),sprites):model(world,sprites);
+                var uvRule=uvRotated.get(input.registryName());
+                JsonObject worldModel=pane?faceModel(LegacyGeometry.paneFaces(0,paneEdges),sprites)
+                        :uvRule!=null?rotatedModel(world,sprites,uvRule.quarterTurns(metadata)):model(world,sprites);
                 JsonObject heldModel=pane&&!paneEdges?faceModel(LegacyGeometry.curtainFaces(12),sprites):model(held,sprites);
                 write(modelPath(staging,worldId),worldModel);write(modelPath(staging,heldId),heldModel);
                 JsonObject state=new JsonObject();state.addProperty("model",worldId);states.add("legacy_meta="+metadata,state);
@@ -115,6 +119,17 @@ public final class LegacyBlockGeometryPass implements ConversionPass {
     private static boolean placeholder(JsonObject o){return o.size()==1&&o.has("parent")&&Set.of("minecraft:item/barrier","minecraft:block/magenta_glazed_terracotta").contains(o.get("parent").getAsString());}
     public static JsonObject model(List<LegacyGeometry.Box> boxes,List<String> sprites) {
         return faceModel(LegacyGeometry.surfaces(boxes),sprites);
+    }
+    public static JsonObject rotatedModel(List<LegacyGeometry.Box> boxes,List<String> sprites,int quarterTurns) {
+        if(quarterTurns<0||quarterTurns>3)throw new IllegalArgumentException("UV quarter-turn outside 0..3");
+        JsonObject model=model(boxes,sprites);if(quarterTurns==0)return model;
+        int rotation=quarterTurns*90;
+        JsonArray elements=model.getAsJsonArray("elements");
+        for(JsonElement raw:elements){
+            JsonObject element=raw.getAsJsonObject();JsonObject faces=element.getAsJsonObject("faces");
+            for(var face:faces.entrySet())face.getValue().getAsJsonObject().addProperty("rotation",rotation);
+        }
+        return model;
     }
     public static JsonObject faceModel(List<LegacyGeometry.Face> surface,List<String> sprites) {
         if(sprites.size()!=6)throw new IllegalArgumentException("Six source face sprites required");
