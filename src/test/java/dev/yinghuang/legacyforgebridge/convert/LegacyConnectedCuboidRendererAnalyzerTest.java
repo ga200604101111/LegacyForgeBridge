@@ -37,6 +37,7 @@ class LegacyConnectedCuboidRendererAnalyzerTest {
         assertEquals(.2,rule.minHeight(),1e-6);assertEquals(.8,rule.maxHeight(),1e-6);
         assertFalse(rule.axisLocked());assertFalse(rule.sameMetadataOnly());
         assertTrue(rule.connectFullBlocks());assertEquals("full",rule.collision());
+        assertEquals("self",rule.materialSource().mode());
     }
 
     private static byte[] iface(){
@@ -71,6 +72,7 @@ class LegacyConnectedCuboidRendererAnalyzerTest {
         m=w.visitMethod(Opcodes.ACC_PUBLIC,"different","(II)Z",null,null);m.visitCode();m.visitInsn(Opcodes.ICONST_0);m.visitInsn(Opcodes.IRETURN);m.visitMaxs(1,3);m.visitEnd();
         for(int i=0;i<5;i++){m=w.visitMethod(Opcodes.ACC_PUBLIC,new String[]{"size","minW","maxW","minH","maxH"}[i],"()F",null,null);m.visitCode();m.visitLdcInsn(i==0?.7F:new float[]{0,.15F,.85F,.2F,.8F}[i]);m.visitInsn(Opcodes.FRETURN);m.visitMaxs(1,1);m.visitEnd();}
         m=w.visitMethod(Opcodes.ACC_PUBLIC,"side","(I)V",null,null);m.visitCode();m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,2);m.visitEnd();
+        m=w.visitMethod(Opcodes.ACC_PUBLIC,"registerBlockIcons","(Lnet/minecraft/client/renderer/texture/IIconRegister;)V",null,null);m.visitCode();m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,2);m.visitEnd();
         m=w.visitMethod(Opcodes.ACC_PUBLIC,"getCollisionBoundingBoxFromPool","(Lnet/minecraft/world/World;III)Lnet/minecraft/util/AxisAlignedBB;",null,null);m.visitCode();
         for(int local=2;local<=4;local++){m.visitVarInsn(Opcodes.ILOAD,local);m.visitInsn(Opcodes.I2D);}
         for(int local=2;local<=4;local++){m.visitVarInsn(Opcodes.ILOAD,local);m.visitInsn(Opcodes.ICONST_1);m.visitInsn(Opcodes.IADD);m.visitInsn(Opcodes.I2D);}
