@@ -38,7 +38,8 @@ public final class LegacyVisibleEntityRegistry {
     public record Rule(Identifier id,String legacyModId,int legacyNumericId,int trackingRange,int updateFrequency,
                        boolean velocityUpdates,float width,float height,Adapter adapter,int modelTextureWidth,int modelTextureHeight,
                        List<Part> parts,Identifier fixedTexture,Map<String,Integer> watcherIndices,Map<Integer,Integer> watcherTypes,
-                       List<TextureVariant> textureVariants,List<Integer> palette,int itemWatcherBase,int itemWatcherCount) {
+                       List<TextureVariant> textureVariants,List<Integer> palette,int itemWatcherBase,int itemWatcherCount,
+                       boolean physicalCollision,boolean playerAttackRemoves) {
         public Rule {
             if(id==null||legacyModId==null||legacyModId.isBlank()||legacyNumericId<0||trackingRange<=0||updateFrequency<=0
                     ||!velocityUpdates||!(width>0F)||!(height>0F)||!finite(width,height)
@@ -152,7 +153,8 @@ public final class LegacyVisibleEntityRegistry {
             Identifier fixed=value.has("fixedTexture")?Identifier.parse(value.get("fixedTexture").getAsString()):null;
             return new Rule(id,legacyModId,integer(value,"legacyNumericId",-1),integer(value,"trackingRange",0),integer(value,"updateFrequency",0),
                     bool(value,"velocityUpdates"),decimal(value,"width"),decimal(value,"height"),adapter,integer(value,"modelTextureWidth",0),integer(value,"modelTextureHeight",0),
-                    parts,fixed,watchers,watcherTypes,textures,palette,integer(value,"itemWatcherBase",-1),integer(value,"itemWatcherCount",0));
+                    parts,fixed,watchers,watcherTypes,textures,palette,integer(value,"itemWatcherBase",-1),integer(value,"itemWatcherCount",0),
+                    bool(value,"physicalCollision"),bool(value,"playerAttackRemoves"));
         }catch(RuntimeException invalid){return null;}
     }
 
