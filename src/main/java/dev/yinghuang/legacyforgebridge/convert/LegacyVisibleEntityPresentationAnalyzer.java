@@ -177,7 +177,7 @@ public final class LegacyVisibleEntityPresentationAnalyzer {
         boolean ownBox=box.size()==3
                 &&box.get(0) instanceof VarInsnNode self&&self.getOpcode()==Opcodes.ALOAD&&self.var==0
                 &&box.get(1) instanceof FieldInsnNode field&&field.getOpcode()==Opcodes.GETFIELD
-                &&field.owner.equals("net/minecraft/entity/Entity")
+                &&(field.owner.equals("net/minecraft/entity/Entity")||field.owner.equals(entity.name))
                 &&field.desc.equals("Lnet/minecraft/util/AxisAlignedBB;")
                 &&Set.of("field_70121_D","boundingBox").contains(field.name)
                 &&box.get(2).getOpcode()==Opcodes.ARETURN;
@@ -189,7 +189,7 @@ public final class LegacyVisibleEntityPresentationAnalyzer {
         return code.size()==7
                 &&code.get(0) instanceof VarInsnNode load&&load.getOpcode()==Opcodes.ALOAD&&load.var==0
                 &&code.get(1) instanceof FieldInsnNode dead&&dead.getOpcode()==Opcodes.GETFIELD
-                &&dead.owner.equals("net/minecraft/entity/Entity")&&dead.desc.equals("Z")
+                &&(dead.owner.equals("net/minecraft/entity/Entity")||dead.owner.equals(entity.name))&&dead.desc.equals("Z")
                 &&Set.of("field_70128_L","isDead").contains(dead.name)
                 &&code.get(2) instanceof JumpInsnNode jump&&jump.getOpcode()==Opcodes.IFNE
                 &&Integer.valueOf(1).equals(intConst(code.get(3)))
