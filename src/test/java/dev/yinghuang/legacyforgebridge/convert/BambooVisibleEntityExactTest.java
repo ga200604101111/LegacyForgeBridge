@@ -19,11 +19,12 @@ class BambooVisibleEntityExactTest {
         var analysis=new LegacyVisibleEntityPresentationAnalyzer().analyze(source);
         Map<String,LegacyVisibleEntityPresentationAnalyzer.Rule> rules=analysis.rules().stream()
                 .collect(Collectors.toMap(LegacyVisibleEntityPresentationAnalyzer.Rule::registryName,Function.identity()));
-        assertEquals(3,rules.size(),analysis.diagnostics().toString());
+        assertEquals(4,rules.size(),analysis.diagnostics().toString());
 
         var door=rules.get("Syouzi");assertNotNull(door);assertEquals(LegacyVisibleEntityPresentationAnalyzer.Adapter.SLIDE_PANEL,door.adapter());
         assertEquals(2,door.legacyNumericId());assertEquals(1F,door.width());assertEquals(2F,door.height());
         assertEquals(17,door.watcherIndices().get("direction"));assertEquals(18,door.watcherIndices().get("mirror"));assertEquals(20,door.watcherIndices().get("texture"));
+        assertEquals(Map.of(17,0,18,0,19,0,20,1,22,0,23,0),door.watcherTypes());
         assertEquals(6,door.textureVariants().size());assertEquals("bamboo:textures/entitys/husuma.png",door.textureVariants().getFirst().texture());
         assertFalse(door.textureVariants().getFirst().translucent());assertTrue(door.textureVariants().get(2).translucent());
         assertEquals(1,door.parts().size());assertEquals(16,door.parts().getFirst().width());assertEquals(32,door.parts().getFirst().height());assertEquals(2,door.parts().getFirst().depth());
@@ -36,6 +37,10 @@ class BambooVisibleEntityExactTest {
         var tray=rules.get("Obon");assertNotNull(tray);assertEquals(LegacyVisibleEntityPresentationAnalyzer.Adapter.TRAY_ITEMS,tray.adapter());
         assertEquals(12,tray.legacyNumericId());assertEquals(1F,tray.width());assertEquals(.25F,tray.height());
         assertEquals(17,tray.itemWatcherBase());assertEquals(5,tray.itemWatcherCount());assertEquals(9,tray.parts().size());
+        for(int index=17;index<=21;index++)assertEquals(5,tray.watcherTypes().get(index),index+" ItemStack watcher");
         assertEquals("bamboo:textures/entitys/obon.png",tray.fixedTexture());
+
+        var thrown=rules.get("ThrowZabuton");assertNotNull(thrown);
+        assertEquals(LegacyVisibleEntityPresentationAnalyzer.Adapter.TINTED_CUSHION,thrown.adapter());
     }
 }
