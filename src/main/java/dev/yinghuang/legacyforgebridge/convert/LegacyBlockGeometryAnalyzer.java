@@ -27,6 +27,8 @@ public final class LegacyBlockGeometryAnalyzer {
         for(var r:new LegacyRegisteredBlockRenderTypeAnalyzer().analyze(source).rules())renderIds.put(r.registryName(),r.renderIdentity());
         Map<String,LegacyConnectedCuboidRendererAnalyzer.Rule> connected=new HashMap<>();
         for(var r:new LegacyConnectedCuboidRendererAnalyzer().analyze(source).rules())connected.put(r.registryName(),r);
+        Map<String,LegacyUvRotatedBoxAnalyzer.Rule> uvRotated=new HashMap<>();
+        for(var r:new LegacyUvRotatedBoxAnalyzer().analyze(source).rules())uvRotated.put(r.registryName(),r);
         Map<String,ClassNode> classes=new HashMap<>();
         try(var jar=new JarFile(source.toFile())){
             var entries=jar.entries();while(entries.hasMoreElements()){
@@ -38,6 +40,7 @@ public final class LegacyBlockGeometryAnalyzer {
         for(var input:inputs) {
             String family=null,proof="";boolean dynamic=false;
             LegacyConnectedCuboidRendererAnalyzer.Rule connectedRule=connected.get(input.registryName());
+            LegacyUvRotatedBoxAnalyzer.Rule uvRule=uvRotated.get(input.registryName());
             var render=renderIds.get(input.registryName());
             // The general gameplay render table intentionally has a smaller admission surface.
             // This presentation adapter recognizes these inherited platform families independently.
@@ -57,6 +60,9 @@ public final class LegacyBlockGeometryAnalyzer {
                     && boundRendererCalls(classes,render,"getOriginalRenderType");
             if(connectedRule!=null) {
                 family="connected_cuboid";dynamic=true;proof=connectedRule.proof();
+            }else if(uvRule!=null && input.platform().equals("net/minecraft/block/Block")
+                    && input.neighbourFaces().isEmpty() && input.materialFallbacks().isEmpty()) {
+                family="box";proof="Source-bound standard renderer applies one metadata-derived quarter-turn to all six face UVs; shift="+uvRule.metadataShift();
             }else if(mimic && (stairs||Set.of("net/minecraft/block/Block","net/minecraft/block/BlockPressurePlate").contains(input.platform()))) {
                 family=stairs?"mimic_stairs":"mimic_box";dynamic=true;
                 proof="Source original render type, bound delegate renderer and tainted-coordinate per-face neighbour projection";
