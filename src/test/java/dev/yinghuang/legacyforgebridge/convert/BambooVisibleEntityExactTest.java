@@ -27,20 +27,22 @@ class BambooVisibleEntityExactTest {
         assertEquals(Map.of(17,0,18,0,19,0,20,1,22,0,23,0),door.watcherTypes());
         assertEquals(6,door.textureVariants().size());assertEquals("bamboo:textures/entitys/husuma.png",door.textureVariants().getFirst().texture());
         assertFalse(door.textureVariants().getFirst().translucent());assertTrue(door.textureVariants().get(2).translucent());
+        assertTrue(door.physicalCollision());assertTrue(door.playerAttackRemoves());
         assertEquals(1,door.parts().size());assertEquals(16,door.parts().getFirst().width());assertEquals(32,door.parts().getFirst().height());assertEquals(2,door.parts().getFirst().depth());
 
         var cushion=rules.get("Zabuton");assertNotNull(cushion);assertEquals(LegacyVisibleEntityPresentationAnalyzer.Adapter.TINTED_CUSHION,cushion.adapter());
         assertEquals(19,cushion.legacyNumericId());assertEquals(1F,cushion.width());assertEquals(.125F,cushion.height());
         assertEquals(16,cushion.watcherIndices().get("color"));assertEquals(16,cushion.palette().size());assertEquals(0xFFFFFF,cushion.palette().get(15));
-        assertEquals("bamboo:textures/entitys/zabuton.png",cushion.fixedTexture());assertEquals(14,cushion.parts().getFirst().width());assertEquals(2,cushion.parts().getFirst().height());
+        assertEquals("bamboo:textures/entitys/zabuton.png",cushion.fixedTexture());assertTrue(cushion.physicalCollision());assertTrue(cushion.playerAttackRemoves());assertEquals(14,cushion.parts().getFirst().width());assertEquals(2,cushion.parts().getFirst().height());
 
         var tray=rules.get("Obon");assertNotNull(tray);assertEquals(LegacyVisibleEntityPresentationAnalyzer.Adapter.TRAY_ITEMS,tray.adapter());
         assertEquals(12,tray.legacyNumericId());assertEquals(1F,tray.width());assertEquals(.25F,tray.height());
         assertEquals(17,tray.itemWatcherBase());assertEquals(5,tray.itemWatcherCount());assertEquals(9,tray.parts().size());
         for(int index=17;index<=21;index++)assertEquals(5,tray.watcherTypes().get(index),index+" ItemStack watcher");
-        assertEquals("bamboo:textures/entitys/obon.png",tray.fixedTexture());
+        assertEquals("bamboo:textures/entitys/obon.png",tray.fixedTexture());assertTrue(tray.physicalCollision());assertTrue(tray.playerAttackRemoves());
 
         var thrown=rules.get("ThrowZabuton");assertNotNull(thrown);
         assertEquals(LegacyVisibleEntityPresentationAnalyzer.Adapter.TINTED_CUSHION,thrown.adapter());
+        assertFalse(thrown.physicalCollision());assertFalse(thrown.playerAttackRemoves());
     }
 }
