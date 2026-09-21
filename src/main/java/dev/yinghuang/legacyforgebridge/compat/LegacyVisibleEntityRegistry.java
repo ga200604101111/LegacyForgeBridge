@@ -37,7 +37,7 @@ public final class LegacyVisibleEntityRegistry {
     }
     public record Rule(Identifier id,String legacyModId,int legacyNumericId,int trackingRange,int updateFrequency,
                        boolean velocityUpdates,float width,float height,Adapter adapter,int modelTextureWidth,int modelTextureHeight,
-                       List<Part> parts,Identifier fixedTexture,Map<String,Integer> watcherIndices,
+                       List<Part> parts,Identifier fixedTexture,Map<String,Integer> watcherIndices,Map<Integer,Integer> watcherTypes,
                        List<TextureVariant> textureVariants,List<Integer> palette,int itemWatcherBase,int itemWatcherCount) {
         public Rule {
             if(id==null||legacyModId==null||legacyModId.isBlank()||legacyNumericId<0||trackingRange<=0||updateFrequency<=0
@@ -45,22 +45,28 @@ public final class LegacyVisibleEntityRegistry {
                     ||adapter==null||modelTextureWidth<=0||modelTextureHeight<=0||parts==null||parts.isEmpty()||parts.size()>64)
                 throw new IllegalArgumentException("Invalid visible Entity rule");
             parts=List.copyOf(parts);watcherIndices=Map.copyOf(watcherIndices==null?Map.of():watcherIndices);
+            watcherTypes=Map.copyOf(watcherTypes==null?Map.of():watcherTypes);
             textureVariants=List.copyOf(textureVariants==null?List.of():textureVariants);
             palette=List.copyOf(palette==null?List.of():palette);
             for(Integer index:watcherIndices.values())if(index==null||index<0||index>31)throw new IllegalArgumentException("Watcher index outside legacy range");
+            for(var entry:watcherTypes.entrySet())if(entry.getKey()==null||entry.getKey()<0||entry.getKey()>31||entry.getValue()==null||entry.getValue()<0||entry.getValue()>6)
+                throw new IllegalArgumentException("Invalid visible Entity watcher wire type");
             switch(adapter){
                 case SLIDE_PANEL -> {
                     if(parts.size()!=1||fixedTexture!=null||textureVariants.size()<2
-                            ||!watcherIndices.keySet().containsAll(Set.of("direction","mirror","texture")))
+                            ||!watcherIndices.keySet().containsAll(Set.of("direction","mirror","texture"))
+                            ||!watcherTypes.keySet().containsAll(watcherIndices.values()))
                         throw new IllegalArgumentException("Incomplete slide-panel rule");
                 }
                 case TINTED_CUSHION -> {
-                    if(parts.size()!=1||fixedTexture==null||palette.size()!=16||!watcherIndices.containsKey("color"))
+                    if(parts.size()!=1||fixedTexture==null||palette.size()!=16||!watcherIndices.containsKey("color")
+                            ||!watcherTypes.containsKey(watcherIndices.get("color")))
                         throw new IllegalArgumentException("Incomplete tinted-cushion rule");
                     for(Integer rgb:palette)if(rgb==null||rgb<0||rgb>0xFFFFFF)throw new IllegalArgumentException("Invalid cushion palette");
                 }
                 case TRAY_ITEMS -> {
-                    if(fixedTexture==null||itemWatcherBase<0||itemWatcherCount!=5||itemWatcherBase+itemWatcherCount>32)
+                    if(fixedTexture==null||itemWatcherBase<0||itemWatcherCount!=5||itemWatcherBase+itemWatcherCount>32
+                            ||java.util.stream.IntStream.range(itemWatcherBase,itemWatcherBase+itemWatcherCount).anyMatch(i->watcherTypes.getOrDefault(i,-1)!=5))
                         throw new IllegalArgumentException("Incomplete tray rule");
                 }
             }
@@ -137,13 +143,15 @@ public final class LegacyVisibleEntityRegistry {
                     decimal(p,"pivotX"),decimal(p,"pivotY"),decimal(p,"pivotZ"),decimal(p,"xRot"),decimal(p,"yRot"),decimal(p,"zRot"),bool(p,"mirror")));}
             Map<String,Integer> watchers=new LinkedHashMap<>();JsonObject wo=value.has("watchers")?value.getAsJsonObject("watchers"):new JsonObject();
             wo.entrySet().forEach(e->watchers.put(e.getKey(),e.getValue().getAsInt()));
+            Map<Integer,Integer> watcherTypes=new LinkedHashMap<>();JsonObject wt=value.has("watcherTypes")?value.getAsJsonObject("watcherTypes"):new JsonObject();
+            wt.entrySet().forEach(e->watcherTypes.put(Integer.parseInt(e.getKey()),e.getValue().getAsInt()));
             List<TextureVariant> textures=new ArrayList<>();JsonArray ta=value.getAsJsonArray("textureVariants");
             if(ta!=null)for(JsonElement e:ta){JsonObject t=e.getAsJsonObject();textures.add(new TextureVariant(integer(t,"value",-1),Identifier.parse(required(t,"texture")),bool(t,"translucent")));}
             List<Integer> palette=new ArrayList<>();JsonArray ca=value.getAsJsonArray("palette");if(ca!=null)for(JsonElement e:ca)palette.add(e.getAsInt());
             Identifier fixed=value.has("fixedTexture")?Identifier.parse(value.get("fixedTexture").getAsString()):null;
             return new Rule(id,legacyModId,integer(value,"legacyNumericId",-1),integer(value,"trackingRange",0),integer(value,"updateFrequency",0),
                     bool(value,"velocityUpdates"),decimal(value,"width"),decimal(value,"height"),adapter,integer(value,"modelTextureWidth",0),integer(value,"modelTextureHeight",0),
-                    parts,fixed,watchers,textures,palette,integer(value,"itemWatcherBase",-1),integer(value,"itemWatcherCount",0));
+                    parts,fixed,watchers,watcherTypes,textures,palette,integer(value,"itemWatcherBase",-1),integer(value,"itemWatcherCount",0));
         }catch(RuntimeException invalid){return null;}
     }
 
