@@ -24,20 +24,27 @@ class LegacyRegistryAnalyzerTest {
         try(JarOutputStream out=new JarOutputStream(Files.newOutputStream(jar))){
             put(out,"other/sample/CrimsonBlade.class",simpleSubclass("other/sample/CrimsonBlade","net/minecraft/item/ItemSword"));
             put(out,"other/sample/StoneLamp.class",simpleSubclass("other/sample/StoneLamp","net/minecraft/block/Block"));
+            put(out,"other/sample/BeamBlock.class",floatConstructorBlock());
             put(out,"other/sample/Bootstrap.class",bootstrap());
         }
 
         LegacyRegistryAnalyzer analyzer=new LegacyRegistryAnalyzer();
         LegacyRegistryAnalyzer.Analysis analysis=analyzer.analyze(jar);
         assertTrue(analysis.diagnostics().isEmpty(), String.join("\n",analysis.diagnostics()));
-        assertEquals(2,analysis.registrations().size());
+        assertEquals(3,analysis.registrations().size());
         var item=analysis.items().getFirst();
         assertEquals("foreign_blade",item.registryName());
         assertEquals("other/sample/CrimsonBlade",item.implementationClass());
         assertEquals("sword",analyzer.classifyItem(item.implementationClass()));
-        var block=analysis.blocks().getFirst();
+        var block=analysis.blocks().stream().filter(value->value.registryName().equals("stone_lamp")).findFirst().orElseThrow();
         assertEquals("stone_lamp",block.registryName());
         assertEquals("other/sample/StoneLamp",block.implementationClass());
+        var beam=analysis.blocks().stream().filter(value->value.registryName().equals("beam")).findFirst().orElseThrow();
+        assertEquals("(FFFF)V",beam.constructorDescriptor());
+        assertEquals(0.15F,beam.constructorArguments().get(0).value());
+        assertEquals(0.85F,beam.constructorArguments().get(1).value());
+        assertEquals(0.15F,beam.constructorArguments().get(2).value());
+        assertEquals(0.85F,beam.constructorArguments().get(3).value());
         // This fixture does not store helper return values into static fields, so no field binding is expected.
         assertTrue(analysis.fieldBindings().isEmpty());
     }
@@ -45,6 +52,13 @@ class LegacyRegistryAnalyzerTest {
     private static byte[] simpleSubclass(String name,String parent){
         ClassWriter w=new ClassWriter(0);w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,name,null,parent,null);
         MethodVisitor m=w.visitMethod(Opcodes.ACC_PUBLIC,"<init>","()V",null,null);m.visitCode();m.visitVarInsn(Opcodes.ALOAD,0);m.visitMethodInsn(Opcodes.INVOKESPECIAL,parent,"<init>","()V",false);m.visitInsn(Opcodes.RETURN);m.visitMaxs(1,1);m.visitEnd();w.visitEnd();return w.toByteArray();
+    }
+
+    private static byte[] floatConstructorBlock(){
+        String name="other/sample/BeamBlock";
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,name,null,"net/minecraft/block/Block",null);
+        MethodVisitor m=w.visitMethod(Opcodes.ACC_PUBLIC,"<init>","(FFFF)V",null,null);m.visitCode();m.visitVarInsn(Opcodes.ALOAD,0);
+        m.visitMethodInsn(Opcodes.INVOKESPECIAL,"net/minecraft/block/Block","<init>","()V",false);m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
     }
 
     private static byte[] bootstrap(){
@@ -56,7 +70,16 @@ class LegacyRegistryAnalyzerTest {
         MethodVisitor m=w.visitMethod(Opcodes.ACC_PUBLIC,"preInit","(Lcpw/mods/fml/common/event/FMLPreInitializationEvent;)V",null,null);
         AnnotationVisitor av=m.visitAnnotation("Lcpw/mods/fml/common/Mod$EventHandler;",true);av.visitEnd();
         m.visitCode();m.visitTypeInsn(Opcodes.NEW,"other/sample/CrimsonBlade");m.visitInsn(Opcodes.DUP);m.visitMethodInsn(Opcodes.INVOKESPECIAL,"other/sample/CrimsonBlade","<init>","()V",false);m.visitLdcInsn("foreign_blade");m.visitMethodInsn(Opcodes.INVOKESTATIC,"other/sample/Bootstrap","item","(Lnet/minecraft/item/Item;Ljava/lang/String;)V",false);
-        m.visitTypeInsn(Opcodes.NEW,"other/sample/StoneLamp");m.visitInsn(Opcodes.DUP);m.visitMethodInsn(Opcodes.INVOKESPECIAL,"other/sample/StoneLamp","<init>","()V",false);m.visitLdcInsn("stone_lamp");m.visitMethodInsn(Opcodes.INVOKESTATIC,"other/sample/Bootstrap","block","(Lnet/minecraft/block/Block;Ljava/lang/String;)V",false);m.visitInsn(Opcodes.RETURN);m.visitMaxs(3,2);m.visitEnd();w.visitEnd();return w.toByteArray();
+        m.visitTypeInsn(Opcodes.NEW,"other/sample/StoneLamp");m.visitInsn(Opcodes.DUP);m.visitMethodInsn(Opcodes.INVOKESPECIAL,"other/sample/StoneLamp","<init>","()V",false);m.visitLdcInsn("stone_lamp");m.visitMethodInsn(Opcodes.INVOKESTATIC,"other/sample/Bootstrap","block","(Lnet/minecraft/block/Block;Ljava/lang/String;)V",false);
+        m.visitLdcInsn(0.85F);m.visitVarInsn(Opcodes.FSTORE,2);
+        m.visitInsn(Opcodes.FCONST_1);m.visitVarInsn(Opcodes.FLOAD,2);m.visitInsn(Opcodes.FSUB);m.visitVarInsn(Opcodes.FSTORE,3);
+        m.visitLdcInsn(0.85F);m.visitVarInsn(Opcodes.FSTORE,4);
+        m.visitInsn(Opcodes.FCONST_1);m.visitVarInsn(Opcodes.FLOAD,4);m.visitInsn(Opcodes.FSUB);m.visitVarInsn(Opcodes.FSTORE,5);
+        m.visitTypeInsn(Opcodes.NEW,"other/sample/BeamBlock");m.visitInsn(Opcodes.DUP);
+        m.visitVarInsn(Opcodes.FLOAD,3);m.visitVarInsn(Opcodes.FLOAD,2);m.visitVarInsn(Opcodes.FLOAD,5);m.visitVarInsn(Opcodes.FLOAD,4);
+        m.visitMethodInsn(Opcodes.INVOKESPECIAL,"other/sample/BeamBlock","<init>","(FFFF)V",false);m.visitLdcInsn("beam");
+        m.visitMethodInsn(Opcodes.INVOKESTATIC,"other/sample/Bootstrap","block","(Lnet/minecraft/block/Block;Ljava/lang/String;)V",false);
+        m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,6);m.visitEnd();w.visitEnd();return w.toByteArray();
     }
 
     private static void put(JarOutputStream out,String name,byte[] bytes)throws Exception{out.putNextEntry(new JarEntry(name));out.write(bytes);out.closeEntry();}

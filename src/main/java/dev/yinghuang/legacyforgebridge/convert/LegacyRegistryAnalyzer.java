@@ -473,11 +473,23 @@ public final class LegacyRegistryAnalyzer {
                     return resolve(context, frame.getStack(frame.getStackSize() - 1), producerIndex, depth + 1, guard);
             }
         }
-        if (producer instanceof VarInsnNode variable && isReferenceLoad(variable.getOpcode())) {
+        if (producer instanceof VarInsnNode variable && isLoad(variable.getOpcode())) {
             if (context.parameterLocals().contains(variable.var)) return new ParamSymbol(variable.var);
             Frame<SourceValue> frame = context.frames()[producerIndex];
             if (frame != null && variable.var < frame.getLocals()) return resolve(context, frame.getLocal(variable.var), producerIndex, depth + 1, guard);
             return UnknownSymbol.INSTANCE;
+        }
+        if (isNumericBinary(producer.getOpcode())) {
+            Frame<SourceValue> frame=context.frames()[producerIndex];
+            if(frame==null||frame.getStackSize()<2)return UnknownSymbol.INSTANCE;
+            Symbol left=resolve(context,frame.getStack(frame.getStackSize()-2),producerIndex,depth+1,guard);
+            Symbol right=resolve(context,frame.getStack(frame.getStackSize()-1),producerIndex,depth+1,guard);
+            return numericBinary(producer.getOpcode(),left,right);
+        }
+        if (isNumericUnary(producer.getOpcode())) {
+            Frame<SourceValue> frame=context.frames()[producerIndex];
+            if(frame==null||frame.getStackSize()<1)return UnknownSymbol.INSTANCE;
+            return numericUnary(producer.getOpcode(),resolve(context,frame.getStack(frame.getStackSize()-1),producerIndex,depth+1,guard));
         }
         if (producer instanceof FieldInsnNode field && field.getOpcode() == Opcodes.GETSTATIC) {
             ClassNode owner = classes.get(field.owner);
@@ -536,8 +548,71 @@ public final class LegacyRegistryAnalyzer {
         return new ObjectSymbol(type);
     }
 
-    private static boolean isReferenceLoad(int opcode) {
-        return opcode == Opcodes.ALOAD;
+    private static boolean isLoad(int opcode) {
+        return opcode==Opcodes.ALOAD||opcode==Opcodes.ILOAD||opcode==Opcodes.LLOAD||opcode==Opcodes.FLOAD||opcode==Opcodes.DLOAD;
+    }
+
+    private static boolean isNumericBinary(int opcode){
+        return switch(opcode){
+            case Opcodes.IADD,Opcodes.ISUB,Opcodes.IMUL,Opcodes.IDIV,Opcodes.IREM,
+                    Opcodes.LADD,Opcodes.LSUB,Opcodes.LMUL,Opcodes.LDIV,Opcodes.LREM,
+                    Opcodes.FADD,Opcodes.FSUB,Opcodes.FMUL,Opcodes.FDIV,Opcodes.FREM,
+                    Opcodes.DADD,Opcodes.DSUB,Opcodes.DMUL,Opcodes.DDIV,Opcodes.DREM -> true;
+            default -> false;
+        };
+    }
+
+    private static boolean isNumericUnary(int opcode){
+        return switch(opcode){
+            case Opcodes.INEG,Opcodes.LNEG,Opcodes.FNEG,Opcodes.DNEG,
+                    Opcodes.I2L,Opcodes.I2F,Opcodes.I2D,Opcodes.L2I,Opcodes.L2F,Opcodes.L2D,
+                    Opcodes.F2I,Opcodes.F2L,Opcodes.F2D,Opcodes.D2I,Opcodes.D2L,Opcodes.D2F -> true;
+            default -> false;
+        };
+    }
+
+    private static Symbol numericBinary(int opcode,Symbol left,Symbol right){
+        if(!(left instanceof NumberSymbol a)||!(right instanceof NumberSymbol b))return UnknownSymbol.INSTANCE;
+        try{
+            return switch(opcode){
+                case Opcodes.IADD->new NumberSymbol(a.value().intValue()+b.value().intValue());
+                case Opcodes.ISUB->new NumberSymbol(a.value().intValue()-b.value().intValue());
+                case Opcodes.IMUL->new NumberSymbol(a.value().intValue()*b.value().intValue());
+                case Opcodes.IDIV->b.value().intValue()==0?UnknownSymbol.INSTANCE:new NumberSymbol(a.value().intValue()/b.value().intValue());
+                case Opcodes.IREM->b.value().intValue()==0?UnknownSymbol.INSTANCE:new NumberSymbol(a.value().intValue()%b.value().intValue());
+                case Opcodes.LADD->new NumberSymbol(a.value().longValue()+b.value().longValue());
+                case Opcodes.LSUB->new NumberSymbol(a.value().longValue()-b.value().longValue());
+                case Opcodes.LMUL->new NumberSymbol(a.value().longValue()*b.value().longValue());
+                case Opcodes.LDIV->b.value().longValue()==0L?UnknownSymbol.INSTANCE:new NumberSymbol(a.value().longValue()/b.value().longValue());
+                case Opcodes.LREM->b.value().longValue()==0L?UnknownSymbol.INSTANCE:new NumberSymbol(a.value().longValue()%b.value().longValue());
+                case Opcodes.FADD->new NumberSymbol(a.value().floatValue()+b.value().floatValue());
+                case Opcodes.FSUB->new NumberSymbol(a.value().floatValue()-b.value().floatValue());
+                case Opcodes.FMUL->new NumberSymbol(a.value().floatValue()*b.value().floatValue());
+                case Opcodes.FDIV->new NumberSymbol(a.value().floatValue()/b.value().floatValue());
+                case Opcodes.FREM->new NumberSymbol(a.value().floatValue()%b.value().floatValue());
+                case Opcodes.DADD->new NumberSymbol(a.value().doubleValue()+b.value().doubleValue());
+                case Opcodes.DSUB->new NumberSymbol(a.value().doubleValue()-b.value().doubleValue());
+                case Opcodes.DMUL->new NumberSymbol(a.value().doubleValue()*b.value().doubleValue());
+                case Opcodes.DDIV->new NumberSymbol(a.value().doubleValue()/b.value().doubleValue());
+                case Opcodes.DREM->new NumberSymbol(a.value().doubleValue()%b.value().doubleValue());
+                default->UnknownSymbol.INSTANCE;
+            };
+        }catch(ArithmeticException invalid){return UnknownSymbol.INSTANCE;}
+    }
+
+    private static Symbol numericUnary(int opcode,Symbol input){
+        if(!(input instanceof NumberSymbol n))return UnknownSymbol.INSTANCE;
+        return switch(opcode){
+            case Opcodes.INEG->new NumberSymbol(-n.value().intValue());
+            case Opcodes.LNEG->new NumberSymbol(-n.value().longValue());
+            case Opcodes.FNEG->new NumberSymbol(-n.value().floatValue());
+            case Opcodes.DNEG->new NumberSymbol(-n.value().doubleValue());
+            case Opcodes.I2L,Opcodes.F2L,Opcodes.D2L->new NumberSymbol(n.value().longValue());
+            case Opcodes.I2F,Opcodes.L2F,Opcodes.D2F->new NumberSymbol(n.value().floatValue());
+            case Opcodes.I2D,Opcodes.L2D,Opcodes.F2D->new NumberSymbol(n.value().doubleValue());
+            case Opcodes.L2I,Opcodes.F2I,Opcodes.D2I->new NumberSymbol(n.value().intValue());
+            default->UnknownSymbol.INSTANCE;
+        };
     }
 
     private boolean isSubclass(String type, String target) {

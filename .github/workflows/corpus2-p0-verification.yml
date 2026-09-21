@@ -32,7 +32,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: success()
         with:
-          name: LegacyForgeBridge-srg-simple-renderer-proof-159
+          name: LegacyForgeBridge-registry-numeric-dataflow-160
           path: build/libs/*.jar
           if-no-files-found: error
 
