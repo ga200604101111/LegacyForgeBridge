@@ -45,6 +45,7 @@ public final class LegacyVisibleEntityPresentationPass implements ConversionPass
             }value.add("textureVariants",textures);
             JsonArray palette=new JsonArray();rule.palette().forEach(palette::add);value.add("palette",palette);
             value.addProperty("itemWatcherBase",rule.itemWatcherBase());value.addProperty("itemWatcherCount",rule.itemWatcherCount());
+            value.addProperty("physicalCollision",rule.physicalCollision());value.addProperty("playerAttackRemoves",rule.playerAttackRemoves());
             value.addProperty("proof",rule.proof());value.addProperty("runtimeComplete",true);rules.add(value);
         }
         root.add("rules",rules);root.addProperty("runtimeCompleteRules",rules.size());
