@@ -206,7 +206,7 @@ public final class LegacyVisibleEntityPresentationAnalyzer {
         for(AbstractInsnNode insn:hurt.instructions){
             if(insn instanceof LdcInsnNode ldc&&"player".equals(ldc.cst))player=true;
             if(insn instanceof MethodInsnNode call
-                    &&call.owner.equals("net/minecraft/entity/Entity")
+                    &&(call.owner.equals("net/minecraft/entity/Entity")||call.owner.equals(entity.name))
                     &&Set.of("func_70106_y","setDead").contains(call.name)
                     &&call.desc.equals("()V"))setDead=true;
         }
