@@ -14,6 +14,7 @@ import dev.yinghuang.legacyforgebridge.compat.LegacyInertModelBlockRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyMicroBlockRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyPlantPlacementRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyPlantRuntimeRegistry;
+import dev.yinghuang.legacyforgebridge.compat.LegacyRadialModelBlockRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacySeatBedRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacySingleInputProcessorRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyStackComponents;
@@ -64,6 +65,7 @@ public final class GeneratedModSupport {
         LegacyPlantPlacementRegistry.loadMod(modId);
         LegacyFoodItemRegistry.loadMod(modId);
         LegacyInertModelBlockRegistry.loadMod(modId);
+        LegacyRadialModelBlockRegistry.loadMod(modId);
         LegacyStorageBlockRegistry.loadMod(modId);
         LegacySingleInputProcessorRegistry.loadMod(modId);
         LegacyGridPotBlockRegistry.loadMod(modId);
@@ -82,17 +84,19 @@ public final class GeneratedModSupport {
         BlockBehaviour.Properties blockProperties=BlockBehaviour.Properties.of().setId(blockKey).overrideDescription(descriptionKey);
         if(gridPot||microBlock||seatBed)blockProperties=blockProperties.dynamicShape().noOcclusion();
         boolean inert=LegacyInertModelBlockRegistry.hasRule(id);
+        boolean radial=LegacyRadialModelBlockRegistry.hasRule(id);
         boolean storage=LegacyStorageBlockRegistry.hasRule(id);
         boolean processor=LegacySingleInputProcessorRegistry.hasRule(id);
         if(processor)blockProperties=LegacySingleInputProcessorRegistry.applyBlockProperties(id,blockProperties);
         var plantRule=LegacyPlantRuntimeRegistry.rule(id);
         boolean plant=plantRule!=null&&LegacyPlantPlacementRegistry.plantTargetRuntimeReady(id);
-        int families=(gridPot?1:0)+(microBlock?1:0)+(seatBed?1:0)+(inert?1:0)+(storage?1:0)+(processor?1:0)+(plant?1:0);
+        int families=(gridPot?1:0)+(microBlock?1:0)+(seatBed?1:0)+(inert?1:0)+(radial?1:0)+(storage?1:0)+(processor?1:0)+(plant?1:0);
         if(families>1)throw new IllegalStateException("Converted block has conflicting specialized runtime rules: "+id);
         Block block=gridPot?new ConvertedLegacyGridPotBlock(id,blockProperties)
                 :microBlock?new ConvertedLegacyMicroBlock(id,blockProperties)
                 :seatBed?new ConvertedLegacySeatBedBlock(id,blockProperties)
                 :inert?new ConvertedLegacyInertModelBlock(id,blockProperties)
+                :radial?new ConvertedLegacyRadialModelBlock(id,blockProperties)
                 :storage?new ConvertedLegacyStorageBlock(id,blockProperties)
                 :processor?new ConvertedLegacyProcessorBlock(id,blockProperties)
                 :plant?new ConvertedLegacyPlantBlock(id,blockProperties)
@@ -103,6 +107,7 @@ public final class GeneratedModSupport {
         if(microBlock)LegacyMicroBlockRegistry.registerType(id,block);
         if(seatBed)LegacySeatBedRegistry.registerType(id,block);
         if(inert)LegacyInertModelBlockRegistry.registerType(id,block);
+        if(radial)LegacyRadialModelBlockRegistry.registerType(id,block);
         if(storage)LegacyStorageBlockRegistry.registerType(id,block);
         if(processor)LegacySingleInputProcessorRegistry.registerType(id,block);
 
