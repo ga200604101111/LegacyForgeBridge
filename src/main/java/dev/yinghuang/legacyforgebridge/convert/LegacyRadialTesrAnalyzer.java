@@ -307,8 +307,8 @@ public final class LegacyRadialTesrAnalyzer {
                     ||!call.owner.equals("cpw/mods/fml/client/registry/ClientRegistry")||!call.name.equals("registerTileEntity")
                     ||!call.desc.equals("(Ljava/lang/Class;Ljava/lang/String;Lnet/minecraft/client/renderer/tileentity/TileEntitySpecialRenderer;)V"))continue;
             LegacyDirectCallArguments.ClassStringNew args=LegacyDirectCallArguments.classStringNew(owner,method,call);
-            if(args!=null&&args.classInternalName().equals(tileClass)&&args.stringValue().equals(tileId)&&inherits(classes,args.newInternalName(),TESR))
-                renderers.add(args.newInternalName());
+            if(args!=null&&args.classInternalName().equals(tileClass)&&args.stringValue().equals(tileId)&&inherits(classes,args.newTypeInternalName(),TESR))
+                renderers.add(args.newTypeInternalName());
         }
         return renderers.size()==1?renderers.getFirst():null;
     }
