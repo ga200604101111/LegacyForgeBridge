@@ -168,7 +168,7 @@ public final class LegacyCombatItemAnalyzer {
                 Number number = numberConstant(cursor);
                 if (number != null && Float.isFinite(number.floatValue()) && number.floatValue() > 0F) {
                     AbstractInsnNode next = nextReal(cursor.getNext());
-                    if (next != null && next.getOpcode() >= Opcodes.FSTORE && next.getOpcode() <= Opcodes.ASTORE) {
+                    if (next != null && next.getOpcode() == Opcodes.FSTORE) {
                         values.add(number.floatValue());
                     }
                     break;
