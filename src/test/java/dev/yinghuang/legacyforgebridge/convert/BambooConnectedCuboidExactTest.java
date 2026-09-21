@@ -29,24 +29,27 @@ class BambooConnectedCuboidExactTest {
             assertEquals(.3,r.minWidth(),1e-6);assertEquals(.7,r.maxWidth(),1e-6);
             assertEquals(.2,r.minHeight(),1e-6);assertEquals(.8,r.maxHeight(),1e-6);
             assertTrue(r.connectWood());assertFalse(r.connectFullBlocks());assertEquals("empty",r.collision());
+            assertEquals("fixed_static_block",r.materialSource().mode(),name);
         }
         for(String name:new String[]{"thinSakuraPillar","thinOrcPillar","thinSprucePillar","thinBirchPillar"}){
             var r=rules.get(name);assertNotNull(r,name);assertTrue(r.axisLocked());assertTrue(r.sameMetadataOnly());
             assertEquals(.4,r.minWidth(),1e-6);assertEquals(.6,r.maxWidth(),1e-6);
             assertEquals(.15,r.minHeight(),1e-6);assertEquals(.85,r.maxHeight(),1e-6);
-            assertEquals("empty",r.collision());
+            assertEquals("empty",r.collision());assertEquals("fixed_static_block",r.materialSource().mode(),name);
         }
         for(String name:new String[]{"bambooLiangThick","bambooLiangVLogThick","bambooLiangVLog2Thick","bambooLiangVWoodThick"}){
             var r=rules.get(name);assertNotNull(r,name);assertFalse(r.axisLocked());assertFalse(r.sameMetadataOnly());
             assertEquals(.15,r.minWidth(),1e-6);assertEquals(.85,r.maxWidth(),1e-6);
             assertEquals(.15,r.minHeight(),1e-6);assertEquals(.85,r.maxHeight(),1e-6);
             assertTrue(r.connectFullBlocks());assertTrue(r.connectWood());assertTrue(r.connectRock());assertEquals("full",r.collision());
+            assertEquals(name.equals("bambooLiangThick")?"self":"state_indexed_static_block",r.materialSource().mode(),name);
         }
         for(String name:new String[]{"bambooLiangThin","bambooLiangVLogThin","bambooLiangVLog2Thin","bambooLiangVWoodThin"}){
             var r=rules.get(name);assertNotNull(r,name);assertFalse(r.axisLocked());assertFalse(r.sameMetadataOnly());
             assertEquals(.3,r.minWidth(),1e-6);assertEquals(.7,r.maxWidth(),1e-6);
             assertEquals(.3,r.minHeight(),1e-6);assertEquals(.7,r.maxHeight(),1e-6);
             assertEquals("full",r.collision());
+            assertEquals(name.equals("bambooLiangThin")?"self":"state_indexed_static_block",r.materialSource().mode(),name);
         }
     }
 }
