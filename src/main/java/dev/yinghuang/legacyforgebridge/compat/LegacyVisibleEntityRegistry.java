@@ -65,9 +65,10 @@ public final class LegacyVisibleEntityRegistry {
                     for(Integer rgb:palette)if(rgb==null||rgb<0||rgb>0xFFFFFF)throw new IllegalArgumentException("Invalid cushion palette");
                 }
                 case TRAY_ITEMS -> {
-                    if(fixedTexture==null||itemWatcherBase<0||itemWatcherCount!=5||itemWatcherBase+itemWatcherCount>32
-                            ||java.util.stream.IntStream.range(itemWatcherBase,itemWatcherBase+itemWatcherCount).anyMatch(i->watcherTypes.getOrDefault(i,-1)!=5))
+                    if(fixedTexture==null||itemWatcherBase<0||itemWatcherCount!=5||itemWatcherBase+itemWatcherCount>32)
                         throw new IllegalArgumentException("Incomplete tray rule");
+                    for(int index=itemWatcherBase;index<itemWatcherBase+itemWatcherCount;index++)
+                        if(watcherTypes.getOrDefault(index,-1)!=5)throw new IllegalArgumentException("Incomplete tray rule");
                 }
             }
         }
