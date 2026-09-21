@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.MethodVisitor;
+import org.objectweb.asm.Label;
 import org.objectweb.asm.Opcodes;
 
 import java.nio.file.Files;
@@ -30,10 +31,12 @@ class LegacySimpleBlockRendererAnalyzerTest {
             put(out, "foreign/simple/CrossBlock.class", block("foreign/simple/CrossBlock", "cross"));
             put(out, "foreign/simple/CropBlock.class", block("foreign/simple/CropBlock", "crop"));
             put(out, "foreign/simple/MetaBlock.class", block("foreign/simple/MetaBlock", "meta"));
+            put(out, "foreign/simple/FakeMetaBlock.class", block("foreign/simple/FakeMetaBlock", "fakeMeta"));
             put(out, "foreign/simple/NoiseBlock.class", block("foreign/simple/NoiseBlock", "noise"));
             put(out, "foreign/simple/CrossRenderer.class", renderer("foreign/simple/CrossRenderer", "cross"));
             put(out, "foreign/simple/CropRenderer.class", renderer("foreign/simple/CropRenderer", "crop"));
             put(out, "foreign/simple/MetaRenderer.class", renderer("foreign/simple/MetaRenderer", "meta"));
+            put(out, "foreign/simple/FakeMetaRenderer.class", renderer("foreign/simple/FakeMetaRenderer", "fakeMeta"));
             put(out, "foreign/simple/NoiseRenderer.class", renderer("foreign/simple/NoiseRenderer", "noise"));
             put(out, "foreign/simple/Bootstrap.class", bootstrap());
             put(out, "foreign/simple/Bindings.class", bindings());
@@ -47,6 +50,8 @@ class LegacySimpleBlockRendererAnalyzerTest {
         assertEquals("foreign/simple/CrossRenderer", rules.get("cross").sourceRendererClass());
         assertEquals(LegacySimpleBlockRendererAnalyzer.Mode.CROP, rules.get("crop").mode());
         assertEquals(LegacySimpleBlockRendererAnalyzer.Mode.META_ZERO_CROP_ELSE_STANDARD, rules.get("meta").mode());
+        assertFalse(rules.containsKey("fakeMeta"),
+                "Reading metadata and then rendering both families sequentially must not prove a metadata branch");
 
         assertFalse(rules.containsKey("noise"),
                 "An otherwise-cross renderer with an unproved source callback must fail closed");
@@ -57,7 +62,7 @@ class LegacySimpleBlockRendererAnalyzerTest {
     private static byte[] ids() {
         ClassWriter writer = new ClassWriter(0);
         writer.visit(Opcodes.V1_7, Opcodes.ACC_PUBLIC, IDS, null, "java/lang/Object", null);
-        for (String field : new String[]{"cross", "crop", "meta", "noise"}) {
+        for (String field : new String[]{"cross", "crop", "meta", "fakeMeta", "noise"}) {
             writer.visitField(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, field, "I", null, null).visitEnd();
         }
         writer.visitEnd();
@@ -108,9 +113,18 @@ class LegacySimpleBlockRendererAnalyzerTest {
             case "cross" -> renderCall(render, "drawCrossedSquares");
             case "crop" -> renderCall(render, "renderBlockCrops");
             case "meta" -> {
-                render.visitInsn(Opcodes.ACONST_NULL);
-                render.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "net/minecraft/world/World",
-                        "getBlockMetadata", "()I", false);
+                Label standard = new Label();
+                Label end = new Label();
+                metadata(render);
+                render.visitJumpInsn(Opcodes.IFNE, standard);
+                renderCall(render, "renderBlockCrops");
+                render.visitJumpInsn(Opcodes.GOTO, end);
+                render.visitLabel(standard);
+                renderCall(render, "renderStandardBlock");
+                render.visitLabel(end);
+            }
+            case "fakeMeta" -> {
+                metadata(render);
                 render.visitInsn(Opcodes.POP);
                 renderCall(render, "renderBlockCrops");
                 renderCall(render, "renderStandardBlock");
@@ -138,6 +152,15 @@ class LegacySimpleBlockRendererAnalyzerTest {
         return writer.toByteArray();
     }
 
+    private static void metadata(MethodVisitor method) {
+        method.visitInsn(Opcodes.ACONST_NULL);
+        method.visitVarInsn(Opcodes.ILOAD, 3);
+        method.visitVarInsn(Opcodes.ILOAD, 4);
+        method.visitVarInsn(Opcodes.ILOAD, 5);
+        method.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "net/minecraft/world/World",
+                "getBlockMetadata", "(III)I", false);
+    }
+
     private static void renderCall(MethodVisitor method, String name) {
         method.visitVarInsn(Opcodes.ALOAD, 1);
         method.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "net/minecraft/client/renderer/RenderBlocks", name, "()V", false);
@@ -151,6 +174,7 @@ class LegacySimpleBlockRendererAnalyzerTest {
         register(method, "foreign/simple/CrossBlock", "cross");
         register(method, "foreign/simple/CropBlock", "crop");
         register(method, "foreign/simple/MetaBlock", "meta");
+        register(method, "foreign/simple/FakeMetaBlock", "fakeMeta");
         register(method, "foreign/simple/NoiseBlock", "noise");
         method.visitInsn(Opcodes.RETURN);
         method.visitMaxs(0, 0);
@@ -176,6 +200,7 @@ class LegacySimpleBlockRendererAnalyzerTest {
         bind(method, "cross", "foreign/simple/CrossRenderer");
         bind(method, "crop", "foreign/simple/CropRenderer");
         bind(method, "meta", "foreign/simple/MetaRenderer");
+        bind(method, "fakeMeta", "foreign/simple/FakeMetaRenderer");
         bind(method, "noise", "foreign/simple/NoiseRenderer");
         method.visitInsn(Opcodes.RETURN);
         method.visitMaxs(0, 0);
