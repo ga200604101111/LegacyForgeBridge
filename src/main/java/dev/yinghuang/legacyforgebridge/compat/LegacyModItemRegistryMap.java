@@ -67,7 +67,7 @@ public final class LegacyModItemRegistryMap {
         return legacyToModern.size();
     }
 
-    static Identifier legacyIdentity(int legacyId) {
+    public static Identifier legacyIdentity(int legacyId) {
         return legacyToModern.get(legacyId);
     }
 

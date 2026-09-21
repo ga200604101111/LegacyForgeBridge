@@ -33,6 +33,22 @@ class FmlRuntimeCodecWatcherValuesTest {
         assertEquals(12,spawn.watcherValues().get(2).id());assertEquals(2,spawn.watcherValues().get(2).type());
     }
 
+    @Test void simpleEntitySpawnDecodesBoundedLegacyItemStackWatcherWithoutInflatingNbt() throws Exception {
+        ByteArrayOutputStream bytes=new ByteArrayOutputStream();DataOutputStream out=new DataOutputStream(bytes);
+        out.writeByte(FmlRuntimeCodec.ENTITY_SPAWN);out.writeInt(7);writeUtf8(out,"Foreign");out.writeInt(9);
+        out.writeInt(0);out.writeInt(0);out.writeInt(0);out.writeByte(0);out.writeByte(0);out.writeByte(0);
+        out.writeByte((5<<5)|17);out.writeShort(512);out.writeByte(3);out.writeShort(7);out.writeShort(3);out.write(new byte[]{1,2,3});
+        out.writeByte((5<<5)|18);out.writeShort(-1);
+        out.writeByte(127);out.writeInt(0);
+        var spawn=FmlRuntimeCodec.parseSimpleEntitySpawn(bytes.toByteArray());
+        assertEquals(2,spawn.watcherEntries());
+        var stack=(FmlRuntimeCodec.LegacyItemStack)spawn.watcherValues().get(0).value();
+        assertEquals(512,stack.legacyItemId());assertEquals(3,stack.count());assertEquals(7,stack.damage());
+        assertArrayEquals(new byte[]{1,2,3},stack.compressedNbt());assertFalse(stack.empty());
+        var empty=(FmlRuntimeCodec.LegacyItemStack)spawn.watcherValues().get(1).value();
+        assertTrue(empty.empty());assertEquals(-1,empty.legacyItemId());
+    }
+
     private static void writeUtf8(DataOutputStream out,String value)throws Exception{
         byte[] encoded=value.getBytes(StandardCharsets.UTF_8);if(encoded.length>=128)throw new IllegalArgumentException("test helper only supports one-byte lengths");out.writeByte(encoded.length);out.write(encoded);
     }

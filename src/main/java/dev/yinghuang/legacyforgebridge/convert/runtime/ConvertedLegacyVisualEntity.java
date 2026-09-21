@@ -1,0 +1,86 @@
+package dev.yinghuang.legacyforgebridge.convert.runtime;
+
+import dev.yinghuang.legacyforgebridge.compat.LegacyVisibleEntityRegistry;
+import dev.yinghuang.legacyforgebridge.network.FmlRuntimeCodec;
+import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
+
+import java.util.Arrays;
+
+/** Client presentation carrier for a source-proven visible legacy Entity family. */
+public final class ConvertedLegacyVisualEntity extends Entity {
+    private final LegacyVisibleEntityRegistry.Rule rule;
+    private final Object[] legacyWatchers=new Object[32];
+
+    public ConvertedLegacyVisualEntity(EntityType<? extends ConvertedLegacyVisualEntity> type,Level level,
+                                       LegacyVisibleEntityRegistry.Rule rule){
+        super(type,level);this.rule=rule;installDefaults();
+    }
+
+    public LegacyVisibleEntityRegistry.Rule visualRule(){return rule;}
+
+    public boolean applyLegacyWatcher(int type,int id,Object value){
+        if(id<0||id>=legacyWatchers.length||value==null)return false;
+        return switch(rule.adapter()){
+            case SLIDE_PANEL -> applySlide(type,id,value);
+            case TINTED_CUSHION -> applyCushion(type,id,value);
+            case TRAY_ITEMS -> applyTray(type,id,value);
+        };
+    }
+
+    public int watcherInt(String semantic,int fallback){
+        Integer index=rule.watcherIndices().get(semantic);if(index==null)return fallback;Object value=legacyWatchers[index];
+        return value instanceof Number n?n.intValue():fallback;
+    }
+
+    public FmlRuntimeCodec.LegacyItemStack watcherStack(int slot){
+        if(rule.adapter()!=LegacyVisibleEntityRegistry.Adapter.TRAY_ITEMS||slot<0||slot>=rule.itemWatcherCount())return FmlRuntimeCodec.LegacyItemStack.EMPTY;
+        Object value=legacyWatchers[rule.itemWatcherBase()+slot];
+        return value instanceof FmlRuntimeCodec.LegacyItemStack stack?stack:FmlRuntimeCodec.LegacyItemStack.EMPTY;
+    }
+
+    private boolean applySlide(int type,int id,Object value){
+        Integer direction=rule.watcherIndices().get("direction"),mirror=rule.watcherIndices().get("mirror"),texture=rule.watcherIndices().get("texture");
+        if((id==direction||id==mirror)&&type==0&&value instanceof Byte){legacyWatchers[id]=value;return true;}
+        if(id==texture&&type==1&&value instanceof Short){legacyWatchers[id]=value;return true;}
+        return false;
+    }
+
+    private boolean applyCushion(int type,int id,Object value){
+        Integer color=rule.watcherIndices().get("color");
+        if(id==color&&type==0&&value instanceof Byte){legacyWatchers[id]=value;return true;}
+        return false;
+    }
+
+    private boolean applyTray(int type,int id,Object value){
+        if(id>=rule.itemWatcherBase()&&id<rule.itemWatcherBase()+rule.itemWatcherCount()
+                &&type==5&&value instanceof FmlRuntimeCodec.LegacyItemStack){legacyWatchers[id]=value;return true;}
+        return false;
+    }
+
+    private void installDefaults(){
+        Arrays.fill(legacyWatchers,null);
+        switch(rule.adapter()){
+            case SLIDE_PANEL -> {
+                legacyWatchers[rule.watcherIndices().get("direction")]=Byte.valueOf((byte)0);
+                legacyWatchers[rule.watcherIndices().get("mirror")]=Byte.valueOf((byte)0);
+                legacyWatchers[rule.watcherIndices().get("texture")]=Short.valueOf((short)0);
+            }
+            case TINTED_CUSHION -> legacyWatchers[rule.watcherIndices().get("color")]=Byte.valueOf((byte)15);
+            case TRAY_ITEMS -> {
+                for(int i=0;i<rule.itemWatcherCount();i++)legacyWatchers[rule.itemWatcherBase()+i]=FmlRuntimeCodec.LegacyItemStack.EMPTY;
+            }
+        }
+    }
+
+    @Override protected void defineSynchedData(SynchedEntityData.Builder builder){}
+    @Override protected void readAdditionalSaveData(ValueInput input){}
+    @Override protected void addAdditionalSaveData(ValueOutput output){}
+    @Override public boolean hurtServer(ServerLevel level,DamageSource source,float amount){return false;}
+}

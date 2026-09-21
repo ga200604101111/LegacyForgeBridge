@@ -20,9 +20,9 @@ public final class FmlRuntimeCodec {
 
     /**
      * Strict spawn envelope for converted entities whose source proof excludes throwable and
-     * IEntityAdditionalSpawnData behavior. Primitive/string/coordinate DataWatcher values are
-     * retained so proof-gated generated entities can map their source-owned synchronized fields.
-     * ItemStack watcher entries remain outside this bounded runtime family.
+     * IEntityAdditionalSpawnData behavior. Primitive/string/coordinate values and the bounded
+     * 1.7.10 ItemStack wire envelope are retained so proof-gated generated/visual entities can map
+     * source-owned synchronized fields. Compressed stack NBT is carried opaquely and never inflated here.
      */
     public static SimpleEntitySpawn parseSimpleEntitySpawn(byte[] payload){
         Reader reader=readerFor(payload,ENTITY_SPAWN);EntitySpawnHeader header=readEntitySpawnHeader(reader);
@@ -56,7 +56,7 @@ public final class FmlRuntimeCodec {
                 case 2->Integer.valueOf(reader.readInt());
                 case 3->Float.valueOf(reader.readFloat());
                 case 4->reader.readPacketString();
-                case 5->throw new IllegalArgumentException("ItemStack legacy DataWatcher entry is outside simple-entity spawn boundary");
+                case 5->reader.readLegacyItemStack();
                 case 6->new LegacyCoordinates(reader.readInt(),reader.readInt(),reader.readInt());
                 default->throw new IllegalArgumentException("Unsupported legacy DataWatcher type "+type);
             };
@@ -72,6 +72,19 @@ public final class FmlRuntimeCodec {
     public record OpenGui(int windowId,String modId,int modGuiId,int x,int y,int z,int trailingBytes){}
     public record EntitySpawnHeader(int entityId,String modId,int modEntityTypeId,int rawX,int rawY,int rawZ,double x,double y,double z,float yaw,float pitch,float headYaw,int remainingBytes){}
     public record LegacyCoordinates(int x,int y,int z){}
+    public record LegacyItemStack(int legacyItemId,int count,int damage,byte[] compressedNbt){
+        public static final LegacyItemStack EMPTY=new LegacyItemStack(-1,0,0,new byte[0]);
+        public LegacyItemStack{
+            require(legacyItemId>=-1,"Invalid legacy ItemStack id");
+            require(count>=0&&count<=255,"Invalid legacy ItemStack count");
+            require(damage>=0&&damage<=65535,"Invalid legacy ItemStack damage");
+            compressedNbt=compressedNbt==null?new byte[0]:compressedNbt.clone();
+            require(compressedNbt.length<=32767,"Legacy ItemStack NBT exceeds short-length boundary");
+            if(legacyItemId<0&&(count!=0||damage!=0||compressedNbt.length!=0))throw new IllegalArgumentException("Null legacy ItemStack carried data");
+        }
+        @Override public byte[] compressedNbt(){return compressedNbt.clone();}
+        public boolean empty(){return legacyItemId<0||count==0;}
+    }
     public record LegacyDataWatcherEntry(int type,int id,Object value){
         public LegacyDataWatcherEntry{require(type>=0&&type<=6,"Invalid legacy DataWatcher type "+type);require(id>=0&&id<=31,"Invalid legacy DataWatcher id "+id);require(value!=null,"Missing legacy DataWatcher value");}
     }
@@ -92,6 +105,14 @@ public final class FmlRuntimeCodec {
         int readVarInt(int maxBytes){int result=0;for(int byteIndex=0;byteIndex<maxBytes;byteIndex++){int current=readUnsignedByte();result|=(current&0x7F)<<(byteIndex*7);if((current&0x80)==0)return result;}throw new IllegalArgumentException("FML VarInt exceeds "+maxBytes+" bytes");}
         String readUtf8(){int length=readVarInt(2);require(length>=0&&length<=32767,"Legacy FML string exceeds 32767 bytes");return readStringBytes(length);}
         String readPacketString(){int length=readVarInt(5);require(length>=0&&length<=32767,"Legacy DataWatcher string exceeds 32767 bytes");return readStringBytes(length);}
+        LegacyItemStack readLegacyItemStack(){
+            int itemId=readShort();if(itemId<0)return LegacyItemStack.EMPTY;
+            int count=readUnsignedByte();int damage=Short.toUnsignedInt(readShort());int nbtLength=readShort();
+            require(nbtLength>=-1,"Invalid legacy ItemStack compressed NBT length "+nbtLength);
+            byte[] nbt=nbtLength<0?new byte[0]:readBytes(nbtLength);
+            return new LegacyItemStack(itemId,count,damage,nbt);
+        }
+        byte[] readBytes(int length){require(length>=0,"Negative byte length");ensure(length);byte[] value=java.util.Arrays.copyOfRange(data,index,index+length);index+=length;return value;}
         private String readStringBytes(int length){ensure(length);String value=new String(data,index,length,StandardCharsets.UTF_8);index+=length;return value;}
         private void ensure(int required){if(required<0||remaining()<required)throw new IllegalArgumentException("Truncated FML runtime payload: need "+required+" bytes but only "+remaining()+" remain");}
     }

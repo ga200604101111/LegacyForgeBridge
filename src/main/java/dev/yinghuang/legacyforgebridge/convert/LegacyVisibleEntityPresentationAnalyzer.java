@@ -191,10 +191,13 @@ public final class LegacyVisibleEntityPresentationAnalyzer {
         MethodNode ctor=model.methods.stream().filter(m->m.name.equals("<init>")).max(Comparator.comparingInt(m->m.instructions.size())).orElse(null);
         if(ctor==null)return null;
         int tw=64,th=32;List<AbstractInsnNode> code=real(ctor);
-        for(int i=1;i<code.size();i++)if(code.get(i) instanceof FieldInsnNode f&&f.getOpcode()==Opcodes.PUTFIELD&&"I".equals(f.desc)){
-            Integer value=intConst(code.get(i-1));if(value==null)continue;
-            if(Set.of("textureWidth","field_78090_t").contains(f.name))tw=value;
-            if(Set.of("textureHeight","field_78089_u").contains(f.name))th=value;
+        for(MethodNode candidate:model.methods)if(candidate.name.equals("<init>")){
+            List<AbstractInsnNode> cc=real(candidate);
+            for(int i=1;i<cc.size();i++)if(cc.get(i) instanceof FieldInsnNode f&&f.getOpcode()==Opcodes.PUTFIELD&&"I".equals(f.desc)){
+                Integer value=intConst(cc.get(i-1));if(value==null)continue;
+                if(Set.of("textureWidth","field_78090_t").contains(f.name))tw=value;
+                if(Set.of("textureHeight","field_78089_u").contains(f.name))th=value;
+            }
         }
         Map<String,MutablePart> parts=new LinkedHashMap<>();
         for(FieldNode f:model.fields)if(("L"+MODEL_RENDERER+";").equals(f.desc)&&(f.access&Opcodes.ACC_STATIC)==0)parts.put(f.name,new MutablePart(f.name));
