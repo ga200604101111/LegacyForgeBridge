@@ -54,4 +54,53 @@ class LegacyIconTableAnalyzerTest {
    """));
   assertFalse(all.isEmpty());for(var r:all){assertTrue(r.variants().isEmpty());assertTrue(r.limitation().contains("ambiguous"));}
  }
+ @Test void allowsLogicOnlyBlockContainersButRejectsActualTesrGeometry()throws Exception {
+  Map<String,String> base=new LinkedHashMap<>();
+  base.put("net/minecraft/block/BlockContainer.java","""
+   package net.minecraft.block; public abstract class BlockContainer extends Block {
+    public BlockContainer(){super();} public abstract net.minecraft.tileentity.TileEntity createNewTileEntity(net.minecraft.world.World w,int meta);
+   }
+   """);
+  base.put("net/minecraft/tileentity/TileEntity.java","package net.minecraft.tileentity; public class TileEntity {}");
+  base.put("net/minecraft/world/World.java","package net.minecraft.world; public class World {}");
+  base.put("net/minecraft/client/renderer/tileentity/TileEntitySpecialRenderer.java",
+   "package net.minecraft.client.renderer.tileentity; public class TileEntitySpecialRenderer {}");
+  base.put("cpw/mods/fml/client/registry/ClientRegistry.java","""
+   package cpw.mods.fml.client.registry; public class ClientRegistry {
+    public static void registerTileEntity(Class c,String id,net.minecraft.client.renderer.tileentity.TileEntitySpecialRenderer r){}
+   }
+   """);
+  base.put("fixture/LogicTile.java","package fixture; public class LogicTile extends net.minecraft.tileentity.TileEntity {}");
+  base.put("fixture/LogicContainer.java","""
+   package fixture; public class LogicContainer extends net.minecraft.block.BlockContainer {
+    public LogicContainer(){super();} public net.minecraft.tileentity.TileEntity createNewTileEntity(net.minecraft.world.World w,int m){return new LogicTile();}
+    public void registerBlockIcons(net.minecraft.client.renderer.texture.IIconRegister r){blockIcon=r.registerIcon("source:logic");}
+   }
+   """);
+  base.put("fixture/TesrTile.java","package fixture; public class TesrTile extends net.minecraft.tileentity.TileEntity {}");
+  base.put("fixture/TesrContainer.java","""
+   package fixture; public class TesrContainer extends net.minecraft.block.BlockContainer {
+    public TesrContainer(){super();} public net.minecraft.tileentity.TileEntity createNewTileEntity(net.minecraft.world.World w,int m){return new TesrTile();}
+    public void registerBlockIcons(net.minecraft.client.renderer.texture.IIconRegister r){blockIcon=r.registerIcon("source:tesr");}
+   }
+   """);
+  base.put("fixture/Tesr.java","package fixture; public class Tesr extends net.minecraft.client.renderer.tileentity.TileEntitySpecialRenderer {}");
+  base.put("fixture/TesrBinding.java","""
+   package fixture; public class TesrBinding { static {
+    cpw.mods.fml.client.registry.ClientRegistry.registerTileEntity(TesrTile.class,"tesr",new Tesr());
+   }}
+   """);
+  base.put("fixture/Content.java","""
+   package fixture; import cpw.mods.fml.common.registry.GameRegistry; public class Content {static {
+    GameRegistry.registerBlock(new LogicContainer(),"logicContainer");
+    GameRegistry.registerBlock(new TesrContainer(),"tesrContainer");
+   }}
+   """);
+  var all=analyze(base);
+  var logic=named(all,"logicContainer");assertEquals(16,logic.variants().size(),logic.limitation());
+  assertEquals("source:logic",logic.variants().getFirst().faceIcons().getFirst());
+  var tesr=named(all,"tesrContainer");assertTrue(tesr.variants().isEmpty());
+  assertTrue(tesr.limitation().contains("BlockEntity renderer"),tesr.limitation());
+ }
+
 }
