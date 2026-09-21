@@ -91,6 +91,7 @@ public final class LegacyConversionEngine {
             builder.add(new LegacyBlockPlacementPass());
             builder.add(new LegacyBlockActivationPass());
             builder.add(new LegacyGridPotBlockPass());
+            builder.add(new LegacyGridPotPresentationProofPass());
             builder.add(new LegacyGridPotPresentationRuntimePass());
             builder.add(new LegacySeatBedPass());
             builder.add(new LegacyInertModelBlockPass());
