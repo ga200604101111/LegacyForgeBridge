@@ -102,7 +102,8 @@ public final class LegacyVisibleEntityPresentationAnalyzer {
         if(direction==null||mirror==null||doorId==null||textureMethod==null||direction.equals(mirror)||doorId.equals(direction)||doorId.equals(mirror))return null;
         String enumType=enumTypeReach(entity,textureMethod,"()Ljava/lang/String;",0,new HashSet<>());
         List<TextureVariant> variants=parseTextureEnum(enumType);
-        if(variants.size()<2||variants.stream().anyMatch(v->!resourceExists(v.texture())))return null;
+        if(variants.size()<2)return null;
+        for(TextureVariant variant:variants)if(!resourceExists(variant.texture()))return null;
         Map<String,Integer> watchers=new LinkedHashMap<>();watchers.put("direction",direction);watchers.put("mirror",mirror);watchers.put("texture",doorId);
         return new Rule(reg.name(),reg.sourceClass(),renderer.name,Adapter.SLIDE_PANEL,reg.numericId(),reg.tracking(),reg.update(),reg.velocity(),
                 size[0],size[1],model.textureWidth(),model.textureHeight(),model.parts(),null,watchers,variants,List.of(),-1,0,
