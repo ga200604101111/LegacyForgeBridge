@@ -235,7 +235,7 @@ public final class LegacyMicroBlockContainerAnalyzer {
         for (AbstractInsnNode insn : factory.instructions)
             if (insn instanceof TypeInsnNode type && insn.getOpcode() == Opcodes.NEW && classes.containsKey(type.desc))
                 allocations.add(type.desc);
-        return allocations.size() == 1 ? allocations.getFirst() : null;
+        return allocations.size() == 1 ? allocations.iterator().next() : null;
     }
 
     private static Boolean effectiveConstantBooleanInt(Map<String,ClassNode> classes, String type,
@@ -273,7 +273,7 @@ public final class LegacyMicroBlockContainerAnalyzer {
                 }
                 if (put && candidate != null && classes.containsKey(candidate)) renderers.add(candidate);
             }
-        return renderers.size() == 1 ? renderers.getFirst() : null;
+        return renderers.size() == 1 ? renderers.iterator().next() : null;
     }
 
     private static String stringArgumentForCall(MethodNode method, String owner, Set<String> names, String desc) {
