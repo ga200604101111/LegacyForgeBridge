@@ -30,12 +30,15 @@ public final class ConvertedGridPotPresentationRuntime {
 
     private ConvertedGridPotPresentationRuntime() { }
 
-    public record Presentation(Identifier id, List<Float> gridOffsets, float contentTranslateY,
+    public record Presentation(Identifier id, Identifier cellCarrierItemId, float cellBodyWidth, float cellBodyHeight,
+                               List<Float> gridOffsets, float contentTranslateY,
                                float sourceContentScale, boolean boundingBoxCentered,
                                boolean boundingBoxBottomAligned, boolean exactLegacyGeometry) {
         public Presentation {
             gridOffsets = List.copyOf(gridOffsets);
-            if (id == null || gridOffsets.size() != 3 || !finite(gridOffsets)
+            if (id == null || cellCarrierItemId==null || !Float.isFinite(cellBodyWidth) || cellBodyWidth<=0F || cellBodyWidth>1F
+                    || !Float.isFinite(cellBodyHeight) || cellBodyHeight<=0F || cellBodyHeight>1F
+                    || gridOffsets.size() != 3 || !finite(gridOffsets)
                     || !Float.isFinite(contentTranslateY) || contentTranslateY < 0F || contentTranslateY > 1F
                     || !Float.isFinite(sourceContentScale) || sourceContentScale <= 0F || sourceContentScale > 1F
                     || !boundingBoxCentered || !boundingBoxBottomAligned || exactLegacyGeometry) {
@@ -110,7 +113,9 @@ public final class ConvertedGridPotPresentationRuntime {
                 grid.add(offset.getAsFloat());
             }
             if (!"NONE".equals(required(value, "itemDisplayContext"))) return null;
-            return new Presentation(id, grid, decimal(value, "contentTranslateY"), decimal(value, "sourceContentScale"),
+            return new Presentation(id, Identifier.parse(required(value,"cellCarrierItemId")),
+                    decimal(value,"cellBodyWidth"),decimal(value,"cellBodyHeight"),grid,
+                    decimal(value, "contentTranslateY"), decimal(value, "sourceContentScale"),
                     bool(value, "boundingBoxCentered"), bool(value, "boundingBoxBottomAligned"),
                     bool(value, "exactLegacyGeometry"));
         } catch (RuntimeException invalid) {
