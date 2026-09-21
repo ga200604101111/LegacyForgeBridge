@@ -382,7 +382,7 @@ public final class LegacyRadialConditionalAnalyzer {
         for(int i=0;i<code.size();i++){
             AbstractInsnNode insn=code.get(i);
             if(insn instanceof FieldInsnNode get&&get.getOpcode()==Opcodes.GETFIELD&&get.owner.equals(field.owner())&&get.name.equals(field.name())){
-                for(int j=i+1;j<Math.min(code.size(),i+5);j++)if(Integer.valueOf(bound).equals(integer(code.get(j)))
+                for(int j=i+1;j<Math.min(code.size(),i+5);j++)if(Integer.valueOf(bound).equals(integer(code.get(j))))
                     for(int k=j+1;k<Math.min(code.size(),j+3);k++)if(code.get(k) instanceof JumpInsnNode jump&&Set.of(Opcodes.IF_ICMPGE,Opcodes.IF_ICMPGT,Opcodes.IF_ICMPLE,Opcodes.IF_ICMPLT).contains(jump.getOpcode()))compare=true;
                 for(int j=i+1;j<Math.min(code.size(),i+7);j++)if(Integer.valueOf(1).equals(integer(code.get(j))))
                     for(int k=j+1;k<Math.min(code.size(),j+3);k++)if(code.get(k).getOpcode()==Opcodes.IADD)
