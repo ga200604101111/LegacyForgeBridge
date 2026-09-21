@@ -21,9 +21,6 @@ public final class LegacyRadialTesrPass implements ConversionPass {
         var analysis=new LegacyRadialTesrAnalyzer().analyze(context.sourceJar());
         if(analysis.rules().isEmpty()&&analysis.skipped().isEmpty()&&analysis.diagnostics().isEmpty())return;
         Map<String,String> ids=blockIds(context.stagingDir());
-        for(var skipped:analysis.skipped())if(ids.containsKey(skipped.sourceBlockClass()))
-            context.diagnostics().warning("LFB-CONVERT-RADIAL-0002",SupportLevel.RUNTIME_BRIDGE,
-                    "Conditional radial TESR presentation remains unadapted for "+skipped.registryName()+": "+skipped.reason());
         JsonObject root=new JsonObject();root.addProperty("schemaVersion",1);root.addProperty("sourceSha256",context.sourceHash());
         JsonArray rules=new JsonArray();int runtime=0;
         for(var rule:analysis.rules()){
@@ -62,6 +59,9 @@ public final class LegacyRadialTesrPass implements ConversionPass {
     private static int writeConditionalRules(ConversionContext context,Map<String,String> ids,List<LegacyRadialTesrAnalyzer.Rule> bases)throws Exception{
         var analysis=new LegacyRadialConditionalAnalyzer().analyze(context.sourceJar(),bases);
         if(analysis.rules().isEmpty()&&analysis.skipped().isEmpty())return 0;
+        for(var skipped:analysis.skipped())if(ids.containsKey(skipped.sourceBlockClass()))
+            context.diagnostics().warning("LFB-CONVERT-RADIAL-0002",SupportLevel.RUNTIME_BRIDGE,
+                    "Conditional radial TESR presentation remains unadapted for "+skipped.registryName()+": "+skipped.reason());
         JsonObject root=new JsonObject();root.addProperty("schemaVersion",1);root.addProperty("sourceSha256",context.sourceHash());
         JsonArray rules=new JsonArray();int runtime=0;
         for(var rule:analysis.rules()){
