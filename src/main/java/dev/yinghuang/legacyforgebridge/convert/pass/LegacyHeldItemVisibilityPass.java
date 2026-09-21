@@ -2,6 +2,7 @@ package dev.yinghuang.legacyforgebridge.convert.pass;
 
 import com.google.gson.*;
 import dev.yinghuang.legacyforgebridge.convert.LegacyHeldItemVisibilityAnalyzer;
+import dev.yinghuang.legacyforgebridge.convert.LegacySimpleBlockRendererAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.api.*;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
