@@ -176,6 +176,7 @@ public final class LegacyCombatItemAnalyzer {
                 int opcode = cursor.getOpcode();
                 if (cursor instanceof MethodInsnNode || cursor instanceof FieldInsnNode
                         || (opcode >= Opcodes.IFEQ && opcode <= Opcodes.IF_ACMPNE)
+                        || opcode == Opcodes.IFNULL || opcode == Opcodes.IFNONNULL
                         || opcode == Opcodes.GOTO || opcode == Opcodes.TABLESWITCH || opcode == Opcodes.LOOKUPSWITCH) {
                     break;
                 }
