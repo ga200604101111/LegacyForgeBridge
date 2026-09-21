@@ -27,14 +27,14 @@ class LegacyGridPotPresentationRuntimePassTest {
         Files.writeString(staging.resolve(LegacyGridPotPresentationProofPass.OUTPUT), """
                 {"schemaVersion":1,"rules":[{
                   "registryName":"grid","sourceBlockClass":"third/block/Grid","sourceRendererClass":"third/render/GridRenderer",
-                  "storedContentPresentationProven":true,"gridOffsets":[-0.333,0.0,0.333],
+                  "cellCarrierLegacyRegistryName":"flower_pot","storedContentPresentationProven":true,"gridOffsets":[-0.333,0.0,0.333],
                   "contentTranslateY":0.25,"crossedScale":0.75,"cactusHalfWidth":0.125
                 }]}
                 """, StandardCharsets.UTF_8);
         Files.writeString(staging.resolve(LegacyGridPotBlockPass.OUTPUT), """
                 {"schemaVersion":1,"rules":[{
                   "id":"foreign:grid","sourceBlockClass":"third/block/Grid","coreRuntimeComplete":true,
-                  "cells":9,"gridWidth":3
+                  "cells":9,"gridWidth":3,"cellHeight":0.375
                 }]}
                 """, StandardCharsets.UTF_8);
 
@@ -51,6 +51,9 @@ class LegacyGridPotPresentationRuntimePassTest {
         assertTrue(rule.get("boundingBoxCentered").getAsBoolean());
         assertTrue(rule.get("boundingBoxBottomAligned").getAsBoolean());
         assertTrue(rule.get("storedContentPresentationRuntimeWired").getAsBoolean());
+        assertEquals("minecraft:flower_pot",rule.get("cellCarrierItemId").getAsString());
+        assertEquals(1.0F/3.0F,rule.get("cellBodyWidth").getAsFloat(),0.0001F);
+        assertEquals(0.375F,rule.get("cellBodyHeight").getAsFloat(),0.0001F);
         assertFalse(rule.get("exactLegacyGeometry").getAsBoolean());
     }
 
