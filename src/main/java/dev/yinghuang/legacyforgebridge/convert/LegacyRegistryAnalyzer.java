@@ -559,7 +559,9 @@ public final class LegacyRegistryAnalyzer {
     }
 
     private static boolean isStore(int opcode) {
-        return opcode==Opcodes.ASTORE||opcode==Opcodes.ISTORE||opcode==Opcodes.LSTORE||opcode==Opcodes.FSTORE||opcode==Opcodes.DSTORE;
+        // Primitive locals are safe scalar provenance. Reference locals intentionally remain
+        // fail-closed so object allocation aliases cannot widen registration proof.
+        return opcode==Opcodes.ISTORE||opcode==Opcodes.LSTORE||opcode==Opcodes.FSTORE||opcode==Opcodes.DSTORE;
     }
 
     private static boolean isNumericBinary(int opcode){
