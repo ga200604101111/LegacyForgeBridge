@@ -102,15 +102,15 @@ public final class ConvertedLegacyVisualEntity extends Entity {
      * modern carrier so the local client resolves entity collision instead of falling through
      * and waiting for the 1.7 server to rubber-band the player back up.
      */
-    @Override public boolean canCollideWith(Entity other){return !isRemoved();}
+    @Override public boolean canCollideWith(Entity other){return rule.physicalCollision()&&!isRemoved();}
 
     /**
      * The same legacy entities were attackable/pickable. Without this override the converted
      * carrier can render correctly but the modern client never sends the interact/attack packet
      * for the server-owned legacy entity, so breaking it appears to do nothing.
      */
-    @Override public boolean isPickable(){return !isRemoved();}
-    @Override public boolean isAttackable(){return !isRemoved();}
+    @Override public boolean isPickable(){return rule.playerAttackRemoves()&&!isRemoved();}
+    @Override public boolean isAttackable(){return rule.playerAttackRemoves()&&!isRemoved();}
 
     @Override protected void defineSynchedData(SynchedEntityData.Builder builder){}
     @Override protected void readAdditionalSaveData(ValueInput input){}
