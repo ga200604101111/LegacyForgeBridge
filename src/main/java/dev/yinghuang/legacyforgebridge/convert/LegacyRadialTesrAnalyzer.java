@@ -246,7 +246,7 @@ public final class LegacyRadialTesrAnalyzer {
                 }
             current=node.superName;
         }
-        return values.size()==1?values.getFirst():null;
+        return values.size()==1?values.iterator().next():null;
     }
     private static boolean directYawPlacement(MethodNode method){
         if(method==null)return false;boolean yaw=false,four=false,threeSixty=false,half=false,floor=false,mask=false,set=false;
