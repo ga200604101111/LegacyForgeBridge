@@ -96,6 +96,21 @@ public final class ConvertedLegacyVisualEntity extends Entity {
         }
     }
 
+    /**
+     * Legacy furniture entities such as trays, cushions and sliding doors explicitly returned
+     * true from Entity#canBeCollidedWith while alive. Keep that source-visible contract on the
+     * modern carrier so the local client resolves entity collision instead of falling through
+     * and waiting for the 1.7 server to rubber-band the player back up.
+     */
+    @Override public boolean canCollideWith(Entity other){return !isRemoved();}
+
+    /**
+     * The same legacy entities were attackable/pickable. Without this override the converted
+     * carrier can render correctly but the modern client never sends the interact/attack packet
+     * for the server-owned legacy entity, so breaking it appears to do nothing.
+     */
+    @Override public boolean isPickable(){return !isRemoved();}
+
     @Override protected void defineSynchedData(SynchedEntityData.Builder builder){}
     @Override protected void readAdditionalSaveData(ValueInput input){}
     @Override protected void addAdditionalSaveData(ValueOutput output){}
