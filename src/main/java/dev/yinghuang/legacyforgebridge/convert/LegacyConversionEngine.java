@@ -120,6 +120,7 @@ public final class LegacyConversionEngine {
             builder.add(new LegacyItemNamePass());
             builder.add(new LegacyCreativeVariantsPass());
             builder.add(new LegacyBlockGeometryPass());
+            builder.add(new LegacyLiquidPresentationPass());
             builder.add(new LegacyTextureAtlasPass());
             builder.add(new LegacyConnectedCuboidPresentationPass());
             builder.add(new LegacySimpleBlockPresentationPass());
