@@ -38,6 +38,8 @@ class BambooRegisteredBlockRenderTypeExactTest {
         Map<String,LegacySimpleBlockRendererAnalyzer.Rule> byName=analysis.rules().stream()
                 .collect(Collectors.toMap(LegacySimpleBlockRendererAnalyzer.Rule::registryName,Function.identity(),(a,b)->a));
         assertEquals(LegacySimpleBlockRendererAnalyzer.Mode.CROSS,byName.get("blockbambooshoot").mode());
+        assertEquals(LegacySimpleBlockRendererAnalyzer.Mode.CROSS,byName.get("bamboosingle").mode());
+        assertEquals(LegacySimpleBlockRendererAnalyzer.Mode.CROP,byName.get("bamboo2").mode());
         assertEquals(LegacySimpleBlockRendererAnalyzer.Mode.META_ZERO_CROP_ELSE_STANDARD,byName.get("singleTexDeco").mode());
         assertEquals(LegacySimpleBlockRendererAnalyzer.Mode.HELD_ITEM_CROSS,byName.get("kitunebi").mode());
     }

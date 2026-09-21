@@ -33,11 +33,13 @@ class LegacySimpleBlockRendererAnalyzerTest {
             put(out, "foreign/simple/MetaBlock.class", block("foreign/simple/MetaBlock", "meta"));
             put(out, "foreign/simple/FakeMetaBlock.class", block("foreign/simple/FakeMetaBlock", "fakeMeta"));
             put(out, "foreign/simple/NoiseBlock.class", block("foreign/simple/NoiseBlock", "noise"));
+            put(out, "foreign/simple/ModeBlock.class", modeBlock());
             put(out, "foreign/simple/CrossRenderer.class", renderer("foreign/simple/CrossRenderer", "cross"));
             put(out, "foreign/simple/CropRenderer.class", renderer("foreign/simple/CropRenderer", "crop"));
             put(out, "foreign/simple/MetaRenderer.class", renderer("foreign/simple/MetaRenderer", "meta"));
             put(out, "foreign/simple/FakeMetaRenderer.class", renderer("foreign/simple/FakeMetaRenderer", "fakeMeta"));
             put(out, "foreign/simple/NoiseRenderer.class", renderer("foreign/simple/NoiseRenderer", "noise"));
+            put(out, "foreign/simple/CoordinateRenderer.class", coordinateRenderer());
             put(out, "foreign/simple/Bootstrap.class", bootstrap());
             put(out, "foreign/simple/Bindings.class", bindings());
         }
@@ -50,6 +52,8 @@ class LegacySimpleBlockRendererAnalyzerTest {
         assertEquals("foreign/simple/CrossRenderer", rules.get("cross").sourceRendererClass());
         assertEquals(LegacySimpleBlockRendererAnalyzer.Mode.CROP, rules.get("crop").mode());
         assertEquals(LegacySimpleBlockRendererAnalyzer.Mode.META_ZERO_CROP_ELSE_STANDARD, rules.get("meta").mode());
+        assertEquals(LegacySimpleBlockRendererAnalyzer.Mode.CROSS, rules.get("srgCtorCross").mode());
+        assertEquals(LegacySimpleBlockRendererAnalyzer.Mode.CROP, rules.get("srgCtorCrop").mode());
         assertFalse(rules.containsKey("fakeMeta"),
                 "Reading metadata and then rendering both families sequentially must not prove a metadata branch");
 
@@ -62,7 +66,7 @@ class LegacySimpleBlockRendererAnalyzerTest {
     private static byte[] ids() {
         ClassWriter writer = new ClassWriter(0);
         writer.visit(Opcodes.V1_7, Opcodes.ACC_PUBLIC, IDS, null, "java/lang/Object", null);
-        for (String field : new String[]{"cross", "crop", "meta", "fakeMeta", "noise"}) {
+        for (String field : new String[]{"cross", "crop", "meta", "fakeMeta", "noise", "coord"}) {
             writer.visitField(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, field, "I", null, null).visitEnd();
         }
         writer.visitEnd();
@@ -110,17 +114,17 @@ class LegacySimpleBlockRendererAnalyzerTest {
                 "(Lnet/minecraft/client/renderer/RenderBlocks;Lnet/minecraft/block/Block;III)V", null, null);
         render.visitCode();
         switch (mode) {
-            case "cross" -> renderCall(render, "drawCrossedSquares");
+            case "cross" -> renderCall(render, "func_147765_a");
             case "crop" -> renderCall(render, "renderBlockCrops");
             case "meta" -> {
                 Label standard = new Label();
                 Label end = new Label();
                 metadata(render);
                 render.visitJumpInsn(Opcodes.IFNE, standard);
-                renderCall(render, "renderBlockCrops");
+                renderCall(render, "func_147796_n");
                 render.visitJumpInsn(Opcodes.GOTO, end);
                 render.visitLabel(standard);
-                renderCall(render, "renderStandardBlock");
+                renderCall(render, "func_147784_q");
                 render.visitLabel(end);
             }
             case "fakeMeta" -> {
@@ -166,6 +170,71 @@ class LegacySimpleBlockRendererAnalyzerTest {
         method.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "net/minecraft/client/renderer/RenderBlocks", name, "()V", false);
     }
 
+    private static byte[] modeBlock() {
+        String name = "foreign/simple/ModeBlock";
+        ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        writer.visit(Opcodes.V1_7, Opcodes.ACC_PUBLIC, name, null, "net/minecraft/block/Block", null);
+        writer.visitField(Opcodes.ACC_PRIVATE | Opcodes.ACC_FINAL, "mode", "I", null, null).visitEnd();
+
+        MethodVisitor init = writer.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "(I)V", null, null);
+        init.visitCode();
+        init.visitVarInsn(Opcodes.ALOAD, 0);
+        init.visitInsn(Opcodes.ACONST_NULL);
+        init.visitMethodInsn(Opcodes.INVOKESPECIAL, "net/minecraft/block/Block", "<init>",
+                "(Lnet/minecraft/block/material/Material;)V", false);
+        init.visitVarInsn(Opcodes.ALOAD, 0);
+        init.visitVarInsn(Opcodes.ILOAD, 1);
+        init.visitFieldInsn(Opcodes.PUTFIELD, name, "mode", "I");
+        init.visitInsn(Opcodes.RETURN);
+        init.visitMaxs(0, 0);
+        init.visitEnd();
+
+        MethodVisitor renderType = writer.visitMethod(Opcodes.ACC_PUBLIC, "getRenderType", "()I", null, null);
+        renderType.visitCode();
+        renderType.visitFieldInsn(Opcodes.GETSTATIC, IDS, "coord", "I");
+        renderType.visitInsn(Opcodes.IRETURN);
+        renderType.visitMaxs(0, 0);
+        renderType.visitEnd();
+
+        MethodVisitor mode = writer.visitMethod(Opcodes.ACC_PUBLIC, "getCoordinateRenderType", "()I", null, null);
+        mode.visitCode();
+        mode.visitVarInsn(Opcodes.ALOAD, 0);
+        mode.visitFieldInsn(Opcodes.GETFIELD, name, "mode", "I");
+        mode.visitInsn(Opcodes.IRETURN);
+        mode.visitMaxs(0, 0);
+        mode.visitEnd();
+        writer.visitEnd();
+        return writer.toByteArray();
+    }
+
+    private static byte[] coordinateRenderer() {
+        String name = "foreign/simple/CoordinateRenderer";
+        ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        writer.visit(Opcodes.V1_7, Opcodes.ACC_PUBLIC, name, null, "java/lang/Object", null);
+        MethodVisitor init = writer.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null);
+        init.visitCode();
+        init.visitVarInsn(Opcodes.ALOAD, 0);
+        init.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false);
+        init.visitInsn(Opcodes.RETURN);
+        init.visitMaxs(0, 0);
+        init.visitEnd();
+
+        MethodVisitor render = writer.visitMethod(Opcodes.ACC_PUBLIC, "renderWorldBlock",
+                "(Lnet/minecraft/client/renderer/RenderBlocks;Lnet/minecraft/block/Block;III)V", null, null);
+        render.visitCode();
+        render.visitVarInsn(Opcodes.ALOAD, 2);
+        render.visitTypeInsn(Opcodes.CHECKCAST, "foreign/simple/ModeBlock");
+        render.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "foreign/simple/ModeBlock", "getCoordinateRenderType", "()I", false);
+        render.visitInsn(Opcodes.POP);
+        renderCall(render, "func_147765_a");
+        renderCall(render, "func_147795_a");
+        render.visitInsn(Opcodes.RETURN);
+        render.visitMaxs(0, 0);
+        render.visitEnd();
+        writer.visitEnd();
+        return writer.toByteArray();
+    }
+
     private static byte[] bootstrap() {
         ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
         writer.visit(Opcodes.V1_7, Opcodes.ACC_PUBLIC, "foreign/simple/Bootstrap", null, "java/lang/Object", null);
@@ -176,11 +245,24 @@ class LegacySimpleBlockRendererAnalyzerTest {
         register(method, "foreign/simple/MetaBlock", "meta");
         register(method, "foreign/simple/FakeMetaBlock", "fakeMeta");
         register(method, "foreign/simple/NoiseBlock", "noise");
+        registerMode(method, 0, "srgCtorCross");
+        registerMode(method, 1, "srgCtorCrop");
         method.visitInsn(Opcodes.RETURN);
         method.visitMaxs(0, 0);
         method.visitEnd();
         writer.visitEnd();
         return writer.toByteArray();
+    }
+
+    private static void registerMode(MethodVisitor method, int mode, String id) {
+        String type = "foreign/simple/ModeBlock";
+        method.visitTypeInsn(Opcodes.NEW, type);
+        method.visitInsn(Opcodes.DUP);
+        method.visitIntInsn(Opcodes.BIPUSH, mode);
+        method.visitMethodInsn(Opcodes.INVOKESPECIAL, type, "<init>", "(I)V", false);
+        method.visitLdcInsn(id);
+        method.visitMethodInsn(Opcodes.INVOKESTATIC, "cpw/mods/fml/common/registry/GameRegistry", "registerBlock",
+                "(Lnet/minecraft/block/Block;Ljava/lang/String;)V", false);
     }
 
     private static void register(MethodVisitor method, String type, String id) {
@@ -202,6 +284,7 @@ class LegacySimpleBlockRendererAnalyzerTest {
         bind(method, "meta", "foreign/simple/MetaRenderer");
         bind(method, "fakeMeta", "foreign/simple/FakeMetaRenderer");
         bind(method, "noise", "foreign/simple/NoiseRenderer");
+        bind(method, "coord", "foreign/simple/CoordinateRenderer");
         method.visitInsn(Opcodes.RETURN);
         method.visitMaxs(0, 0);
         method.visitEnd();
