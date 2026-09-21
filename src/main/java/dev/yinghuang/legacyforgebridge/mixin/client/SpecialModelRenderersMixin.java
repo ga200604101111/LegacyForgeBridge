@@ -3,6 +3,7 @@ package dev.yinghuang.legacyforgebridge.mixin.client;
 import dev.yinghuang.legacyforgebridge.render.ConvertedLegacyInertModelSpecialRenderer;
 import dev.yinghuang.legacyforgebridge.render.ConvertedLegacyOscillatingModelSpecialRenderer;
 import dev.yinghuang.legacyforgebridge.render.ConvertedLegacyProcessorSpecialRenderer;
+import dev.yinghuang.legacyforgebridge.render.ConvertedLegacyRadialModelSpecialRenderer;
 import dev.yinghuang.legacyforgebridge.render.ObjSpecialRenderer;
 import net.minecraft.client.renderer.special.SpecialModelRenderers;
 import net.minecraft.resources.Identifier;
@@ -23,5 +24,6 @@ public abstract class SpecialModelRenderersMixin {
         ID_MAPPER.put(Identifier.fromNamespaceAndPath("legacyforgebridge","processor"),ConvertedLegacyProcessorSpecialRenderer.Unbaked.MAP_CODEC);
         ID_MAPPER.put(Identifier.fromNamespaceAndPath("legacyforgebridge","inert_model"),ConvertedLegacyInertModelSpecialRenderer.Unbaked.MAP_CODEC);
         ID_MAPPER.put(Identifier.fromNamespaceAndPath("legacyforgebridge","oscillating_model"),ConvertedLegacyOscillatingModelSpecialRenderer.Unbaked.MAP_CODEC);
+        ID_MAPPER.put(Identifier.fromNamespaceAndPath("legacyforgebridge","radial_model"),ConvertedLegacyRadialModelSpecialRenderer.Unbaked.MAP_CODEC);
     }
 }
