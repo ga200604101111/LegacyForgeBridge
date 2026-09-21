@@ -8,6 +8,7 @@ import org.objectweb.asm.FieldVisitor;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
@@ -68,6 +69,23 @@ class LegacyClassDependencyAnalyzerTest {
 
         assertTrue(result.classes().stream().noneMatch(value -> value.action().equals("exclude")));
         assertTrue(result.limitations().stream().anyMatch(value -> value.contains("never authorizes")));
+    }
+
+    @Test
+    void boundedTextResourcesBecomeConservativeClassReferenceRoots() throws Exception {
+        Map<String, byte[]> resources = new LinkedHashMap<>();
+        resources.put("config/handlers.json", "{\"handler\":\"example.Unused\"}".getBytes(StandardCharsets.UTF_8));
+        resources.put("assets/example/not-text.png", "example.Unused".getBytes(StandardCharsets.UTF_8));
+        Path source = writeJar(tempDir.resolve("resource-fixture.jar"), fixtureClasses(), null, resources);
+
+        LegacyClassDependencyAnalyzer.Analysis result = new LegacyClassDependencyAnalyzer().analyze(source);
+        var unused = dependency(result, "example/Unused");
+
+        assertEquals(LegacyClassDependencyAnalyzer.Reachability.POTENTIALLY_REACHABLE, unused.reachability());
+        assertEquals(java.util.List.of("config/handlers.json"), unused.resourceReferences());
+        assertTrue(unused.rootEvidence().contains("source resource symbolic reference: config/handlers.json"));
+        assertFalse(unused.resourceReferences().contains("assets/example/not-text.png"),
+                "Binary asset extensions must not become symbolic class-reference evidence");
     }
 
     @Test
@@ -185,12 +203,22 @@ class LegacyClassDependencyAnalyzerTest {
     }
 
     private static Path writeJar(Path output, Map<String, byte[]> classes, String corePlugin) throws Exception {
+        return writeJar(output, classes, corePlugin, Map.of());
+    }
+
+    private static Path writeJar(Path output, Map<String, byte[]> classes, String corePlugin,
+                                 Map<String, byte[]> resources) throws Exception {
         Manifest manifest = new Manifest();
         manifest.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
         if (corePlugin != null) manifest.getMainAttributes().putValue("FMLCorePlugin", corePlugin);
         try (JarOutputStream jar = new JarOutputStream(Files.newOutputStream(output), manifest)) {
             for (Map.Entry<String, byte[]> entry : classes.entrySet()) {
                 jar.putNextEntry(new JarEntry(entry.getKey() + ".class"));
+                jar.write(entry.getValue());
+                jar.closeEntry();
+            }
+            for (Map.Entry<String, byte[]> entry : resources.entrySet()) {
+                jar.putNextEntry(new JarEntry(entry.getKey()));
                 jar.write(entry.getValue());
                 jar.closeEntry();
             }

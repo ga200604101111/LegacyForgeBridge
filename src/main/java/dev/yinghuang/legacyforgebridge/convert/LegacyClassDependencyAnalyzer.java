@@ -66,6 +66,11 @@ public final class LegacyClassDependencyAnalyzer {
             collectFmlRoots(value.node(), names, roots);
         }
         collectManifestAndServices(sourceJar, names, roots, diagnostics);
+        Map<String, Set<String>> resourceReferences = collectResourceReferences(sourceJar, names, diagnostics);
+        resourceReferences.forEach((sourceClass, evidence) -> {
+            for (String resource : evidence)
+                add(roots, sourceClass, "source resource symbolic reference: " + resource);
+        });
 
         Map<String, Scanned> staged = stagingDir == null ? Map.of() : scanDirectory(stagingDir, diagnostics);
         if (stagingDir != null) {
@@ -100,7 +105,7 @@ public final class LegacyClassDependencyAnalyzer {
             classes.add(new ClassDependency(
                     value.name(), sha256(value.bytes()), roles(value.name(), source), declaredSide(value.node()),
                     reachability, state, values(roots, value.name()), values(edges, value.name()),
-                    values(incoming, value.name()), values(generated, value.name()), List.of(),
+                    values(incoming, value.name()), values(generated, value.name()), values(resourceReferences, value.name()),
                     sorted(external), sorted(capabilities), sorted(value.dynamic()),
                     "not_proven_by_reference_analysis", action));
         }
@@ -118,7 +123,7 @@ public final class LegacyClassDependencyAnalyzer {
 
         return new Analysis(List.copyOf(classes), List.copyOf(graph), List.copyOf(new LinkedHashSet<>(diagnostics)), List.of(
                 "Symbolic references over-approximate execution and may include dormant code.",
-                "Reflection, native code, resources and external integrations can hide runtime edges.",
+                "Reflection, native code, binary or oversized resources and external integrations can hide runtime edges.",
                 "Not statically reachable is not proof that a source class is safe to remove.",
                 "Generated references are dependency evidence; they do not prove complete modern semantic replacement.",
                 "This analysis never authorizes source-class exclusion or changes loader-safety status."));
@@ -229,6 +234,72 @@ public final class LegacyClassDependencyAnalyzer {
                 }
             }
         }
+    }
+
+    private static final int RESOURCE_SCAN_LIMIT = 2 * 1024 * 1024;
+    private static final Set<String> TEXT_RESOURCE_SUFFIXES = Set.of(
+            ".json", ".info", ".cfg", ".conf", ".properties", ".txt", ".xml", ".lang",
+            ".toml", ".yml", ".yaml", ".list", ".ini", ".csv", ".tsv", ".accesswidener");
+
+    /**
+     * Conservatively records source classes named by bounded text resources. Binary assets are
+     * deliberately excluded; unresolved binary/custom formats remain covered by the limitation.
+     */
+    private static Map<String, Set<String>> collectResourceReferences(
+            Path jarPath, Set<String> names, List<String> diagnostics) throws IOException {
+        Map<String, Set<String>> references = new TreeMap<>();
+        List<String> orderedNames = names.stream()
+                .sorted(Comparator.comparingInt(String::length).reversed().thenComparing(Comparator.naturalOrder()))
+                .toList();
+        try (JarFile jar = new JarFile(jarPath.toFile(), false)) {
+            var entries = jar.entries();
+            while (entries.hasMoreElements()) {
+                JarEntry entry = entries.nextElement();
+                if (entry.isDirectory() || entry.getName().endsWith(".class") || !textResource(entry.getName())) continue;
+                byte[] bytes;
+                try (InputStream input = jar.getInputStream(entry)) {
+                    bytes = input.readNBytes(RESOURCE_SCAN_LIMIT + 1);
+                }
+                if (bytes.length > RESOURCE_SCAN_LIMIT) {
+                    diagnostics.add("Skipped oversized dependency-analysis resource: " + entry.getName());
+                    continue;
+                }
+                String text = new String(bytes, StandardCharsets.UTF_8);
+                for (String name : orderedNames) {
+                    String dotted = name.replace('/', '.');
+                    if (containsClassToken(text, name) || containsClassToken(text, dotted)
+                            || text.contains("L" + name + ";"))
+                        add(references, name, entry.getName());
+                }
+            }
+        }
+        return references;
+    }
+
+    private static boolean textResource(String name) {
+        String lower = name.toLowerCase(Locale.ROOT);
+        if (lower.startsWith("meta-inf/services/")) return true;
+        if (lower.equals("meta-inf/manifest.mf")) return false;
+        for (String suffix : TEXT_RESOURCE_SUFFIXES) if (lower.endsWith(suffix)) return true;
+        return false;
+    }
+
+    private static boolean containsClassToken(String text, String token) {
+        int from = 0;
+        while (from <= text.length() - token.length()) {
+            int index = text.indexOf(token, from);
+            if (index < 0) return false;
+            int before = index - 1, after = index + token.length();
+            boolean left = before < 0 || !classTokenChar(text.charAt(before));
+            boolean right = after >= text.length() || !classTokenChar(text.charAt(after));
+            if (left && right) return true;
+            from = index + 1;
+        }
+        return false;
+    }
+
+    private static boolean classTokenChar(char value) {
+        return Character.isJavaIdentifierPart(value) || value == '.' || value == '/';
     }
 
     private static CandidateState candidateState(Scanned source, Map<String, Scanned> staged, boolean inspected) {
