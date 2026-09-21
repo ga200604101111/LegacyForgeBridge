@@ -22,11 +22,13 @@ public final class LegacyGridPotPresentationAnalyzer {
     private static final String TESSELLATOR = "net/minecraft/client/renderer/Tessellator";
 
     public record Proof(String registryName, String sourceBlockClass, String sourceTileClass,
-                        String sourceRendererClass, List<Float> gridOffsets,
+                        String sourceRendererClass, String cellCarrierLegacyRegistryName, List<Float> gridOffsets,
                         float contentTranslateY, float crossedScale, float cactusHalfWidth) {
         public Proof {
             gridOffsets = List.copyOf(gridOffsets);
-            if (sourceRendererClass == null || sourceRendererClass.isBlank() || gridOffsets.size() != 3)
+            if (sourceRendererClass == null || sourceRendererClass.isBlank()
+                    || cellCarrierLegacyRegistryName == null || cellCarrierLegacyRegistryName.isBlank()
+                    || gridOffsets.size() != 3)
                 throw new IllegalArgumentException("Invalid GridPot presentation proof");
         }
     }
@@ -69,6 +71,12 @@ public final class LegacyGridPotPresentationAnalyzer {
                 continue;
             }
             ClassNode rendererNode = classes.get(renderer);
+            String cellCarrier=storedVanillaBlockIconSource(rendererNode);
+            if (cellCarrier == null) {
+                skipped.add(new Skipped(rule.registryName(), rule.sourceBlockClass(),
+                        "GridPot renderer does not prove a unique stored vanilla block icon carrier for each enabled cell."));
+                continue;
+            }
             if (!rendererPresentationShape(rendererNode, rule.sourceTileClass(), shape.enabledGetter().name,
                     shape.itemGetter().name, shape.itemMetaGetter().name,
                     Set.copyOf(rule.contentInsertionSymbolicRenderFields()))) {
@@ -76,7 +84,7 @@ public final class LegacyGridPotPresentationAnalyzer {
                         "GridPot renderer does not match the bounded stored-content presentation shape."));
                 continue;
             }
-            proofs.add(new Proof(rule.registryName(), rule.sourceBlockClass(), rule.sourceTileClass(), renderer,
+            proofs.add(new Proof(rule.registryName(), rule.sourceBlockClass(), rule.sourceTileClass(), renderer, cellCarrier,
                     List.of(-0.333F, 0.0F, 0.333F), 0.25F, 0.75F, 0.125F));
         }
         return new Analysis(proofs, skipped, List.copyOf(diagnostics));
@@ -146,6 +154,33 @@ public final class LegacyGridPotPresentationAnalyzer {
         if (countOwnerDescriptor(method, RENDER_BLOCKS, "(Lnet/minecraft/block/Block;III)Z") < 4) return false;
         if (countOwnerDescriptor(method, RENDER_BLOCKS, "(Lnet/minecraft/util/IIcon;DDDF)V") < 1) return false;
         return countOwnerDescriptor(method, TESSELLATOR, "(FFF)V") >= 2;
+    }
+
+
+    /**
+     * Proves the per-cell carrier block from the renderer itself. The admitted shape is a vanilla
+     * Blocks static field passed to RenderBlocks#getBlockIconFromSide and then stored in a local
+     * for subsequent face rendering. Inline one-off material lookups (for example a dirt top face)
+     * are intentionally excluded.
+     */
+    private static String storedVanillaBlockIconSource(ClassNode renderer) {
+        if (renderer == null) return null;
+        LinkedHashSet<String> names = new LinkedHashSet<>();
+        for (MethodNode method : renderer.methods) for (AbstractInsnNode instruction : method.instructions) {
+            if (!(instruction instanceof MethodInsnNode call)
+                    || !RENDER_BLOCKS.equals(call.owner)
+                    || !Set.of("getBlockIconFromSide","func_147745_b").contains(call.name)
+                    || !"(Lnet/minecraft/block/Block;)Lnet/minecraft/util/IIcon;".equals(call.desc)) continue;
+            AbstractInsnNode previous=previousReal(instruction),next=nextReal(instruction);
+            if (!(previous instanceof FieldInsnNode field) || field.getOpcode()!=Opcodes.GETSTATIC
+                    || !LegacyVanillaRegistry1710.BLOCKS_OWNER.equals(field.owner)
+                    || !"Lnet/minecraft/block/Block;".equals(field.desc)
+                    || !(next instanceof VarInsnNode store) || store.getOpcode()!=Opcodes.ASTORE) continue;
+            LegacyVanillaRegistry1710.resolve(field.owner,field.name)
+                    .filter(entry->entry.kind()==LegacyRegistryAnalyzer.Kind.BLOCK)
+                    .map(LegacyVanillaRegistry1710.Entry::registryName).ifPresent(names::add);
+        }
+        return names.size()==1?names.getFirst():null;
     }
 
     private static boolean containsAnyStaticIntField(MethodNode method, Set<String> keys) {
@@ -226,6 +261,16 @@ public final class LegacyGridPotPresentationAnalyzer {
             case Opcodes.LDC -> instruction instanceof LdcInsnNode ldc && ldc.cst instanceof Float value ? value : null;
             default -> null;
         };
+    }
+    private static AbstractInsnNode previousReal(AbstractInsnNode instruction) {
+        for (AbstractInsnNode current=instruction==null?null:instruction.getPrevious();current!=null;current=current.getPrevious())
+            if (current.getOpcode()>=0) return current;
+        return null;
+    }
+    private static AbstractInsnNode nextReal(AbstractInsnNode instruction) {
+        for (AbstractInsnNode current=instruction==null?null:instruction.getNext();current!=null;current=current.getNext())
+            if (current.getOpcode()>=0) return current;
+        return null;
     }
     private static List<AbstractInsnNode> real(MethodNode method) {
         List<AbstractInsnNode> result = new ArrayList<>();
