@@ -3,6 +3,7 @@ package dev.yinghuang.legacyforgebridge.render;
 import dev.yinghuang.legacyforgebridge.LegacyForgeBridge;
 import dev.yinghuang.legacyforgebridge.compat.*;
 import dev.yinghuang.legacyforgebridge.convert.runtime.ConvertedLegacyBlock;
+import dev.yinghuang.legacyforgebridge.convert.runtime.ConvertedLegacyMicroBlockBlockEntity;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.model.loading.v1.ModelLoadingPlugin;
 import net.fabricmc.fabric.api.client.model.loading.v1.ModelModifier;
@@ -17,6 +18,7 @@ import net.minecraft.client.renderer.chunk.RenderSectionRegion;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.BlockAndTintGetter;
@@ -33,16 +35,52 @@ public final class ConvertedGeometryClient implements ClientModInitializer {
     private static final Map<List<LegacyGeometry.Box>,List<LegacyGeometry.Face>> SURFACES=new ConcurrentHashMap<>();
     @Override public void onInitializeClient() {
         LegacyMimicInvalidationClient.initialize();
+        LegacyMicroBlockNetworkBridge.initialize();
         ModelLoadingPlugin.register(plugin->{
             MATERIALS.clear();
             plugin.modifyBlockModelAfterBake().register(ModelModifier.WRAP_PHASE,(model,context)->{
-                BlockState state=context.state();var rule=LegacyBlockGeometryRegistry.rule(state);
+                BlockState state=context.state();
+                var micro=LegacyMicroBlockRegistry.rule(BuiltInRegistries.BLOCK.getKey(state.getBlock()));
+                if(micro!=null&&state.hasProperty(ConvertedLegacyBlock.LEGACY_META))return new MicroBlockModel(model,micro);
+                var rule=LegacyBlockGeometryRegistry.rule(state);
                 if(rule==null||!state.hasProperty(ConvertedLegacyBlock.LEGACY_META)||rule.variant(ConvertedLegacyBlock.legacyMeta(state))==null)return model;
                 return new GeometryModel(model,rule);
             });
         });
-        LegacyForgeBridge.LOGGER.info("Native geometric model projection enabled: stairs, slabs, connected panes, connected cuboids and directional neighbour materials; rules={}",LegacyBlockGeometryRegistry.all().size());
+        LegacyForgeBridge.LOGGER.info("Native geometric model projection enabled: stairs, slabs, connected panes, connected cuboids, micro-block containers and directional neighbour materials; rules={}, microRules={}",LegacyBlockGeometryRegistry.all().size(),LegacyMicroBlockRegistry.count());
     }
+
+    private static final class MicroBlockModel extends WrapperBlockStateModel {
+        private final LegacyMicroBlockRegistry.Rule rule;
+        private final Material[] hostMaterials;
+        private MicroBlockModel(BlockStateModel wrapped,LegacyMicroBlockRegistry.Rule rule){
+            super(wrapped);this.rule=rule;this.hostMaterials=materials(wrapped);
+        }
+        @Override public Object createGeometryKey(BlockAndTintGetter world,BlockPos pos,BlockState state,RandomSource random){return null;}
+        @Override public void emitQuads(QuadEmitter emitter,BlockAndTintGetter world,BlockPos pos,BlockState state,RandomSource random,Predicate<Direction> cullTest){
+            var blockEntity=world.getBlockEntity(pos);
+            if(!(blockEntity instanceof ConvertedLegacyMicroBlockBlockEntity micro)||micro.isEmpty()){
+                var box=LegacyMicroBlockRegistry.emptyFace(ConvertedLegacyBlock.legacyMeta(state));
+                emitFaces(emitter,world,pos,state,LegacyGeometry.surfaces(List.of(box)),hostMaterials,
+                        rule.translucentPass()?ChunkSectionLayer.TRANSLUCENT:ChunkSectionLayer.CUTOUT,cullTest);
+                return;
+            }
+            int n=micro.fieldSize();double step=1D/n;
+            for(int x=0;x<n;x++)for(int y=0;y<n;y++)for(int z=0;z<n;z++){
+                BlockState target=micro.cellState(x,y,z);if(target==null)continue;
+                var targetModel=Minecraft.getInstance().getBlockRenderer().getBlockModel(target);
+                Material[] chosen=targetModel instanceof GeometryModel geometry?geometry.materials:materials(targetModel);
+                ChunkSectionLayer layer=rule.translucentPass()||ItemBlockRenderTypes.getChunkRenderType(target)==ChunkSectionLayer.TRANSLUCENT
+                        ?ChunkSectionLayer.TRANSLUCENT:ChunkSectionLayer.CUTOUT;
+                var box=new LegacyGeometry.Box(x*step,y*step,z*step,(x+1)*step,(y+1)*step,(z+1)*step);
+                for(var face:LegacyGeometry.surfaces(List.of(box))){
+                    if(!microFaceVisible(micro,x,y,z,target,face.side(),world,pos))continue;
+                    emitFace(emitter,world,pos,target,face,chosen,layer,cullTest);
+                }
+            }
+        }
+    }
+
     private static final class GeometryModel extends WrapperBlockStateModel {
         private final LegacyGeometrySpec.Rule rule;
         private final Material[] materials;
@@ -83,6 +121,43 @@ public final class ConvertedGeometryClient implements ClientModInitializer {
             }
         }
     }
+    private static boolean microFaceVisible(ConvertedLegacyMicroBlockBlockEntity micro,int x,int y,int z,
+                                            BlockState target,int side,BlockAndTintGetter world,BlockPos hostPos){
+        int dx=0,dy=0,dz=0;
+        switch(side){case 0->dy=-1;case 1->dy=1;case 2->dz=-1;case 3->dz=1;case 4->dx=-1;case 5->dx=1;default->{return false;}}
+        int nx=x+dx,ny=y+dy,nz=z+dz,n=micro.fieldSize();
+        if(nx>=0&&ny>=0&&nz>=0&&nx<n&&ny<n&&nz<n){
+            BlockState neighbour=micro.cellState(nx,ny,nz);
+            if(neighbour==null)return true;
+            if(neighbour.getBlock()==target.getBlock())return false;
+            return !(neighbour.canOcclude()&&neighbour.isCollisionShapeFullBlock(world,hostPos));
+        }
+        Direction direction=DIRECTIONS[side];BlockPos outside=hostPos.relative(direction);BlockState neighbour=world.getBlockState(outside);
+        return !(neighbour.canOcclude()&&neighbour.isCollisionShapeFullBlock(world,outside));
+    }
+
+    private static void emitFaces(QuadEmitter emitter,BlockAndTintGetter world,BlockPos pos,BlockState tintState,
+                                  List<LegacyGeometry.Face> faces,Material[] chosen,ChunkSectionLayer layer,
+                                  Predicate<Direction> cullTest){
+        for(var face:faces)emitFace(emitter,world,pos,tintState,face,chosen,layer,cullTest);
+    }
+
+    private static void emitFace(QuadEmitter emitter,BlockAndTintGetter world,BlockPos pos,BlockState tintState,
+                                 LegacyGeometry.Face face,Material[] chosen,ChunkSectionLayer layer,
+                                 Predicate<Direction> cullTest){
+        Direction direction=DIRECTIONS[face.side()];Direction cull=boundary(face)?direction:null;
+        if(cull!=null&&cullTest.test(cull))return;
+        Material material=chosen[face.side()];
+        int color=material.tint()<0?0xFFFFFF:Minecraft.getInstance().getBlockColors().getColor(tintState,world,pos,material.tint());
+        if(color==-1)color=0xFFFFFF;
+        emitter.cullFace(cull).nominalFace(direction).renderLayer(layer).tintIndex(-1).ambientOcclusion(TriState.DEFAULT);
+        for(int vertex=0;vertex<4;vertex++){
+            var p=face.positions();emitter.pos(vertex,p.get(vertex*3).floatValue(),p.get(vertex*3+1).floatValue(),p.get(vertex*3+2).floatValue());
+            emitter.uv(vertex,face.uv().get(vertex*2).floatValue(),face.uv().get(vertex*2+1).floatValue());emitter.color(vertex,0xFF000000|color);
+        }
+        emitter.spriteBake(material.sprite(),QuadEmitter.BAKE_NORMALIZED);emitter.emit();
+    }
+
     private record Target(BlockPos pos,BlockState state) { }
     /** Resolve the source directional neighbor chain with explicit cycle/budget protection.
      * Complex neighbor multi-layer model equivalence and source interaction forwarding are not claimed.

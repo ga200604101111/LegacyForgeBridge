@@ -17,6 +17,7 @@ public final class LegacyModItemRegistryMap {
 
     private static volatile Map<Integer, Identifier> legacyToModern = Map.of();
     private static volatile Map<Identifier, Integer> modernToLegacy = Map.of();
+    private static volatile Map<Integer, Identifier> legacyToAnyIdentity = Map.of();
 
     private LegacyModItemRegistryMap() { }
 
@@ -31,6 +32,7 @@ public final class LegacyModItemRegistryMap {
     ) {
         Map<Integer, Identifier> byLegacyId = new LinkedHashMap<>();
         Map<Identifier, Integer> byModernId = new LinkedHashMap<>();
+        Map<Integer, Identifier> byAnyLegacyId = new LinkedHashMap<>();
 
         if (registryIds != null) {
             for (Map.Entry<String, Integer> entry : registryIds.entrySet()) {
@@ -44,9 +46,11 @@ public final class LegacyModItemRegistryMap {
 
                 String unprefixed = rawIdentity.substring(1);
                 Identifier legacyIdentity = LegacyRegistryIdentity.normalize(unprefixed);
-                if (legacyIdentity == null || "minecraft".equals(legacyIdentity.getNamespace())) continue;
+                if (legacyIdentity == null) continue;
                 Identifier modernId = LegacyRegistryIdentity.resolve(unprefixed, conversionAliases);
                 if (modernId == null) continue;
+                byAnyLegacyId.put(legacyId, modernId);
+                if ("minecraft".equals(legacyIdentity.getNamespace())) continue;
 
                 byLegacyId.put(legacyId, modernId);
                 byModernId.put(modernId, legacyId);
@@ -55,12 +59,14 @@ public final class LegacyModItemRegistryMap {
 
         legacyToModern = Collections.unmodifiableMap(new LinkedHashMap<>(byLegacyId));
         modernToLegacy = Collections.unmodifiableMap(new LinkedHashMap<>(byModernId));
+        legacyToAnyIdentity = Collections.unmodifiableMap(new LinkedHashMap<>(byAnyLegacyId));
         return legacyToModern.size();
     }
 
     public static synchronized void clear() {
         legacyToModern = Map.of();
         modernToLegacy = Map.of();
+        legacyToAnyIdentity = Map.of();
     }
 
     public static int mappedItemCount() {
@@ -69,6 +75,11 @@ public final class LegacyModItemRegistryMap {
 
     public static Identifier legacyIdentity(int legacyId) {
         return legacyToModern.get(legacyId);
+    }
+
+    /** Includes vanilla registry identities from the same FML ModIdData snapshot. */
+    public static Identifier legacyAnyIdentity(int legacyId) {
+        return legacyToAnyIdentity.get(legacyId);
     }
 
     static Integer legacyNumericId(Identifier modernId) {

@@ -97,6 +97,7 @@ public final class LegacyConversionEngine {
             builder.add(new LegacyOscillatingModelBlockPass());
             builder.add(new LegacyStorageBlockPass());
             builder.add(new LegacySingleInputProcessorPass());
+            builder.add(new LegacyMicroBlockContainerPass());
             builder.add(new LegacySingleInputProcessorPresentationPass());
             builder.add(new LegacySingleInputProcessorBlockConstructionPass());
             builder.add(new LegacySingleInputProcessorTileRegistrationStripPass());

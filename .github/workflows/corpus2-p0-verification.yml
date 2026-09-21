@@ -32,7 +32,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: success()
         with:
-          name: LegacyForgeBridge-visible-entity-runtime-163
+          name: LegacyForgeBridge-micro-block-runtime-164
           path: build/libs/*.jar
           if-no-files-found: error
 

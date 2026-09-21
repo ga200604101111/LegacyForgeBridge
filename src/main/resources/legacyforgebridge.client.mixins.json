@@ -10,6 +10,7 @@
     "ViaLegacyModItemBoundaryMixin",
     "ViaModernModItemBoundaryMixin",
     "ViaLegacyModBlockBoundaryMixin",
+    "ViaLegacyMicroBlockDataMixin",
     "ViaBlockStateMappingBoundaryMixin",
     "SpecialModelRenderersMixin",
     "LegacyLivingBehaviorMixin",

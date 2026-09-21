@@ -18,6 +18,7 @@ public final class LegacyModBlockRegistryMap {
     private static volatile Map<Identifier, Integer> modernToLegacy = Map.of();
     private static volatile Map<Integer, Integer> legacyToStateTokenBase = Map.of();
     private static volatile List<StateIdentity> stateTokenIdentities = List.of();
+    private static volatile Map<Integer, Identifier> legacyToAnyIdentity = Map.of();
 
     private LegacyModBlockRegistryMap() { }
 
@@ -32,6 +33,7 @@ public final class LegacyModBlockRegistryMap {
     ) {
         Map<Integer, Identifier> byLegacyId = new LinkedHashMap<>();
         Map<Identifier, Integer> byModernId = new LinkedHashMap<>();
+        Map<Integer, Identifier> byAnyLegacyId = new LinkedHashMap<>();
         if (registryIds != null) {
             for (Map.Entry<String, Integer> entry : registryIds.entrySet()) {
                 String rawIdentity = entry.getKey();
@@ -44,9 +46,11 @@ public final class LegacyModBlockRegistryMap {
 
                 String unprefixed = rawIdentity.substring(1);
                 Identifier legacyIdentity = LegacyRegistryIdentity.normalize(unprefixed);
-                if (legacyIdentity == null || "minecraft".equals(legacyIdentity.getNamespace())) continue;
+                if (legacyIdentity == null) continue;
                 Identifier modernId = LegacyRegistryIdentity.resolve(unprefixed, conversionAliases);
                 if (modernId == null) continue;
+                byAnyLegacyId.put(legacyId, modernId);
+                if ("minecraft".equals(legacyIdentity.getNamespace())) continue;
 
                 byLegacyId.put(legacyId, modernId);
                 byModernId.put(modernId, legacyId);
@@ -68,6 +72,7 @@ public final class LegacyModBlockRegistryMap {
         modernToLegacy = Collections.unmodifiableMap(new LinkedHashMap<>(byModernId));
         legacyToStateTokenBase = Collections.unmodifiableMap(new LinkedHashMap<>(tokenBases));
         stateTokenIdentities = List.copyOf(identities);
+        legacyToAnyIdentity = Collections.unmodifiableMap(new LinkedHashMap<>(byAnyLegacyId));
         return legacyToModern.size();
     }
 
@@ -76,6 +81,7 @@ public final class LegacyModBlockRegistryMap {
         modernToLegacy = Map.of();
         legacyToStateTokenBase = Map.of();
         stateTokenIdentities = List.of();
+        legacyToAnyIdentity = Map.of();
     }
 
     public static int mappedBlockCount() { return legacyToModern.size(); }
@@ -99,6 +105,8 @@ public final class LegacyModBlockRegistryMap {
     }
 
     public static Identifier legacyIdentity(int legacyId) { return legacyToModern.get(legacyId); }
+    /** Includes vanilla block identities from the same FML ModIdData snapshot. */
+    public static Identifier legacyAnyIdentity(int legacyId) { return legacyToAnyIdentity.get(legacyId); }
     public static Integer legacyNumericId(Identifier modernId) { return modernToLegacy.get(modernId); }
 
     private static StateIdentity stateIdentity(int token) {
