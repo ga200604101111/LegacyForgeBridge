@@ -110,6 +110,7 @@ public final class ConvertedLegacyVisualEntity extends Entity {
      * for the server-owned legacy entity, so breaking it appears to do nothing.
      */
     @Override public boolean isPickable(){return !isRemoved();}
+    @Override public boolean isAttackable(){return !isRemoved();}
 
     @Override protected void defineSynchedData(SynchedEntityData.Builder builder){}
     @Override protected void readAdditionalSaveData(ValueInput input){}
