@@ -1,6 +1,7 @@
 package dev.yinghuang.legacyforgebridge.convert.pass;
 
 import com.google.gson.*;
+import dev.yinghuang.legacyforgebridge.convert.LegacyRadialConditionalAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.LegacyRadialTesrAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.api.*;
 
@@ -9,9 +10,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.*;
 
-/** Publishes source-proven unconditional radial TESR bases without claiming conditional groups. */
+/** Publishes source-proven radial TESR bases plus separately proven metadata-selected sub-groups. */
 public final class LegacyRadialTesrPass implements ConversionPass {
     public static final String OUTPUT="legacyforgebridge/radial-tesr-rules.json";
+    public static final String CONDITIONAL_OUTPUT="legacyforgebridge/radial-tesr-conditional-rules.json";
     private static final Gson JSON=new GsonBuilder().setPrettyPrinting().create();
     @Override public String id(){return "legacy-radial-tesr-base";}
 
@@ -48,8 +50,55 @@ public final class LegacyRadialTesrPass implements ConversionPass {
         JsonArray skipped=new JsonArray();for(var s:analysis.skipped()){JsonObject v=new JsonObject();v.addProperty("registryName",s.registryName());v.addProperty("sourceBlockClass",s.sourceBlockClass());v.addProperty("reason",s.reason());skipped.add(v);}root.add("skipped",skipped);
         JsonArray diagnostics=new JsonArray();analysis.diagnostics().forEach(diagnostics::add);root.add("analysisDiagnostics",diagnostics);
         Path output=context.stagingDir().resolve(OUTPUT);Files.createDirectories(output.getParent());Files.writeString(output,JSON.toJson(root)+"\n",StandardCharsets.UTF_8);
+
+        int conditionalRuntime=writeConditionalRules(context,ids,analysis.rules());
         if(runtime>0)context.diagnostics().info("LFB-CONVERT-RADIAL-0001",SupportLevel.ADAPTED,
-                "Source-proven radial TESR base runtime rules="+runtime+"; conditional model groups remain explicitly separate.");
+                "Source-proven radial TESR base runtime rules="+runtime+"; source-proven conditional subgroup rules="+conditionalRuntime+".");
+    }
+
+    private static int writeConditionalRules(ConversionContext context,Map<String,String> ids,List<LegacyRadialTesrAnalyzer.Rule> bases)throws Exception{
+        var analysis=new LegacyRadialConditionalAnalyzer().analyze(context.sourceJar(),bases);
+        if(analysis.rules().isEmpty()&&analysis.skipped().isEmpty())return 0;
+        JsonObject root=new JsonObject();root.addProperty("schemaVersion",1);root.addProperty("sourceSha256",context.sourceHash());
+        JsonArray rules=new JsonArray();int runtime=0;
+        for(var rule:analysis.rules()){
+            String id=ids.get(rule.sourceBlockClass());if(id==null)continue;
+            JsonObject value=new JsonObject();value.addProperty("id",id);
+            value.addProperty("sourceBlockClass",rule.sourceBlockClass());value.addProperty("sourceTileClass",rule.sourceTileClass());
+            value.addProperty("sourceRendererClass",rule.sourceRendererClass());value.addProperty("sourceModelClass",rule.sourceModelClass());
+            value.addProperty("metadataShift",rule.metadataShift());value.addProperty("selectorMask",rule.selectorMask());
+            value.addProperty("coveredModelCalls",rule.coveredModelCalls());
+            value.addProperty("conditionalPresentationRuntimeComplete",true);
+            JsonArray groups=new JsonArray();
+            for(var group:rule.groups()){
+                JsonObject groupValue=new JsonObject();groupValue.addProperty("selectorValue",group.selectorValue());
+                JsonArray parts=new JsonArray();
+                for(var part:group.parts()){
+                    JsonObject partValue=new JsonObject();var c=part.cuboid();JsonObject cube=new JsonObject();
+                    cube.addProperty("u",c.u());cube.addProperty("v",c.v());cube.addProperty("x",c.x());cube.addProperty("y",c.y());cube.addProperty("z",c.z());
+                    cube.addProperty("width",c.width());cube.addProperty("height",c.height());cube.addProperty("depth",c.depth());
+                    cube.addProperty("pivotX",c.pivotX());cube.addProperty("pivotY",c.pivotY());cube.addProperty("pivotZ",c.pivotZ());partValue.add("cuboid",cube);
+                    JsonArray poses=new JsonArray();for(var pose:part.poses()){
+                        JsonObject poseValue=new JsonObject();poseValue.addProperty("xRot",pose.xRot());poseValue.addProperty("yRot",pose.yRot());poseValue.addProperty("zRot",pose.zRot());poses.add(poseValue);
+                    }partValue.add("poses",poses);
+                    if(part.animation()!=null){
+                        JsonObject animation=new JsonObject();animation.addProperty("axis",part.animation().axis().name());
+                        animation.addProperty("degreesPerTick",part.animation().degreesPerTick());animation.addProperty("periodTicks",part.animation().periodTicks());
+                        animation.addProperty("randomizedPhase",part.animation().randomizedPhase());partValue.add("animation",animation);
+                    }
+                    parts.add(partValue);
+                }
+                groupValue.add("parts",parts);groups.add(groupValue);
+            }
+            value.add("groups",groups);rules.add(value);runtime++;
+        }
+        root.add("rules",rules);root.addProperty("runtimeCompleteRules",runtime);
+        JsonArray skipped=new JsonArray();for(var entry:analysis.skipped()){
+            JsonObject value=new JsonObject();value.addProperty("registryName",entry.registryName());value.addProperty("sourceBlockClass",entry.sourceBlockClass());value.addProperty("reason",entry.reason());skipped.add(value);
+        }root.add("skipped",skipped);
+        Path output=context.stagingDir().resolve(CONDITIONAL_OUTPUT);Files.createDirectories(output.getParent());
+        Files.writeString(output,JSON.toJson(root)+"\n",StandardCharsets.UTF_8);
+        return runtime;
     }
 
     private static void writeInventoryPresentation(Path staging,String idValue,LegacyRadialTesrAnalyzer.Rule rule)throws Exception{
