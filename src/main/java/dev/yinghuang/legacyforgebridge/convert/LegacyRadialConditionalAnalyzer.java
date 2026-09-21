@@ -374,7 +374,7 @@ public final class LegacyRadialConditionalAnalyzer {
             }
             current=node.superName;
         }
-        return bounds.size()==1?bounds.getFirst():null;
+        return bounds.size()==1?bounds.iterator().next():null;
     }
 
     private static boolean incrementWrap(MethodNode method,SourceField field,int bound){
