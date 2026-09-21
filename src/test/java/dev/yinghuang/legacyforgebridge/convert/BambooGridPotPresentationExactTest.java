@@ -29,6 +29,7 @@ class BambooGridPotPresentationExactTest {
                         + analysis.skipped() + ", diagnostics=" + analysis.diagnostics()));
 
         assertEquals("ruby/bamboo/render/block/RenderMultiPot", proof.sourceRendererClass());
+        assertEquals("flower_pot", proof.cellCarrierLegacyRegistryName());
         assertEquals(3, proof.gridOffsets().size());
         assertEquals(-0.333F, proof.gridOffsets().get(0), 0.0001F);
         assertEquals(0.0F, proof.gridOffsets().get(1), 0.0001F);
