@@ -97,7 +97,7 @@ public final class LegacySingleInputProcessorRegistry {
                 if(!bool(value,"runtimeProofComplete")||!bool(value,"baseRuntimeComplete")||integer(value,"materializedRecipeCount",-1)!=integer(value,"sourceRecipeCount",-2))continue;
                 Rule rule=parse(value);if(rule==null||!rule.id().getNamespace().equals(modId))continue;
                 Rule previous=RULES.putIfAbsent(rule.id(),rule);if(previous!=null&&!sameRule(previous,rule))throw new IllegalStateException("Conflicting converted processor rule for "+rule.id());
-                if(bool(value,"worldPresentationRuntimeComplete"))WORLD_PRESENTATION.add(rule.id());loaded++;
+                if(bool(value,"worldPresentationRuntimeComplete")&&bool(value,"exclusiveWorldRendererModelWritten"))WORLD_PRESENTATION.add(rule.id());loaded++;
             }
             if(loaded>0)LegacyForgeBridge.LOGGER.info("Loaded converted processor runtime rules: mod={}, machines={}",modId,loaded);
         }catch(Exception exception){LegacyForgeBridge.LOGGER.error("Failed to load converted processor rules for {}",modId,exception);}

@@ -32,7 +32,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: success()
         with:
-          name: LegacyForgeBridge-micro-block-runtime-164
+          name: LegacyForgeBridge-processor-world-ownership-165
           path: build/libs/*.jar
           if-no-files-found: error
 
