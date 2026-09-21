@@ -59,6 +59,7 @@ public final class LegacyCombatItemPass implements ConversionPass {
                 String legacy = item.has("legacyRegistryName") ? item.get("legacyRegistryName").getAsString() : "";
                 if (!legacy.equals(rule.registryName())) continue;
             }
+            item.addProperty("kind", rule.kind().name().toLowerCase());
             if (rule.durability() > 0) item.addProperty("durability", rule.durability());
             JsonObject value = new JsonObject();
             value.addProperty("id", id);
