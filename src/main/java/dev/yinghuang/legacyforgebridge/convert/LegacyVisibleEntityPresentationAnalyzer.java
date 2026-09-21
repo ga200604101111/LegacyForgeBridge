@@ -32,7 +32,8 @@ public final class LegacyVisibleEntityPresentationAnalyzer {
                        int legacyNumericId,int trackingRange,int updateFrequency,boolean velocityUpdates,
                        float width,float height,int modelTextureWidth,int modelTextureHeight,List<Part> parts,
                        String fixedTexture,Map<String,Integer> watcherIndices,Map<Integer,Integer> watcherTypes,
-                       List<TextureVariant> textureVariants,List<Integer> palette,int itemWatcherBase,int itemWatcherCount,String proof) {
+                       List<TextureVariant> textureVariants,List<Integer> palette,int itemWatcherBase,int itemWatcherCount,
+                       boolean physicalCollision,boolean playerAttackRemoves,String proof) {
         public Rule {
             parts=List.copyOf(parts);watcherIndices=Map.copyOf(watcherIndices);watcherTypes=Map.copyOf(watcherTypes);
             textureVariants=List.copyOf(textureVariants);palette=List.copyOf(palette);
@@ -65,16 +66,19 @@ public final class LegacyVisibleEntityPresentationAnalyzer {
             ClassNode rendererNode=classes.get(renderer);ClassNode entity=classes.get(registration.sourceClass());
             if(rendererNode==null||entity==null)continue;
             float[] size=directSize(entity);if(size==null)continue;
-            Rule rule=proveSlidePanel(registration,rendererNode,entity,size);
-            if(rule==null)rule=proveTintedCushion(registration,rendererNode,entity,size);
-            if(rule==null)rule=proveTray(registration,rendererNode,entity,size);
+            boolean physicalCollision=provesPhysicalCollision(entity);
+            boolean playerAttackRemoves=provesPlayerAttackRemoval(entity);
+            Rule rule=proveSlidePanel(registration,rendererNode,entity,size,physicalCollision,playerAttackRemoves);
+            if(rule==null)rule=proveTintedCushion(registration,rendererNode,entity,size,physicalCollision,playerAttackRemoves);
+            if(rule==null)rule=proveTray(registration,rendererNode,entity,size,physicalCollision,playerAttackRemoves);
             if(rule!=null)out.add(rule);
         }
         out.sort(Comparator.comparing(Rule::registryName));
         return new Analysis(out,List.copyOf(new LinkedHashSet<>(diagnostics)));
     }
 
-    private Rule proveSlidePanel(Registration reg,ClassNode renderer,ClassNode entity,float[] size)throws IOException{
+    private Rule proveSlidePanel(Registration reg,ClassNode renderer,ClassNode entity,float[] size,
+                                 boolean physicalCollision,boolean playerAttackRemoves)throws IOException{
         String modelType=uniqueModelType(renderer);if(modelType==null)return null;
         ModelProof model=parseModel(classes.get(modelType));if(model==null||model.parts().size()!=1||model.textureWidth()!=64||model.textureHeight()!=64)return null;
         Part part=model.parts().getFirst();
@@ -111,10 +115,12 @@ public final class LegacyVisibleEntityPresentationAnalyzer {
         if(watcherTypes==null||watcherTypes.get(direction)!=0||watcherTypes.get(mirror)!=0||watcherTypes.get(doorId)!=1)return null;
         return new Rule(reg.name(),reg.sourceClass(),renderer.name,Adapter.SLIDE_PANEL,reg.numericId(),reg.tracking(),reg.update(),reg.velocity(),
                 size[0],size[1],model.textureWidth(),model.textureHeight(),model.parts(),null,watchers,watcherTypes,variants,List.of(),-1,0,
+                physicalCollision,playerAttackRemoves,
                 "Source-bound dual-mirror single-cuboid renderer; complete source-proven watcher schema plus direction/mirror/texture semantics and enum texture/translucency table");
     }
 
-    private Rule proveTintedCushion(Registration reg,ClassNode renderer,ClassNode entity,float[] size)throws IOException{
+    private Rule proveTintedCushion(Registration reg,ClassNode renderer,ClassNode entity,float[] size,
+                                    boolean physicalCollision,boolean playerAttackRemoves)throws IOException{
         String modelType=uniqueModelType(renderer);if(modelType==null)return null;
         ModelProof model=parseModel(classes.get(modelType));if(model==null||model.parts().size()!=1)return null;
         Part part=model.parts().getFirst();
@@ -139,10 +145,12 @@ public final class LegacyVisibleEntityPresentationAnalyzer {
         if(watcherTypes==null||watcherTypes.get(color)!=0)return null;
         return new Rule(reg.name(),reg.sourceClass(),renderer.name,Adapter.TINTED_CUSHION,reg.numericId(),reg.tracking(),reg.update(),reg.velocity(),
                 size[0],size[1],model.textureWidth(),model.textureHeight(),model.parts(),texture,watchers,watcherTypes,List.of(),palette,-1,0,
+                physicalCollision,playerAttackRemoves,
                 "Source-bound single-cuboid renderer with fixed texture, complete source-proven watcher schema, entity yaw/pitch transform and 16-entry watcher-selected source palette");
     }
 
-    private Rule proveTray(Registration reg,ClassNode renderer,ClassNode entity,float[] size)throws IOException{
+    private Rule proveTray(Registration reg,ClassNode renderer,ClassNode entity,float[] size,
+                           boolean physicalCollision,boolean playerAttackRemoves)throws IOException{
         String modelType=uniqueModelType(renderer);if(modelType==null)return null;
         ClassNode modelNode=classes.get(modelType);ModelProof model=parseModel(modelNode);if(model==null)model=parseDeclaredModel(modelNode);
         if(model==null||model.parts().size()<5||model.textureWidth()!=64||model.textureHeight()!=32)return null;
@@ -158,7 +166,51 @@ public final class LegacyVisibleEntityPresentationAnalyzer {
         Map<Integer,Integer> watcherTypes=new LinkedHashMap<>();for(int i=0;i<range[1];i++)watcherTypes.put(range[0]+i,5);
         return new Rule(reg.name(),reg.sourceClass(),renderer.name,Adapter.TRAY_ITEMS,reg.numericId(),reg.tracking(),reg.update(),reg.velocity(),
                 size[0],size[1],model.textureWidth(),model.textureHeight(),model.parts(),texture,Map.of(),watcherTypes,List.of(),List.of(),range[0],range[1],
+                physicalCollision,playerAttackRemoves,
                 "Source-bound fixed multi-cuboid tray renderer plus bounded five-slot ItemStack watcher range and radial modern-item presentation adapter");
+    }
+
+    private boolean provesPhysicalCollision(ClassNode entity){
+        MethodNode bounding=effectiveMethod(entity.name,"func_70046_E","()Lnet/minecraft/util/AxisAlignedBB;");
+        if(bounding==null)bounding=effectiveMethod(entity.name,"getBoundingBox","()Lnet/minecraft/util/AxisAlignedBB;");
+        List<AbstractInsnNode> box=real(bounding);
+        boolean ownBox=box.size()==3
+                &&box.get(0) instanceof VarInsnNode self&&self.getOpcode()==Opcodes.ALOAD&&self.var==0
+                &&box.get(1) instanceof FieldInsnNode field&&field.getOpcode()==Opcodes.GETFIELD
+                &&field.owner.equals("net/minecraft/entity/Entity")
+                &&field.desc.equals("Lnet/minecraft/util/AxisAlignedBB;")
+                &&Set.of("field_70121_D","boundingBox").contains(field.name)
+                &&box.get(2).getOpcode()==Opcodes.ARETURN;
+        if(!ownBox)return false;
+
+        MethodNode collidable=effectiveMethod(entity.name,"func_70067_L","()Z");
+        if(collidable==null)collidable=effectiveMethod(entity.name,"canBeCollidedWith","()Z");
+        List<AbstractInsnNode> code=real(collidable);
+        return code.size()==7
+                &&code.get(0) instanceof VarInsnNode load&&load.getOpcode()==Opcodes.ALOAD&&load.var==0
+                &&code.get(1) instanceof FieldInsnNode dead&&dead.getOpcode()==Opcodes.GETFIELD
+                &&dead.owner.equals("net/minecraft/entity/Entity")&&dead.desc.equals("Z")
+                &&Set.of("field_70128_L","isDead").contains(dead.name)
+                &&code.get(2) instanceof JumpInsnNode jump&&jump.getOpcode()==Opcodes.IFNE
+                &&Integer.valueOf(1).equals(intConst(code.get(3)))
+                &&code.get(4).getOpcode()==Opcodes.GOTO
+                &&Integer.valueOf(0).equals(intConst(code.get(5)))
+                &&code.get(6).getOpcode()==Opcodes.IRETURN;
+    }
+
+    private boolean provesPlayerAttackRemoval(ClassNode entity){
+        MethodNode hurt=effectiveMethod(entity.name,"func_70097_a","(Lnet/minecraft/util/DamageSource;F)Z");
+        if(hurt==null)hurt=effectiveMethod(entity.name,"attackEntityFrom","(Lnet/minecraft/util/DamageSource;F)Z");
+        if(hurt==null)return false;
+        boolean player=false,setDead=false;
+        for(AbstractInsnNode insn:hurt.instructions){
+            if(insn instanceof LdcInsnNode ldc&&"player".equals(ldc.cst))player=true;
+            if(insn instanceof MethodInsnNode call
+                    &&call.owner.equals("net/minecraft/entity/Entity")
+                    &&Set.of("func_70106_y","setDead").contains(call.name)
+                    &&call.desc.equals("()V"))setDead=true;
+        }
+        return player&&setDead;
     }
 
     private List<Registration> registrations(Path jar)throws IOException{
