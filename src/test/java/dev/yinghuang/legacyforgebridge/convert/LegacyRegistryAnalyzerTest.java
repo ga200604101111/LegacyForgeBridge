@@ -41,10 +41,10 @@ class LegacyRegistryAnalyzerTest {
         assertEquals("other/sample/StoneLamp",block.implementationClass());
         var beam=analysis.blocks().stream().filter(value->value.registryName().equals("beam")).findFirst().orElseThrow();
         assertEquals("(FFFF)V",beam.constructorDescriptor());
-        assertEquals(0.15F,beam.constructorArguments().get(0).value());
-        assertEquals(0.85F,beam.constructorArguments().get(1).value());
-        assertEquals(0.15F,beam.constructorArguments().get(2).value());
-        assertEquals(0.85F,beam.constructorArguments().get(3).value());
+        assertEquals(0.15F,((Number)beam.constructorArguments().get(0).value()).floatValue(),1e-6F);
+        assertEquals(0.85F,((Number)beam.constructorArguments().get(1).value()).floatValue(),1e-6F);
+        assertEquals(0.15F,((Number)beam.constructorArguments().get(2).value()).floatValue(),1e-6F);
+        assertEquals(0.85F,((Number)beam.constructorArguments().get(3).value()).floatValue(),1e-6F);
         // This fixture does not store helper return values into static fields, so no field binding is expected.
         assertTrue(analysis.fieldBindings().isEmpty());
     }
