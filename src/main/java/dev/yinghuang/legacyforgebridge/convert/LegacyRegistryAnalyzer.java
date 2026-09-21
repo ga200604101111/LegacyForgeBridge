@@ -479,6 +479,12 @@ public final class LegacyRegistryAnalyzer {
             if (frame != null && variable.var < frame.getLocals()) return resolve(context, frame.getLocal(variable.var), producerIndex, depth + 1, guard);
             return UnknownSymbol.INSTANCE;
         }
+        if (producer instanceof VarInsnNode variable && isStore(variable.getOpcode())) {
+            Frame<SourceValue> frame=context.frames()[producerIndex];
+            if(frame!=null&&frame.getStackSize()>0)
+                return resolve(context,frame.getStack(frame.getStackSize()-1),producerIndex,depth+1,guard);
+            return UnknownSymbol.INSTANCE;
+        }
         if (isNumericBinary(producer.getOpcode())) {
             Frame<SourceValue> frame=context.frames()[producerIndex];
             if(frame==null||frame.getStackSize()<2)return UnknownSymbol.INSTANCE;
@@ -550,6 +556,10 @@ public final class LegacyRegistryAnalyzer {
 
     private static boolean isLoad(int opcode) {
         return opcode==Opcodes.ALOAD||opcode==Opcodes.ILOAD||opcode==Opcodes.LLOAD||opcode==Opcodes.FLOAD||opcode==Opcodes.DLOAD;
+    }
+
+    private static boolean isStore(int opcode) {
+        return opcode==Opcodes.ASTORE||opcode==Opcodes.ISTORE||opcode==Opcodes.LSTORE||opcode==Opcodes.FSTORE||opcode==Opcodes.DSTORE;
     }
 
     private static boolean isNumericBinary(int opcode){
