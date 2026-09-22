@@ -376,7 +376,10 @@ public final class LegacyRotatingAssemblyEntityAnalyzer {
         for(int i=0;i<code.size();i++)if(code.get(i).getOpcode()==Opcodes.FASTORE){
             String array=null;for(int j=i-1;j>=Math.max(0,i-18);j--)if(code.get(j) instanceof FieldInsnNode f&&f.getOpcode()==Opcodes.GETFIELD&&f.owner.equals(model.name)&&f.desc.equals("[F")){array=f.name;break;}
             if(array==null)continue;boolean step=false;Float phase=0F;
-            for(int j=Math.max(0,i-16);j<i;j++){Integer v=intConstant(code.get(j));if(v!=null&&v==30)step=true;if(code.get(j).getOpcode()==Opcodes.ISUB&&j>0){Integer p=intConstant(code.get(j-1));if(p!=null)phase=-p.floatValue();}}
+            for(int j=Math.max(0,i-16);j<i;j++){
+                Number numeric=numberConstant(code.get(j));if(numeric!=null&&Double.compare(numeric.doubleValue(),30D)==0)step=true;
+                if(code.get(j).getOpcode()==Opcodes.ISUB&&j>0){Integer p=intConstant(code.get(j-1));if(p!=null)phase=-p.floatValue();}
+            }
             if(step)out.put(array,phase);
         }
         return out;
@@ -443,6 +446,10 @@ public final class LegacyRotatingAssemblyEntityAnalyzer {
     private static boolean containsField(MethodNode m,String desc,Set<String> names){if(m!=null)for(AbstractInsnNode i:m.instructions)if(i instanceof FieldInsnNode f&&f.desc.equals(desc)&&names.contains(f.name))return true;return false;}
     private static String fieldOrigin(List<AbstractInsnNode> code,int index,String modelOwner,int ignored){return fieldOrigin(code,index,modelOwner);}
     private static Integer intConstant(AbstractInsnNode i){if(i==null)return null;return switch(i.getOpcode()){case Opcodes.ICONST_M1->-1;case Opcodes.ICONST_0->0;case Opcodes.ICONST_1->1;case Opcodes.ICONST_2->2;case Opcodes.ICONST_3->3;case Opcodes.ICONST_4->4;case Opcodes.ICONST_5->5;case Opcodes.BIPUSH,Opcodes.SIPUSH->((IntInsnNode)i).operand;case Opcodes.LDC->i instanceof LdcInsnNode l&&l.cst instanceof Integer v?v:null;default->null;};}
+    private static Number numberConstant(AbstractInsnNode i){
+        if(i instanceof LdcInsnNode ldc&&ldc.cst instanceof Number number)return number;
+        return intConstant(i);
+    }
     private static Float floatConstant(AbstractInsnNode i){if(i==null)return null;return switch(i.getOpcode()){case Opcodes.FCONST_0->0F;case Opcodes.FCONST_1->1F;case Opcodes.FCONST_2->2F;case Opcodes.LDC->i instanceof LdcInsnNode l&&l.cst instanceof Number n?n.floatValue():null;default->null;};}
     private static AbstractInsnNode previousReal(AbstractInsnNode i){for(AbstractInsnNode p=i==null?null:i.getPrevious();p!=null;p=p.getPrevious())if(p.getOpcode()>=0)return p;return null;}
     private static List<AbstractInsnNode> real(MethodNode m){List<AbstractInsnNode> out=new ArrayList<>();if(m!=null)for(AbstractInsnNode i:m.instructions)if(i.getOpcode()>=0)out.add(i);return out;}
