@@ -3,6 +3,7 @@ package dev.yinghuang.legacyforgebridge.compat;
 import com.viaversion.viaversion.api.minecraft.entitydata.EntityData;
 import com.viaversion.viaversion.api.minecraft.item.Item;
 import dev.yinghuang.legacyforgebridge.convert.runtime.ConvertedLegacyRemoteProjectile;
+import dev.yinghuang.legacyforgebridge.convert.runtime.ConvertedLegacyRotatingAssemblyEntity;
 import dev.yinghuang.legacyforgebridge.convert.runtime.ConvertedLegacyVisualEntity;
 import dev.yinghuang.legacyforgebridge.network.FmlRuntimeCodec;
 import net.minecraft.client.Minecraft;
@@ -72,6 +73,8 @@ public final class LegacyRemoteEntityMetadataBridge {
                     visible.applyLegacyWatcher(update.type(),update.index(),update.value());
                 }else if(entity instanceof ConvertedLegacyRemoteProjectile projectile){
                     projectile.applyLegacyWatcher(update.type(),update.index(),update.value());
+                }else if(entity instanceof ConvertedLegacyRotatingAssemblyEntity rotating){
+                    rotating.applyLegacyWatcher(update.type(),update.index(),update.value());
                 }else if(entity instanceof LegacyPlainEntityWatcherBridge plain){
                     plain.legacyforgebridge$applyWatcher(update.index(),update.type(),update.value());
                 }
