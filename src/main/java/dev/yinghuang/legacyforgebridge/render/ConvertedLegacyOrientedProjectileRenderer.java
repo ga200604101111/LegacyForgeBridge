@@ -12,6 +12,7 @@ import net.minecraft.client.renderer.item.ItemStackRenderState;
 import net.minecraft.client.renderer.state.CameraRenderState;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.world.item.ItemDisplayContext;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * Directional modern-item carrier for source-proven arrow-family custom projectile renderers.
@@ -22,6 +23,7 @@ import net.minecraft.world.item.ItemDisplayContext;
  */
 public final class ConvertedLegacyOrientedProjectileRenderer
         extends EntityRenderer<ConvertedLegacyRemoteProjectile,ConvertedLegacyOrientedProjectileRenderer.State> {
+    private static final double MIN_MOTION_SQUARED=1.0E-7D;
     private final ItemModelResolver itemModelResolver;
 
     public ConvertedLegacyOrientedProjectileRenderer(EntityRendererProvider.Context context){
@@ -35,6 +37,12 @@ public final class ConvertedLegacyOrientedProjectileRenderer
         super.extractRenderState(entity,state,partialTick);
         ConvertedLegacyNoOpEntityRenderer.suppressVisualEffects(state);
         state.yaw=entity.getYRot();state.pitch=entity.getXRot();
+        Vec3 motion=entity.getDeltaMovement();
+        if(motion.lengthSqr()>MIN_MOTION_SQUARED){
+            double horizontal=Math.sqrt(motion.x*motion.x+motion.z*motion.z);
+            state.yaw=(float)Math.toDegrees(Math.atan2(motion.x,motion.z));
+            state.pitch=(float)Math.toDegrees(Math.atan2(motion.y,horizontal));
+        }
         itemModelResolver.updateForNonLiving(state.item,entity.getItem(),ItemDisplayContext.NONE,entity);
     }
 
