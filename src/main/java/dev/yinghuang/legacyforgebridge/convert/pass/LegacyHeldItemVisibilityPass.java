@@ -31,7 +31,11 @@ public final class LegacyHeldItemVisibilityPass implements ConversionPass {
             String visibleId=ns+":block/"+path+"_lfb_visible_cross";write(staging.resolve("assets/"+ns+"/models/block/"+path+"_lfb_visible_cross.json"),visible);
             JsonObject states=new JsonObject();boolean complete=true;for(int meta=0;meta<16;meta++){String key="legacy_meta="+meta;JsonElement prior=oldStates.get(key);if(prior==null||!prior.isJsonObject()||!prior.getAsJsonObject().has("model")){complete=false;break;}JsonObject state=new JsonObject();state.addProperty("model",(meta&source.visibleOrMask())!=0?visibleId:hiddenId);states.add(key,state);}
             if(!complete)continue;JsonObject blockstate=new JsonObject();blockstate.add("variants",states);write(statePath,blockstate);
-            JsonObject rule=new JsonObject();rule.addProperty("id",id);rule.addProperty("sourceClass",source.sourceBlockClass());rule.addProperty("visibleOrMask",source.visibleOrMask());rule.addProperty("hiddenAndMask",source.hiddenAndMask());rule.addProperty("clientMetadataToggleRuntime",true);rules.add(rule);converted++;
+            JsonObject rule=new JsonObject();rule.addProperty("id",id);rule.addProperty("sourceClass",source.sourceBlockClass());
+            rule.addProperty("visibleOrMask",source.visibleOrMask());rule.addProperty("hiddenAndMask",source.hiddenAndMask());
+            rule.addProperty("emptyCollision",source.emptyCollision());
+            rule.addProperty("metaZeroSelectionElseEmpty",source.metaZeroSelectionElseEmpty());
+            rule.addProperty("clientMetadataToggleRuntime",true);rule.addProperty("shapeRuntimeComplete",source.emptyCollision());rules.add(rule);converted++;
         }
         JsonObject root=new JsonObject();root.addProperty("schemaVersion",1);root.addProperty("sourceSha256",context.sourceHash());root.addProperty("runtimeComplete",true);root.add("rules",rules);root.addProperty("convertedBlocks",converted);write(staging.resolve(OUTPUT),root);
         if(converted>0)context.diagnostics().info("LFB-CONVERT-HELD-VIS-0001",SupportLevel.ADAPTED,"Converted held-own-BlockItem visibility blocks="+converted+" with client metadata/model toggles.");
