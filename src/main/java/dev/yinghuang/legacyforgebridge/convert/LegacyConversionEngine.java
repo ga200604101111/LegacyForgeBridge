@@ -117,6 +117,7 @@ public final class LegacyConversionEngine {
             builder.add(new LegacyBehaviorPass());
             builder.add(new LegacyClientContentBaselinePass());
             builder.add(new LegacyIconPresentationPass());
+            builder.add(new LegacyNbtByteIconSelectorPass());
             builder.add(new LegacyUseDurationIconPass());
             builder.add(new LegacyHeldItemVisibilityPass());
             builder.add(new LegacyRandomDisplayParticlePass());
