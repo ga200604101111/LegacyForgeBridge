@@ -23,6 +23,7 @@ class LegacyCombatItemAnalyzerTest {
         try(JarOutputStream out=new JarOutputStream(Files.newOutputStream(jar))){
             put(out,"foreign/weapons/Blade.class",weapon("foreign/weapons/Blade",false));
             put(out,"foreign/weapons/AmbiguousBlade.class",weapon("foreign/weapons/AmbiguousBlade",true));
+            put(out,"foreign/weapons/BowLike.class",bow());
             put(out,"foreign/weapons/Bootstrap.class",bootstrap());
         }
 
@@ -34,6 +35,13 @@ class LegacyCombatItemAnalyzerTest {
 
         assertTrue(analysis.rules().stream().noneMatch(rule->rule.registryName().equals("ambiguous_blade")),
                 "A branch before the source damage base value must fail closed instead of guessing a weapon value");
+
+        var bow=analysis.rules().stream().filter(rule->rule.registryName().equals("foreign_bow")).findFirst().orElseThrow();
+        assertEquals(LegacyCombatItemAnalyzer.Kind.BOW,bow.kind());
+        assertEquals(300,bow.durability());
+        assertEquals(3,bow.pullStages());
+        assertEquals("foreign:bow_pull_",bow.pullTexturePrefix());
+        assertEquals(java.util.List.of(1,26,40),bow.pullStageMinTicks());
     }
 
     private static byte[] weapon(String name,boolean branchFirst){
@@ -62,11 +70,46 @@ class LegacyCombatItemAnalyzerTest {
         w.visitEnd();return w.toByteArray();
     }
 
+    private static byte[] bow(){
+        String name="foreign/weapons/BowLike",icon="net/minecraft/util/IIcon";
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,name,null,"net/minecraft/item/ItemBow",null);
+        w.visitField(Opcodes.ACC_PRIVATE,"pull","[L"+icon+";",null,null).visitEnd();
+        MethodVisitor init=w.visitMethod(Opcodes.ACC_PUBLIC,"<init>","()V",null,null);
+        init.visitCode();init.visitVarInsn(Opcodes.ALOAD,0);
+        init.visitMethodInsn(Opcodes.INVOKESPECIAL,"net/minecraft/item/ItemBow","<init>","()V",false);
+        init.visitVarInsn(Opcodes.ALOAD,0);init.visitIntInsn(Opcodes.SIPUSH,300);
+        init.visitMethodInsn(Opcodes.INVOKEVIRTUAL,name,"func_77656_e","(I)Lnet/minecraft/item/Item;",false);init.visitInsn(Opcodes.POP);
+        init.visitVarInsn(Opcodes.ALOAD,0);init.visitInsn(Opcodes.ICONST_3);init.visitTypeInsn(Opcodes.ANEWARRAY,icon);
+        init.visitFieldInsn(Opcodes.PUTFIELD,name,"pull","[L"+icon+";");
+        init.visitLdcInsn("foreign:bow_pull_");init.visitInsn(Opcodes.POP);
+        init.visitInsn(Opcodes.RETURN);init.visitMaxs(0,0);init.visitEnd();
+
+        MethodVisitor stage=w.visitMethod(Opcodes.ACC_PUBLIC,"stage","(I)L"+icon+";",null,null);
+        stage.visitCode();stage.visitVarInsn(Opcodes.ALOAD,0);stage.visitFieldInsn(Opcodes.GETFIELD,name,"pull","[L"+icon+";");
+        stage.visitVarInsn(Opcodes.ILOAD,1);stage.visitInsn(Opcodes.AALOAD);stage.visitInsn(Opcodes.ARETURN);
+        stage.visitMaxs(0,0);stage.visitEnd();
+
+        MethodVisitor get=w.visitMethod(Opcodes.ACC_PUBLIC,"getIcon","(I)L"+icon+";",null,null);
+        get.visitCode();
+        Label stage1=new Label(),stage0=new Label(),ordinary=new Label();
+        get.visitVarInsn(Opcodes.ILOAD,1);get.visitIntInsn(Opcodes.BIPUSH,40);get.visitJumpInsn(Opcodes.IF_ICMPLT,stage1);
+        get.visitVarInsn(Opcodes.ALOAD,0);get.visitInsn(Opcodes.ICONST_2);get.visitMethodInsn(Opcodes.INVOKEVIRTUAL,name,"stage","(I)L"+icon+";",false);get.visitInsn(Opcodes.ARETURN);
+        get.visitLabel(stage1);
+        get.visitVarInsn(Opcodes.ILOAD,1);get.visitIntInsn(Opcodes.BIPUSH,25);get.visitJumpInsn(Opcodes.IF_ICMPLE,stage0);
+        get.visitVarInsn(Opcodes.ALOAD,0);get.visitInsn(Opcodes.ICONST_1);get.visitMethodInsn(Opcodes.INVOKEVIRTUAL,name,"stage","(I)L"+icon+";",false);get.visitInsn(Opcodes.ARETURN);
+        get.visitLabel(stage0);
+        get.visitVarInsn(Opcodes.ILOAD,1);get.visitJumpInsn(Opcodes.IFLE,ordinary);
+        get.visitVarInsn(Opcodes.ALOAD,0);get.visitInsn(Opcodes.ICONST_0);get.visitMethodInsn(Opcodes.INVOKEVIRTUAL,name,"stage","(I)L"+icon+";",false);get.visitInsn(Opcodes.ARETURN);
+        get.visitLabel(ordinary);get.visitInsn(Opcodes.ACONST_NULL);get.visitInsn(Opcodes.ARETURN);
+        get.visitMaxs(0,0);get.visitEnd();w.visitEnd();return w.toByteArray();
+    }
+
     private static byte[] bootstrap(){
         ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
         w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,"foreign/weapons/Bootstrap",null,"java/lang/Object",null);
         MethodVisitor m=w.visitMethod(Opcodes.ACC_STATIC,"<clinit>","()V",null,null);
-        m.visitCode();register(m,"foreign/weapons/Blade","foreign_blade");register(m,"foreign/weapons/AmbiguousBlade","ambiguous_blade");
+        m.visitCode();register(m,"foreign/weapons/Blade","foreign_blade");register(m,"foreign/weapons/AmbiguousBlade","ambiguous_blade");register(m,"foreign/weapons/BowLike","foreign_bow");
         m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
     }
 
