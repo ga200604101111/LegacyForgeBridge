@@ -35,7 +35,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: success()
         with:
-          name: LegacyForgeBridge-radial-conditional-runtime-169
+          name: LegacyForgeBridge-entity-state-shape-runtime-170
           path: build/libs/*.jar
           if-no-files-found: error
 
