@@ -45,7 +45,7 @@ public final class LegacyRotatingAssemblyEntityAnalyzer {
                        int legacyNumericId,int trackingRange,int updateFrequency,boolean velocityUpdates,
                        Adapter adapter,List<Cuboid> staticParts,List<Cuboid> repeatedPrimary,List<Cuboid> repeatedSecondary,
                        int directionWatcher,int sizeWatcher,int countWatcher,int textureWatcher,int reverseWatcher,
-                       int directionDefault,int sizeDefault,int countDefault,int textureDefault,int reverseDefault,
+                       int directionDefault,int sizeDefault,int sizeMin,int sizeMax,int countDefault,int textureDefault,int reverseDefault,
                        int countBase,int countMax,int fixedRepeatCount,float secondaryPhaseDegrees,float modelScale,
                        List<String> textures,boolean physicalCollision,boolean playerAttackRemoves,boolean randomInitialPhase){
         public Rule{
@@ -54,7 +54,8 @@ public final class LegacyRotatingAssemblyEntityAnalyzer {
             if(registryName==null||registryName.isBlank()||sourceClass==null||rendererClass==null||sourceModelClass==null
                     ||legacyNumericId<0||trackingRange<=0||updateFrequency<=0||adapter==null
                     ||staticParts.isEmpty()||repeatedPrimary.isEmpty()||directionWatcher<0||sizeWatcher<0
-                    ||directionDefault<0||sizeDefault<=0||modelScale<=0F||textures.isEmpty()||!physicalCollision||!playerAttackRemoves||!randomInitialPhase)
+                    ||directionDefault<0||sizeDefault<=0||sizeMin<=0||sizeMax<sizeMin||sizeDefault<sizeMin||sizeDefault>sizeMax
+                    ||modelScale<=0F||textures.isEmpty()||!physicalCollision||!playerAttackRemoves||!randomInitialPhase)
                 throw new IllegalArgumentException("Invalid rotating assembly rule");
             if(adapter==Adapter.VARIABLE_Z_RADIAL&&(countWatcher<0||textureWatcher<0||countDefault<0||textureDefault<0||countBase<=0||countMax<countBase||textures.size()<2))
                 throw new IllegalArgumentException("Incomplete variable radial assembly rule");
@@ -70,6 +71,9 @@ public final class LegacyRotatingAssemblyEntityAnalyzer {
     private record MutablePart(String field,int u,int v,float x,float y,float z,int width,int height,int depth,
                                float pivotX,float pivotY,float pivotZ,float xRot,float yRot,float zRot,boolean mirror){}
     private record CountProof(int watcherIndex,int base){}
+    private record IntBounds(int min,int max){
+        private IntBounds{if(max<min)throw new IllegalArgumentException("Invalid watcher bounds");}
+    }
     private record Loop(int start,int end,int variable,Integer fixedCount,String countField){}
 
     private final Map<String,ClassNode> classes=new LinkedHashMap<>();
@@ -99,6 +103,8 @@ public final class LegacyRotatingAssemblyEntityAnalyzer {
             if(renderMethod==null)continue;
             int size=dominantDirectByteWatcher(renderMethod,watcher.sourceClass(),direction);
             if(size<0)continue;
+            IntBounds sizeBounds=watcherMutationBounds(watcher.sourceClass(),size);
+            if(sizeBounds==null||sizeBounds.min()<=0)continue;
             String rollGetter=rollGetter(renderMethod,watcher.sourceClass());String rollField=rollGetter==null?null:returnedFloatField(watcher.sourceClass(),rollGetter);
             if(rollField==null||!randomInitialRoll(watcher.sourceClass(),rollField))continue;
             if(!provesPhysicalCollision(watcher.sourceClass())||!provesPlayerAttackRemoval(watcher.sourceClass()))continue;
@@ -114,12 +120,15 @@ public final class LegacyRotatingAssemblyEntityAnalyzer {
                 int texture=textureWatcher(rendererNode,watcher.sourceClass());
                 VariableModel variable=proveVariableModel(model,parts);
                 int countMax=count==null?-1:variableMaxCount(model,count.base());
-                if(count!=null&&texture>=0&&variable!=null&&countMax>=count.base()
+                IntBounds countBounds=count==null?null:watcherMutationBounds(watcher.sourceClass(),count.watcherIndex());
+                if(count!=null&&texture>=0&&variable!=null&&countMax>=count.base()&&countBounds!=null
+                        &&countBounds.min()==0&&countBounds.max()==countMax-count.base()
                         &&proveVariableRendererTransform(renderMethod,watcher.sourceClass(),direction,size,rollGetter)
                         &&proveConstantPositiveRoll(watcher.sourceClass(),rollField))
                     rule=new Rule(watcher.registryName(),watcher.sourceClass(),renderer,modelName,watcher.numericId(),watcher.trackingRange(),watcher.updateFrequency(),watcher.velocityUpdates(),
                             Adapter.VARIABLE_Z_RADIAL,variable.staticParts(),variable.repeated(),List.of(),direction,size,count.watcherIndex(),texture,-1,
-                            watcherDefault(watcher,direction,0),watcherDefault(watcher,size,1),watcherDefault(watcher,count.watcherIndex(),0),watcherDefault(watcher,texture,0),0,
+                            watcherDefault(watcher,direction,0),watcherDefault(watcher,size,1),sizeBounds.min(),sizeBounds.max(),
+                            watcherDefault(watcher,count.watcherIndex(),0),watcherDefault(watcher,texture,0),0,
                             count.base(),countMax,0,0F,scale,textures,true,true,true);
             }else{
                 int reverse=remainingOwnByteWatcher(watcher,Set.of(size));
@@ -129,7 +138,8 @@ public final class LegacyRotatingAssemblyEntityAnalyzer {
                         &&proveFluidBidirectionalRoll(watcher.sourceClass(),rollField,reverse))
                     rule=new Rule(watcher.registryName(),watcher.sourceClass(),renderer,modelName,watcher.numericId(),watcher.trackingRange(),watcher.updateFrequency(),watcher.velocityUpdates(),
                             Adapter.FLUID_X_RADIAL,fixed.staticParts(),fixed.primary(),fixed.secondary(),direction,size,-1,-1,reverse,
-                            watcherDefault(watcher,direction,0),watcherDefault(watcher,size,1),0,0,watcherDefault(watcher,reverse,0),
+                            watcherDefault(watcher,direction,0),watcherDefault(watcher,size,1),sizeBounds.min(),sizeBounds.max(),
+                            0,0,watcherDefault(watcher,reverse,0),
                             0,0,fixed.count(),fixed.secondaryPhaseDegrees(),scale,textures,true,true,true);
             }
             if(rule!=null)rules.add(rule);
@@ -229,6 +239,36 @@ public final class LegacyRotatingAssemblyEntityAnalyzer {
         int result=-1;for(var e:rule.entries())if("byte".equals(e.valueKind())&&e.declaredBy().equals(rule.sourceClass())&&!excluded.contains(e.index())){
             if(result!=-1)return -1;result=e.index();
         }return result;
+    }
+
+    private IntBounds watcherMutationBounds(String entity,int watcherIndex){
+        Integer min=null,max=null;Set<String> seen=new HashSet<>();
+        for(String current=entity;current!=null&&seen.add(current);){
+            ClassNode node=classes.get(current);if(node==null)break;
+            for(MethodNode method:node.methods){
+                List<AbstractInsnNode> code=real(method);boolean writes=false;
+                for(int i=1;i<code.size();i++)if(code.get(i) instanceof MethodInsnNode call&&call.owner.equals(DATA_WATCHER)
+                        &&Set.of("updateObject","func_75692_b").contains(call.name)&&call.desc.equals("(ILjava/lang/Object;)V")){
+                    for(int j=i-1;j>=Math.max(0,i-12);j--){Integer idx=intConstant(code.get(j));if(idx!=null&&idx==watcherIndex){writes=true;break;}}
+                }
+                if(!writes)continue;
+                for(int i=1;i<code.size();i++)if(code.get(i) instanceof MethodInsnNode call&&call.owner.equals(DATA_WATCHER)&&WATCH_BYTE.contains(call.name)){
+                    Integer idx=intConstant(code.get(i-1));if(idx==null||idx!=watcherIndex)continue;
+                    if(i+1<code.size()&&code.get(i+1) instanceof JumpInsnNode jump){
+                        if(jump.getOpcode()==Opcodes.IFLE)min=min==null?0:Math.max(min,0);
+                    }
+                    if(i+2<code.size()){
+                        Integer bound=intConstant(code.get(i+1));
+                        if(bound!=null&&code.get(i+2) instanceof JumpInsnNode jump){
+                            if(jump.getOpcode()==Opcodes.IF_ICMPLE)min=min==null?bound:Math.max(min,bound);
+                            if(jump.getOpcode()==Opcodes.IF_ICMPGE)max=max==null?bound:Math.min(max,bound);
+                        }
+                    }
+                }
+            }
+            current=node.superName;
+        }
+        return min!=null&&max!=null&&max>=min?new IntBounds(min,max):null;
     }
 
     private static int watcherDefault(LegacyEntityDataWatcherAnalyzer.Rule rule,int index,int fallback){
