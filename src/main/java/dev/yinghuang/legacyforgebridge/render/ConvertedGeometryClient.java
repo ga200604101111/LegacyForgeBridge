@@ -36,6 +36,7 @@ public final class ConvertedGeometryClient implements ClientModInitializer {
     @Override public void onInitializeClient() {
         LegacyMimicInvalidationClient.initialize();
         LegacyMicroBlockNetworkBridge.initialize();
+        LegacyGridPotNetworkBridge.initialize();
         ModelLoadingPlugin.register(plugin->{
             MATERIALS.clear();
             plugin.modifyBlockModelAfterBake().register(ModelModifier.WRAP_PHASE,(model,context)->{
