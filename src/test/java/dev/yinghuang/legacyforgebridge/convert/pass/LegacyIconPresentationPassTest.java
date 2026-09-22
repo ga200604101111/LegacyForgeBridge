@@ -10,6 +10,12 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class LegacyIconPresentationPassTest {
  @TempDir Path temp;
+ @Test void sourceNormalizedVanillaBlockSpritesDoNotRequireCopiedMinecraftPngs()throws Exception{
+  Path staging=temp.resolve("vanilla-staging");Files.createDirectories(staging);
+  assertEquals("minecraft:block/piston_top",LegacyIconPresentationPass.resolve(staging,"minecraft:block/piston_top",true));
+  assertEquals("minecraft:block/piston_inner",LegacyIconPresentationPass.resolve(staging,"minecraft:block/piston_inner",true));
+ }
+
  @Test void sourceIconsBecomeNativeModelVariantsThenCandidateOwnedTextures()throws Exception{
   Path source=LegacyIconFixtures.create(temp.resolve("fixture"),Map.of()),staging=temp.resolve("staging");Files.createDirectories(staging);
   var context=new ConversionContext(source,staging,temp.resolve("output.jar"),"test-sha",Files.size(source),new LegacyModMetadata("source.jar","test",List.of(new LegacyModMetadata.ModEntry("Example","Example","1","1.7.10",List.of()))),new LegacyJarAnalyzer().analyze(source),new DiagnosticCollector(),"test");
