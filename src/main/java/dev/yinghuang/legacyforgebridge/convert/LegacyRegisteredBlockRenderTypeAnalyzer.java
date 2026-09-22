@@ -121,17 +121,29 @@ public final class LegacyRegisteredBlockRenderTypeAnalyzer {
         for (Type type : argumentTypes) if (type.getSort() != Type.INT) return null; // first bounded family: int-only constructors
 
         InstanceField field = directInstanceRenderField(renderMethod);
-        ClassNode owner = classes.get(sourceClass);
-        MethodNode constructor = findMethod(owner, "<init>", descriptor);
-        if (field == null || constructor == null) return null;
-        Integer parameterIndex = constructorParameterAssignedToField(constructor, field, argumentTypes);
-        if (parameterIndex == null) return null;
+        if (field == null) return null;
 
-        Object proven = registration.constructorArguments().get(parameterIndex).value();
-        Integer constant = exactInt(proven);
-        if (constant != null) return RenderIdentity.constant(constant);
-        if (proven != null) return null;
+        List<RenderIdentity> registrationArguments = new ArrayList<>(argumentTypes.length);
+        boolean allKnown = true;
+        for (var argument : registration.constructorArguments()) {
+            Object proven = argument.value();
+            Integer constant = exactInt(proven);
+            if (constant != null) registrationArguments.add(RenderIdentity.constant(constant));
+            else if (proven == null) { registrationArguments.add(null); allKnown = false; }
+            else return null;
+        }
 
+        // First prefer the exact registry constructor arguments. This also follows bounded this(...)
+        // constructor delegation, so wrappers such as (int,int)->(int,int,int) remain source-proven.
+        if (allKnown) {
+            RenderIdentity resolved = constructorFieldIdentity(
+                    classes, sourceClass, descriptor, registrationArguments, field, 0, new HashSet<>());
+            if (resolved != null) return resolved;
+        }
+
+        // A registry analyzer may leave one constructor argument symbolic. Recover it only from a
+        // unique source allocation whose other arguments match the registry-proven constants, then
+        // replay that exact allocation through the same constructor-delegation resolver.
         LinkedHashSet<RenderIdentity> candidates = new LinkedHashSet<>();
         for (ClassNode caller : classes.values()) for (MethodNode method : caller.methods) {
             if ((method.access & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE)) != 0) continue;
@@ -149,17 +161,18 @@ public final class LegacyRegisteredBlockRenderTypeAnalyzer {
                 if (!newReceiver(context, receiver, sourceClass, 0, new HashSet<>())) continue;
 
                 boolean matches = true;
-                RenderIdentity target = null;
+                List<RenderIdentity> actualArguments = new ArrayList<>(argumentTypes.length);
                 for (int arg = 0; arg < argumentTypes.length; arg++) {
                     RenderIdentity actual = intValue(context, frame.getStack(start + arg), 0, new HashSet<>());
-                    if (arg == parameterIndex) {
-                        target = actual;
-                        continue;
-                    }
-                    Integer expected = exactInt(registration.constructorArguments().get(arg).value());
-                    if (expected == null || actual == null || !actual.isConstant(expected)) { matches = false; break; }
+                    if (actual == null) { matches = false; break; }
+                    RenderIdentity expected = registrationArguments.get(arg);
+                    if (expected != null && !expected.equals(actual)) { matches = false; break; }
+                    actualArguments.add(actual);
                 }
-                if (matches && target != null) candidates.add(target);
+                if (!matches) continue;
+                RenderIdentity target = constructorFieldIdentity(
+                        classes, sourceClass, descriptor, actualArguments, field, 0, new HashSet<>());
+                if (target != null) candidates.add(target);
             }
         }
         return candidates.size() == 1 ? candidates.getFirst() : null;
@@ -172,6 +185,74 @@ public final class LegacyRegisteredBlockRenderTypeAnalyzer {
                 || !(code.get(1) instanceof FieldInsnNode field) || field.getOpcode() != Opcodes.GETFIELD || !"I".equals(field.desc)
                 || code.get(2).getOpcode() != Opcodes.IRETURN) return null;
         return new InstanceField(field.owner, field.name);
+    }
+
+    /**
+     * Resolves one instance int field through a bounded chain of source-owned this(...) constructors.
+     * Only direct int locals/constants/static-int identities are admitted; arithmetic and branches
+     * fail closed rather than guessing constructor semantics.
+     */
+    private static RenderIdentity constructorFieldIdentity(Map<String,ClassNode> classes,String owner,String descriptor,
+                                                           List<RenderIdentity> arguments,InstanceField target,
+                                                           int depth,Set<String> guard) {
+        if(owner==null||descriptor==null||depth>16||!guard.add(owner+descriptor))return null;
+        ClassNode node=classes.get(owner);MethodNode ctor=findMethod(node,"<init>",descriptor);
+        if(ctor==null){guard.remove(owner+descriptor);return null;}
+        Type[] types=Type.getArgumentTypes(descriptor);
+        if(types.length!=arguments.size()){guard.remove(owner+descriptor);return null;}
+        Map<Integer,RenderIdentity> locals=new HashMap<>();int local=1;
+        for(int i=0;i<types.length;i++){
+            if(types[i].getSort()!=Type.INT){guard.remove(owner+descriptor);return null;}
+            RenderIdentity value=arguments.get(i);if(value!=null)locals.put(local,value);local+=types[i].getSize();
+        }
+
+        LinkedHashSet<RenderIdentity> writes=new LinkedHashSet<>();
+        List<AbstractInsnNode> code=real(ctor);
+        for(int i=0;i<code.size();i++){
+            AbstractInsnNode insn=code.get(i);
+            if(insn instanceof FieldInsnNode put&&put.getOpcode()==Opcodes.PUTFIELD
+                    &&target.owner().equals(put.owner)&&target.name().equals(put.name)&&"I".equals(put.desc)){
+                if(i<2||!(code.get(i-2) instanceof VarInsnNode receiver)||receiver.getOpcode()!=Opcodes.ALOAD||receiver.var!=0){
+                    guard.remove(owner+descriptor);return null;
+                }
+                RenderIdentity value=constructorInt(code.get(i-1),locals);
+                if(value==null){guard.remove(owner+descriptor);return null;}
+                writes.add(value);
+            }
+        }
+        if(writes.size()>1){guard.remove(owner+descriptor);return null;}
+        if(writes.size()==1){RenderIdentity result=writes.getFirst();guard.remove(owner+descriptor);return result;}
+
+        LinkedHashSet<RenderIdentity> delegated=new LinkedHashSet<>();
+        for(int i=0;i<code.size();i++){
+            AbstractInsnNode insn=code.get(i);
+            if(!(insn instanceof MethodInsnNode call)||call.getOpcode()!=Opcodes.INVOKESPECIAL
+                    ||!"<init>".equals(call.name)||!owner.equals(call.owner))continue;
+            Type[] nestedTypes=Type.getArgumentTypes(call.desc);
+            int first=i-nestedTypes.length;
+            if(first<1||!(code.get(first-1) instanceof VarInsnNode receiver)
+                    ||receiver.getOpcode()!=Opcodes.ALOAD||receiver.var!=0)continue;
+            List<RenderIdentity> nested=new ArrayList<>(nestedTypes.length);boolean supported=true;
+            for(int arg=0;arg<nestedTypes.length;arg++){
+                if(nestedTypes[arg].getSort()!=Type.INT){supported=false;break;}
+                RenderIdentity value=constructorInt(code.get(first+arg),locals);
+                if(value==null){supported=false;break;}
+                nested.add(value);
+            }
+            if(!supported)continue;
+            RenderIdentity value=constructorFieldIdentity(classes,owner,call.desc,nested,target,depth+1,guard);
+            if(value!=null)delegated.add(value);
+        }
+        guard.remove(owner+descriptor);
+        return delegated.size()==1?delegated.getFirst():null;
+    }
+
+    private static RenderIdentity constructorInt(AbstractInsnNode insn,Map<Integer,RenderIdentity> locals){
+        Integer constant=intConstant(insn);if(constant!=null)return RenderIdentity.constant(constant);
+        if(insn instanceof FieldInsnNode field&&field.getOpcode()==Opcodes.GETSTATIC&&"I".equals(field.desc))
+            return RenderIdentity.field(field.owner,field.name);
+        if(insn instanceof VarInsnNode load&&load.getOpcode()==Opcodes.ILOAD)return locals.get(load.var);
+        return null;
     }
 
     private static Integer constructorParameterAssignedToField(MethodNode constructor, InstanceField field, Type[] arguments) {
