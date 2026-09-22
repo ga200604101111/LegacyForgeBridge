@@ -31,6 +31,9 @@ class BambooHeldVisibilityExactTest {
             JsonObject rule=find(sidecar,"id","bamboomod:kitunebi");
             assertEquals(8,rule.get("visibleOrMask").getAsInt());
             assertEquals(7,rule.get("hiddenAndMask").getAsInt());
+            assertTrue(rule.get("emptyCollision").getAsBoolean());
+            assertTrue(rule.get("metaZeroSelectionElseEmpty").getAsBoolean());
+            assertTrue(rule.get("shapeRuntimeComplete").getAsBoolean());
             assertTrue(rule.get("clientMetadataToggleRuntime").getAsBoolean());
 
             JsonObject visible=read(jar,"assets/bamboomod/models/block/kitunebi_lfb_visible_cross.json");
