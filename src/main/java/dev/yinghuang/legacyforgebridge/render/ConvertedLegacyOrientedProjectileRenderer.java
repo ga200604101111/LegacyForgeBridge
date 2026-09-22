@@ -45,10 +45,6 @@ public final class ConvertedLegacyOrientedProjectileRenderer
         // 1.7 arrow-like renderer contract: world Y yaw minus 90, then local Z pitch.
         pose.mulPose(Axis.YP.rotationDegrees(state.yaw-90F));
         pose.mulPose(Axis.ZP.rotationDegrees(state.pitch));
-        // The exact Bamboo spear renderer additionally fixes its quad cross-section at 45 degrees.
-        // Applying the same neutral diagonal to a source-bound item carrier avoids a flat edge-on
-        // sprite while keeping this adapter independent of source class/registry names.
-        pose.mulPose(Axis.XP.rotationDegrees(45F));
         state.item.submit(pose,queue,state.lightCoords,OverlayTexture.NO_OVERLAY,state.outlineColor);
         pose.popPose();
     }
