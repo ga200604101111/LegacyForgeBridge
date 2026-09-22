@@ -14,7 +14,14 @@ import java.util.jar.*;
  */
 public final class LegacySimpleBlockRendererAnalyzer {
     public enum Mode { CROSS, CROP, META_ZERO_CROP_ELSE_STANDARD, HELD_ITEM_CROSS }
-    public record Rule(String registryName,String sourceBlockClass,String sourceRendererClass,Mode mode) { }
+    public record Bounds(float minX,float minY,float minZ,float maxX,float maxY,float maxZ) {
+        public Bounds {
+            if(!finite(minX,minY,minZ,maxX,maxY,maxZ)||minX<0F||minY<0F||minZ<0F||maxX>1F||maxY>1F||maxZ>1F
+                    ||minX>=maxX||minY>=maxY||minZ>=maxZ)throw new IllegalArgumentException("Invalid simple renderer bounds");
+        }
+    }
+    public record Rule(String registryName,String sourceBlockClass,String sourceRendererClass,Mode mode,
+                       Bounds bounds,boolean emptyCollision) { }
     public record Analysis(List<Rule> rules,List<String> diagnostics) {
         public Analysis { rules=List.copyOf(rules);diagnostics=List.copyOf(diagnostics); }
     }
@@ -34,10 +41,38 @@ public final class LegacySimpleBlockRendererAnalyzer {
             var id=block.renderIdentity();if(id.fieldOwner()==null)continue;
             String renderer=rendererForField(classes,id.fieldOwner(),id.fieldName());if(renderer==null)continue;
             Mode mode=classify(classes,renderer,block.sourceBlockClass(),registrations.get(block.registryName()),heldItemVisibleClasses.contains(block.sourceBlockClass()));
-            if(mode!=null)rules.add(new Rule(block.registryName(),block.sourceBlockClass(),renderer,mode));
+            if(mode!=null)rules.add(new Rule(block.registryName(),block.sourceBlockClass(),renderer,mode,
+                    uniqueSourceBounds(classes,block.sourceBlockClass()),provesEmptyCollision(classes,block.sourceBlockClass())));
             else diagnostics.add("Custom block renderer is outside the simple native cross/crop family: "+block.registryName()+" renderer="+renderer);
         }
         return new Analysis(rules,List.copyOf(diagnostics));
+    }
+
+    private static Bounds uniqueSourceBounds(Map<String,ClassNode> classes,String source){
+        LinkedHashSet<Bounds> values=new LinkedHashSet<>();Set<String> seen=new HashSet<>();
+        for(String current=source;current!=null&&seen.add(current);){
+            ClassNode node=classes.get(current);if(node==null)break;
+            for(MethodNode method:node.methods)if(method.name.equals("<init>")){
+                List<AbstractInsnNode> code=real(method);
+                for(int i=6;i<code.size();i++)if(code.get(i) instanceof MethodInsnNode call
+                        &&Set.of("setBlockBounds","func_149676_a").contains(call.name)&&call.desc.equals("(FFFFFF)V")){
+                    Float a=floatValue(code.get(i-6)),b=floatValue(code.get(i-5)),d=floatValue(code.get(i-4)),
+                            e=floatValue(code.get(i-3)),f=floatValue(code.get(i-2)),g=floatValue(code.get(i-1));
+                    if(a!=null&&b!=null&&d!=null&&e!=null&&f!=null&&g!=null){
+                        try{values.add(new Bounds(a,b,d,e,f,g));}catch(IllegalArgumentException ignored){}
+                    }
+                }
+            }
+            current=node.superName;
+        }
+        return values.size()==1?values.getFirst():null;
+    }
+
+    private static boolean provesEmptyCollision(Map<String,ClassNode> classes,String source){
+        MethodNode method=findHierarchy(classes,source,Set.of("getCollisionBoundingBoxFromPool","func_149668_a"),
+                "(Lnet/minecraft/world/World;III)Lnet/minecraft/util/AxisAlignedBB;");
+        if(method==null)return false;List<AbstractInsnNode> code=real(method);
+        return code.size()==2&&code.get(0).getOpcode()==Opcodes.ACONST_NULL&&code.get(1).getOpcode()==Opcodes.ARETURN;
     }
 
     private static String rendererForField(Map<String,ClassNode> classes,String fieldOwner,String fieldName){
@@ -227,6 +262,12 @@ public final class LegacySimpleBlockRendererAnalyzer {
         return Double.isFinite(raw)&&raw==Math.rint(raw)&&raw>=Integer.MIN_VALUE&&raw<=Integer.MAX_VALUE?(int)raw:null;
     }
     private static Integer integer(AbstractInsnNode insn){return switch(insn.getOpcode()){case Opcodes.ICONST_M1->-1;case Opcodes.ICONST_0->0;case Opcodes.ICONST_1->1;case Opcodes.ICONST_2->2;case Opcodes.ICONST_3->3;case Opcodes.ICONST_4->4;case Opcodes.ICONST_5->5;case Opcodes.BIPUSH,Opcodes.SIPUSH->((IntInsnNode)insn).operand;case Opcodes.LDC->insn instanceof LdcInsnNode ldc&&ldc.cst instanceof Integer v?v:null;default->null;};}
+    private static Float floatValue(AbstractInsnNode insn){
+        if(insn==null)return null;return switch(insn.getOpcode()){
+            case Opcodes.FCONST_0->0F;case Opcodes.FCONST_1->1F;case Opcodes.FCONST_2->2F;
+            case Opcodes.LDC->insn instanceof LdcInsnNode ldc&&ldc.cst instanceof Number n?n.floatValue():null;default->null;};
+    }
+    private static boolean finite(float... values){for(float value:values)if(!Float.isFinite(value))return false;return true;}
     private static List<AbstractInsnNode> real(MethodNode method){List<AbstractInsnNode> out=new ArrayList<>();for(AbstractInsnNode insn:method.instructions)if(insn.getOpcode()>=0)out.add(insn);return out;}
     private static Map<String,ClassNode> loadClasses(Path jarPath)throws IOException{Map<String,ClassNode> classes=new LinkedHashMap<>();try(JarFile jar=new JarFile(jarPath.toFile(),false)){var entries=jar.entries();while(entries.hasMoreElements()){JarEntry entry=entries.nextElement();if(entry.isDirectory()||!entry.getName().endsWith(".class")||entry.getName().equals("module-info.class"))continue;try(InputStream input=jar.getInputStream(entry)){ClassNode node=new ClassNode(Opcodes.ASM9);new ClassReader(input).accept(node,ClassReader.SKIP_DEBUG|ClassReader.SKIP_FRAMES);classes.put(node.name,node);}catch(RuntimeException ignored){}}}return classes;}
 }
