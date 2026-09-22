@@ -1,6 +1,7 @@
 package dev.yinghuang.legacyforgebridge.convert.pass;
 
 import com.google.gson.*;
+import dev.yinghuang.legacyforgebridge.compat.LegacyRotatingAssemblyEntityRegistry;
 import dev.yinghuang.legacyforgebridge.convert.LegacyRotatingAssemblyEntityAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.api.*;
 
@@ -45,6 +46,8 @@ public final class LegacyRotatingAssemblyEntityPass implements ConversionPass {
             value.add("repeatedSecondary",parts(rule.repeatedSecondary()));
             value.addProperty("physicalCollision",rule.physicalCollision());value.addProperty("playerAttackRemoves",rule.playerAttackRemoves());
             value.addProperty("randomInitialPhase",rule.randomInitialPhase());value.addProperty("runtimeComplete",true);
+            try{LegacyRotatingAssemblyEntityRegistry.validateCandidateRule(value,context.metadata().primary().modId());}
+            catch(RuntimeException invalid){throw new IllegalStateException("Rotating assembly runtime schema rejected source-proven rule "+rule.registryName()+"#"+rule.legacyNumericId(),invalid);}
             rules.add(value);
         }
         root.add("rules",rules);root.addProperty("runtimeCompleteRules",rules.size());
