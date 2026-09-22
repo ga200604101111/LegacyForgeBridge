@@ -15,6 +15,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.EntityBlock;
+import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
@@ -37,6 +38,7 @@ public final class ConvertedLegacyGridPotBlock extends ConvertedLegacyBlock impl
     }
 
     @Override public BlockEntity newBlockEntity(BlockPos pos, BlockState state) { return new ConvertedLegacyGridPotBlockEntity(pos, state); }
+    @Override protected RenderShape getRenderShape(BlockState state) { return RenderShape.INVISIBLE; }
     @Override protected List<ItemStack> getDrops(BlockState state, LootParams.Builder params) { return List.of(); }
 
     @Override
