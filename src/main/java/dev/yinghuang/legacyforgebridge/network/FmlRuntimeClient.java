@@ -16,6 +16,9 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.entity.Entity;
 
+import java.util.LinkedHashSet;
+import java.util.Locale;
+
 /** Client-side dispatcher for the Forge 1.7.10 {@code FML} runtime channel. */
 public final class FmlRuntimeClient {
     public enum Phase { CONFIGURATION, PLAY }
@@ -46,14 +49,14 @@ public final class FmlRuntimeClient {
 
     private void handleEntitySpawn(byte[] payload,Phase phase,FmlConnectionTrace trace){
         FmlRuntimeCodec.EntitySpawnHeader message=FmlRuntimeCodec.parseEntitySpawnHeader(payload);
-        LegacySeatBedRegistry.Rule seatRule=LegacySeatBedRegistry.remoteSpawnRule(message.modId(),message.modEntityTypeId());
-        LegacyVisibleEntityRegistry.Rule visibleRule=seatRule==null?LegacyVisibleEntityRegistry.remoteSpawnRule(message.modId(),message.modEntityTypeId()):null;
+        LegacySeatBedRegistry.Rule seatRule=remoteSeatRule(message.modId(),message.modEntityTypeId());
+        LegacyVisibleEntityRegistry.Rule visibleRule=seatRule==null?remoteVisibleRule(message.modId(),message.modEntityTypeId()):null;
         LegacyProjectilePresentationRegistry.Rule projectileRule=seatRule==null&&visibleRule==null
-                ?LegacyProjectilePresentationRegistry.remoteSpawnRule(message.modId(),message.modEntityTypeId()):null;
+                ?remoteProjectileRule(message.modId(),message.modEntityTypeId()):null;
         LegacyRotatingAssemblyEntityRegistry.Rule rotatingRule=seatRule==null&&visibleRule==null&&projectileRule==null
-                ?LegacyRotatingAssemblyEntityRegistry.remoteSpawnRule(message.modId(),message.modEntityTypeId()):null;
+                ?remoteRotatingRule(message.modId(),message.modEntityTypeId()):null;
         LegacyPlainEntityRegistry.Rule plainRule=seatRule==null&&visibleRule==null&&projectileRule==null&&rotatingRule==null
-                ?LegacyPlainEntityRegistry.remoteSpawnRule(message.modId(),message.modEntityTypeId()):null;
+                ?remotePlainRule(message.modId(),message.modEntityTypeId()):null;
         String mapping=seatRule!=null?" (matched proof-gated transient-seat mapping)"
                 :visibleRule!=null?" (matched proof-gated visible-entity mapping)"
                 :projectileRule!=null?" (matched proof-gated remote-projectile mapping)"
@@ -84,6 +87,54 @@ public final class FmlRuntimeClient {
         else if(projectileRule!=null)client.execute(()->applyRemoteProjectileSpawn(client,spawn,projectileRule,trace));
         else if(rotatingRule!=null)client.execute(()->applyRemoteRotatingSpawn(client,spawn,rotatingRule,trace));
         else client.execute(()->applyRemotePlainSpawn(client,spawn,plainRule,trace));
+    }
+
+    private static LegacySeatBedRegistry.Rule remoteSeatRule(String modId,int entityId){
+        for(String candidate:legacyModIdCandidates(modId)){LegacySeatBedRegistry.Rule rule=LegacySeatBedRegistry.remoteSpawnRule(candidate,entityId);if(rule!=null)return rule;}
+        return null;
+    }
+    private static LegacyVisibleEntityRegistry.Rule remoteVisibleRule(String modId,int entityId){
+        for(String candidate:legacyModIdCandidates(modId)){LegacyVisibleEntityRegistry.Rule rule=LegacyVisibleEntityRegistry.remoteSpawnRule(candidate,entityId);if(rule!=null)return rule;}
+        return null;
+    }
+    private static LegacyProjectilePresentationRegistry.Rule remoteProjectileRule(String modId,int entityId){
+        for(String candidate:legacyModIdCandidates(modId)){LegacyProjectilePresentationRegistry.Rule rule=LegacyProjectilePresentationRegistry.remoteSpawnRule(candidate,entityId);if(rule!=null)return rule;}
+        return null;
+    }
+    private static LegacyRotatingAssemblyEntityRegistry.Rule remoteRotatingRule(String modId,int entityId){
+        for(String candidate:legacyModIdCandidates(modId)){LegacyRotatingAssemblyEntityRegistry.Rule rule=LegacyRotatingAssemblyEntityRegistry.remoteSpawnRule(candidate,entityId);if(rule!=null)return rule;}
+        return null;
+    }
+    private static LegacyPlainEntityRegistry.Rule remotePlainRule(String modId,int entityId){
+        for(String candidate:legacyModIdCandidates(modId)){LegacyPlainEntityRegistry.Rule rule=LegacyPlainEntityRegistry.remoteSpawnRule(candidate,entityId);if(rule!=null)return rule;}
+        return null;
+    }
+
+    private static Iterable<String> legacyModIdCandidates(String modId){
+        LinkedHashSet<String> out=new LinkedHashSet<>();
+        if(modId==null||modId.isBlank())return out;
+        addCandidate(out,modId);
+        String lower=modId.toLowerCase(Locale.ROOT);
+        addCandidate(out,lower);
+        String trimmed=modId.trim();
+        String trimmedLower=trimmed.toLowerCase(Locale.ROOT);
+        if(trimmedLower.endsWith("mod")&&trimmed.length()>3){
+            addCandidate(out,trimmed.substring(0,trimmed.length()-3));
+            addCandidate(out,trimmedLower.substring(0,trimmedLower.length()-3));
+        }
+        if(trimmedLower.endsWith("_mod")&&trimmed.length()>4){
+            addCandidate(out,trimmed.substring(0,trimmed.length()-4));
+            addCandidate(out,trimmedLower.substring(0,trimmedLower.length()-4));
+        }
+        if(trimmedLower.endsWith("-mod")&&trimmed.length()>4){
+            addCandidate(out,trimmed.substring(0,trimmed.length()-4));
+            addCandidate(out,trimmedLower.substring(0,trimmedLower.length()-4));
+        }
+        return out;
+    }
+
+    private static void addCandidate(LinkedHashSet<String> out,String value){
+        if(value!=null&&!value.isBlank())out.add(value);
     }
 
     private void applyRemoteSeatSpawn(Minecraft client,FmlRuntimeCodec.SimpleEntitySpawn spawn,FmlConnectionTrace trace){
