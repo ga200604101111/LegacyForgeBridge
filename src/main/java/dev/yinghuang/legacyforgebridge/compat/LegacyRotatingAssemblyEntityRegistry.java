@@ -74,10 +74,21 @@ public final class LegacyRotatingAssemblyEntityRegistry {
             String legacyModId=string(root,"legacyModId",null);if(legacyModId==null)return;
             JsonArray rules=root.getAsJsonArray("rules");if(rules==null)return;int loaded=0;
             for(JsonElement element:rules){
-                if(!element.isJsonObject())continue;Rule rule=parse(element.getAsJsonObject(),legacyModId);
-                if(rule==null||!modId.equals(rule.id().getNamespace()))continue;install(rule);loaded++;
+                if(!element.isJsonObject()){LegacyForgeBridge.LOGGER.warn("Ignoring non-object rotating assembly rule in {}",modId);continue;}
+                JsonObject raw=element.getAsJsonObject();Rule rule;
+                try{rule=parseStrict(raw,legacyModId);}
+                catch(RuntimeException invalid){
+                    LegacyForgeBridge.LOGGER.warn("Rejected rotating assembly runtime rule: mod={}, legacyId={}, numericId={}, adapter={}, reason={}",
+                            modId,string(raw,"legacyRegistryName","?"),integer(raw,"legacyNumericId",-1),string(raw,"adapter","?"),invalid.toString());
+                    continue;
+                }
+                if(!modId.equals(rule.id().getNamespace())){
+                    LegacyForgeBridge.LOGGER.warn("Rejected rotating assembly rule with foreign namespace: mod={}, id={}",modId,rule.id());
+                    continue;
+                }
+                install(rule);loaded++;
             }
-            if(loaded>0)LegacyForgeBridge.LOGGER.info("Loaded rotating assembly Entity rules: mod={}, rules={}",modId,loaded);
+            LegacyForgeBridge.LOGGER.info("Loaded rotating assembly Entity rules: mod={}, rules={}, declared={}",modId,loaded,rules.size());
         }catch(Exception exception){
             LOADED.remove(modId);throw new IllegalStateException("Failed to load rotating assembly Entity rules for "+modId,exception);
         }
@@ -109,8 +120,11 @@ public final class LegacyRotatingAssemblyEntityRegistry {
         Registry.register(BuiltInRegistries.ENTITY_TYPE,resourceKey,type);TYPES.put(rule.id(),type);
     }
 
+    public static Rule validateCandidateRule(JsonObject value,String legacyModId){return parseStrict(value,legacyModId);}
     private static Rule parse(JsonObject value,String legacyModId){
-        try{
+        try{return parseStrict(value,legacyModId);}catch(RuntimeException invalid){return null;}
+    }
+    private static Rule parseStrict(JsonObject value,String legacyModId){
             Identifier id=Identifier.parse(required(value,"id"));JsonArray rawTextures=value.getAsJsonArray("textures");if(rawTextures==null)return null;
             List<Identifier> textures=new ArrayList<>();for(JsonElement e:rawTextures)textures.add(Identifier.parse(e.getAsString()));
             return new Rule(id,legacyModId,integer(value,"legacyNumericId",-1),integer(value,"trackingRange",0),integer(value,"updateFrequency",0),
@@ -122,7 +136,6 @@ public final class LegacyRotatingAssemblyEntityRegistry {
                     integer(value,"countDefault",0),integer(value,"textureDefault",0),integer(value,"reverseDefault",0),
                     integer(value,"countBase",0),integer(value,"countMax",0),integer(value,"fixedRepeatCount",0),
                     decimal(value,"secondaryPhaseDegrees"),textures,bool(value,"physicalCollision"),bool(value,"playerAttackRemoves"),bool(value,"randomInitialPhase"));
-        }catch(RuntimeException invalid){return null;}
     }
     private static List<Cuboid> parts(JsonObject root,String key){
         JsonArray raw=root.getAsJsonArray(key);if(raw==null)return List.of();List<Cuboid> out=new ArrayList<>();
