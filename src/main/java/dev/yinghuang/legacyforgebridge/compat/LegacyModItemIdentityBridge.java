@@ -15,6 +15,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.core.registries.BuiltInRegistries;
 import dev.yinghuang.legacyforgebridge.convert.runtime.ConvertedIconModelCatalog;
 import dev.yinghuang.legacyforgebridge.convert.runtime.ConvertedItemNameCatalog;
+import dev.yinghuang.legacyforgebridge.convert.runtime.LegacyNbtByteIconSelectorCatalog;
 
 /** Keeps Forge identity in a vanilla paper carrier from the FIRST to the LAST Via boundary. */
 public final class LegacyModItemIdentityBridge {
@@ -50,7 +51,8 @@ public final class LegacyModItemIdentityBridge {
         LegacyViaStackComponents.toClient(data,metadata);
         if(nativeItem.getDefaultInstance().isDamageableItem())data.set(StructuredDataKey.DAMAGE,metadata);
         else data.remove(StructuredDataKey.DAMAGE);
-        String model=ConvertedIconModelCatalog.itemModel(modern.toString(),metadata);
+        String model=LegacyNbtByteIconSelectorCatalog.itemModel(modern,custom);
+        if(model==null)model=ConvertedIconModelCatalog.itemModel(modern.toString(),metadata);
         if(model!=null)data.set(StructuredDataKey.ITEM_MODEL,new ItemModel(Key.of(model)));
         // ITEM_NAME is the translated default; CUSTOM_NAME belongs to the server/anvil/plugin.
         LegacyItemNameBridge.toClient(data,marker,ConvertedItemNameCatalog.translationKey(modern.toString(),metadata));
@@ -88,8 +90,10 @@ public final class LegacyModItemIdentityBridge {
         data.remove(StructuredDataKey.DAMAGE);
         // Only bridge-owned model overrides are stripped. They are not legacy gameplay NBT.
         ItemModel model=data.get(StructuredDataKey.ITEM_MODEL);
-        String owned=ConvertedIconModelCatalog.itemModel(modern.toString(),LegacyItemCarrierState.metadata(marker));
-        if(model!=null&&owned!=null&&model.key().equals(owned))data.remove(StructuredDataKey.ITEM_MODEL);
+        String metadataOwned=ConvertedIconModelCatalog.itemModel(modern.toString(),LegacyItemCarrierState.metadata(marker));
+        String nbtOwned=LegacyNbtByteIconSelectorCatalog.itemModel(modern,custom);
+        if(model!=null&&((metadataOwned!=null&&model.key().equals(metadataOwned))
+                ||(nbtOwned!=null&&model.key().equals(nbtOwned))))data.remove(StructuredDataKey.ITEM_MODEL);
         item.setIdentifier(BuiltInRegistries.ITEM.getId(Items.PAPER));return true;
     }
 
