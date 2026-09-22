@@ -137,9 +137,10 @@ public final class GenericContentPass implements ConversionPass {
                 continue;
             }
             String id = namespace + ":" + path;
+            String kind = analyzer.classifyItem(registration.implementationClass());
             JsonObject item = new JsonObject();
             item.addProperty("id", id);
-            item.addProperty("kind", analyzer.classifyItem(registration.implementationClass()));
+            item.addProperty("kind", kind);
             item.addProperty("descriptionKey", legacyTranslation(context, "item." + registration.registryName() + ".name"));
             item.addProperty("legacyRegistryName", registration.registryName());
             if (registration.implementationClass() != null) item.addProperty("sourceClass", registration.implementationClass());
@@ -157,7 +158,7 @@ public final class GenericContentPass implements ConversionPass {
             }
             items.add(item);
             recordIdentity(context, "items", registration, id);
-            writeFallbackItemModels(context, id, registration.registryName());
+            writeFallbackItemModels(context, id, registration.registryName(), kind);
         }
         root.add("items", items);
 
@@ -198,7 +199,7 @@ public final class GenericContentPass implements ConversionPass {
         return "lfb.converted." + context.metadata().fabricId() + "." + legacyKey;
     }
 
-    private static void writeFallbackItemModels(ConversionContext context, String id, String legacyName) throws IOException {
+    private static void writeFallbackItemModels(ConversionContext context, String id, String legacyName, String kind) throws IOException {
         String namespace = id.substring(0, id.indexOf(':'));
         String path = id.substring(id.indexOf(':') + 1);
         Texture texture = findTexture(context.stagingDir(), "items", legacyName);
@@ -206,7 +207,7 @@ public final class GenericContentPass implements ConversionPass {
         Path model = context.stagingDir().resolve("assets/" + namespace + "/models/item/" + path + ".json");
         Path item = context.stagingDir().resolve("assets/" + namespace + "/items/" + path + ".json");
         Files.createDirectories(model.getParent()); Files.createDirectories(item.getParent());
-        Files.writeString(model, "{\n  \"parent\": \"minecraft:item/generated\",\n  \"textures\": {\"layer0\": \"" + texture.resource() + "\"}\n}\n", StandardCharsets.UTF_8);
+        Files.writeString(model, "{\n  \"parent\": \"" + fallbackItemParent(kind) + "\",\n  \"textures\": {\"layer0\": \"" + texture.resource() + "\"}\n}\n", StandardCharsets.UTF_8);
         LegacyPresentationOwnership.record(context.stagingDir(), model);
         Files.writeString(item, "{\n  \"model\": {\"type\": \"minecraft:model\", \"model\": \"" + namespace + ":item/" + path + "\"}\n}\n", StandardCharsets.UTF_8);
     }
@@ -224,8 +225,22 @@ public final class GenericContentPass implements ConversionPass {
         Files.writeString(model, "{\n  \"parent\": \"minecraft:block/cube_all\",\n  \"textures\": {\"all\": \"" + texture.resource() + "\"}\n}\n", StandardCharsets.UTF_8);
         LegacyPresentationOwnership.record(context.stagingDir(), model);
         Files.writeString(state, "{\n  \"variants\": {\"\": {\"model\": \"" + namespace + ":block/" + path + "\"}}\n}\n", StandardCharsets.UTF_8);
-        Files.writeString(itemModel, "{\n  \"parent\": \"" + namespace + ":block/" + path + "\"\n}\n", StandardCharsets.UTF_8);
+        Texture itemTexture = findTexture(context.stagingDir(), "items", legacyName);
+        if (itemTexture != null) {
+            Files.writeString(itemModel, "{\n  \"parent\": \"minecraft:item/generated\",\n  \"textures\": {\"layer0\": \"" + itemTexture.resource() + "\"}\n}\n", StandardCharsets.UTF_8);
+            LegacyPresentationOwnership.record(context.stagingDir(), itemModel);
+        } else {
+            Files.writeString(itemModel, "{\n  \"parent\": \"" + namespace + ":block/" + path + "\"\n}\n", StandardCharsets.UTF_8);
+        }
         Files.writeString(item, "{\n  \"model\": {\"type\": \"minecraft:model\", \"model\": \"" + namespace + ":item/" + path + "\"}\n}\n", StandardCharsets.UTF_8);
+    }
+
+    private static String fallbackItemParent(String kind) {
+        return switch (kind) {
+            case "sword", "hoe", "pickaxe", "axe", "shovel", "tool" -> "minecraft:item/handheld";
+            case "bow" -> "minecraft:item/bow";
+            default -> "minecraft:item/generated";
+        };
     }
 
     private static Texture findTexture(Path staging, String directory, String legacyName) throws IOException {
