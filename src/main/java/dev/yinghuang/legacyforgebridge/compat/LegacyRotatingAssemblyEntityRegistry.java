@@ -33,7 +33,7 @@ public final class LegacyRotatingAssemblyEntityRegistry {
         }
     }
     public record Rule(Identifier id,String legacyModId,int legacyNumericId,int trackingRange,int updateFrequency,boolean velocityUpdates,
-                       Adapter adapter,float modelScale,List<Cuboid> staticParts,List<Cuboid> repeatedPrimary,List<Cuboid> repeatedSecondary,
+                       Adapter adapter,float modelScale,int modelTextureWidth,int modelTextureHeight,List<Cuboid> staticParts,List<Cuboid> repeatedPrimary,List<Cuboid> repeatedSecondary,
                        int directionWatcher,int sizeWatcher,int countWatcher,int textureWatcher,int reverseWatcher,
                        int directionDefault,int sizeDefault,int sizeMin,int sizeMax,int countDefault,int textureDefault,int reverseDefault,
                        int countBase,int countMax,int fixedRepeatCount,float secondaryPhaseDegrees,List<Identifier> textures,
@@ -42,7 +42,7 @@ public final class LegacyRotatingAssemblyEntityRegistry {
             staticParts=List.copyOf(staticParts);repeatedPrimary=List.copyOf(repeatedPrimary);
             repeatedSecondary=List.copyOf(repeatedSecondary);textures=List.copyOf(textures);
             if(id==null||legacyModId==null||legacyModId.isBlank()||legacyNumericId<0||trackingRange<=0||updateFrequency<=0
-                    ||adapter==null||modelScale<=0F||staticParts.isEmpty()||repeatedPrimary.isEmpty()
+                    ||adapter==null||modelScale<=0F||modelTextureWidth<=0||modelTextureHeight<=0||staticParts.isEmpty()||repeatedPrimary.isEmpty()
                     ||directionWatcher<0||sizeWatcher<0||directionDefault<0||sizeDefault<sizeMin||sizeDefault>sizeMax
                     ||sizeMin<=0||sizeMax<sizeMin||textures.isEmpty()||!physicalCollision||!playerAttackRemoves||!randomInitialPhase)
                 throw new IllegalArgumentException("Invalid rotating assembly rule");
@@ -115,7 +115,7 @@ public final class LegacyRotatingAssemblyEntityRegistry {
             List<Identifier> textures=new ArrayList<>();for(JsonElement e:rawTextures)textures.add(Identifier.parse(e.getAsString()));
             return new Rule(id,legacyModId,integer(value,"legacyNumericId",-1),integer(value,"trackingRange",0),integer(value,"updateFrequency",0),
                     bool(value,"velocityUpdates"),Adapter.valueOf(required(value,"adapter")),decimal(value,"modelScale"),
-                    parts(value,"staticParts"),parts(value,"repeatedPrimary"),parts(value,"repeatedSecondary"),
+                    integer(value,"modelTextureWidth",0),integer(value,"modelTextureHeight",0),parts(value,"staticParts"),parts(value,"repeatedPrimary"),parts(value,"repeatedSecondary"),
                     integer(value,"directionWatcher",-1),integer(value,"sizeWatcher",-1),integer(value,"countWatcher",-1),
                     integer(value,"textureWatcher",-1),integer(value,"reverseWatcher",-1),
                     integer(value,"directionDefault",0),integer(value,"sizeDefault",0),integer(value,"sizeMin",0),integer(value,"sizeMax",0),
