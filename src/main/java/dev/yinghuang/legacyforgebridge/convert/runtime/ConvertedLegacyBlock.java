@@ -26,6 +26,7 @@ import net.minecraft.world.level.block.state.properties.IntegerProperty;
 import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 import java.util.List;
@@ -134,12 +135,20 @@ public class ConvertedLegacyBlock extends Block {
 
     @Override
     protected VoxelShape getShape(BlockState state, BlockGetter world, BlockPos pos, CollisionContext context) {
+        LegacyHeldItemVisibilityRegistry.Rule visibility = LegacyHeldItemVisibilityRegistry.rule(convertedId);
+        if (visibility != null && visibility.metaZeroSelectionElseEmpty() && legacyMeta(state) != 0) {
+            return Shapes.empty();
+        }
         VoxelShape shape = LegacyBlockGeometryRegistry.shape(convertedId, state, world, pos, false);
         return shape == null ? super.getShape(state, world, pos, context) : shape;
     }
 
     @Override
     protected VoxelShape getCollisionShape(BlockState state, BlockGetter world, BlockPos pos, CollisionContext context) {
+        LegacyHeldItemVisibilityRegistry.Rule visibility = LegacyHeldItemVisibilityRegistry.rule(convertedId);
+        if (visibility != null && visibility.emptyCollision()) {
+            return Shapes.empty();
+        }
         VoxelShape shape = LegacyBlockGeometryRegistry.shape(convertedId, state, world, pos, true);
         return shape == null ? super.getCollisionShape(state, world, pos, context) : shape;
     }
