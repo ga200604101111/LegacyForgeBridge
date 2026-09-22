@@ -257,6 +257,16 @@ public final class LegacySimpleBlockRendererAnalyzer {
             guard.remove(producer);if(candidate==null)return null;if(result==null)result=candidate;else if(!result.equals(candidate))return null;}return result;
     }
 
+    private static MethodNode findHierarchy(Map<String,ClassNode> classes,String owner,Set<String> names,String desc){
+        Set<String> seen=new HashSet<>();
+        while(owner!=null&&seen.add(owner)){
+            ClassNode node=classes.get(owner);if(node==null)return null;
+            for(MethodNode method:node.methods)if(names.contains(method.name)&&method.desc.equals(desc))return method;
+            owner=node.superName;
+        }
+        return null;
+    }
+
     private static Integer exactInt(Object value){
         if(!(value instanceof Number number))return null;double raw=number.doubleValue();
         return Double.isFinite(raw)&&raw==Math.rint(raw)&&raw>=Integer.MIN_VALUE&&raw<=Integer.MAX_VALUE?(int)raw:null;
