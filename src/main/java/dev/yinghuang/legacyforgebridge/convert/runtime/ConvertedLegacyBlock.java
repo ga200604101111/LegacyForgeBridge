@@ -6,6 +6,7 @@ import dev.yinghuang.legacyforgebridge.compat.LegacyBlockDropRuntimeRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyBlockPlacementRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyStackComponents;
 import dev.yinghuang.legacyforgebridge.compat.LegacyBlockGeometryRegistry;
+import dev.yinghuang.legacyforgebridge.compat.LegacyHeldItemVisibilityRegistry;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.RandomSource;
