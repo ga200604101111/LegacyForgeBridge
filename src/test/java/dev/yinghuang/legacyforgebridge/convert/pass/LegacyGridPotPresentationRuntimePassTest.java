@@ -55,6 +55,22 @@ class LegacyGridPotPresentationRuntimePassTest {
         assertEquals(1.0F/3.0F,rule.get("cellBodyWidth").getAsFloat(),0.0001F);
         assertEquals(0.375F,rule.get("cellBodyHeight").getAsFloat(),0.0001F);
         assertFalse(rule.get("exactLegacyGeometry").getAsBoolean());
+
+        JsonObject blockModel=JsonParser.parseString(Files.readString(
+                staging.resolve("assets/foreign/models/block/grid.json"),StandardCharsets.UTF_8)).getAsJsonObject();
+        assertEquals("minecraft:block/block",blockModel.get("parent").getAsString());
+        assertEquals("minecraft:block/flower_pot",blockModel.getAsJsonObject("textures").get("particle").getAsString());
+        assertFalse(LegacyPresentationOwnership.owns(staging,staging.resolve("assets/foreign/models/block/grid.json")),
+                "GridPot final custom-renderer host must not remain provisional-owned");
+
+        JsonObject itemModel=JsonParser.parseString(Files.readString(
+                staging.resolve("assets/foreign/models/item/grid.json"),StandardCharsets.UTF_8)).getAsJsonObject();
+        assertEquals("minecraft:block/block",itemModel.get("parent").getAsString());
+        assertEquals(2,itemModel.getAsJsonArray("elements").size());
+
+        JsonObject itemDef=JsonParser.parseString(Files.readString(
+                staging.resolve("assets/foreign/items/grid.json"),StandardCharsets.UTF_8)).getAsJsonObject();
+        assertEquals("foreign:item/grid",itemDef.getAsJsonObject("model").get("model").getAsString());
     }
 
     @Test
