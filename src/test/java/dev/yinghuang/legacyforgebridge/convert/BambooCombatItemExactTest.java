@@ -26,4 +26,21 @@ class BambooCombatItemExactTest {
         assertEquals(200,rule.durability());
         assertEquals(4.0F,rule.attackDamage(),0.0001F);
     }
+
+    @Test
+    void exactBambooBowPreservesSourcePullStageTiming()throws Exception{
+        String input=System.getProperty("lfb.exactCorpus.jar");assertNotNull(input);
+        Path source=Path.of(input);assertTrue(Files.isRegularFile(source));assertEquals(SHA,Hashing.sha256(source));
+
+        var analysis=new LegacyCombatItemAnalyzer().analyze(source);
+        var rule=analysis.rules().stream()
+                .filter(value->"ruby/bamboo/item/ItemBambooBow".equals(value.sourceClass()))
+                .findFirst().orElseThrow(()->new AssertionError("Bamboo bow pull timing proof missing; skipped="+analysis.skipped()));
+
+        assertEquals(LegacyCombatItemAnalyzer.Kind.BOW,rule.kind());
+        assertEquals(300,rule.durability());
+        assertEquals(3,rule.pullStages());
+        assertEquals("bamboo:bamboobow_pull_",rule.pullTexturePrefix());
+        assertEquals(java.util.List.of(1,26,40),rule.pullStageMinTicks());
+    }
 }
