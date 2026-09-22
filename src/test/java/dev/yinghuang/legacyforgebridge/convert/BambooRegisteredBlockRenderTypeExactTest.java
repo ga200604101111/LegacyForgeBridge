@@ -22,6 +22,8 @@ class BambooRegisteredBlockRenderTypeExactTest {
         var analysis=new LegacyRegisteredBlockRenderTypeAnalyzer().analyze(source);
         Map<String,LegacyRegisteredBlockRenderTypeAnalyzer.Rule> byName=analysis.rules().stream()
                 .collect(Collectors.toMap(LegacyRegisteredBlockRenderTypeAnalyzer.Rule::registryName,Function.identity(),(a,b)->a));
+        var bamboo=byName.get("bamboo");assertNotNull(bamboo,"delegated bamboo render identity");
+        assertTrue(bamboo.renderIdentity().isConstant(6),"BambooMod:bamboo must retain source render type 6/CROP");
         for(String name:new String[]{"bamboosingle","bamboo2"}){
             var rule=byName.get(name);assertNotNull(rule,name+" render identity");
             assertEquals("ruby/bamboo/CustomRenderHandler",rule.renderIdentity().fieldOwner(),name);
