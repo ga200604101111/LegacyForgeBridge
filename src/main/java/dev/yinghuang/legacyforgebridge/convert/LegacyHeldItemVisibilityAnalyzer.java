@@ -9,8 +9,13 @@ import java.util.jar.*;
 
 /** Proves the legacy client pattern "show this block only while holding its own BlockItem". */
 public final class LegacyHeldItemVisibilityAnalyzer {
-    public record Rule(String registryName,String sourceBlockClass,int visibleOrMask,int hiddenAndMask) {
-        public Rule { if(registryName==null||sourceBlockClass==null||visibleOrMask<=0||visibleOrMask>15||hiddenAndMask<0||hiddenAndMask>15||(visibleOrMask&hiddenAndMask)!=0)throw new IllegalArgumentException("Invalid held-item visibility rule"); }
+    public record Rule(String registryName,String sourceBlockClass,int visibleOrMask,int hiddenAndMask,
+                       boolean emptyCollision,boolean metaZeroSelectionElseEmpty) {
+        public Rule {
+            if(registryName==null||sourceBlockClass==null||visibleOrMask<=0||visibleOrMask>15
+                    ||hiddenAndMask<0||hiddenAndMask>15||(visibleOrMask&hiddenAndMask)!=0)
+                throw new IllegalArgumentException("Invalid held-item visibility rule");
+        }
     }
     public record Analysis(List<Rule> rules,List<String> diagnostics) { public Analysis { rules=List.copyOf(rules);diagnostics=List.copyOf(diagnostics); } }
     private static final String RANDOM_DESC="(Lnet/minecraft/world/World;IIILjava/util/Random;)V";
@@ -20,11 +25,49 @@ public final class LegacyHeldItemVisibilityAnalyzer {
             String source=registration.implementationClass();ClassNode node=classes.get(source);if(node==null)continue;
             MethodNode random=findHierarchy(classes,source,Set.of("randomDisplayTick","func_149734_b"),RANDOM_DESC);if(random==null)continue;
             Set<MethodNode> reachable=reachableSourceMethods(classes,random,24);Rule rule=null;
-            for(MethodNode method:reachable){int[] masks=proveHeldOwnBlockToggle(method);if(masks==null)continue;if(rule!=null){rule=null;diagnostics.add("Multiple held-item visibility toggle methods are reachable for "+source);break;}rule=new Rule(registration.registryName(),source,masks[0],masks[1]);}
+            for(MethodNode method:reachable){
+                int[] masks=proveHeldOwnBlockToggle(method);if(masks==null)continue;
+                if(rule!=null){rule=null;diagnostics.add("Multiple held-item visibility toggle methods are reachable for "+source);break;}
+                boolean emptyCollision=provesEmptyCollision(classes,source);
+                boolean metaZeroSelection=provesMetaZeroSelectionElseEmpty(classes,source);
+                rule=new Rule(registration.registryName(),source,masks[0],masks[1],emptyCollision,metaZeroSelection);
+            }
             if(rule!=null)rules.add(rule);
         }
         return new Analysis(rules,List.copyOf(diagnostics));
     }
+    private static boolean provesEmptyCollision(Map<String,ClassNode> classes,String source){
+        MethodNode method=findHierarchy(classes,source,Set.of("getCollisionBoundingBoxFromPool","func_149668_a"),
+                "(Lnet/minecraft/world/World;III)Lnet/minecraft/util/AxisAlignedBB;");
+        List<AbstractInsnNode> code=real(method);
+        return code.size()==2&&code.get(0).getOpcode()==Opcodes.ACONST_NULL&&code.get(1).getOpcode()==Opcodes.ARETURN;
+    }
+
+    private static boolean provesMetaZeroSelectionElseEmpty(Map<String,ClassNode> classes,String source){
+        MethodNode method=findHierarchy(classes,source,Set.of("getSelectedBoundingBoxFromPool","func_149633_g"),
+                "(Lnet/minecraft/world/World;III)Lnet/minecraft/util/AxisAlignedBB;");
+        if(method==null)return false;List<AbstractInsnNode> code=real(method);
+        boolean metadata=false,branch=false,superBox=false,zeroBox=false,sixZeros=false;
+        for(int i=0;i<code.size();i++){
+            AbstractInsnNode insn=code.get(i);
+            if(insn instanceof MethodInsnNode call){
+                if(call.owner.equals("net/minecraft/world/World")
+                        &&Set.of("getBlockMetadata","func_72805_g").contains(call.name)
+                        &&call.desc.equals("(III)I"))metadata=true;
+                if(call.getOpcode()==Opcodes.INVOKESPECIAL&&call.owner.equals("net/minecraft/block/Block")
+                        &&Set.of("getSelectedBoundingBoxFromPool","func_149633_g").contains(call.name)
+                        &&call.desc.equals("(Lnet/minecraft/world/World;III)Lnet/minecraft/util/AxisAlignedBB;"))superBox=true;
+                if(call.getOpcode()==Opcodes.INVOKESTATIC&&call.owner.equals("net/minecraft/util/AxisAlignedBB")
+                        &&Set.of("getBoundingBox","func_72330_a").contains(call.name)
+                        &&call.desc.equals("(DDDDDD)Lnet/minecraft/util/AxisAlignedBB;"))zeroBox=true;
+            }
+            if(insn instanceof JumpInsnNode jump&&(jump.getOpcode()==Opcodes.IFEQ||jump.getOpcode()==Opcodes.IFNE))branch=true;
+        }
+        int zeroDoubles=0;for(AbstractInsnNode insn:code)if(insn.getOpcode()==Opcodes.DCONST_0)zeroDoubles++;
+        sixZeros=zeroDoubles>=6;
+        return metadata&&branch&&superBox&&zeroBox&&sixZeros;
+    }
+
     private static int[] proveHeldOwnBlockToggle(MethodNode method){
         boolean client=false,held=false,item=false,blockFromItem=false,compare=false;int setBlock=0,bounds=0;Integer orMask=null,andMask=null;List<AbstractInsnNode> code=real(method);
         for(int i=0;i<code.size();i++){
