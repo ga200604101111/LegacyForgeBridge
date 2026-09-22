@@ -45,4 +45,5 @@ public final class ConvertedLegacyInertModelBlock extends ConvertedLegacyBlock i
     @Override public BlockEntity newBlockEntity(BlockPos pos,BlockState state){return new ConvertedLegacyInertModelBlockEntity(pos,state);}
     @Override protected RenderShape getRenderShape(BlockState state){return RenderShape.INVISIBLE;}
     @Override protected VoxelShape getShape(BlockState state,BlockGetter level,BlockPos pos,CollisionContext context){return shape;}
+    @Override protected VoxelShape getCollisionShape(BlockState state,BlockGetter level,BlockPos pos,CollisionContext context){return shape;}
 }
