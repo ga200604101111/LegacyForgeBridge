@@ -1,5 +1,13 @@
 package dev.yinghuang.legacyforgebridge.convert;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import dev.yinghuang.legacyforgebridge.compat.LegacyVisibleEntityRegistry;
+import org.junit.jupiter.api.io.TempDir;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.util.jar.JarFile;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import java.nio.file.Files;
@@ -11,6 +19,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @Tag("exact-corpus")
 class BambooVisibleEntityExactTest {
+    @TempDir Path tempDir;
     private static final String SHA="bcceb588950f911398cfc94856a45527b4aa17b6e130927b2e0516fdf059b402";
 
     @Test void exactVisibleFurnitureAndDoorRenderersAreSourceProven()throws Exception{
@@ -44,5 +53,24 @@ class BambooVisibleEntityExactTest {
         var thrown=rules.get("ThrowZabuton");assertNotNull(thrown);
         assertEquals(LegacyVisibleEntityPresentationAnalyzer.Adapter.TINTED_CUSHION,thrown.adapter());
         assertFalse(thrown.physicalCollision());assertFalse(thrown.playerAttackRemoves());
+
+        var converted=new LegacyConversionEngine().convert(source,tempDir.resolve("converted"),tempDir.resolve("manifests"));
+        try(JarFile jar=new JarFile(converted.candidateJar().orElseThrow().toFile())){
+            JsonObject sidecar=read(jar,"legacyforgebridge/visible-entity-rules.json");
+            assertEquals(4,sidecar.getAsJsonArray("rules").size(),sidecar.toString());
+            String legacyModId=sidecar.get("legacyModId").getAsString();
+            for(JsonElement element:sidecar.getAsJsonArray("rules")){
+                JsonObject value=element.getAsJsonObject();
+                assertNotNull(LegacyVisibleEntityRegistry.validateCandidateRule(value,legacyModId),
+                        value.get("legacyRegistryName").getAsString());
+            }
+        }
+    }
+
+    private static JsonObject read(JarFile jar,String path)throws Exception{
+        var entry=jar.getJarEntry(path);assertNotNull(entry,"Missing candidate output "+path);
+        try(InputStreamReader reader=new InputStreamReader(jar.getInputStream(entry),StandardCharsets.UTF_8)){
+            return JsonParser.parseReader(reader).getAsJsonObject();
+        }
     }
 }
