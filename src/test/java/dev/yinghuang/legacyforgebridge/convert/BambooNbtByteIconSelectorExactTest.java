@@ -1,5 +1,6 @@
 package dev.yinghuang.legacyforgebridge.convert;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -45,13 +46,21 @@ class BambooNbtByteIconSelectorExactTest {
             assertNotNull(emitted,sidecar.toString());
             assertEquals("iconNum",emitted.get("nbtKey").getAsString());
             assertEquals(7,emitted.get("variantCount").getAsInt());
-            assertEquals(7,emitted.getAsJsonArray("itemModels").size());
+            JsonArray itemModels=emitted.getAsJsonArray("itemModels");
+            assertEquals(7,itemModels.size());
             assertTrue(emitted.get("runtimeComplete").getAsBoolean());
 
             JsonObject defaultItem=read(jar,"assets/bamboomod/items/bamboopickaxe.json");
             assertEquals("bamboomod:item/bamboopickaxe_lfb_nbt_0",
                     defaultItem.getAsJsonObject("model").get("model").getAsString());
             for(int i=0;i<7;i++){
+                assertEquals("bamboomod:lfb_nbt/bamboopickaxe/"+i,itemModels.get(i).getAsString());
+                JsonObject itemDefinition=read(jar,"assets/bamboomod/items/lfb_nbt/bamboopickaxe/"+i+".json");
+                JsonObject boundaryModel=itemDefinition.getAsJsonObject("model");
+                assertNotNull(boundaryModel,"variant "+i+" item boundary missing model node");
+                assertEquals("minecraft:model",boundaryModel.get("type").getAsString());
+                assertEquals("bamboomod:item/bamboopickaxe_lfb_nbt_"+i,boundaryModel.get("model").getAsString());
+
                 JsonObject model=read(jar,"assets/bamboomod/models/item/bamboopickaxe_lfb_nbt_"+i+".json");
                 assertEquals("minecraft:item/generated",model.get("parent").getAsString());
                 assertTrue(model.getAsJsonObject("textures").get("layer0").getAsString().contains("pickaxe_"+i)
