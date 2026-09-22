@@ -169,6 +169,15 @@ public final class ConvertedLegacySeatBedBlock extends BedBlock {
 
     @Override
     protected VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
+        return sourceBoundsShape();
+    }
+
+    @Override
+    protected VoxelShape getCollisionShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
+        return sourceBoundsShape();
+    }
+
+    private VoxelShape sourceBoundsShape() {
         return box(0D, 0D, 0D, 16D, rule.blockHeight() * 16D, 16D);
     }
 
