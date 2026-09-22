@@ -138,7 +138,7 @@ public final class LegacyRotatingAssemblyEntityAnalyzer {
         Set<String> repeated=renderedFields(render,loop.start(),loop.end(),model.name);
         Set<String> statics=renderedFieldsOutside(render,loop.start(),loop.end(),model.name);
         if(repeated.size()!=2||statics.size()!=2)return null;
-        if(!rotationFields(render,loop.start(),loop.end(),model.name,Z_ROT).containsAll(repeated))return null;
+        if(!sharedDuplicatedRotation(render,loop.start(),loop.end(),Z_ROT))return null;
         if(!variableAngleTable(model))return null;
         return new VariableModel(select(raw,statics),select(raw,repeated));
     }
@@ -344,6 +344,17 @@ public final class LegacyRotatingAssemblyEntityAnalyzer {
     private static Set<String> renderedFieldsOutside(MethodNode method,int start,int end,String model){Set<String> out=new LinkedHashSet<>();List<AbstractInsnNode> all=new ArrayList<>();for(AbstractInsnNode i:method.instructions)all.add(i);
         for(int i=0;i<all.size();i++)if((i<start||i>=end)&&all.get(i) instanceof MethodInsnNode call&&call.owner.equals(MODEL_RENDERER)&&RENDER.contains(call.name)){
             String f=fieldOrigin(all,i,model);if(f!=null)out.add(f);}return out;}
+    private static boolean sharedDuplicatedRotation(MethodNode method,int start,int end,Set<String> names){
+        List<AbstractInsnNode> all=new ArrayList<>();for(AbstractInsnNode i:method.instructions)all.add(i);
+        int stores=0;boolean duplicate=false;
+        for(int i=Math.max(0,start);i<Math.min(end,all.size());i++){
+            AbstractInsnNode insn=all.get(i);
+            if(insn.getOpcode()==Opcodes.DUP_X1||insn.getOpcode()==Opcodes.DUP)duplicate=true;
+            if(insn instanceof FieldInsnNode put&&put.getOpcode()==Opcodes.PUTFIELD&&put.owner.equals(MODEL_RENDERER)&&names.contains(put.name))stores++;
+        }
+        return duplicate&&stores==2;
+    }
+
     private static Set<String> rotationFields(MethodNode method,int start,int end,String model,Set<String> names){Set<String> out=new LinkedHashSet<>();List<AbstractInsnNode> all=new ArrayList<>();for(AbstractInsnNode i:method.instructions)all.add(i);
         for(int i=Math.max(0,start);i<Math.min(end,all.size());i++)if(all.get(i) instanceof FieldInsnNode put&&put.getOpcode()==Opcodes.PUTFIELD&&put.owner.equals(MODEL_RENDERER)&&names.contains(put.name)){
             String f=fieldOrigin(all,i,model);if(f!=null)out.add(f);}return out;}
