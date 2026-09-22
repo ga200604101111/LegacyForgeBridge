@@ -398,9 +398,17 @@ public final class LegacyRotatingAssemblyEntityAnalyzer {
 
     private String uniqueModelType(ClassNode renderer){LinkedHashSet<String> out=new LinkedHashSet<>();for(MethodNode m:renderer.methods)for(AbstractInsnNode i:m.instructions)
         if(i instanceof TypeInsnNode t&&t.getOpcode()==Opcodes.NEW&&inherits(t.desc,MODEL_BASE))out.add(t.desc);return out.size()==1?out.getFirst():null;}
-    private MethodNode entityRenderMethod(ClassNode renderer,String entity){MethodNode found=null;for(MethodNode m:renderer.methods){Type[] a=Type.getArgumentTypes(m.desc);if(a.length!=6||a[0].getSort()!=Type.OBJECT)continue;
-        boolean cast=false,push=false;for(AbstractInsnNode i:m.instructions){if(i instanceof TypeInsnNode t&&t.getOpcode()==Opcodes.CHECKCAST&&ownerInHierarchy(entity,t.desc))cast=true;if(i instanceof MethodInsnNode call&&call.owner.equals("org/lwjgl/opengl/GL11")&&call.name.equals("glPushMatrix"))push=true;}
-        if(cast&&push){if(found!=null)return null;found=m;}}return found;}
+    private MethodNode entityRenderMethod(ClassNode renderer,String entity){
+        MethodNode found=null;
+        for(MethodNode m:renderer.methods){
+            Type[] args=Type.getArgumentTypes(m.desc);
+            if(args.length!=6||args[0].getSort()!=Type.OBJECT||!ownerInHierarchy(entity,args[0].getInternalName()))continue;
+            boolean push=false;
+            for(AbstractInsnNode i:m.instructions)if(i instanceof MethodInsnNode call&&call.owner.equals("org/lwjgl/opengl/GL11")&&call.name.equals("glPushMatrix"))push=true;
+            if(push){if(found!=null)return null;found=m;}
+        }
+        return found;
+    }
 
     private Integer directWatcherIndex(MethodNode method){
         if(method==null)return null;List<AbstractInsnNode> code=real(method);
