@@ -6,6 +6,7 @@ import dev.yinghuang.legacyforgebridge.behavior.ConvertedLegacyBowItem;
 import dev.yinghuang.legacyforgebridge.behavior.LegacyBehaviorRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyBlockActivationEffectsRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyBlockActivationRegistry;
+import dev.yinghuang.legacyforgebridge.compat.LegacyBlockGeometryRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyBlockPlacementRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyFoodItemRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyFuelRegistry;
@@ -90,6 +91,7 @@ public final class GeneratedModSupport {
         boolean microBlock=LegacyMicroBlockRegistry.hasRule(id);
         boolean seatBed=LegacySeatBedRegistry.hasBlockRule(id);
         BlockBehaviour.Properties blockProperties=BlockBehaviour.Properties.of().setId(blockKey).overrideDescription(descriptionKey);
+        blockProperties=LegacyBlockGeometryRegistry.properties(id,blockProperties);
         if(gridPot||microBlock||seatBed)blockProperties=blockProperties.dynamicShape().noOcclusion();
         boolean inert=LegacyInertModelBlockRegistry.hasRule(id);
         boolean radial=LegacyRadialModelBlockRegistry.hasRule(id);
