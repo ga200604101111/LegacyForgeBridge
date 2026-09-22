@@ -16,8 +16,8 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * <p>The source-bound converted item model is used as the presentation primitive. Throwable icon
  * renderers map directly to a modern thrown-item billboard. Arrow-family custom renderers use the
- * same bound item identity as a conservative visible carrier until their source quad geometry can
- * be materialized separately.</p>
+ * same bound item identity, but now follow the source-proven yaw/pitch flight orientation instead
+ * of camera billboard orientation. Old immediate-mode quad geometry is never executed.</p>
  */
 public final class ConvertedProjectilePresentationRuntime {
     private static final Set<Identifier> REGISTERED=ConcurrentHashMap.newKeySet();
@@ -29,7 +29,10 @@ public final class ConvertedProjectilePresentationRuntime {
             if(!REGISTERED.add(rule.id()))continue;
             EntityType<ConvertedLegacyRemoteProjectile> type=LegacyProjectilePresentationRegistry.type(rule.id());
             if(type==null)throw new IllegalStateException("Remote projectile EntityType missing before renderer registration: "+rule.id());
-            EntityRendererRegistry.register(type,ThrownItemRenderer::new);count++;
+            if(rule.adapter()==LegacyProjectilePresentationRegistry.Adapter.ORIENTED_ITEM)
+                EntityRendererRegistry.register(type,ConvertedLegacyOrientedProjectileRenderer::new);
+            else EntityRendererRegistry.register(type,ThrownItemRenderer::new);
+            count++;
         }
         if(count>0)LegacyForgeBridge.LOGGER.info("Registered converted remote projectile renderers: mod={}, renderers={}",modId,count);
     }
