@@ -189,18 +189,14 @@ public final class LegacyMetadataRotatingTesrAnalyzer {
 
     private static String findRendererRegistration(Map<String,ClassNode> classes,String tileClass,String tileId){
         LinkedHashSet<String> renderers=new LinkedHashSet<>();
-        for(ClassNode owner:classes.values())for(MethodNode method:owner.methods){List<AbstractInsnNode> code=real(method);for(int i=0;i<code.size();i++){
-            if(!(code.get(i) instanceof MethodInsnNode call)||call.getOpcode()!=Opcodes.INVOKESTATIC
+        for(ClassNode owner:classes.values())for(MethodNode method:owner.methods)for(AbstractInsnNode insn:method.instructions){
+            if(!(insn instanceof MethodInsnNode call)||call.getOpcode()!=Opcodes.INVOKESTATIC
                     ||!call.owner.equals("cpw/mods/fml/client/registry/ClientRegistry")||!call.name.equals("registerTileEntity")
                     ||!call.desc.equals("(Ljava/lang/Class;Ljava/lang/String;Lnet/minecraft/client/renderer/tileentity/TileEntitySpecialRenderer;)V"))continue;
-            boolean tile=false,id=false;String renderer=null;
-            for(int j=Math.max(0,i-12);j<i;j++){AbstractInsnNode value=code.get(j);
-                if(value instanceof LdcInsnNode ldc&&ldc.cst instanceof Type type&&type.getSort()==Type.OBJECT&&type.getInternalName().equals(tileClass))tile=true;
-                if(value instanceof LdcInsnNode ldc&&tileId.equals(ldc.cst))id=true;
-                if(value instanceof TypeInsnNode type&&type.getOpcode()==Opcodes.NEW&&inherits(classes,type.desc,TESR))renderer=type.desc;
-            }
-            if(tile&&id&&renderer!=null)renderers.add(renderer);
-        }}
+            LegacyDirectCallArguments.ClassStringNew args=LegacyDirectCallArguments.classStringNew(owner,method,call);
+            if(args!=null&&args.classInternalName().equals(tileClass)&&args.stringValue().equals(tileId)
+                    &&inherits(classes,args.newTypeInternalName(),TESR))renderers.add(args.newTypeInternalName());
+        }
         return renderers.size()==1?renderers.getFirst():null;
     }
 
