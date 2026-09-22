@@ -8,6 +8,7 @@ import dev.yinghuang.legacyforgebridge.compat.LegacyVisibleEntityRegistry;
 import dev.yinghuang.legacyforgebridge.convert.runtime.ConvertedLegacyRemoteProjectile;
 import dev.yinghuang.legacyforgebridge.convert.runtime.ConvertedLegacySeatEntity;
 import dev.yinghuang.legacyforgebridge.convert.runtime.LegacySeatEntityRuntime;
+import dev.yinghuang.legacyforgebridge.protocol.LegacyViaFmlEntityTrackerBridge;
 import dev.yinghuang.legacyforgebridge.convert.runtime.ConvertedLegacyVisualEntity;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -72,6 +73,7 @@ public final class FmlRuntimeClient {
             return;
         }
         Minecraft client=Minecraft.getInstance();
+        LegacyViaFmlEntityTrackerBridge.trackFmlEntity(client,message.entityId(),trace);
         if(seatRule!=null)client.execute(()->applyRemoteSeatSpawn(client,spawn,trace));
         else if(visibleRule!=null)client.execute(()->applyRemoteVisibleSpawn(client,spawn,visibleRule,trace));
         else if(projectileRule!=null)client.execute(()->applyRemoteProjectileSpawn(client,spawn,projectileRule,trace));
@@ -98,7 +100,7 @@ public final class FmlRuntimeClient {
             try{mapped=entity.applyLegacyWatcher(watcher.type(),watcher.id(),watcher.value());}
             catch(RuntimeException invalid){trace.event("Converted visible Entity spawn rejected while applying watcher; entity="+message.entityId()+" watcher="+watcher.id()+" type="+watcher.type()+" reason="+invalid.getClass().getSimpleName());return;}
             if(mapped){customWatchers++;continue;}
-            if(isDefaultLegacyEntityBaseWatcher(watcher)){baseWatchers++;continue;}
+            if(isLegacyEntityBaseWatcher(watcher)){baseWatchers++;continue;}
             trace.event("Converted visible Entity spawn rejected: unmapped/non-default watcher; entity="+message.entityId()+" watcher="+watcher.id()+" type="+watcher.type());
             return;
         }
@@ -151,7 +153,7 @@ public final class FmlRuntimeClient {
             try{mapped=bridge.legacyforgebridge$applyWatcher(watcher.id(),watcher.type(),watcher.value());}
             catch(RuntimeException invalid){trace.event("Converted plain Entity spawn rejected while applying legacy watcher; entity="+message.entityId()+" watcher="+watcher.id()+" type="+watcher.type()+" reason="+invalid.getClass().getSimpleName());return;}
             if(mapped){customWatchers++;continue;}
-            if(isDefaultLegacyEntityBaseWatcher(watcher)){baseWatchers++;continue;}
+            if(isLegacyEntityBaseWatcher(watcher)){baseWatchers++;continue;}
             trace.event("Converted plain Entity spawn rejected: unmapped/non-default legacy base watcher; entity="+message.entityId()+" watcher="+watcher.id()+" type="+watcher.type()+" value="+watcher.value());
             return;
         }

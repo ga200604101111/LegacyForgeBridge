@@ -1,5 +1,6 @@
 package dev.yinghuang.legacyforgebridge;
 
+import dev.yinghuang.legacyforgebridge.compat.LegacyRemoteEntityMetadataBridge;
 import dev.yinghuang.legacyforgebridge.network.FmlConnectionTrace;
 import dev.yinghuang.legacyforgebridge.network.FmlHandshakeClient;
 import dev.yinghuang.legacyforgebridge.network.FmlMappedPayload;
@@ -82,6 +83,7 @@ public final class LegacyForgeBridgeClient implements ClientModInitializer {
         });
 
         ClientConfigurationConnectionEvents.INIT.register((handler, client) -> {
+            LegacyRemoteEntityMetadataBridge.clear();
             directRegistrationSent = false;
             if (!ViaFabricPlusBackend.INSTANCE.isMinecraft1710Target()) return;
             FmlConnectionTrace trace = FmlConnectionTrace.INSTANCE;
@@ -135,6 +137,7 @@ public final class LegacyForgeBridgeClient implements ClientModInitializer {
         });
 
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
+            LegacyRemoteEntityMetadataBridge.clear();
             if (ViaFabricPlusBackend.INSTANCE.isMinecraft1710Target()) {
                 FmlConnectionTrace trace = FmlConnectionTrace.INSTANCE;
                 trace.startIfNeeded("client PLAY JOIN; target=" + ViaFabricPlusBackend.INSTANCE.currentProtocolName());
@@ -145,6 +148,7 @@ public final class LegacyForgeBridgeClient implements ClientModInitializer {
         });
 
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+            LegacyRemoteEntityMetadataBridge.clear();
             FmlConnectionTrace trace = FmlConnectionTrace.INSTANCE;
             if (trace.sessionActive()) trace.event("PLAY disconnected with handshakeState=" + handshake.state());
             handshake.reset();
