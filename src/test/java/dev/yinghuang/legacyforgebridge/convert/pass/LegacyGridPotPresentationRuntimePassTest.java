@@ -51,7 +51,7 @@ class LegacyGridPotPresentationRuntimePassTest {
         assertTrue(rule.get("boundingBoxCentered").getAsBoolean());
         assertTrue(rule.get("boundingBoxBottomAligned").getAsBoolean());
         assertTrue(rule.get("storedContentPresentationRuntimeWired").getAsBoolean());
-        assertEquals("minecraft:flower_pot",rule.get("cellCarrierItemId").getAsString());
+        assertEquals("example:grid",rule.get("cellCarrierItemId").getAsString());
         assertEquals(1.0F/3.0F,rule.get("cellBodyWidth").getAsFloat(),0.0001F);
         assertEquals(0.375F,rule.get("cellBodyHeight").getAsFloat(),0.0001F);
         assertFalse(rule.get("exactLegacyGeometry").getAsBoolean());
