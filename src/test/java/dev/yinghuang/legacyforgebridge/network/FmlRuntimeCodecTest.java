@@ -35,6 +35,16 @@ class FmlRuntimeCodecTest {
         assertEquals(77,spawn.header().entityId());assertEquals(4,spawn.watcherEntries());assertEquals(0,spawn.throwerId());assertEquals(0,spawn.additionalSpawnBytes());assertTrue(spawn.plainNonThrowable());
     }
 
+    @Test void parsesThrowableVelocityBeforeAdditionalSpawnData()throws IOException{
+        ByteArrayOutputStream bytes=new ByteArrayOutputStream();DataOutputStream out=new DataOutputStream(bytes);
+        writeSpawnHeader(out,80,"ExampleMod",24,32,64,96,0,0,0);out.writeByte(127);out.writeInt(41);
+        out.writeInt(8000);out.writeInt(-4000);out.writeInt(2000);
+        var spawn=FmlRuntimeCodec.parseSimpleEntitySpawn(bytes.toByteArray());
+        assertTrue(spawn.throwableEnvelope());assertTrue(spawn.additionalSpawnDataEmpty());
+        assertEquals(1.0D,spawn.velocityX());assertEquals(-0.5D,spawn.velocityY());assertEquals(0.25D,spawn.velocityZ());
+        assertEquals(0,spawn.additionalSpawnBytes());assertFalse(spawn.plainNonThrowable());
+    }
+
     @Test void simpleEntitySpawnRetainsAdditionalSpawnBytesForFailClosedCaller()throws IOException{
         ByteArrayOutputStream bytes=new ByteArrayOutputStream();DataOutputStream out=new DataOutputStream(bytes);writeSpawnHeader(out,78,"ExampleMod",23,0,0,0,0,0,0);out.writeByte(127);out.writeInt(0);out.writeByte(99);
         var spawn=FmlRuntimeCodec.parseSimpleEntitySpawn(bytes.toByteArray());assertEquals(1,spawn.additionalSpawnBytes());assertFalse(spawn.plainNonThrowable());
