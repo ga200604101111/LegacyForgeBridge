@@ -50,7 +50,10 @@ class LegacySimpleBlockRendererAnalyzerTest {
 
         assertEquals(LegacySimpleBlockRendererAnalyzer.Mode.CROSS, rules.get("cross").mode());
         assertEquals("foreign/simple/CrossRenderer", rules.get("cross").sourceRendererClass());
+        assertNotNull(rules.get("cross").bounds());assertEquals(.25F,rules.get("cross").bounds().minX(),0.0001F);
+        assertEquals(.75F,rules.get("cross").bounds().maxZ(),0.0001F);assertTrue(rules.get("cross").emptyCollision());
         assertEquals(LegacySimpleBlockRendererAnalyzer.Mode.CROP, rules.get("crop").mode());
+        assertNotNull(rules.get("crop").bounds());assertTrue(rules.get("crop").emptyCollision());
         assertEquals(LegacySimpleBlockRendererAnalyzer.Mode.META_ZERO_CROP_ELSE_STANDARD, rules.get("meta").mode());
         assertEquals(LegacySimpleBlockRendererAnalyzer.Mode.CROSS, rules.get("srgCtorCross").mode());
         assertEquals(LegacySimpleBlockRendererAnalyzer.Mode.CROP, rules.get("srgCtorCrop").mode());
@@ -83,6 +86,9 @@ class LegacySimpleBlockRendererAnalyzerTest {
         init.visitInsn(Opcodes.ACONST_NULL);
         init.visitMethodInsn(Opcodes.INVOKESPECIAL, "net/minecraft/block/Block", "<init>",
                 "(Lnet/minecraft/block/material/Material;)V", false);
+        init.visitVarInsn(Opcodes.ALOAD,0);init.visitLdcInsn(.25F);init.visitInsn(Opcodes.FCONST_0);init.visitLdcInsn(.25F);
+        init.visitLdcInsn(.75F);init.visitInsn(Opcodes.FCONST_1);init.visitLdcInsn(.75F);
+        init.visitMethodInsn(Opcodes.INVOKEVIRTUAL,name,"setBlockBounds","(FFFFFF)V",false);
         init.visitInsn(Opcodes.RETURN);
         init.visitMaxs(0, 0);
         init.visitEnd();
@@ -93,6 +99,11 @@ class LegacySimpleBlockRendererAnalyzerTest {
         render.visitInsn(Opcodes.IRETURN);
         render.visitMaxs(0, 0);
         render.visitEnd();
+
+        MethodVisitor collision=writer.visitMethod(Opcodes.ACC_PUBLIC,"getCollisionBoundingBoxFromPool",
+                "(Lnet/minecraft/world/World;III)Lnet/minecraft/util/AxisAlignedBB;",null,null);
+        collision.visitCode();collision.visitInsn(Opcodes.ACONST_NULL);collision.visitInsn(Opcodes.ARETURN);
+        collision.visitMaxs(0,0);collision.visitEnd();
 
         writer.visitEnd();
         return writer.toByteArray();
