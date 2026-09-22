@@ -7,9 +7,11 @@ import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldInsnNode;
 import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.IntInsnNode;
+import org.objectweb.asm.tree.JumpInsnNode;
 import org.objectweb.asm.tree.LdcInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
+import org.objectweb.asm.tree.VarInsnNode;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -37,8 +39,10 @@ public final class LegacyCombatItemAnalyzer {
     public enum Kind { SWORD, BOW }
 
     public record Rule(String registryName, String sourceClass, Kind kind, int durability,
-                       float attackDamage, int useDuration, String pullTexturePrefix, int pullStages) {
+                       float attackDamage, int useDuration, String pullTexturePrefix, int pullStages,
+                       List<Integer> pullStageMinTicks) {
         public Rule {
+            pullStageMinTicks = pullStageMinTicks == null ? List.of() : List.copyOf(pullStageMinTicks);
             if (registryName == null || registryName.isBlank() || sourceClass == null || sourceClass.isBlank()
                     || kind == null || durability < 0 || !Float.isFinite(attackDamage) || attackDamage < 0F
                     || useDuration < 0 || pullStages < 0) {
@@ -46,7 +50,8 @@ public final class LegacyCombatItemAnalyzer {
             }
             if (kind == Kind.SWORD && attackDamage <= 0F) throw new IllegalArgumentException("Sword damage was not proven");
             if (kind == Kind.BOW && (useDuration <= 0 || pullTexturePrefix == null || pullTexturePrefix.isBlank()
-                    || pullStages <= 0)) throw new IllegalArgumentException("Bow use/pull presentation was not proven");
+                    || pullStages <= 0 || pullStageMinTicks.size() != pullStages))
+                throw new IllegalArgumentException("Bow use/pull presentation was not proven");
         }
     }
 
@@ -88,17 +93,18 @@ public final class LegacyCombatItemAnalyzer {
                     continue;
                 }
                 rules.add(new Rule(item.registryName(), source, kind, Math.max(0, durability), damage,
-                        0, null, 0));
+                        0, null, 0, List.of()));
             } else {
                 String prefix = uniquePullTexturePrefix(source);
                 int stages = uniquePullStageCount(source);
-                if (prefix == null || stages <= 0) {
+                List<Integer> stageMinTicks = uniquePullStageMinTicks(source, stages);
+                if (prefix == null || stages <= 0 || stageMinTicks.size() != stages) {
                     skipped.add(new Skipped(item.registryName(), source,
-                            "No unique source bow pull texture sequence was proven."));
+                            "No unique source bow pull texture/threshold sequence was proven."));
                     continue;
                 }
                 rules.add(new Rule(item.registryName(), source, kind, Math.max(0, durability), 0F,
-                        72_000, prefix, stages));
+                        72_000, prefix, stages, stageMinTicks));
             }
         }
         return new Analysis(rules, skipped, List.copyOf(new LinkedHashSet<>(diagnostics)));
@@ -207,6 +213,67 @@ public final class LegacyCombatItemAnalyzer {
             }
         }
         return values.size() == 1 ? values.iterator().next() : null;
+    }
+
+    private List<Integer> uniquePullStageMinTicks(String sourceClass, int stages) {
+        if (stages <= 0) return List.of();
+        List<List<Integer>> candidates = new ArrayList<>();
+        for (ClassNode node : sourceLineage(sourceClass)) for (MethodNode method : node.methods) {
+            if (!method.desc.endsWith(")Lnet/minecraft/util/IIcon;")) continue;
+            List<AbstractInsnNode> code = new ArrayList<>();
+            for (AbstractInsnNode instruction : method.instructions) if (instruction.getOpcode() >= 0) code.add(instruction);
+            Map<Integer,Integer> minimumByStage = new LinkedHashMap<>();
+            Integer elapsedLocal = null;
+            boolean invalid = false;
+            for (int i = 0; i < code.size(); i++) {
+                if (!(code.get(i) instanceof MethodInsnNode call)
+                        || !call.owner.equals(node.name)
+                        || !call.desc.equals("(I)Lnet/minecraft/util/IIcon;")) continue;
+                Integer stage = i > 0 ? intConstant(code.get(i - 1)) : null;
+                if (stage == null || stage < 0 || stage >= stages) { invalid = true; break; }
+                Threshold threshold = precedingFallthroughThreshold(code, i);
+                if (threshold == null || threshold.minimumTicks() <= 0) { invalid = true; break; }
+                if (elapsedLocal == null) elapsedLocal = threshold.elapsedLocal();
+                else if (!elapsedLocal.equals(threshold.elapsedLocal())) { invalid = true; break; }
+                Integer prior = minimumByStage.putIfAbsent(stage, threshold.minimumTicks());
+                if (prior != null && !prior.equals(threshold.minimumTicks())) { invalid = true; break; }
+            }
+            if (invalid || minimumByStage.size() != stages) continue;
+            List<Integer> ordered = new ArrayList<>(stages);
+            int previous = 0;
+            for (int stage = 0; stage < stages; stage++) {
+                Integer minimum = minimumByStage.get(stage);
+                if (minimum == null || minimum <= previous) { invalid = true; break; }
+                ordered.add(minimum); previous = minimum;
+            }
+            if (!invalid) candidates.add(List.copyOf(ordered));
+        }
+        if (candidates.isEmpty()) return List.of();
+        List<Integer> first = candidates.getFirst();
+        for (List<Integer> candidate : candidates) if (!candidate.equals(first)) return List.of();
+        return first;
+    }
+
+    private record Threshold(int elapsedLocal, int minimumTicks) { }
+
+    private static Threshold precedingFallthroughThreshold(List<AbstractInsnNode> code, int callIndex) {
+        int start = Math.max(0, callIndex - 12);
+        for (int i = callIndex - 1; i >= start; i--) {
+            AbstractInsnNode instruction = code.get(i);
+            if (!(instruction instanceof JumpInsnNode jump)) continue;
+            int opcode = jump.getOpcode();
+            if (opcode == Opcodes.IFLE || opcode == Opcodes.IFLT) {
+                if (i < 1 || !(code.get(i - 1) instanceof VarInsnNode load) || load.getOpcode() != Opcodes.ILOAD) continue;
+                return new Threshold(load.var, opcode == Opcodes.IFLE ? 1 : 0);
+            }
+            if (opcode != Opcodes.IF_ICMPLT && opcode != Opcodes.IF_ICMPLE) continue;
+            if (i < 2 || !(code.get(i - 2) instanceof VarInsnNode load) || load.getOpcode() != Opcodes.ILOAD) continue;
+            Integer bound = intConstant(code.get(i - 1));
+            if (bound == null || bound < 0) continue;
+            int minimum = opcode == Opcodes.IF_ICMPLT ? bound : bound + 1;
+            return new Threshold(load.var, minimum);
+        }
+        return null;
     }
 
     private int uniquePullStageCount(String sourceClass) {
