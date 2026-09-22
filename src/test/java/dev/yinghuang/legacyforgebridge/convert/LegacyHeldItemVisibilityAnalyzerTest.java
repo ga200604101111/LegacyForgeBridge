@@ -39,6 +39,8 @@ class LegacyHeldItemVisibilityAnalyzerTest {
         assertEquals(VISIBLE, rule.sourceBlockClass());
         assertEquals(8, rule.visibleOrMask());
         assertEquals(7, rule.hiddenAndMask());
+        assertTrue(rule.emptyCollision());
+        assertTrue(rule.metaZeroSelectionElseEmpty());
         assertTrue(analysis.rules().stream().noneMatch(value -> value.registryName().equals("noise")),
                 "A similar client tick without Block.getBlockFromItem provenance must fail closed");
     }
@@ -103,6 +105,26 @@ class LegacyHeldItemVisibilityAnalyzerTest {
         tick.visitInsn(Opcodes.RETURN);
         tick.visitMaxs(0, 0);
         tick.visitEnd();
+
+        MethodVisitor collision = writer.visitMethod(Opcodes.ACC_PUBLIC, "getCollisionBoundingBoxFromPool",
+                "(Lnet/minecraft/world/World;III)Lnet/minecraft/util/AxisAlignedBB;", null, null);
+        collision.visitCode();collision.visitInsn(Opcodes.ACONST_NULL);collision.visitInsn(Opcodes.ARETURN);
+        collision.visitMaxs(0,0);collision.visitEnd();
+
+        MethodVisitor selection = writer.visitMethod(Opcodes.ACC_PUBLIC, "getSelectedBoundingBoxFromPool",
+                "(Lnet/minecraft/world/World;III)Lnet/minecraft/util/AxisAlignedBB;", null, null);
+        selection.visitCode();selection.visitVarInsn(Opcodes.ALOAD,1);selection.visitVarInsn(Opcodes.ILOAD,2);
+        selection.visitVarInsn(Opcodes.ILOAD,3);selection.visitVarInsn(Opcodes.ILOAD,4);
+        selection.visitMethodInsn(Opcodes.INVOKEVIRTUAL,"net/minecraft/world/World","getBlockMetadata","(III)I",false);
+        Label zeroMeta=new Label();selection.visitJumpInsn(Opcodes.IFEQ,zeroMeta);
+        for(int i=0;i<6;i++)selection.visitInsn(Opcodes.DCONST_0);
+        selection.visitMethodInsn(Opcodes.INVOKESTATIC,"net/minecraft/util/AxisAlignedBB","getBoundingBox",
+                "(DDDDDD)Lnet/minecraft/util/AxisAlignedBB;",false);selection.visitInsn(Opcodes.ARETURN);
+        selection.visitLabel(zeroMeta);selection.visitVarInsn(Opcodes.ALOAD,0);selection.visitVarInsn(Opcodes.ALOAD,1);
+        selection.visitVarInsn(Opcodes.ILOAD,2);selection.visitVarInsn(Opcodes.ILOAD,3);selection.visitVarInsn(Opcodes.ILOAD,4);
+        selection.visitMethodInsn(Opcodes.INVOKESPECIAL,"net/minecraft/block/Block","getSelectedBoundingBoxFromPool",
+                "(Lnet/minecraft/world/World;III)Lnet/minecraft/util/AxisAlignedBB;",false);selection.visitInsn(Opcodes.ARETURN);
+        selection.visitMaxs(0,0);selection.visitEnd();
 
         writer.visitEnd();
         return writer.toByteArray();
