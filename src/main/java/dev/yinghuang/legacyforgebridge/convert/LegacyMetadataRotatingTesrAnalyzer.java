@@ -94,9 +94,10 @@ public final class LegacyMetadataRotatingTesrAnalyzer {
             int[] textureSize=modelTexture(model);Map<String,Box> boxes=boxes(model);Map<String,Pivot> pivots=pivots(model);Set<String> mirrors=mirrors(model);
             if(boxes.isEmpty()||!pivots.keySet().containsAll(boxes.keySet())){skipped.add(new Skipped(registration.registryName(),block,"ModelRenderer cuboid/pivot proof is incomplete"));continue;}
 
+            float worldScale=worldModelScale(world,modelClass);if(!Float.isFinite(worldScale)||worldScale<=0F){skipped.add(new Skipped(registration.registryName(),block,"TESR model scale argument is unresolved"));continue;}
             DynamicModel dynamic=dynamicModel(model,tile,boxes.keySet());
             if(dynamic==null){skipped.add(new Skipped(registration.registryName(),block,"Model does not prove one metadata-driven Y-rotated part"));continue;}
-            if(!staticInventory(model,dynamic.animatedPart(),boxes.keySet(),dynamic.scale())){skipped.add(new Skipped(registration.registryName(),block,"Inventory model does not reset animated part to zero and render all cuboids"));continue;}
+            if(!staticInventory(model,dynamic.animatedPart(),boxes.keySet(),worldScale)){skipped.add(new Skipped(registration.registryName(),block,"Inventory model does not reset animated part to zero and render all cuboids at the world model scale"));continue;}
             if(!tileAnimation(classes,tile,dynamic.tileGetter())){skipped.add(new Skipped(registration.registryName(),block,"Tile client tick does not prove roll += block metadata with 360-degree wrap"));continue;}
 
             List<Cuboid> cuboids=new ArrayList<>();
@@ -104,19 +105,20 @@ public final class LegacyMetadataRotatingTesrAnalyzer {
                     box.width(),box.height(),box.depth(),pivot.x(),pivot.y(),pivot.z(),mirrors.contains(box.field())));}
             cuboids.sort(Comparator.comparing(Cuboid::field));
             rules.add(new Rule(registration.registryName(),block,tile,tileIds.get(tile),renderer,modelClass,texture,
-                    textureSize[0],textureSize[1],cuboids,dynamic.animatedPart(),dynamic.scale(),.5F,.5F,.5F,15,1F,true));
+                    textureSize[0],textureSize[1],cuboids,dynamic.animatedPart(),worldScale,.5F,.5F,.5F,15,1F,true));
         }
         return new Analysis(rules,skipped,List.copyOf(diagnostics));
     }
 
-    private record DynamicModel(String animatedPart,String tileGetter,float scale){}
+    private record DynamicModel(String animatedPart,String tileGetter){}
 
     private static DynamicModel dynamicModel(ClassNode model,String tile,Set<String> fields){
         DynamicModel found=null;
         for(MethodNode method:model.methods){
             Type[] args=Type.getArgumentTypes(method.desc);
             if(args.length!=7||args[0].getSort()!=Type.OBJECT||!args[0].getInternalName().equals(tile)||Type.getReturnType(method.desc).getSort()!=Type.VOID)continue;
-            List<AbstractInsnNode> code=real(method);String animated=null,getter=null;Float scale=null;Set<String> rendered=new LinkedHashSet<>();
+            int scaleLocal=parameterLocal(method,args.length-1);if(scaleLocal<0)continue;
+            List<AbstractInsnNode> code=real(method);String animated=null,getter=null;Set<String> rendered=new LinkedHashSet<>();
             for(int i=0;i<code.size();i++){
                 AbstractInsnNode insn=code.get(i);
                 if(insn instanceof FieldInsnNode put&&put.getOpcode()==Opcodes.PUTFIELD&&put.owner.equals(MODEL_RENDERER)&&Y_ROT.contains(put.name)){
@@ -127,13 +129,30 @@ public final class LegacyMetadataRotatingTesrAnalyzer {
                 }
                 if(insn instanceof MethodInsnNode call&&call.owner.equals(MODEL_RENDERER)&&Set.of("render","func_78785_a").contains(call.name)&&call.desc.equals("(F)V")){
                     String field=null;for(int j=i-1;j>=Math.max(0,i-4);j--)if(code.get(j) instanceof FieldInsnNode f&&f.getOpcode()==Opcodes.GETFIELD&&f.owner.equals(model.name)&&fields.contains(f.name)){field=f.name;break;}
-                    Float s=floatConstant(previousReal(insn));if(field==null||s==null||s<=0F)return null;rendered.add(field);if(scale==null)scale=s;else if(Float.compare(scale,s)!=0)return null;
+                    AbstractInsnNode previous=previousReal(insn);
+                    if(field==null||!(previous instanceof VarInsnNode load)||load.getOpcode()!=Opcodes.FLOAD||load.var!=scaleLocal)return null;
+                    rendered.add(field);
                 }
             }
-            if(animated==null||getter==null||scale==null||!rendered.containsAll(fields))continue;
-            DynamicModel candidate=new DynamicModel(animated,getter,scale);if(found!=null&&!found.equals(candidate))return null;found=candidate;
+            if(animated==null||getter==null||!rendered.containsAll(fields))continue;
+            DynamicModel candidate=new DynamicModel(animated,getter);if(found!=null&&!found.equals(candidate))return null;found=candidate;
         }
         return found;
+    }
+
+    private static int parameterLocal(MethodNode method,int argumentIndex){
+        if(method==null||argumentIndex<0)return -1;Type[] args=Type.getArgumentTypes(method.desc);if(argumentIndex>=args.length)return -1;
+        int local=(method.access&Opcodes.ACC_STATIC)==0?1:0;for(int i=0;i<argumentIndex;i++)local+=args[i].getSize();return local;
+    }
+
+    private static float worldModelScale(MethodNode world,String modelClass){
+        if(world==null)return Float.NaN;Float scale=null;for(AbstractInsnNode insn:world.instructions){
+            if(!(insn instanceof MethodInsnNode call)||!call.owner.equals(modelClass)||Type.getReturnType(call.desc).getSort()!=Type.VOID)continue;
+            Type[] args=Type.getArgumentTypes(call.desc);if(args.length==0||args[args.length-1].getSort()!=Type.FLOAT)continue;
+            Float value=floatConstant(previousReal(insn));if(value==null||value<=0F)return Float.NaN;
+            if(scale!=null&&Float.compare(scale,value)!=0)return Float.NaN;scale=value;
+        }
+        return scale==null?Float.NaN:scale;
     }
 
     private static boolean staticInventory(ClassNode model,String animated,Set<String> fields,float expectedScale){
