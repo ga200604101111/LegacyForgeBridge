@@ -334,10 +334,7 @@ public final class LegacyEntityDataWatcherAnalyzer {
         if (producer instanceof LdcInsnNode ldc && (ldc.cst instanceof Number || ldc.cst instanceof String)) return ldc.cst;
         if (producer instanceof IntInsnNode integer && (integer.getOpcode() == Opcodes.BIPUSH || integer.getOpcode() == Opcodes.SIPUSH)) return integer.operand;
         if (producer instanceof FieldInsnNode field && field.getOpcode() == Opcodes.GETSTATIC) {
-            ClassNode owner = classes.get(field.owner);
-            if (owner == null) return null;
-            FieldNode source = owner.fields.stream().filter(f -> f.name.equals(field.name) && f.desc.equals(field.desc)).findFirst().orElse(null);
-            return source == null ? null : source.value;
+            return staticScalar(field, depth + 1, guard);
         }
         if (producer instanceof InsnNode insn) {
             int op = insn.getOpcode();
@@ -370,6 +367,31 @@ public final class LegacyEntityDataWatcherAnalyzer {
             return decoded == null ? null : decoded.value();
         }
         return null;
+    }
+
+    private Object staticScalar(FieldInsnNode field,int depth,Set<AbstractInsnNode> guard) {
+        ClassNode owner=classes.get(field.owner);if(owner==null)return null;
+        FieldNode source=owner.fields.stream().filter(f->f.name.equals(field.name)&&f.desc.equals(field.desc)).findFirst().orElse(null);
+        if(source==null)return null;
+        if(source.value instanceof Number||source.value instanceof String)return source.value;
+
+        MethodKey clinit=new MethodKey(owner.name,"<clinit>","()V");
+        MethodContext context;
+        try{context=context(clinit);}catch(AnalyzerException error){return null;}
+        if(context==null)return null;
+        Object resolved=null;boolean have=false;
+        for(int i=0;i<context.method().instructions.size();i++){
+            AbstractInsnNode instruction=context.method().instructions.get(i);
+            if(!(instruction instanceof FieldInsnNode put)||put.getOpcode()!=Opcodes.PUTSTATIC
+                    ||!put.owner.equals(field.owner)||!put.name.equals(field.name)||!put.desc.equals(field.desc))continue;
+            Frame<SourceValue> frame=context.frames()[i];
+            if(frame==null||frame.getStackSize()<1)return null;
+            Object candidate=scalar(context,frame.getStack(frame.getStackSize()-1),depth+1,guard);
+            if(candidate==null)return null;
+            if(!have){resolved=candidate;have=true;}
+            else if(!Objects.equals(resolved,candidate))return null;
+        }
+        return have?resolved:null;
     }
 
     private Decoded decodeDefault(MethodContext context, SourceValue value, int depth, Set<AbstractInsnNode> guard) {
