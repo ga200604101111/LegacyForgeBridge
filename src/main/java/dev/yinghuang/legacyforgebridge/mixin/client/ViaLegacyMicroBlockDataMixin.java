@@ -9,6 +9,7 @@ import com.viaversion.viaversion.api.protocol.packet.State;
 import com.viaversion.viaversion.api.type.Types;
 import dev.yinghuang.legacyforgebridge.protocol.ViaFabricPlusBackend;
 import dev.yinghuang.legacyforgebridge.render.LegacyMicroBlockNetworkBridge;
+import dev.yinghuang.legacyforgebridge.render.LegacyGridPotNetworkBridge;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -40,6 +41,7 @@ public abstract class ViaLegacyMicroBlockDataMixin {
             BlockPosition position=wrapper.get(Types.BLOCK_POSITION1_8,0);
             CompoundTag tag=wrapper.get(Types.NAMED_COMPOUND_TAG,0);
             LegacyMicroBlockNetworkBridge.capture(position,tag);
+            LegacyGridPotNetworkBridge.capture(position,tag);
         }catch(RuntimeException ignored){
             // Not every action-5 packet belongs to a converted micro-block family. Fail closed.
         }
