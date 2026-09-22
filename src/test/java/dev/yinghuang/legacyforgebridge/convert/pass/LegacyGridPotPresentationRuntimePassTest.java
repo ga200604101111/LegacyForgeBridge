@@ -44,7 +44,7 @@ class LegacyGridPotPresentationRuntimePassTest {
                 staging.resolve(LegacyGridPotPresentationRuntimePass.OUTPUT), StandardCharsets.UTF_8)).getAsJsonObject();
         assertEquals(1, root.get("runtimeRules").getAsInt());
         assertTrue(root.get("storedContentPresentationRuntimeWired").getAsBoolean());
-        assertEquals("MODERN_ITEM_MODEL_RENDER_STATE", root.get("adaptation").getAsString());
+        assertEquals("SOURCE_SIZED_3D_CELL_ITEM_MODEL", root.get("adaptation").getAsString());
         JsonObject rule = root.getAsJsonArray("rules").get(0).getAsJsonObject();
         assertEquals("foreign:grid", rule.get("id").getAsString());
         assertEquals("NONE", rule.get("itemDisplayContext").getAsString());
