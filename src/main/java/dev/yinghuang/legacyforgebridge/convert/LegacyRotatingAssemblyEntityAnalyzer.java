@@ -45,7 +45,8 @@ public final class LegacyRotatingAssemblyEntityAnalyzer {
                        int legacyNumericId,int trackingRange,int updateFrequency,boolean velocityUpdates,
                        Adapter adapter,List<Cuboid> staticParts,List<Cuboid> repeatedPrimary,List<Cuboid> repeatedSecondary,
                        int directionWatcher,int sizeWatcher,int countWatcher,int textureWatcher,int reverseWatcher,
-                       int countBase,int fixedRepeatCount,float secondaryPhaseDegrees,float modelScale,
+                       int directionDefault,int sizeDefault,int countDefault,int textureDefault,int reverseDefault,
+                       int countBase,int countMax,int fixedRepeatCount,float secondaryPhaseDegrees,float modelScale,
                        List<String> textures,boolean physicalCollision,boolean playerAttackRemoves,boolean randomInitialPhase){
         public Rule{
             staticParts=List.copyOf(staticParts);repeatedPrimary=List.copyOf(repeatedPrimary);
@@ -53,11 +54,11 @@ public final class LegacyRotatingAssemblyEntityAnalyzer {
             if(registryName==null||registryName.isBlank()||sourceClass==null||rendererClass==null||sourceModelClass==null
                     ||legacyNumericId<0||trackingRange<=0||updateFrequency<=0||adapter==null
                     ||staticParts.isEmpty()||repeatedPrimary.isEmpty()||directionWatcher<0||sizeWatcher<0
-                    ||modelScale<=0F||textures.isEmpty()||!physicalCollision||!playerAttackRemoves||!randomInitialPhase)
+                    ||directionDefault<0||sizeDefault<=0||modelScale<=0F||textures.isEmpty()||!physicalCollision||!playerAttackRemoves||!randomInitialPhase)
                 throw new IllegalArgumentException("Invalid rotating assembly rule");
-            if(adapter==Adapter.VARIABLE_Z_RADIAL&&(countWatcher<0||textureWatcher<0||countBase<=0||textures.size()<2))
+            if(adapter==Adapter.VARIABLE_Z_RADIAL&&(countWatcher<0||textureWatcher<0||countDefault<0||textureDefault<0||countBase<=0||countMax<countBase||textures.size()<2))
                 throw new IllegalArgumentException("Incomplete variable radial assembly rule");
-            if(adapter==Adapter.FLUID_X_RADIAL&&(reverseWatcher<0||fixedRepeatCount<=1||!repeatedSecondary.isEmpty()&&secondaryPhaseDegrees==0F))
+            if(adapter==Adapter.FLUID_X_RADIAL&&(reverseWatcher<0||reverseDefault<0||fixedRepeatCount<=1||!repeatedSecondary.isEmpty()&&secondaryPhaseDegrees==0F))
                 throw new IllegalArgumentException("Incomplete fluid radial assembly rule");
         }
     }
@@ -112,17 +113,24 @@ public final class LegacyRotatingAssemblyEntityAnalyzer {
                 CountProof count=countProof(renderMethod,watcher.sourceClass(),modelName);
                 int texture=textureWatcher(rendererNode,watcher.sourceClass());
                 VariableModel variable=proveVariableModel(model,parts);
-                if(count!=null&&texture>=0&&variable!=null&&proveConstantPositiveRoll(watcher.sourceClass(),rollField))
+                int countMax=count==null?-1:variableMaxCount(model,count.base());
+                if(count!=null&&texture>=0&&variable!=null&&countMax>=count.base()
+                        &&proveVariableRendererTransform(renderMethod,watcher.sourceClass(),direction,size,rollGetter)
+                        &&proveConstantPositiveRoll(watcher.sourceClass(),rollField))
                     rule=new Rule(watcher.registryName(),watcher.sourceClass(),renderer,modelName,watcher.numericId(),watcher.trackingRange(),watcher.updateFrequency(),watcher.velocityUpdates(),
                             Adapter.VARIABLE_Z_RADIAL,variable.staticParts(),variable.repeated(),List.of(),direction,size,count.watcherIndex(),texture,-1,
-                            count.base(),0,0F,scale,textures,true,true,true);
+                            watcherDefault(watcher,direction,0),watcherDefault(watcher,size,1),watcherDefault(watcher,count.watcherIndex(),0),watcherDefault(watcher,texture,0),0,
+                            count.base(),countMax,0,0F,scale,textures,true,true,true);
             }else{
                 int reverse=remainingOwnByteWatcher(watcher,Set.of(size));
                 FixedModel fixed=proveFixedModel(model,parts);
-                if(reverse>=0&&fixed!=null&&proveFluidBidirectionalRoll(watcher.sourceClass(),rollField,reverse))
+                if(reverse>=0&&fixed!=null
+                        &&proveFluidRendererTransform(renderMethod,watcher.sourceClass(),direction,size,rollGetter)
+                        &&proveFluidBidirectionalRoll(watcher.sourceClass(),rollField,reverse))
                     rule=new Rule(watcher.registryName(),watcher.sourceClass(),renderer,modelName,watcher.numericId(),watcher.trackingRange(),watcher.updateFrequency(),watcher.velocityUpdates(),
                             Adapter.FLUID_X_RADIAL,fixed.staticParts(),fixed.primary(),fixed.secondary(),direction,size,-1,-1,reverse,
-                            0,fixed.count(),fixed.secondaryPhaseDegrees(),scale,textures,true,true,true);
+                            watcherDefault(watcher,direction,0),watcherDefault(watcher,size,1),0,0,watcherDefault(watcher,reverse,0),
+                            0,0,fixed.count(),fixed.secondaryPhaseDegrees(),scale,textures,true,true,true);
             }
             if(rule!=null)rules.add(rule);
             else skipped.add(new Skipped(watcher.registryName(),watcher.sourceClass(),"Renderer/model/tick/AABB shape is outside the admitted rotating-assembly families"));
@@ -222,6 +230,77 @@ public final class LegacyRotatingAssemblyEntityAnalyzer {
             if(result!=-1)return -1;result=e.index();
         }return result;
     }
+
+    private static int watcherDefault(LegacyEntityDataWatcherAnalyzer.Rule rule,int index,int fallback){
+        for(var entry:rule.entries())if(entry.index()==index&&entry.defaultValue() instanceof Number number)return number.intValue();
+        return fallback;
+    }
+
+    private int variableMaxCount(ClassNode model,int base){
+        MethodNode ctor=model.methods.stream().filter(m->m.name.equals("<init>")).findFirst().orElse(null);
+        if(ctor==null||base<=0)return -1;List<AbstractInsnNode> code=real(ctor);Integer upper=null;
+        for(int i=2;i<code.size();i++){
+            if(!(code.get(i) instanceof JumpInsnNode jump)||jump.getOpcode()!=Opcodes.IF_ICMPGT)continue;
+            Integer bound=intConstant(code.get(i-1));
+            if(bound==null||bound<base||!(code.get(i-2) instanceof VarInsnNode load)||load.getOpcode()!=Opcodes.ILOAD)continue;
+            boolean initialized=false;
+            for(int j=i-3;j>=Math.max(0,i-12);j--)if(code.get(j) instanceof VarInsnNode store&&store.getOpcode()==Opcodes.ISTORE&&store.var==load.var){
+                Integer initial=intConstant(code.get(j-1));if(initial!=null&&initial==base)initialized=true;break;
+            }
+            if(initialized){if(upper!=null&&!upper.equals(bound))return -1;upper=bound;}
+        }
+        return upper==null?-1:upper;
+    }
+
+    private boolean proveVariableRendererTransform(MethodNode render,String entity,int direction,int size,String rollGetter){
+        return proveCommonRendererTransform(render,entity,direction,size,rollGetter)
+                &&containsOpcode(render,Opcodes.FDIV)&&containsOpcode(render,Opcodes.FADD)&&containsOpcode(render,Opcodes.FSUB)
+                &&countInt(render,2)>=2&&rollAxis(render,entity,rollGetter,2);
+    }
+
+    private boolean proveFluidRendererTransform(MethodNode render,String entity,int direction,int size,String rollGetter){
+        return proveCommonRendererTransform(render,entity,direction,size,rollGetter)
+                &&containsOpcode(render,Opcodes.IDIV)&&containsOpcode(render,Opcodes.IADD)
+                &&countInt(render,2)>=2&&containsInt(render,-1)&&rollAxis(render,entity,rollGetter,0);
+    }
+
+    private boolean proveCommonRendererTransform(MethodNode render,String entity,int direction,int size,String rollGetter){
+        if(render==null||rollGetter==null)return false;boolean dir=false,sizeSeen=false,translate=false,scale=false,yaw=false,roll=false,ninety=false;
+        for(AbstractInsnNode insn:render.instructions){
+            if(insn instanceof MethodInsnNode call){
+                if(ownerInHierarchy(entity,call.owner)&&call.desc.equals("()B")){
+                    Integer index=directWatcherIndex(effective(entity,Set.of(call.name),"()B"));
+                    if(index!=null){dir|=index==direction;sizeSeen|=index==size;}
+                }
+                if(ownerInHierarchy(entity,call.owner)&&call.name.equals(rollGetter)&&call.desc.equals("()F"))roll=true;
+                if(call.owner.equals("org/lwjgl/opengl/GL11")){
+                    translate|=call.name.equals("glTranslatef");scale|=call.name.equals("glScalef");
+                    yaw|=call.name.equals("glRotatef");
+                }
+            }
+            Float f=floatConstant(insn);if(f!=null&&Float.compare(f,90F)==0)ninety=true;
+        }
+        return dir&&sizeSeen&&translate&&scale&&yaw&&roll&&ninety;
+    }
+
+    private boolean rollAxis(MethodNode render,String entity,String getter,int axis){
+        List<AbstractInsnNode> code=real(render);
+        for(int i=0;i<code.size();i++)if(code.get(i) instanceof MethodInsnNode call&&ownerInHierarchy(entity,call.owner)
+                &&call.name.equals(getter)&&call.desc.equals("()F")){
+            for(int j=i+1;j<Math.min(code.size(),i+6);j++)if(code.get(j) instanceof MethodInsnNode gl&&gl.owner.equals("org/lwjgl/opengl/GL11")
+                    &&gl.name.equals("glRotatef")&&gl.desc.equals("(FFFF)V")){
+                List<Float> values=new ArrayList<>();for(int q=i+1;q<j;q++){Float v=floatConstant(code.get(q));if(v!=null)values.add(v);}
+                if(values.size()>=3){
+                    float x=values.get(values.size()-3),y=values.get(values.size()-2),z=values.get(values.size()-1);
+                    return axis==0?x==1F&&y==0F&&z==0F:axis==2?x==0F&&y==0F&&z==1F:false;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static int countInt(MethodNode method,int target){int count=0;for(AbstractInsnNode i:method.instructions)if(Integer.valueOf(target).equals(intConstant(i)))count++;return count;}
+    private static boolean containsInt(MethodNode method,int target){return countInt(method,target)>0;}
 
     private String rollGetter(MethodNode renderer,String entity){
         String found=null;for(AbstractInsnNode insn:renderer.instructions)if(insn instanceof MethodInsnNode call&&ownerInHierarchy(entity,call.owner)&&call.desc.equals("()F")){
