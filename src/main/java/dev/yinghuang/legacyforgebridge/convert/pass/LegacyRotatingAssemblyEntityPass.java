@@ -30,6 +30,7 @@ public final class LegacyRotatingAssemblyEntityPass implements ConversionPass {
             value.addProperty("legacyNumericId",rule.legacyNumericId());value.addProperty("trackingRange",rule.trackingRange());
             value.addProperty("updateFrequency",rule.updateFrequency());value.addProperty("velocityUpdates",rule.velocityUpdates());
             value.addProperty("adapter",rule.adapter().name());value.addProperty("modelScale",rule.modelScale());
+            value.addProperty("modelTextureWidth",rule.modelTextureWidth());value.addProperty("modelTextureHeight",rule.modelTextureHeight());
             value.addProperty("directionWatcher",rule.directionWatcher());value.addProperty("sizeWatcher",rule.sizeWatcher());
             value.addProperty("countWatcher",rule.countWatcher());value.addProperty("textureWatcher",rule.textureWatcher());
             value.addProperty("reverseWatcher",rule.reverseWatcher());
