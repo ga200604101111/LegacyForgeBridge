@@ -66,7 +66,7 @@ public final class ConvertedGridPotPresentationRuntime {
             JsonObject root = JsonParser.parseReader(reader).getAsJsonObject();
             if (integer(root, "schemaVersion", 0) != 1
                     || !bool(root, "storedContentPresentationRuntimeWired")
-                    || !"MODERN_ITEM_MODEL_RENDER_STATE".equals(string(root, "adaptation"))) return;
+                    || !"SOURCE_SIZED_3D_CELL_ITEM_MODEL".equals(string(root, "adaptation"))) return;
             JsonArray rules = root.getAsJsonArray("rules");
             if (rules == null) return;
             for (JsonElement element : rules) {
