@@ -58,6 +58,9 @@ class BambooLivePresentationExactTest {
 
             JsonObject geometry=read(jar,"legacyforgebridge/block-geometry.json");
             JsonObject blocks=geometry.getAsJsonObject("blocks");
+            assertSimpleShape(blocks,"bamboomod:blockbambooshoot",new double[]{.3,0,.3,.7,.5,.7});
+            assertSimpleShape(blocks,"bamboomod:bamboosingle",new double[]{.125,0,.125,.875,1,.875});
+            assertSimpleShape(blocks,"bamboomod:bamboo2",new double[]{.125,0,.125,.875,1,.875});
             Set<String> connected=Set.of(
                     "thicksakurapillar","thickorcpillar","thicksprucepillar","thickbirchpillar",
                     "thinsakurapillar","thinorcpillar","thinsprucepillar","thinbirchpillar",
@@ -71,6 +74,15 @@ class BambooLivePresentationExactTest {
                 assertTrue(model.has("elements"),id+" final connected model has no cuboid elements");
             }
         }
+    }
+
+    private static void assertSimpleShape(JsonObject blocks,String id,double[] expected){
+        assertTrue(blocks.has(id),id+" missing simple geometry");
+        JsonObject rule=blocks.getAsJsonObject(id);assertEquals("box",rule.get("family").getAsString(),id);
+        JsonObject variant=rule.getAsJsonObject("variants").getAsJsonObject("0");
+        assertEquals("empty",variant.get("collision").getAsString(),id);
+        var bounds=variant.getAsJsonArray("bounds");assertEquals(6,bounds.size(),id);
+        for(int i=0;i<6;i++)assertEquals(expected[i],bounds.get(i).getAsDouble(),0.0001,id+" bound "+i);
     }
 
     private static void assertParent(JarFile jar,String path,String expected)throws Exception{
