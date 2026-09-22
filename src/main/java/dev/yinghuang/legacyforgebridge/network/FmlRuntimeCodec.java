@@ -27,7 +27,12 @@ public final class FmlRuntimeCodec {
     public static SimpleEntitySpawn parseSimpleEntitySpawn(byte[] payload){
         Reader reader=readerFor(payload,ENTITY_SPAWN);EntitySpawnHeader header=readEntitySpawnHeader(reader);
         List<LegacyDataWatcherEntry> watcherValues=readLegacyDataWatcher(reader);int throwerId=reader.readInt();
-        return new SimpleEntitySpawn(header,watcherValues.size(),watcherValues,throwerId,reader.remaining());
+        int rawVelocityX=0,rawVelocityY=0,rawVelocityZ=0;
+        if(throwerId!=0){
+            rawVelocityX=reader.readInt();rawVelocityY=reader.readInt();rawVelocityZ=reader.readInt();
+        }
+        return new SimpleEntitySpawn(header,watcherValues.size(),watcherValues,throwerId,
+                rawVelocityX,rawVelocityY,rawVelocityZ,reader.remaining());
     }
 
     public static EntityAdjust parseEntityAdjust(byte[] payload){Reader reader=readerFor(payload,ENTITY_ADJUST);int entityId=reader.readInt(),serverX=reader.readInt(),serverY=reader.readInt(),serverZ=reader.readInt();return new EntityAdjust(entityId,serverX,serverY,serverZ,reader.remaining());}
@@ -88,9 +93,15 @@ public final class FmlRuntimeCodec {
     public record LegacyDataWatcherEntry(int type,int id,Object value){
         public LegacyDataWatcherEntry{require(type>=0&&type<=6,"Invalid legacy DataWatcher type "+type);require(id>=0&&id<=31,"Invalid legacy DataWatcher id "+id);require(value!=null,"Missing legacy DataWatcher value");}
     }
-    public record SimpleEntitySpawn(EntitySpawnHeader header,int watcherEntries,List<LegacyDataWatcherEntry> watcherValues,int throwerId,int additionalSpawnBytes){
+    public record SimpleEntitySpawn(EntitySpawnHeader header,int watcherEntries,List<LegacyDataWatcherEntry> watcherValues,int throwerId,
+                                    int rawVelocityX,int rawVelocityY,int rawVelocityZ,int additionalSpawnBytes){
         public SimpleEntitySpawn{watcherValues=List.copyOf(watcherValues);require(watcherEntries==watcherValues.size(),"Legacy DataWatcher count/value mismatch");}
+        public boolean throwableEnvelope(){return throwerId!=0;}
+        public boolean additionalSpawnDataEmpty(){return additionalSpawnBytes==0;}
         public boolean plainNonThrowable(){return throwerId==0&&additionalSpawnBytes==0;}
+        public double velocityX(){return rawVelocityX/8000.0D;}
+        public double velocityY(){return rawVelocityY/8000.0D;}
+        public double velocityZ(){return rawVelocityZ/8000.0D;}
     }
     public record EntityAdjust(int entityId,int serverX,int serverY,int serverZ,int trailingBytes){public double x(){return serverX/32.0D;}public double y(){return serverY/32.0D;}public double z(){return serverZ/32.0D;}}
 
