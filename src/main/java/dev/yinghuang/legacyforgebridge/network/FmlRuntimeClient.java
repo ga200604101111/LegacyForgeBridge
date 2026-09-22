@@ -2,8 +2,10 @@ package dev.yinghuang.legacyforgebridge.network;
 
 import dev.yinghuang.legacyforgebridge.compat.LegacyPlainEntityRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyPlainEntityWatcherBridge;
+import dev.yinghuang.legacyforgebridge.compat.LegacyProjectilePresentationRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacySeatBedRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyVisibleEntityRegistry;
+import dev.yinghuang.legacyforgebridge.convert.runtime.ConvertedLegacyRemoteProjectile;
 import dev.yinghuang.legacyforgebridge.convert.runtime.ConvertedLegacySeatEntity;
 import dev.yinghuang.legacyforgebridge.convert.runtime.LegacySeatEntityRuntime;
 import dev.yinghuang.legacyforgebridge.convert.runtime.ConvertedLegacyVisualEntity;
@@ -43,24 +45,36 @@ public final class FmlRuntimeClient {
         FmlRuntimeCodec.EntitySpawnHeader message=FmlRuntimeCodec.parseEntitySpawnHeader(payload);
         LegacySeatBedRegistry.Rule seatRule=LegacySeatBedRegistry.remoteSpawnRule(message.modId(),message.modEntityTypeId());
         LegacyVisibleEntityRegistry.Rule visibleRule=seatRule==null?LegacyVisibleEntityRegistry.remoteSpawnRule(message.modId(),message.modEntityTypeId()):null;
-        LegacyPlainEntityRegistry.Rule plainRule=seatRule==null&&visibleRule==null?LegacyPlainEntityRegistry.remoteSpawnRule(message.modId(),message.modEntityTypeId()):null;
+        LegacyProjectilePresentationRegistry.Rule projectileRule=seatRule==null&&visibleRule==null
+                ?LegacyProjectilePresentationRegistry.remoteSpawnRule(message.modId(),message.modEntityTypeId()):null;
+        LegacyPlainEntityRegistry.Rule plainRule=seatRule==null&&visibleRule==null&&projectileRule==null
+                ?LegacyPlainEntityRegistry.remoteSpawnRule(message.modId(),message.modEntityTypeId()):null;
         String mapping=seatRule!=null?" (matched proof-gated transient-seat mapping)"
                 :visibleRule!=null?" (matched proof-gated visible-entity mapping)"
+                :projectileRule!=null?" (matched proof-gated remote-projectile mapping)"
                 :plainRule!=null?" (matched proof-gated plain-entity mapping)"
                 :" (header decoded; no admitted converted entity mapping)";
         trace.packet("IN","FML",payload,"EntitySpawnMessage entityId="+message.entityId()+" modId="+message.modId()+" modEntityTypeId="+message.modEntityTypeId()+" pos="+message.x()+","+message.y()+","+message.z()+" rot="+message.yaw()+","+message.pitch()+" headYaw="+message.headYaw()+" opaqueTailBytes="+message.remainingBytes()+" phase="+phase+mapping);
-        if(phase!=Phase.PLAY||(seatRule==null&&visibleRule==null&&plainRule==null))return;
+        if(phase!=Phase.PLAY||(seatRule==null&&visibleRule==null&&projectileRule==null&&plainRule==null))return;
 
         final FmlRuntimeCodec.SimpleEntitySpawn spawn;
         try{spawn=FmlRuntimeCodec.parseSimpleEntitySpawn(payload);}
         catch(RuntimeException unsafe){trace.event("EntitySpawnMessage matched converted entity identity but tail was outside the admitted simple-entity boundary; entity="+message.entityId()+" reason="+unsafe.getMessage());return;}
-        if(!spawn.plainNonThrowable()){
-            trace.event("EntitySpawnMessage matched converted entity identity but carried throwable/additional spawn data; entity="+message.entityId()+" throwerId="+spawn.throwerId()+" additionalBytes="+spawn.additionalSpawnBytes());
+        if(projectileRule!=null){
+            if(!spawn.additionalSpawnDataEmpty()){
+                trace.event("EntitySpawnMessage matched remote projectile identity but carried unproven additional spawn data; entity="
+                        +message.entityId()+" throwerId="+spawn.throwerId()+" additionalBytes="+spawn.additionalSpawnBytes());
+                return;
+            }
+        }else if(!spawn.plainNonThrowable()){
+            trace.event("EntitySpawnMessage matched non-projectile converted entity identity but carried throwable/additional spawn data; entity="
+                    +message.entityId()+" throwerId="+spawn.throwerId()+" additionalBytes="+spawn.additionalSpawnBytes());
             return;
         }
         Minecraft client=Minecraft.getInstance();
         if(seatRule!=null)client.execute(()->applyRemoteSeatSpawn(client,spawn,trace));
         else if(visibleRule!=null)client.execute(()->applyRemoteVisibleSpawn(client,spawn,visibleRule,trace));
+        else if(projectileRule!=null)client.execute(()->applyRemoteProjectileSpawn(client,spawn,projectileRule,trace));
         else client.execute(()->applyRemotePlainSpawn(client,spawn,plainRule,trace));
     }
 
@@ -93,6 +107,36 @@ public final class FmlRuntimeClient {
         trace.event("Converted legacy FML visible Entity spawned; entity="+message.entityId()+" legacy="+message.modId()+":"+message.modEntityTypeId()+" modern="+rule.id()+" adapter="+rule.adapter()+" baseWatchers="+baseWatchers+" customWatchers="+customWatchers);
     }
 
+    private void applyRemoteProjectileSpawn(Minecraft client,FmlRuntimeCodec.SimpleEntitySpawn spawn,
+                                            LegacyProjectilePresentationRegistry.Rule rule,FmlConnectionTrace trace){
+        ClientLevel level=client.level;FmlRuntimeCodec.EntitySpawnHeader message=spawn.header();
+        if(level==null){trace.event("Converted remote projectile spawn skipped: client level is null; entity="+message.entityId());return;}
+        ConvertedLegacyRemoteProjectile entity=LegacyProjectilePresentationRegistry.create(rule.id(),level);
+        if(entity==null){trace.event("Converted remote projectile spawn skipped: factory unavailable; entity="+message.entityId()+" id="+rule.id());return;}
+        int customWatchers=0,baseWatchers=0;
+        for(FmlRuntimeCodec.LegacyDataWatcherEntry watcher:spawn.watcherValues()){
+            final boolean mapped;
+            try{mapped=entity.applyLegacyWatcher(watcher.type(),watcher.id(),watcher.value());}
+            catch(RuntimeException invalid){trace.event("Converted remote projectile spawn rejected while applying watcher; entity="+message.entityId()
+                    +" watcher="+watcher.id()+" type="+watcher.type()+" reason="+invalid.getClass().getSimpleName());return;}
+            if(mapped){customWatchers++;continue;}
+            if(isLegacyEntityBaseWatcher(watcher)
+                    ||(rule.baseFamily()==LegacyProjectilePresentationRegistry.BaseFamily.ARROW&&watcher.id()==16&&watcher.type()==0&&watcher.value() instanceof Byte)){
+                baseWatchers++;continue;
+            }
+            trace.event("Converted remote projectile spawn rejected: unmapped watcher; entity="+message.entityId()
+                    +" watcher="+watcher.id()+" type="+watcher.type()+" family="+rule.baseFamily());return;
+        }
+        entity.setId(message.entityId());entity.setPos(message.x(),message.y(),message.z());
+        entity.setYRot(message.yaw());entity.setXRot(message.pitch());
+        if(spawn.throwableEnvelope())entity.setDeltaMovement(spawn.velocityX(),spawn.velocityY(),spawn.velocityZ());
+        entity.syncPacketPositionCodec(message.x(),message.y(),message.z());level.addEntity(entity);
+        trace.event("Converted legacy FML remote projectile spawned; entity="+message.entityId()+" legacy="+message.modId()+":"
+                +message.modEntityTypeId()+" modern="+rule.id()+" adapter="+rule.adapter()+" throwerId="+spawn.throwerId()
+                +" velocity="+spawn.velocityX()+","+spawn.velocityY()+","+spawn.velocityZ()
+                +" baseWatchers="+baseWatchers+" customWatchers="+customWatchers);
+    }
+
     private void applyRemotePlainSpawn(Minecraft client,FmlRuntimeCodec.SimpleEntitySpawn spawn,LegacyPlainEntityRegistry.Rule rule,FmlConnectionTrace trace){
         ClientLevel level=client.level;FmlRuntimeCodec.EntitySpawnHeader message=spawn.header();
         if(level==null){trace.event("Converted plain Entity spawn skipped: client level is null; entity="+message.entityId());return;}
@@ -116,9 +160,11 @@ public final class FmlRuntimeClient {
         trace.event("Converted legacy FML plain Entity spawned; entity="+message.entityId()+" legacy="+message.modId()+":"+message.modEntityTypeId()+" modern="+rule.id()+" baseWatchers="+baseWatchers+" customWatchers="+customWatchers);
     }
 
-    private static boolean isDefaultLegacyEntityBaseWatcher(FmlRuntimeCodec.LegacyDataWatcherEntry watcher){
-        if(watcher.id()==0&&watcher.type()==0&&watcher.value() instanceof Byte value)return value.byteValue()==0;
-        if(watcher.id()==1&&watcher.type()==1&&watcher.value() instanceof Short value)return value.shortValue()==300;
+    private static boolean isLegacyEntityBaseWatcher(FmlRuntimeCodec.LegacyDataWatcherEntry watcher){
+        // Minecraft 1.7.10 Entity defines exactly watcher 0 (flags byte) and watcher 1 (air short).
+        // Their values may legitimately be non-default by the time FML emits the spawn envelope.
+        if(watcher.id()==0&&watcher.type()==0)return watcher.value() instanceof Byte;
+        if(watcher.id()==1&&watcher.type()==1)return watcher.value() instanceof Short;
         return false;
     }
 
