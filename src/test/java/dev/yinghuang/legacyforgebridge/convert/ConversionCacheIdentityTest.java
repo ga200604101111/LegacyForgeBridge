@@ -172,6 +172,13 @@ class ConversionCacheIdentityTest {
     }
 
     @Test
+    void currentRevisionInvalidatesPreEntityStateAndShapeRuntimeCandidateCache() {
+        String stale = ConversionCacheIdentity.fingerprint(
+                "0.2.0-alpha.27", 2, "2026-09-21.169-radial-conditional-runtime", SOURCE_A);
+        assertNotEquals(stale, ConversionCacheIdentity.current(SOURCE_A));
+    }
+
+    @Test
     void malformedIdentityInputsFailClosed() {
         assertThrows(IllegalArgumentException.class,
                 () -> ConversionCacheIdentity.fingerprint("", 2, "r1", SOURCE_A));
