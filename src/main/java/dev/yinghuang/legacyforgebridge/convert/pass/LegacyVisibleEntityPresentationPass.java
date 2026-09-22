@@ -1,6 +1,7 @@
 package dev.yinghuang.legacyforgebridge.convert.pass;
 
 import com.google.gson.*;
+import dev.yinghuang.legacyforgebridge.compat.LegacyVisibleEntityRegistry;
 import dev.yinghuang.legacyforgebridge.convert.LegacyVisibleEntityPresentationAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.api.*;
 
@@ -46,7 +47,10 @@ public final class LegacyVisibleEntityPresentationPass implements ConversionPass
             JsonArray palette=new JsonArray();rule.palette().forEach(palette::add);value.add("palette",palette);
             value.addProperty("itemWatcherBase",rule.itemWatcherBase());value.addProperty("itemWatcherCount",rule.itemWatcherCount());
             value.addProperty("physicalCollision",rule.physicalCollision());value.addProperty("playerAttackRemoves",rule.playerAttackRemoves());
-            value.addProperty("proof",rule.proof());value.addProperty("runtimeComplete",true);rules.add(value);
+            value.addProperty("proof",rule.proof());value.addProperty("runtimeComplete",true);
+            try{LegacyVisibleEntityRegistry.validateCandidateRule(value,context.metadata().primary().modId());}
+            catch(RuntimeException invalid){throw new IllegalStateException("Visible Entity runtime schema rejected source-proven rule "+rule.registryName()+"#"+rule.legacyNumericId(),invalid);}
+            rules.add(value);
         }
         root.add("rules",rules);root.addProperty("runtimeCompleteRules",rules.size());
         JsonArray diagnostics=new JsonArray();analysis.diagnostics().forEach(diagnostics::add);root.add("analysisDiagnostics",diagnostics);
