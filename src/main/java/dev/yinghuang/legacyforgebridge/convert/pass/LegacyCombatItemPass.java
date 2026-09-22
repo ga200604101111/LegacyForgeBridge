@@ -85,6 +85,8 @@ public final class LegacyCombatItemPass implements ConversionPass {
                 value.addProperty("useDuration", rule.useDuration());
                 value.addProperty("pullTexturePrefix", rule.pullTexturePrefix());
                 value.addProperty("pullStages", rule.pullStages());
+                JsonArray pullStageMinTicks = new JsonArray();rule.pullStageMinTicks().forEach(pullStageMinTicks::add);
+                value.add("pullStageMinTicks", pullStageMinTicks);
                 bows++;
             }
             rules.add(value);
@@ -138,30 +140,46 @@ public final class LegacyCombatItemPass implements ConversionPass {
             write(staging.resolve("assets/" + namespace + "/models/item/" + path + "_pulling_" + stage + ".json"), model);
         }
         Path defaultDefinition = staging.resolve("assets/" + namespace + "/items/" + path + ".json");
-        rewriteBowDefinition(defaultDefinition, namespace + ":item/" + path + "_pulling_0");
+        rewriteBowDefinition(defaultDefinition, namespace, path, rule);
         Path aliases = staging.resolve("assets/" + namespace + "/items/lfb_meta/" + path);
         if (Files.isDirectory(aliases)) {
             try (var walk = Files.walk(aliases)) {
                 for (Path definition : walk.filter(Files::isRegularFile)
                         .filter(file -> file.toString().endsWith(".json")).toList()) {
-                    rewriteBowDefinition(definition, namespace + ":item/" + path + "_pulling_0");
+                    rewriteBowDefinition(definition, namespace, path, rule);
                 }
             }
         }
     }
 
-    private static void rewriteBowDefinition(Path path, String pullingModel) throws IOException {
+    private static void rewriteBowDefinition(Path path, String namespace, String itemPath,
+                                             LegacyCombatItemAnalyzer.Rule rule) throws IOException {
         if (!Files.isRegularFile(path)) return;
         JsonObject root = read(path);
         JsonElement ordinary = root.get("model");
         if (ordinary == null || !ordinary.isJsonObject()) return;
-        JsonObject pulling = new JsonObject();
-        pulling.addProperty("type", "minecraft:model");
-        pulling.addProperty("model", pullingModel);
+
+        JsonObject dispatch = new JsonObject();
+        dispatch.addProperty("type", "minecraft:range_dispatch");
+        dispatch.addProperty("property", "minecraft:use_duration");
+        dispatch.addProperty("scale", 0.05F);
+        JsonArray entries = new JsonArray();
+        for (int stage = 0; stage < rule.pullStages(); stage++) {
+            JsonObject entry = new JsonObject();
+            entry.addProperty("threshold", rule.pullStageMinTicks().get(stage) * 0.05F);
+            JsonObject model = new JsonObject();
+            model.addProperty("type", "minecraft:model");
+            model.addProperty("model", namespace + ":item/" + itemPath + "_pulling_" + stage);
+            entry.add("model", model);
+            entries.add(entry);
+        }
+        dispatch.add("entries", entries);
+        dispatch.add("fallback", ordinary.deepCopy());
+
         JsonObject condition = new JsonObject();
         condition.addProperty("type", "minecraft:condition");
         condition.addProperty("property", "minecraft:using_item");
-        condition.add("on_true", pulling);
+        condition.add("on_true", dispatch);
         condition.add("on_false", ordinary.deepCopy());
         root.add("model", condition);
         write(path, root);
