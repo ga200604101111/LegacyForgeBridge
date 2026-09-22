@@ -5,11 +5,13 @@ import com.viaversion.nbt.tag.CompoundTag;
 import com.viaversion.nbt.tag.NumberTag;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyNbtByteIconSelectorPass;
 import net.fabricmc.loader.api.FabricLoader;
+import net.fabricmc.loader.api.ModContainer;
 import net.minecraft.resources.Identifier;
 
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.*;
 
 /** Immutable lookup for source-proven NBT-byte-selected item model definitions. */
@@ -61,9 +63,8 @@ public final class LegacyNbtByteIconSelectorCatalog {
                         List<String> models=new ArrayList<>(count);boolean valid=true;
                         for(JsonElement raw:rawModels){
                             if(!raw.isJsonPrimitive()){valid=false;break;}
-                            String model=raw.getAsString();String[] split=model.split(":",2);
-                            if(split.length!=2||!model.matches("[a-z0-9_.-]+:[a-z0-9/._-]+")
-                                    ||mod.findPath("assets/"+split[0]+"/items/"+split[1]+".json").isEmpty()){valid=false;break;}
+                            String model=raw.getAsString();
+                            if(!validItemDefinition(mod,model)){valid=false;break;}
                             models.add(model);
                         }
                         if(!valid)continue;
@@ -86,5 +87,27 @@ public final class LegacyNbtByteIconSelectorCatalog {
     }
     private static boolean bool(JsonObject value,String key){
         JsonElement element=value.get(key);return element!=null&&element.isJsonPrimitive()&&element.getAsBoolean();
+    }
+    private static boolean validItemDefinition(ModContainer mod,String id){
+        if(!validResourceId(id))return false;String[] split=id.split(":",2);
+        Optional<Path> itemPath=mod.findPath("assets/"+split[0]+"/items/"+split[1]+".json");
+        if(itemPath.isEmpty())return false;
+        try(Reader reader=Files.newBufferedReader(itemPath.get(),StandardCharsets.UTF_8)){
+            JsonObject root=JsonParser.parseReader(reader).getAsJsonObject();
+            JsonObject node=object(root,"model");if(node==null)return false;
+            if(!"minecraft:model".equals(string(node,"type")))return false;
+            String model=string(node,"model");if(!validResourceId(model))return false;
+            String[] modelSplit=model.split(":",2);
+            return mod.findPath("assets/"+modelSplit[0]+"/models/"+modelSplit[1]+".json").isPresent();
+        }catch(Exception invalid){return false;}
+    }
+    private static boolean validResourceId(String value){
+        return value!=null&&value.matches("[a-z0-9_.-]+:[a-z0-9/._-]+");
+    }
+    private static JsonObject object(JsonObject value,String key){
+        JsonElement element=value.get(key);return element!=null&&element.isJsonObject()?element.getAsJsonObject():null;
+    }
+    private static String string(JsonObject value,String key){
+        JsonElement element=value.get(key);return element!=null&&element.isJsonPrimitive()?element.getAsString():null;
     }
 }
