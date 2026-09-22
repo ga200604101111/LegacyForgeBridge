@@ -98,10 +98,21 @@ public final class LegacyVisibleEntityRegistry {
             String legacyModId=string(root,"legacyModId",null);if(legacyModId==null)return;
             JsonArray rules=root.getAsJsonArray("rules");if(rules==null)return;int loaded=0;
             for(JsonElement element:rules){
-                if(!element.isJsonObject())continue;Rule rule=parse(element.getAsJsonObject(),legacyModId);
-                if(rule==null||!modId.equals(rule.id().getNamespace()))continue;install(rule);loaded++;
+                if(!element.isJsonObject()){LegacyForgeBridge.LOGGER.warn("Ignoring non-object visible Entity rule in {}",modId);continue;}
+                JsonObject raw=element.getAsJsonObject();Rule rule;
+                try{rule=parseStrict(raw,legacyModId);}
+                catch(RuntimeException invalid){
+                    LegacyForgeBridge.LOGGER.warn("Rejected visible Entity runtime rule: mod={}, legacyId={}, numericId={}, adapter={}, reason={}",
+                            modId,string(raw,"legacyRegistryName","?"),integer(raw,"legacyNumericId",-1),string(raw,"adapter","?"),invalid.toString());
+                    continue;
+                }
+                if(!modId.equals(rule.id().getNamespace())){
+                    LegacyForgeBridge.LOGGER.warn("Rejected visible Entity runtime rule with foreign namespace: mod={}, id={}",modId,rule.id());
+                    continue;
+                }
+                install(rule);loaded++;
             }
-            if(loaded>0)LegacyForgeBridge.LOGGER.info("Loaded converted visible Entity runtime: mod={}, rules={}",modId,loaded);
+            LegacyForgeBridge.LOGGER.info("Loaded converted visible Entity runtime: mod={}, rules={}, declared={}",modId,loaded,rules.size());
         }catch(Exception exception){
             LOADED.remove(modId);throw new IllegalStateException("Failed to load visible Entity runtime for "+modId,exception);
         }
@@ -136,8 +147,11 @@ public final class LegacyVisibleEntityRegistry {
     }
 
     static Rule parseForTests(JsonObject value,String legacyModId){return parse(value,legacyModId);}
+    public static Rule validateCandidateRule(JsonObject value,String legacyModId){return parseStrict(value,legacyModId);}
     private static Rule parse(JsonObject value,String legacyModId){
-        try{
+        try{return parseStrict(value,legacyModId);}catch(RuntimeException invalid){return null;}
+    }
+    private static Rule parseStrict(JsonObject value,String legacyModId){
             Identifier id=Identifier.parse(required(value,"id"));Adapter adapter=Adapter.valueOf(required(value,"adapter"));
             List<Part> parts=new ArrayList<>();JsonArray pa=value.getAsJsonArray("parts");if(pa==null)return null;
             for(JsonElement e:pa){JsonObject p=e.getAsJsonObject();parts.add(new Part(required(p,"field"),integer(p,"u",-1),integer(p,"v",-1),
@@ -155,7 +169,6 @@ public final class LegacyVisibleEntityRegistry {
                     bool(value,"velocityUpdates"),decimal(value,"width"),decimal(value,"height"),adapter,integer(value,"modelTextureWidth",0),integer(value,"modelTextureHeight",0),
                     parts,fixed,watchers,watcherTypes,textures,palette,integer(value,"itemWatcherBase",-1),integer(value,"itemWatcherCount",0),
                     bool(value,"physicalCollision"),bool(value,"playerAttackRemoves"));
-        }catch(RuntimeException invalid){return null;}
     }
 
     private static String required(JsonObject o,String k){String v=string(o,k,null);if(v==null)throw new IllegalArgumentException("Missing "+k);return v;}
