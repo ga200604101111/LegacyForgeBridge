@@ -181,7 +181,7 @@ public final class LegacyProjectilePresentationAnalyzer {
         }
         if(!(defaultValue instanceof Number number))return null;
         int offset=selectorOffset(code,selectorCall);
-        int metadata=number.intValue()+offset;if(metadata<0)return null;
+        int metadata=Math.max(0,number.intValue()+offset);
         return new Selector(index,wireType,offset,metadata);
     }
 
