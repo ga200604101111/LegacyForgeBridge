@@ -135,6 +135,12 @@ public final class LegacyIconPresentationPass implements ConversionPass {
             String bare=p.replaceFirst("^items?/", "");
             if(bare.equals("book_written"))p="item/written_book";
         }
+        // LegacyIconTableAnalyzer emits modern vanilla sprite identifiers only after its
+        // source-side vanilla registry/name mapping has been proven. Vanilla assets are supplied
+        // by Minecraft itself at runtime and are intentionally absent from the converted staging
+        // tree, so do not require a copied PNG for an already-normalized modern identifier.
+        if(ns.equals("minecraft")&&(p.startsWith("block/")||p.startsWith("item/"))
+                &&p.matches("[a-z0-9_./-]+"))return ns+":"+p;
         List<String> candidates=new ArrayList<>();String old=block?"blocks/":"items/",modern=block?"block/":"item/";
         if(p.startsWith(old)||p.startsWith(modern))candidates.add(p);else {candidates.add(old+p);candidates.add(modern+p);}
         List<String> found=new ArrayList<>();
