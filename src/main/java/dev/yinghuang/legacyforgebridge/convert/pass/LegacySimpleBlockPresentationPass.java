@@ -22,7 +22,8 @@ public final class LegacySimpleBlockPresentationPass implements ConversionPass {
     private static final Gson JSON=new GsonBuilder().setPrettyPrinting().create();
 
     private enum FinalMode { CROSS, CROP, META_ZERO_CROP_ELSE_STANDARD }
-    private record Candidate(String registryName,String sourceBlockClass,String sourceRendererClass,FinalMode mode,String proof) { }
+    private record Candidate(String registryName,String sourceBlockClass,String sourceRendererClass,FinalMode mode,String proof,
+                             LegacySimpleBlockRendererAnalyzer.Bounds bounds,boolean emptyCollision) { }
 
     @Override public String id(){return "legacy-simple-block-presentation";}
 
@@ -49,7 +50,7 @@ public final class LegacySimpleBlockPresentationPass implements ConversionPass {
                 default->null;
             };
             if(mode!=null)candidates.add(new Candidate(rule.registryName(),rule.sourceBlockClass(),rule.sourceRendererClass(),mode,
-                    "source-bound custom renderer"));
+                    "source-bound custom renderer",rule.bounds(),rule.emptyCollision()));
         }
 
         var renderTypes=new LegacyRegisteredBlockRenderTypeAnalyzer().analyze(context.sourceJar());
@@ -58,9 +59,16 @@ public final class LegacySimpleBlockPresentationPass implements ConversionPass {
             int type=rule.renderIdentity().constant();
             FinalMode mode=type==1?FinalMode.CROSS:type==6?FinalMode.CROP:null;
             if(mode!=null)candidates.add(new Candidate(rule.registryName(),rule.sourceBlockClass(),null,mode,
-                    "direct legacy vanilla renderType="+type));
+                    "direct legacy vanilla renderType="+type,null,false));
         }
         candidates.sort(Comparator.comparing(Candidate::registryName));
+
+        Path geometryPath=staging.resolve(dev.yinghuang.legacyforgebridge.compat.LegacyGeometrySpec.PATH);
+        JsonObject geometryRoot=Files.isRegularFile(geometryPath)?read(geometryPath):new JsonObject();
+        if(!geometryRoot.has("schemaVersion"))geometryRoot.addProperty("schemaVersion",1);
+        if(!geometryRoot.has("sourceSha256"))geometryRoot.addProperty("sourceSha256",context.sourceHash());
+        if(!geometryRoot.has("blocks")||!geometryRoot.get("blocks").isJsonObject())geometryRoot.add("blocks",new JsonObject());
+        JsonObject geometryBlocks=geometryRoot.getAsJsonObject("blocks");int mergedShapes=0;
 
         JsonObject root=new JsonObject();root.addProperty("schemaVersion",1);root.addProperty("sourceSha256",context.sourceHash());
         JsonArray rules=new JsonArray();int written=0;
@@ -94,12 +102,41 @@ public final class LegacySimpleBlockPresentationPass implements ConversionPass {
             if(rule.sourceRendererClass()!=null)evidence.addProperty("sourceRendererClass",rule.sourceRendererClass());
             evidence.addProperty("mode",rule.mode().name());evidence.addProperty("proof",rule.proof());
             if(texture!=null)evidence.addProperty("texture",texture);
+            if(rule.bounds()!=null){
+                evidence.add("sourceBounds",boundsArray(rule.bounds()));
+                evidence.addProperty("emptyCollision",rule.emptyCollision());
+                if(!geometryBlocks.has(id)){
+                    geometryBlocks.add(id,geometryRule(rule));
+                    mergedShapes++;
+                }
+            }
             evidence.addProperty("finalModelOwnership",true);rules.add(evidence);written++;
         }
-        root.add("rules",rules);root.addProperty("finalModelsWritten",written);
+        root.add("rules",rules);root.addProperty("finalModelsWritten",written);root.addProperty("shapeRulesMerged",mergedShapes);
+        if(mergedShapes>0){
+            dev.yinghuang.legacyforgebridge.compat.LegacyGeometrySpec.parse(geometryRoot);
+            write(geometryPath,geometryRoot);
+        }
         Path output=staging.resolve(OUTPUT);Files.createDirectories(output.getParent());Files.writeString(output,JSON.toJson(root)+"\n",StandardCharsets.UTF_8);
         if(written>0)context.diagnostics().info("LFB-CONVERT-SIMPLE-RENDER-0001",SupportLevel.ADAPTED,
-                "Final simple-renderer block models written="+written+"; source-proven custom and vanilla CROSS/CROP ownership overrides generic cube presentation while preserving metadata model identity.");
+                "Final simple-renderer block models written="+written+", source-proven shape rules merged="+mergedShapes
+                        +"; CROSS/CROP presentation stays model-owned while native geometry carries bounds/collision.");
+    }
+
+    private static JsonObject geometryRule(Candidate rule){
+        JsonObject spec=new JsonObject();spec.addProperty("family","box");spec.addProperty("opaque",true);
+        spec.addProperty("sourceClass",rule.sourceBlockClass());spec.addProperty("proof","Source constructor bounds + simple CROSS/CROP renderer; collision="+(rule.emptyCollision()?"empty":"inherited"));
+        JsonObject variants=new JsonObject();
+        for(int meta=0;meta<16;meta++){
+            JsonObject variant=new JsonObject();variant.add("bounds",boundsArray(rule.bounds()));variant.add("inventoryBounds",boundsArray(rule.bounds()));
+            variant.addProperty("copyFace",-1);variant.addProperty("edges",true);variant.addProperty("collision",rule.emptyCollision()?"empty":"inherited");
+            variants.add(String.valueOf(meta),variant);
+        }
+        spec.add("variants",variants);return spec;
+    }
+
+    private static JsonArray boundsArray(LegacySimpleBlockRendererAnalyzer.Bounds b){
+        JsonArray values=new JsonArray();values.add(b.minX());values.add(b.minY());values.add(b.minZ());values.add(b.maxX());values.add(b.maxY());values.add(b.maxZ());return values;
     }
 
     private static boolean rewriteReferencedModels(Path staging,String ns,String path,String parent,String textureKey)throws Exception{
