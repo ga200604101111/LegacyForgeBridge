@@ -103,6 +103,7 @@ public final class ConvertedLegacyVisualEntity extends Entity {
      * and waiting for the 1.7 server to rubber-band the player back up.
      */
     @Override public boolean canCollideWith(Entity other){return rule.physicalCollision()&&!isRemoved();}
+    @Override public boolean canBeCollidedWith(Entity other){return rule.physicalCollision()&&!isRemoved();}
 
     /**
      * The same legacy entities were attackable/pickable. Without this override the converted
