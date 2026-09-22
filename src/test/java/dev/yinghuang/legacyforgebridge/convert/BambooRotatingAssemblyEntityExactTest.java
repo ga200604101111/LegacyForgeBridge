@@ -1,5 +1,13 @@
 package dev.yinghuang.legacyforgebridge.convert;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import dev.yinghuang.legacyforgebridge.compat.LegacyRotatingAssemblyEntityRegistry;
+import org.junit.jupiter.api.io.TempDir;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.util.jar.JarFile;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -13,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @Tag("exact-corpus")
 class BambooRotatingAssemblyEntityExactTest {
+    @TempDir Path tempDir;
     private static final String SHA="bcceb588950f911398cfc94856a45527b4aa17b6e130927b2e0516fdf059b402";
 
     @Test
@@ -53,5 +62,24 @@ class BambooRotatingAssemblyEntityExactTest {
         assertEquals(.0625F,water.modelScale(),0.0001F);assertEquals(64,water.modelTextureWidth());assertEquals(32,water.modelTextureHeight());
         assertEquals(java.util.List.of("bamboo:textures/entitys/waterwheel.png"),water.textures());
         assertTrue(water.physicalCollision());assertTrue(water.playerAttackRemoves());assertTrue(water.randomInitialPhase());
+
+        var converted=new LegacyConversionEngine().convert(source,tempDir.resolve("converted"),tempDir.resolve("manifests"));
+        try(JarFile jar=new JarFile(converted.candidateJar().orElseThrow().toFile())){
+            JsonObject sidecar=read(jar,"legacyforgebridge/rotating-assembly-entity-rules.json");
+            assertEquals(2,sidecar.getAsJsonArray("rules").size(),sidecar.toString());
+            String legacyModId=sidecar.get("legacyModId").getAsString();
+            for(JsonElement element:sidecar.getAsJsonArray("rules")){
+                JsonObject value=element.getAsJsonObject();
+                assertNotNull(LegacyRotatingAssemblyEntityRegistry.validateCandidateRule(value,legacyModId),
+                        value.get("legacyRegistryName").getAsString());
+            }
+        }
+    }
+
+    private static JsonObject read(JarFile jar,String path)throws Exception{
+        var entry=jar.getJarEntry(path);assertNotNull(entry,"Missing candidate output "+path);
+        try(InputStreamReader reader=new InputStreamReader(jar.getInputStream(entry),StandardCharsets.UTF_8)){
+            return JsonParser.parseReader(reader).getAsJsonObject();
+        }
     }
 }
