@@ -20,6 +20,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.stream.Stream;
 
 /** Materializes only source-and-asset-proven legacy plant presentation; gameplay runtime remains closed. */
 public final class LegacyPlantPresentationPass implements ConversionPass {
@@ -42,14 +43,17 @@ public final class LegacyPlantPresentationPass implements ConversionPass {
         root.addProperty("schemaVersion", 1);
         root.addProperty("sourceSha256", context.sourceHash());
         JsonArray rules = new JsonArray();
-        int textureProof = 0, assetProof = 0, complete = 0;
+        int textureProof = 0, sourceModelProof = 0, assetProof = 0, complete = 0;
 
         for (var proof : analysis.proofs()) {
             String modern = modernIds.get(key(proof.registryName(), proof.sourceClass()));
-            AssetProof assets = proof.sourcePresentationProofComplete()
-                    ? resolveAssets(context.stagingDir(), proof.family(), proof.textureName())
-                    : new AssetProof(false, List.of(), "source-presentation-proof-incomplete");
-            boolean presentationComplete = modern != null && proof.sourcePresentationProofComplete() && assets.complete();
+            boolean sourceModelPresentationComplete = proof.constructorPathStraightLine()
+                    && proof.textureNameProofComplete()
+                    && proof.sourcePresentationHooks().isEmpty();
+            AssetProof assets = proof.textureNameProofComplete()
+                    ? resolveAssets(context.stagingDir(), proof.family(), proof.textureName(), proof.legacyNamespace())
+                    : new AssetProof(false, List.of(), "source-texture-proof-incomplete");
+            boolean presentationComplete = modern != null && sourceModelPresentationComplete && assets.complete();
 
             JsonObject value = new JsonObject();
             value.addProperty("legacyRegistryName", proof.registryName());
@@ -61,8 +65,10 @@ public final class LegacyPlantPresentationPass implements ConversionPass {
             if (proof.textureName() != null) value.addProperty("textureName", proof.textureName());
             value.addProperty("textureNameProofComplete", proof.textureNameProofComplete());
             value.addProperty("sourcePresentationProofComplete", proof.sourcePresentationProofComplete());
+            value.addProperty("sourceModelPresentationProofComplete", sourceModelPresentationComplete);
             value.add("sourcePresentationHooks", strings(proof.sourcePresentationHooks()));
             value.add("constructorPresentationMutations", strings(proof.constructorPresentationMutations()));
+            value.addProperty("constructorPresentationMutationsAffectGameplayRuntime", !proof.constructorPresentationMutations().isEmpty());
             if (modern != null) value.addProperty("modernId", modern);
             value.addProperty("modernIdentityComplete", modern != null);
             value.addProperty("assetProofComplete", assets.complete());
@@ -76,6 +82,7 @@ public final class LegacyPlantPresentationPass implements ConversionPass {
             rules.add(value);
 
             if (proof.textureNameProofComplete()) textureProof++;
+            if (sourceModelPresentationComplete) sourceModelProof++;
             if (assets.complete()) assetProof++;
             if (presentationComplete) {
                 complete++;
@@ -86,6 +93,7 @@ public final class LegacyPlantPresentationPass implements ConversionPass {
         root.add("rules", rules);
         root.addProperty("classifiedBlocks", rules.size());
         root.addProperty("textureNameProofCompleteBlocks", textureProof);
+        root.addProperty("sourceModelPresentationProofCompleteBlocks", sourceModelProof);
         root.addProperty("assetProofCompleteBlocks", assetProof);
         root.addProperty("presentationCompleteBlocks", complete);
         root.addProperty("runtimeCompleteBlocks", 0);
@@ -95,8 +103,8 @@ public final class LegacyPlantPresentationPass implements ConversionPass {
 
         context.diagnostics().info("LFB-CONVERT-PLANT-PRESENTATION-0001", SupportLevel.RUNTIME_BRIDGE,
                 "Proved legacy plant presentation: blocks=" + rules.size()
-                        + ", texture-name=" + textureProof + ", assets=" + assetProof
-                        + ", presentation-complete=" + complete
+                        + ", texture-name=" + textureProof + ", source-model=" + sourceModelProof
+                        + ", assets=" + assetProof + ", presentation-complete=" + complete
                         + "; plant gameplay runtime remains gated.");
         analysis.diagnostics().forEach(message -> context.diagnostics().warning(
                 "LFB-CONVERT-PLANT-PRESENTATION-0002", SupportLevel.MANUAL_REQUIRED, message));
@@ -106,34 +114,82 @@ public final class LegacyPlantPresentationPass implements ConversionPass {
      * Forge 1.7.10 BlockCrops.registerBlockIcons derives exactly eight icons from
      * getTextureName()+"_stage_"+stage. Reed/Bush inherit a single blockIcon texture.
      */
-    private static AssetProof resolveAssets(Path staging, LegacyPlantBlockAnalyzer.Family family, String textureName) {
-        if (textureName == null || textureName.isBlank()) return new AssetProof(false, List.of(), "missing-texture-name");
-        int colon = textureName.indexOf(':');
-        if (colon <= 0 || colon == textureName.length() - 1 || textureName.indexOf(':', colon + 1) >= 0) {
-            return new AssetProof(false, List.of(), "texture-name-must-be-namespaced");
-        }
-        String namespace = textureName.substring(0, colon);
-        String path = textureName.substring(colon + 1).replace('\\', '/');
-        if (!namespace.equals(namespace.toLowerCase(Locale.ROOT)) || !path.equals(path.toLowerCase(Locale.ROOT))
-                || !namespace.matches("[a-z0-9_.-]+") || !path.matches("[a-z0-9/._-]+")
-                || path.startsWith("/") || path.contains("..")) {
-            return new AssetProof(false, List.of(), "texture-name-not-modern-identifier-safe");
-        }
+    private static AssetProof resolveAssets(Path staging, LegacyPlantBlockAnalyzer.Family family,
+                                             String textureName, String fallbackNamespace) throws Exception {
+        TextureName normalized = normalizeTextureName(textureName, fallbackNamespace);
+        if (normalized == null) return new AssetProof(false, List.of(), "missing-or-unsafe-texture-name");
 
         List<String> resources = new ArrayList<>();
         if (family == LegacyPlantBlockAnalyzer.Family.CROPS) {
             for (int stage = 0; stage < 8; stage++) {
-                String resourcePath = path + "_stage_" + stage;
-                Path file = staging.resolve("assets/" + namespace + "/textures/blocks/" + resourcePath + ".png");
-                if (!Files.isRegularFile(file)) return new AssetProof(false, List.copyOf(resources), "missing-stage-" + stage);
-                resources.add(namespace + ":blocks/" + resourcePath);
+                String resourcePath = normalized.path() + "_stage_" + stage;
+                String texture = resolveBlockTexture(staging, normalized.namespace(), resourcePath);
+                if (texture == null) return new AssetProof(false, List.copyOf(resources), "missing-stage-" + stage);
+                resources.add(texture);
             }
         } else {
-            Path file = staging.resolve("assets/" + namespace + "/textures/blocks/" + path + ".png");
-            if (!Files.isRegularFile(file)) return new AssetProof(false, List.of(), "missing-cross-texture");
-            resources.add(namespace + ":blocks/" + path);
+            String texture = resolveBlockTexture(staging, normalized.namespace(), normalized.path());
+            if (texture == null) return new AssetProof(false, List.of(), "missing-cross-texture");
+            resources.add(texture);
         }
         return new AssetProof(true, resources, null);
+    }
+
+    private record TextureName(String namespace, String path) { }
+
+    private static TextureName normalizeTextureName(String textureName, String fallbackNamespace) {
+        if (textureName == null || textureName.isBlank()) return null;
+        String value = textureName.trim().replace('\\', '/');
+        int colon = value.indexOf(':');
+        if (colon != value.lastIndexOf(':')) return null;
+
+        String namespace;
+        String path;
+        if (colon >= 0) {
+            namespace = value.substring(0, colon);
+            path = value.substring(colon + 1);
+        } else if (fallbackNamespace != null && !fallbackNamespace.isBlank()) {
+            namespace = fallbackNamespace;
+            path = value;
+        } else {
+            return null;
+        }
+
+        namespace = namespace.toLowerCase(Locale.ROOT);
+        path = path.toLowerCase(Locale.ROOT);
+        if (path.startsWith("textures/blocks/")) path = path.substring("textures/blocks/".length());
+        if (path.startsWith("blocks/")) path = path.substring("blocks/".length());
+        if (path.endsWith(".png")) path = path.substring(0, path.length() - 4);
+
+        if (!namespace.matches("[a-z0-9_.-]+") || !path.matches("[a-z0-9/._-]+")
+                || path.isBlank() || path.startsWith("/") || path.contains("..")) {
+            return null;
+        }
+        return new TextureName(namespace, path);
+    }
+
+    private static String resolveBlockTexture(Path staging, String namespace, String resourcePath) throws Exception {
+        Path blocksRoot = staging.resolve("assets/" + namespace + "/textures/blocks");
+        Path lower = blocksRoot.resolve(resourcePath + ".png");
+        if (Files.isRegularFile(lower)) return namespace + ":blocks/" + resourcePath;
+
+        String normalized = resourcePath.toLowerCase(Locale.ROOT);
+        Path lowerNormalized = blocksRoot.resolve(normalized + ".png");
+        if (Files.isRegularFile(lowerNormalized)) return namespace + ":blocks/" + normalized;
+
+        if (!Files.isDirectory(blocksRoot)) return null;
+        String wanted = normalized + ".png";
+        try (Stream<Path> files = Files.walk(blocksRoot)) {
+            return files.filter(Files::isRegularFile)
+                    .filter(path -> blocksRoot.relativize(path).toString().replace('\\', '/')
+                            .equalsIgnoreCase(wanted))
+                    .findFirst()
+                    .map(path -> namespace + ":blocks/" + blocksRoot.relativize(path).toString()
+                            .replace('\\', '/')
+                            .replaceAll("(?i)\\.png$", "")
+                            .toLowerCase(Locale.ROOT))
+                    .orElse(null);
+        }
     }
 
     private static void materializeModels(Path staging, String modernId, LegacyPlantBlockAnalyzer.Family family,
