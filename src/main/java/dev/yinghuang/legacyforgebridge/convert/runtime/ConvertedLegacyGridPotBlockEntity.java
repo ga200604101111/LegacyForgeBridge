@@ -83,6 +83,24 @@ public final class ConvertedLegacyGridPotBlockEntity extends BlockEntity {
         changedAndNotify();
     }
 
+    /**
+     * Applies the exact nine-cell state decoded from the legacy action-5 S35 snapshot.
+     * This is client presentation state only; server gameplay remains authoritative.
+     */
+    public void applyLegacySnapshot(int mask, java.util.List<ItemStack> snapshotItems) {
+        if ((mask & ~((1 << rule.cells()) - 1)) != 0 || snapshotItems == null || snapshotItems.size() != rule.cells())
+            throw new IllegalArgumentException("GridPot legacy snapshot shape mismatch");
+        NonNullList<ItemStack> next = NonNullList.withSize(rule.cells(), ItemStack.EMPTY);
+        for (int slot = 0; slot < rule.cells(); slot++) {
+            if ((mask & (1 << slot)) == 0) continue;
+            ItemStack stack = snapshotItems.get(slot);
+            next.set(slot, stack == null || stack.isEmpty() ? ItemStack.EMPTY : stack.copy());
+        }
+        this.enabledMask = mask;
+        this.items = next;
+        setChanged();
+    }
+
     public void dropAll(Level level, BlockPos pos, ItemStack cellItem) {
         for (int slot = 0; slot < rule.cells(); slot++) {
             if (!isEnabled(slot)) continue;
