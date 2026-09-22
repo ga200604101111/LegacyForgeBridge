@@ -49,7 +49,7 @@ public final class LegacyGridPotPresentationRuntimePass implements ConversionPas
         JsonObject root = new JsonObject();
         root.addProperty("schemaVersion", 1);
         root.addProperty("sourceSha256", context.sourceHash());
-        root.addProperty("adaptation", "MODERN_ITEM_MODEL_RENDER_STATE");
+        root.addProperty("adaptation", "SOURCE_SIZED_3D_CELL_ITEM_MODEL");
         root.addProperty("storedContentPresentationRuntimeWired", true);
         JsonArray rules = new JsonArray();
         JsonArray skipped = new JsonArray();
@@ -72,19 +72,23 @@ public final class LegacyGridPotPresentationRuntimePass implements ConversionPas
                 addSkipped(skipped, id, source, "GridPot presentation proof has malformed transforms.");
                 continue;
             }
-            final String modernCarrier;
-            try{modernCarrier=LegacyVanillaStackDataFix.upgrade(legacyCarrier,0).id();}
+            try{LegacyVanillaStackDataFix.upgrade(legacyCarrier,0);}
             catch(RuntimeException unsupported){
-                addSkipped(skipped,id,source,"GridPot enabled-cell carrier could not be migrated through vanilla DFU: "+unsupported.getMessage());
+                addSkipped(skipped,id,source,"GridPot source pot-icon carrier could not be migrated through vanilla DFU: "+unsupported.getMessage());
                 continue;
             }
+            float cellWidth=1.0F/integer(core,"gridWidth",0);
+            float cellHeight=core.get("cellHeight").getAsFloat();
+            writeCellItemModel(context.stagingDir(),id,cellWidth,cellHeight);
             JsonObject value = new JsonObject();
             value.addProperty("id", id);
             value.addProperty("sourceBlockClass", source);
             value.addProperty("sourceRendererClass", string(proof, "sourceRendererClass"));
-            value.addProperty("cellCarrierItemId",modernCarrier);
-            value.addProperty("cellBodyWidth",1.0F/integer(core,"gridWidth",0));
-            value.addProperty("cellBodyHeight",core.get("cellHeight").getAsFloat());
+            // Reuse the converted GridPot BlockItem itself. Its generated item model below is a
+            // source-sized 3D cell rather than a flat legacy item sprite or a full vanilla pot.
+            value.addProperty("cellCarrierItemId",id);
+            value.addProperty("cellBodyWidth",cellWidth);
+            value.addProperty("cellBodyHeight",cellHeight);
             value.add("gridOffsets", offsets.deepCopy());
             value.addProperty("contentTranslateY", proof.get("contentTranslateY").getAsFloat());
             value.addProperty("sourceContentScale", proof.get("crossedScale").getAsFloat());
@@ -94,6 +98,8 @@ public final class LegacyGridPotPresentationRuntimePass implements ConversionPas
             value.addProperty("storedContentPresentationProven", true);
             value.addProperty("storedContentPresentationRuntimeWired", true);
             value.addProperty("exactLegacyGeometry", false);
+            value.addProperty("sourceSizedCellGeometry", true);
+            value.addProperty("inventoryUsesSameCellModel", true);
             rules.add(value);
         }
         root.add("rules", rules);
@@ -105,8 +111,45 @@ public final class LegacyGridPotPresentationRuntimePass implements ConversionPas
         Files.createDirectories(output.getParent());
         Files.writeString(output, GSON.toJson(root) + "\n", StandardCharsets.UTF_8);
         if (!rules.isEmpty()) context.diagnostics().info("LFB-CONVERT-GRIDPOT-PRESENT-RUNTIME-0001", SupportLevel.ADAPTED,
-                "Admitted modern item-model GridPot stored-content presentation for " + rules.size()
-                        + " block(s); legacy RenderBlocks geometry remains explicitly non-exact.");
+                "Admitted source-sized 3D GridPot cell presentation for " + rules.size()
+                        + " block(s); world and inventory now share the same 3D cell model while stored-content render branches remain adapted.");
+    }
+
+    private static void writeCellItemModel(Path staging,String idValue,float width,float height)throws Exception{
+        int split=idValue.indexOf(':');if(split<=0||split==idValue.length()-1)throw new IllegalArgumentException("Invalid GridPot id "+idValue);
+        String ns=idValue.substring(0,split),path=idValue.substring(split+1);
+        float half=width*8F;
+        float x0=8F-half,x1=8F+half,z0=x0,z1=x1,y1=height*16F;
+        JsonObject model=new JsonObject();model.addProperty("parent","minecraft:block/block");
+        JsonObject textures=new JsonObject();textures.addProperty("pot","minecraft:block/flower_pot");
+        textures.addProperty("dirt","minecraft:block/dirt");textures.addProperty("particle","minecraft:block/flower_pot");
+        model.add("textures",textures);JsonArray elements=new JsonArray();
+
+        JsonObject body=new JsonObject();body.add("from",vec(x0,0F,z0));body.add("to",vec(x1,y1,z1));
+        JsonObject bodyFaces=new JsonObject();
+        for(String face:java.util.List.of("down","north","south","west","east")){
+            JsonObject f=new JsonObject();f.addProperty("texture","#pot");bodyFaces.add(face,f);
+        }
+        // The source renderer draws a separate dirt top rather than closing the cell with the pot icon.
+        body.add("faces",bodyFaces);elements.add(body);
+
+        float inset=Math.max(.5F,width*1.5F);
+        JsonObject dirt=new JsonObject();dirt.add("from",vec(x0+inset,Math.max(0F,y1-.20F),z0+inset));
+        dirt.add("to",vec(x1-inset,y1-.05F,z1-inset));JsonObject dirtFaces=new JsonObject();
+        JsonObject up=new JsonObject();up.addProperty("texture","#dirt");dirtFaces.add("up",up);dirt.add("faces",dirtFaces);elements.add(dirt);
+        model.add("elements",elements);
+
+        Path modelPath=staging.resolve("assets/"+ns+"/models/item/"+path+".json");Files.createDirectories(modelPath.getParent());
+        Files.writeString(modelPath,GSON.toJson(model)+"\n",StandardCharsets.UTF_8);
+
+        JsonObject node=new JsonObject();node.addProperty("type","minecraft:model");node.addProperty("model",ns+":item/"+path);
+        JsonObject definition=new JsonObject();definition.add("model",node);
+        Path itemPath=staging.resolve("assets/"+ns+"/items/"+path+".json");Files.createDirectories(itemPath.getParent());
+        Files.writeString(itemPath,GSON.toJson(definition)+"\n",StandardCharsets.UTF_8);
+    }
+
+    private static JsonArray vec(float x,float y,float z){
+        JsonArray out=new JsonArray();out.add(x);out.add(y);out.add(z);return out;
     }
 
     private static void addSkipped(JsonArray skipped, String id, String source, String reason) {
