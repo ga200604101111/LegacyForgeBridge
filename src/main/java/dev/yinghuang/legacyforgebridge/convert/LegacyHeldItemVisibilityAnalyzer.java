@@ -39,7 +39,7 @@ public final class LegacyHeldItemVisibilityAnalyzer {
     private static boolean provesEmptyCollision(Map<String,ClassNode> classes,String source){
         MethodNode method=findHierarchy(classes,source,Set.of("getCollisionBoundingBoxFromPool","func_149668_a"),
                 "(Lnet/minecraft/world/World;III)Lnet/minecraft/util/AxisAlignedBB;");
-        List<AbstractInsnNode> code=real(method);
+        if(method==null)return false;List<AbstractInsnNode> code=real(method);
         return code.size()==2&&code.get(0).getOpcode()==Opcodes.ACONST_NULL&&code.get(1).getOpcode()==Opcodes.ARETURN;
     }
 
