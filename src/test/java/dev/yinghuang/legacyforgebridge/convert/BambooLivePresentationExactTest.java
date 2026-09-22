@@ -34,6 +34,7 @@ class BambooLivePresentationExactTest {
         Path candidate=result.candidateJar().orElseThrow();
         try(JarFile jar=new JarFile(candidate.toFile())){
             assertParent(jar,"assets/bamboomod/models/block/blockbambooshoot.json","minecraft:block/cross");
+            assertParent(jar,"assets/bamboomod/models/block/bamboo.json","minecraft:block/crop");
             assertParent(jar,"assets/bamboomod/models/block/bamboosingle.json","minecraft:block/cross");
             assertParent(jar,"assets/bamboomod/models/block/bamboo2.json","minecraft:block/crop");
 
