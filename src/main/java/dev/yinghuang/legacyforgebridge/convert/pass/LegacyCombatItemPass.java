@@ -130,7 +130,7 @@ public final class LegacyCombatItemPass implements ConversionPass {
     private static void rewriteBow(Path staging, String namespace, String path,
                                    LegacyCombatItemAnalyzer.Rule rule) throws IOException {
         rewriteItemModels(staging, namespace, path, "minecraft:item/bow");
-        String prefix = modernTexture(rule.pullTexturePrefix());
+        String prefix = modernTexture(staging, rule.pullTexturePrefix());
         for (int stage = 0; stage < rule.pullStages(); stage++) {
             JsonObject model = new JsonObject();
             model.addProperty("parent", "minecraft:item/bow");
@@ -185,12 +185,24 @@ public final class LegacyCombatItemPass implements ConversionPass {
         write(path, root);
     }
 
-    private static String modernTexture(String legacyPrefix) {
+    private static String modernTexture(Path staging, String legacyPrefix) throws IOException {
         int split = legacyPrefix.indexOf(':');
         String namespace = split < 0 ? "minecraft" : legacyPrefix.substring(0, split);
         String path = split < 0 ? legacyPrefix : legacyPrefix.substring(split + 1);
-        path = path.replaceFirst("^items?/", "");
-        return namespace + ":item/" + path;
+        path = path.replace('\\', '/').replaceFirst("^textures/", "").replaceFirst("\\.png$", "");
+        String itemPath = path.replaceFirst("^items?/", "");
+        String[] candidates = path.contains("/")
+                ? new String[] { path, "items/" + itemPath, "item/" + itemPath }
+                : new String[] { "items/" + itemPath, "item/" + itemPath, itemPath };
+        for (String candidate : candidates) {
+            if (Files.isRegularFile(staging.resolve("assets/" + namespace + "/textures/" + candidate + "0.png"))) {
+                return namespace + ":" + candidate;
+            }
+        }
+        // Legacy 1.7.x item textures normally live under textures/items. Prefer that path when
+        // the source prefix is directory-less so generated bow pulling models do not reference a
+        // modernized textures/item location that was never emitted by the resource-copy passes.
+        return namespace + ":" + (path.contains("/") ? path : "items/" + itemPath);
     }
 
     private static JsonObject read(Path path) throws IOException {
