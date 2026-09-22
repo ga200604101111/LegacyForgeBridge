@@ -43,11 +43,12 @@ public final class LegacyLiquidPresentationPass implements ConversionPass {
 
         JsonObject root=new JsonObject();root.addProperty("schemaVersion",1);root.addProperty("sourceSha256",context.sourceHash());
         root.addProperty("runtimeImplementationWired",true);root.addProperty("renderLayer","TRANSLUCENT");
-        JsonArray rules=new JsonArray();int written=0;
+        JsonArray rules=new JsonArray();int written=0,overwritten=0;
 
         for(var rule:analysis.rules()){
-            String id=ids.get(rule.registryName());if(id==null||geometryBlocks.has(id))continue;
+            String id=ids.get(rule.registryName());if(id==null)continue;
             String[] split=id.split(":",2);if(split.length!=2)continue;String ns=split[0],path=split[1];
+            if(geometryBlocks.has(id))overwritten++;
 
             JsonObject states=new JsonObject(),variants=new JsonObject();
             for(int meta=0;meta<16;meta++){
@@ -86,14 +87,14 @@ public final class LegacyLiquidPresentationPass implements ConversionPass {
         geometry.add("blocks",geometryBlocks);geometry.add("excluded",exclusions);
         // Strictly reparse before publication so the runtime never consumes a malformed merge.
         LegacyGeometrySpec.parse(geometry);write(geometryPath,geometry);
-        root.add("rules",rules);root.addProperty("runtimeRules",rules.size());
+        root.add("rules",rules);root.addProperty("runtimeRules",rules.size());root.addProperty("overwrittenGeometryRules",overwritten);
         JsonArray skipped=new JsonArray();for(var item:analysis.skipped()){
             JsonObject value=new JsonObject();value.addProperty("registryName",item.registryName());
             value.addProperty("sourceClass",item.sourceClass());value.addProperty("reason",item.reason());skipped.add(value);
         }
         root.add("skipped",skipped);write(staging.resolve(OUTPUT),root);
         if(written>0)context.diagnostics().info("LFB-CONVERT-LIQUID-0001",SupportLevel.ADAPTED,
-                "Source-proven legacy liquid presentation blocks="+written+"; metadata water level, empty collision and translucent render-layer ownership materialized.");
+                "Source-proven legacy liquid presentation blocks="+written+"; metadata water level, empty collision and translucent render-layer ownership materialized; overwrittenPriorGeometry="+overwritten+".");
         for(String diagnostic:analysis.diagnostics())context.diagnostics().warning("LFB-CONVERT-LIQUID-0002",SupportLevel.RUNTIME_BRIDGE,diagnostic);
     }
 
