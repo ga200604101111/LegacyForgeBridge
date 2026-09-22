@@ -28,10 +28,10 @@ public final class ConvertedLegacyRotatingAssemblyEntityRenderer extends EntityR
 
     public ConvertedLegacyRotatingAssemblyEntityRenderer(EntityRendererProvider.Context context,LegacyRotatingAssemblyEntityRegistry.Rule rule){
         super(context);this.rule=rule;this.shadowRadius=0F;
-        this.statics=build(rule.staticParts());
+        this.statics=build(rule.staticParts(),rule.modelTextureWidth(),rule.modelTextureHeight());
         int capacity=rule.adapter()==LegacyRotatingAssemblyEntityRegistry.Adapter.VARIABLE_Z_RADIAL?rule.countMax():rule.fixedRepeatCount();
-        this.primaryByRepeat=buildRepeats(rule.repeatedPrimary(),capacity);
-        this.secondaryByRepeat=buildRepeats(rule.repeatedSecondary(),capacity);
+        this.primaryByRepeat=buildRepeats(rule.repeatedPrimary(),capacity,rule.modelTextureWidth(),rule.modelTextureHeight());
+        this.secondaryByRepeat=buildRepeats(rule.repeatedSecondary(),capacity,rule.modelTextureWidth(),rule.modelTextureHeight());
         this.renderTypes=rule.textures().stream().map(RenderTypes::entityCutout).toList();
     }
 
@@ -109,16 +109,16 @@ public final class ConvertedLegacyRotatingAssemblyEntityRenderer extends EntityR
         int dir=direction&3;dir+=(dir==1||dir==3)?-1:1;return dir*90F;
     }
 
-    private static List<Rendered> build(List<LegacyRotatingAssemblyEntityRegistry.Cuboid> source){
-        List<Rendered> out=new ArrayList<>();for(var cuboid:source)out.add(new Rendered(cuboid,part(cuboid)));return List.copyOf(out);
+    private static List<Rendered> build(List<LegacyRotatingAssemblyEntityRegistry.Cuboid> source,int textureWidth,int textureHeight){
+        List<Rendered> out=new ArrayList<>();for(var cuboid:source)out.add(new Rendered(cuboid,part(cuboid,textureWidth,textureHeight)));return List.copyOf(out);
     }
-    private static List<List<Rendered>> buildRepeats(List<LegacyRotatingAssemblyEntityRegistry.Cuboid> source,int count){
+    private static List<List<Rendered>> buildRepeats(List<LegacyRotatingAssemblyEntityRegistry.Cuboid> source,int count,int textureWidth,int textureHeight){
         if(source.isEmpty()||count<=0)return List.of();List<List<Rendered>> out=new ArrayList<>();
-        for(int i=0;i<count;i++)out.add(build(source));return List.copyOf(out);
+        for(int i=0;i<count;i++)out.add(build(source,textureWidth,textureHeight));return List.copyOf(out);
     }
-    private static ModelPart part(LegacyRotatingAssemblyEntityRegistry.Cuboid source){
+    private static ModelPart part(LegacyRotatingAssemblyEntityRegistry.Cuboid source,int textureWidth,int textureHeight){
         ModelPart.Cube cube=new ModelPart.Cube(source.u(),source.v(),source.x(),source.y(),source.z(),source.width(),source.height(),source.depth(),
-                0F,0F,0F,source.mirror(),64,32,EnumSet.allOf(Direction.class));
+                0F,0F,0F,source.mirror(),textureWidth,textureHeight,EnumSet.allOf(Direction.class));
         return new ModelPart(List.of(cube),Map.of());
     }
 
