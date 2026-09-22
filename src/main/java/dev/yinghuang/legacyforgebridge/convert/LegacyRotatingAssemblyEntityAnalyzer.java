@@ -318,7 +318,7 @@ public final class LegacyRotatingAssemblyEntityAnalyzer {
             if(code.get(i) instanceof FieldInsnNode put&&put.getOpcode()==Opcodes.PUTFIELD&&put.owner.equals(MODEL_RENDERER)&&i>=1){
                 String field=fieldOrigin(code,i,model.name);Float value=floatConstant(code.get(i-1));if(field==null||value==null)continue;
                 float[] r=rots.computeIfAbsent(field,k->new float[3]);if(X_ROT.contains(put.name))r[0]=value;else if(Y_ROT.contains(put.name))r[1]=value;else if(Z_ROT.contains(put.name))r[2]=value;
-                else if(put.desc.equals("Z")&&Set.of("mirror","field_78809_i").contains(put.name)&&value!=0F)mirrors.add(field);
+                else if(put.desc.equals("Z")&&Set.of("mirror","field_78809_i").contains(put.name)&&Integer.valueOf(1).equals(intConstant(code.get(i-1))))mirrors.add(field);
             }
         }
         List<MutablePart> out=new ArrayList<>();for(var b:boxes.values()){float[] p=pivots.getOrDefault(b.field(),new float[3]),r=rots.getOrDefault(b.field(),new float[3]);
@@ -371,9 +371,11 @@ public final class LegacyRotatingAssemblyEntityAnalyzer {
         return out;
     }
 
-    private static String fieldOrigin(List<AbstractInsnNode> code,int index,String model){for(int j=index-1;j>=Math.max(0,index-12);j--)if(code.get(j) instanceof FieldInsnNode f&&f.getOpcode()==Opcodes.GETFIELD&&f.owner.equals(model)&&f.desc.equals("L"+MODEL_RENDERER+";"))return f.name;return null;}
-    private static String fieldOrigin(List<AbstractInsnNode> code,int index,String model,boolean unused){return fieldOrigin(code,index,model);}
-    private static String fieldOrigin(List<AbstractInsnNode> all,int index,String model){for(int j=index-1;j>=Math.max(0,index-12);j--)if(all.get(j) instanceof FieldInsnNode f&&f.getOpcode()==Opcodes.GETFIELD&&f.owner.equals(model)&&f.desc.equals("L"+MODEL_RENDERER+";"))return f.name;return null;}
+    private static String fieldOrigin(List<AbstractInsnNode> code,int index,String model){
+        for(int j=index-1;j>=Math.max(0,index-12);j--)if(code.get(j) instanceof FieldInsnNode f
+                &&f.getOpcode()==Opcodes.GETFIELD&&f.owner.equals(model)&&f.desc.equals("L"+MODEL_RENDERER+";"))return f.name;
+        return null;
+    }
 
     private float modelScale(MethodNode renderer,String model){Float result=null;for(AbstractInsnNode insn:renderer.instructions)if(insn instanceof MethodInsnNode call&&call.owner.equals(model)){
         Type[] args=Type.getArgumentTypes(call.desc);if(args.length==0||args[args.length-1].getSort()!=Type.FLOAT)continue;Float v=floatConstant(previousReal(insn));if(v==null||v<=0F)return Float.NaN;if(result!=null&&Float.compare(result,v)!=0)return Float.NaN;result=v;}
@@ -389,8 +391,29 @@ public final class LegacyRotatingAssemblyEntityAnalyzer {
         boolean cast=false,push=false;for(AbstractInsnNode i:m.instructions){if(i instanceof TypeInsnNode t&&t.getOpcode()==Opcodes.CHECKCAST&&ownerInHierarchy(entity,t.desc))cast=true;if(i instanceof MethodInsnNode call&&call.owner.equals("org/lwjgl/opengl/GL11")&&call.name.equals("glPushMatrix"))push=true;}
         if(cast&&push){if(found!=null)return null;found=m;}}return found;}
 
-    private Integer directWatcherIndex(MethodNode method){if(method==null)return null;List<AbstractInsnNode> code=real(method);for(int i=1;i<code.size();i++)
-        if(code.get(i) instanceof MethodInsnNode call&&call.owner.equals(DATA_WATCHER)&&WATCH_BYTE.contains(call.name)){Integer v=intConstant(code.get(i-1));if(v!=null)return v;}return null;}
+    private Integer directWatcherIndex(MethodNode method){
+        if(method==null)return null;List<AbstractInsnNode> code=real(method);
+        for(int i=1;i<code.size();i++)if(code.get(i) instanceof MethodInsnNode call&&call.owner.equals(DATA_WATCHER)&&WATCH_BYTE.contains(call.name)){
+            AbstractInsnNode source=code.get(i-1);Integer value=intConstant(source);
+            if(value==null&&source instanceof FieldInsnNode field&&field.getOpcode()==Opcodes.GETSTATIC)value=staticInt(field);
+            if(value!=null&&value>=0&&value<=31)return value;
+        }
+        return null;
+    }
+
+    private Integer staticInt(FieldInsnNode field){
+        ClassNode owner=classes.get(field.owner);if(owner==null||!"I".equals(field.desc))return null;
+        FieldNode source=owner.fields.stream().filter(f->f.name.equals(field.name)&&f.desc.equals(field.desc)).findFirst().orElse(null);
+        if(source!=null&&source.value instanceof Integer value)return value;
+        MethodNode clinit=owner.methods.stream().filter(m->m.name.equals("<clinit>")&&m.desc.equals("()V")).findFirst().orElse(null);
+        if(clinit==null)return null;Integer result=null;List<AbstractInsnNode> code=real(clinit);
+        for(int i=1;i<code.size();i++)if(code.get(i) instanceof FieldInsnNode put&&put.getOpcode()==Opcodes.PUTSTATIC
+                &&put.owner.equals(field.owner)&&put.name.equals(field.name)&&put.desc.equals(field.desc)){
+            Integer value=intConstant(code.get(i-1));if(value==null)return null;
+            if(result!=null&&!result.equals(value))return null;result=value;
+        }
+        return result;
+    }
     private MethodNode ownOrEffectiveTick(String entity){return effective(entity,Set.of("onUpdate","func_70071_h_"),"()V");}
     private MethodNode effective(String owner,Set<String> names,String desc){Set<String> seen=new HashSet<>();for(String c=owner;c!=null&&seen.add(c);){ClassNode n=classes.get(c);if(n==null)return null;for(MethodNode m:n.methods)if(names.contains(m.name)&&m.desc.equals(desc))return m;c=n.superName;}return null;}
     private boolean ownerInHierarchy(String child,String owner){Set<String> seen=new HashSet<>();for(String c=child;c!=null&&seen.add(c);){if(c.equals(owner))return true;ClassNode n=classes.get(c);c=n==null?null:n.superName;}return false;}
