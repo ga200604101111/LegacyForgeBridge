@@ -37,6 +37,17 @@ class LegacyRegisteredBlockRenderTypeAnalyzerTest {
         assertNotNull(symbolicIdentity);assertEquals(IDS,symbolicIdentity.fieldOwner());assertEquals("cross",symbolicIdentity.fieldName());
     }
 
+    @Test void delegatedConstructorRenderTypeIsProvenWithoutNames() {
+        ClassNode block=delegatedBlockClass();
+        MethodNode render=block.methods.stream().filter(m->m.name.equals("func_149645_b")).findFirst().orElseThrow();
+        Map<String,ClassNode> classes=Map.of(BLOCK,block);
+        var registration=new LegacyRegistryAnalyzer.Registration(
+                LegacyRegistryAnalyzer.Kind.BLOCK,"fixture","fixture",BLOCK,null,"(II)V",
+                List.of(arg(9),arg(6)),"foreign/render/Bootstrap","preInit","()V");
+        var identity=LegacyRegisteredBlockRenderTypeAnalyzer.constructorBoundRenderIdentity(classes,registration,render);
+        assertNotNull(identity);assertTrue(identity.isConstant(6));
+    }
+
     @Test void ambiguousConstructorAllocationsFailClosed() {
         ClassNode block=blockClass();MethodNode render=block.methods.stream().filter(m->m.name.equals("func_149645_b")).findFirst().orElseThrow();
         ClassNode caller=allocationClass("cross","other");
@@ -59,6 +70,19 @@ class LegacyRegisteredBlockRenderTypeAnalyzerTest {
         MethodNode ctor=new MethodNode(Opcodes.ASM9,Opcodes.ACC_PUBLIC,"<init>","(III)V",null,null);ctor.instructions.add(new VarInsnNode(Opcodes.ALOAD,0));ctor.instructions.add(new VarInsnNode(Opcodes.ILOAD,2));ctor.instructions.add(new FieldInsnNode(Opcodes.PUTFIELD,BLOCK,"renderType","I"));ctor.instructions.add(new InsnNode(Opcodes.RETURN));ctor.maxLocals=4;ctor.maxStack=2;c.methods.add(ctor);
         MethodNode render=renderMethod();render.instructions.add(new VarInsnNode(Opcodes.ALOAD,0));render.instructions.add(new FieldInsnNode(Opcodes.GETFIELD,BLOCK,"renderType","I"));render.instructions.add(new InsnNode(Opcodes.IRETURN));render.maxLocals=1;render.maxStack=1;c.methods.add(render);return c;
     }
+    private static ClassNode delegatedBlockClass(){
+        ClassNode c=blockClass();
+        MethodNode ctor2=new MethodNode(Opcodes.ASM9,Opcodes.ACC_PUBLIC,"<init>","(II)V",null,null);
+        ctor2.instructions.add(new VarInsnNode(Opcodes.ALOAD,0));
+        ctor2.instructions.add(new VarInsnNode(Opcodes.ILOAD,1));
+        ctor2.instructions.add(new VarInsnNode(Opcodes.ILOAD,2));
+        ctor2.instructions.add(new InsnNode(Opcodes.ICONST_0));
+        ctor2.instructions.add(new MethodInsnNode(Opcodes.INVOKESPECIAL,BLOCK,"<init>","(III)V",false));
+        ctor2.instructions.add(new InsnNode(Opcodes.RETURN));
+        ctor2.maxLocals=3;ctor2.maxStack=4;c.methods.add(ctor2);
+        return c;
+    }
+
     private static ClassNode allocationClass(String... fields){
         ClassNode c=new ClassNode(Opcodes.ASM9);c.name="foreign/render/Bootstrap";c.superName="java/lang/Object";
         MethodNode m=new MethodNode(Opcodes.ASM9,Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"preInit","()V",null,null);
