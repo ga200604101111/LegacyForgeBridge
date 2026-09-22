@@ -44,6 +44,25 @@ class LegacyEntityDataWatcherAnalyzerTest {
         assertEquals(7, ((Number) rule.entries().get(1).defaultValue()).intValue());
     }
 
+    @Test void staticInitializedWatcherIndexIsSourceProvenAcrossSourceSuperclass() throws Exception {
+        Path jar=tempDir.resolve("StaticWatcherEntity.jar");
+        try(JarOutputStream out=new JarOutputStream(Files.newOutputStream(jar))){
+            put(out,"foreign/staticwatch/Base.class",staticWatcherBase());
+            put(out,"foreign/staticwatch/Child.class",staticWatcherChild());
+            put(out,"foreign/staticwatch/Bootstrap.class",staticWatcherBootstrap());
+        }
+        var analysis=new LegacyEntityDataWatcherAnalyzer().analyze(jar);
+        assertTrue(analysis.diagnostics().isEmpty(),String.join("\n",analysis.diagnostics()));
+        assertTrue(analysis.skipped().isEmpty(),analysis.skipped().toString());
+        var rule=analysis.rules().stream().filter(value->value.registryName().equals("static_watch")).findFirst().orElseThrow();
+        assertEquals("foreign/staticwatch/Child",rule.sourceClass());
+        assertEquals(1,rule.entries().size());
+        assertEquals(16,rule.entries().getFirst().index());
+        assertEquals("byte",rule.entries().getFirst().valueKind());
+        assertEquals((byte)0,((Number)rule.entries().getFirst().defaultValue()).byteValue());
+        assertEquals("foreign/staticwatch/Base",rule.entries().getFirst().declaredBy());
+    }
+
     @Test void dynamicWatcherIndexFailsClosed() throws Exception {
         Path jar = tempDir.resolve("UnsafeEntity.jar");
         try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(jar))) {
@@ -55,6 +74,41 @@ class LegacyEntityDataWatcherAnalyzerTest {
         assertEquals(1, analysis.skipped().size());
         assertTrue(analysis.skipped().getFirst().reason().contains("Dynamic/unproven DataWatcher index"),
                 analysis.skipped().getFirst().reason());
+    }
+
+    private static byte[] staticWatcherBase(){
+        String owner="foreign/staticwatch/Base";
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,owner,null,"net/minecraft/entity/Entity",null);
+        w.visitField(Opcodes.ACC_PRIVATE|Opcodes.ACC_STATIC,"SLOT","I",null,null).visitEnd();
+        MethodVisitor init=w.visitMethod(Opcodes.ACC_PROTECTED,"func_70088_a","()V",null,null);init.visitCode();
+        init.visitVarInsn(Opcodes.ALOAD,0);init.visitMethodInsn(Opcodes.INVOKESPECIAL,"net/minecraft/entity/Entity","func_70088_a","()V",false);
+        init.visitVarInsn(Opcodes.ALOAD,0);init.visitFieldInsn(Opcodes.GETFIELD,"net/minecraft/entity/Entity","field_70180_af","Lnet/minecraft/entity/DataWatcher;");
+        init.visitFieldInsn(Opcodes.GETSTATIC,owner,"SLOT","I");init.visitInsn(Opcodes.ICONST_0);init.visitInsn(Opcodes.I2B);
+        init.visitMethodInsn(Opcodes.INVOKESTATIC,"java/lang/Byte","valueOf","(B)Ljava/lang/Byte;",false);
+        init.visitMethodInsn(Opcodes.INVOKEVIRTUAL,"net/minecraft/entity/DataWatcher","func_75682_a","(ILjava/lang/Object;)V",false);
+        init.visitInsn(Opcodes.RETURN);init.visitMaxs(0,0);init.visitEnd();
+        MethodVisitor cl=w.visitMethod(Opcodes.ACC_STATIC,"<clinit>","()V",null,null);cl.visitCode();cl.visitIntInsn(Opcodes.BIPUSH,16);
+        cl.visitFieldInsn(Opcodes.PUTSTATIC,owner,"SLOT","I");cl.visitInsn(Opcodes.RETURN);cl.visitMaxs(0,0);cl.visitEnd();
+        w.visitEnd();return w.toByteArray();
+    }
+
+    private static byte[] staticWatcherChild(){
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,"foreign/staticwatch/Child",null,"foreign/staticwatch/Base",null);
+        w.visitEnd();return w.toByteArray();
+    }
+
+    private static byte[] staticWatcherBootstrap(){
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,"foreign/staticwatch/Bootstrap",null,"java/lang/Object",null);
+        MethodVisitor m=w.visitMethod(Opcodes.ACC_PUBLIC,"preInit","(Lcpw/mods/fml/common/event/FMLPreInitializationEvent;)V",null,null);
+        AnnotationVisitor annotation=m.visitAnnotation("Lcpw/mods/fml/common/Mod$EventHandler;",true);annotation.visitEnd();m.visitCode();
+        m.visitLdcInsn(Type.getObjectType("foreign/staticwatch/Child"));m.visitLdcInsn("static_watch");m.visitIntInsn(Opcodes.BIPUSH,38);m.visitVarInsn(Opcodes.ALOAD,0);
+        m.visitIntInsn(Opcodes.BIPUSH,64);m.visitInsn(Opcodes.ICONST_3);m.visitInsn(Opcodes.ICONST_0);
+        m.visitMethodInsn(Opcodes.INVOKESTATIC,"cpw/mods/fml/common/registry/EntityRegistry","registerModEntity",
+                "(Ljava/lang/Class;Ljava/lang/String;ILjava/lang/Object;IIZ)V",false);
+        m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
     }
 
     private static byte[] entity(boolean dynamicIndex) {
