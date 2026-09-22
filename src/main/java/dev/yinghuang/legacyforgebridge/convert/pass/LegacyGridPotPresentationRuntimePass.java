@@ -80,6 +80,10 @@ public final class LegacyGridPotPresentationRuntimePass implements ConversionPas
             float cellWidth=1.0F/integer(core,"gridWidth",0);
             float cellHeight=core.get("cellHeight").getAsFloat();
             writeCellItemModel(context.stagingDir(),id,cellWidth,cellHeight);
+            // Own the custom-renderer block model before the generic icon pass runs later.
+            // A particle-only non-rendering model prevents that pass from reclassifying the
+            // GridPot BlockItem as an ordinary metadata cube and overwriting the 3D cell item model.
+            LegacySpecialBlockModelWriter.write(context.stagingDir(),id,"minecraft:block/flower_pot");
             JsonObject value = new JsonObject();
             value.addProperty("id", id);
             value.addProperty("sourceBlockClass", source);
