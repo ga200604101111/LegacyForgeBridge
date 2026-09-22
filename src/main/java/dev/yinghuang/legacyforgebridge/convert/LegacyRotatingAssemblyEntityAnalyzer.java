@@ -47,7 +47,7 @@ public final class LegacyRotatingAssemblyEntityAnalyzer {
                        int directionWatcher,int sizeWatcher,int countWatcher,int textureWatcher,int reverseWatcher,
                        int directionDefault,int sizeDefault,int sizeMin,int sizeMax,int countDefault,int textureDefault,int reverseDefault,
                        int countBase,int countMax,int fixedRepeatCount,float secondaryPhaseDegrees,float modelScale,
-                       List<String> textures,boolean physicalCollision,boolean playerAttackRemoves,boolean randomInitialPhase){
+                       int modelTextureWidth,int modelTextureHeight,List<String> textures,boolean physicalCollision,boolean playerAttackRemoves,boolean randomInitialPhase){
         public Rule{
             staticParts=List.copyOf(staticParts);repeatedPrimary=List.copyOf(repeatedPrimary);
             repeatedSecondary=List.copyOf(repeatedSecondary);textures=List.copyOf(textures);
@@ -55,7 +55,7 @@ public final class LegacyRotatingAssemblyEntityAnalyzer {
                     ||legacyNumericId<0||trackingRange<=0||updateFrequency<=0||adapter==null
                     ||staticParts.isEmpty()||repeatedPrimary.isEmpty()||directionWatcher<0||sizeWatcher<0
                     ||directionDefault<0||sizeDefault<=0||sizeMin<=0||sizeMax<sizeMin||sizeDefault<sizeMin||sizeDefault>sizeMax
-                    ||modelScale<=0F||textures.isEmpty()||!physicalCollision||!playerAttackRemoves||!randomInitialPhase)
+                    ||modelScale<=0F||modelTextureWidth<=0||modelTextureHeight<=0||textures.isEmpty()||!physicalCollision||!playerAttackRemoves||!randomInitialPhase)
                 throw new IllegalArgumentException("Invalid rotating assembly rule");
             if(adapter==Adapter.VARIABLE_Z_RADIAL&&(countWatcher<0||textureWatcher<0||countDefault<0||textureDefault<0||countBase<=0||countMax<countBase||textures.size()<2))
                 throw new IllegalArgumentException("Incomplete variable radial assembly rule");
@@ -112,6 +112,7 @@ public final class LegacyRotatingAssemblyEntityAnalyzer {
 
             List<MutablePart> parts=parseParts(model);if(parts.isEmpty())continue;
             float scale=modelScale(renderMethod,modelName);if(!(scale>0F))continue;
+            int[] textureSize=modelTexture(model);
             List<String> textures=rendererTextures(rendererNode);if(textures.isEmpty())continue;
 
             Rule rule=null;
@@ -129,7 +130,7 @@ public final class LegacyRotatingAssemblyEntityAnalyzer {
                             Adapter.VARIABLE_Z_RADIAL,variable.staticParts(),variable.repeated(),List.of(),direction,size,count.watcherIndex(),texture,-1,
                             watcherDefault(watcher,direction,0),watcherDefault(watcher,size,1),sizeBounds.min(),sizeBounds.max(),
                             watcherDefault(watcher,count.watcherIndex(),0),watcherDefault(watcher,texture,0),0,
-                            count.base(),countMax,0,0F,scale,textures,true,true,true);
+                            count.base(),countMax,0,0F,scale,textureSize[0],textureSize[1],textures,true,true,true);
             }else{
                 int reverse=remainingOwnByteWatcher(watcher,Set.of(size));
                 FixedModel fixed=proveFixedModel(model,parts);
@@ -140,7 +141,7 @@ public final class LegacyRotatingAssemblyEntityAnalyzer {
                             Adapter.FLUID_X_RADIAL,fixed.staticParts(),fixed.primary(),fixed.secondary(),direction,size,-1,-1,reverse,
                             watcherDefault(watcher,direction,0),watcherDefault(watcher,size,1),sizeBounds.min(),sizeBounds.max(),
                             0,0,watcherDefault(watcher,reverse,0),
-                            0,0,fixed.count(),fixed.secondaryPhaseDegrees(),scale,textures,true,true,true);
+                            0,0,fixed.count(),fixed.secondaryPhaseDegrees(),scale,textureSize[0],textureSize[1],textures,true,true,true);
             }
             if(rule!=null)rules.add(rule);
             else skipped.add(new Skipped(watcher.registryName(),watcher.sourceClass(),"Renderer/model/tick/AABB shape is outside the admitted rotating-assembly families"));
@@ -508,6 +509,20 @@ public final class LegacyRotatingAssemblyEntityAnalyzer {
         for(int j=index-1;j>=Math.max(0,index-12);j--)if(code.get(j) instanceof FieldInsnNode f
                 &&f.getOpcode()==Opcodes.GETFIELD&&f.owner.equals(model)&&f.desc.equals("L"+MODEL_RENDERER+";"))return f.name;
         return null;
+    }
+
+    private static int[] modelTexture(ClassNode model){
+        int width=64,height=32;
+        for(MethodNode method:model.methods)if(method.name.equals("<init>")){
+            List<AbstractInsnNode> code=real(method);
+            for(int i=1;i<code.size();i++)if(code.get(i) instanceof FieldInsnNode field&&field.getOpcode()==Opcodes.PUTFIELD
+                    &&field.owner.equals(model.name)&&field.desc.equals("I")){
+                Integer value=intConstant(code.get(i-1));if(value==null||value<=0)continue;
+                if(Set.of("textureWidth","field_78090_t").contains(field.name))width=value;
+                if(Set.of("textureHeight","field_78089_u").contains(field.name))height=value;
+            }
+        }
+        return new int[]{width,height};
     }
 
     private float modelScale(MethodNode renderer,String model){Float result=null;for(AbstractInsnNode insn:renderer.instructions)if(insn instanceof MethodInsnNode call&&call.owner.equals(model)){
