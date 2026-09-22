@@ -17,6 +17,7 @@ import dev.yinghuang.legacyforgebridge.compat.LegacyPlantPlacementRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyPlantRuntimeRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyProjectilePresentationRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyRadialModelBlockRegistry;
+import dev.yinghuang.legacyforgebridge.compat.LegacyRotatingAssemblyEntityRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacySeatBedRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacySingleInputProcessorRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyStackComponents;
@@ -64,6 +65,7 @@ public final class GeneratedModSupport {
         LegacyOscillatingModelBootstrap.bootstrapMod(modId);
         LegacyVariantSnowballRuntimeRegistry.loadMod(modId);
         LegacyProjectilePresentationRegistry.loadMod(modId);
+        LegacyRotatingAssemblyEntityRegistry.loadMod(modId);
         LegacyPlantRuntimeRegistry.loadMod(modId);
         LegacyPlantPlacementRegistry.loadMod(modId);
         LegacyFoodItemRegistry.loadMod(modId);
