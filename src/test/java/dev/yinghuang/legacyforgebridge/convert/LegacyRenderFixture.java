@@ -1,5 +1,6 @@
 package dev.yinghuang.legacyforgebridge.convert;
 
+import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;

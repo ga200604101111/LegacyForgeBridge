@@ -67,17 +67,17 @@ class LegacyCreativeTabPresentationPassTest {
     private static byte[] contentClass(){
         ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,"other/tab/Content",null,"java/lang/Object",null);
         w.visitField(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"TAB","Lnet/minecraft/creativetab/CreativeTabs;",null,null).visitEnd();
-        w.visitField(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"BLADE","Lnet/minecraft/item/Item;",null,null).visitEnd();
+        w.visitField(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"BLADE","Lother/tab/Sword;",null,null).visitEnd();
         MethodVisitor m=w.visitMethod(Opcodes.ACC_STATIC,"<clinit>","()V",null,null);m.visitCode();
         m.visitTypeInsn(Opcodes.NEW,"other/tab/Tab");m.visitInsn(Opcodes.DUP);m.visitLdcInsn("weapons");
         m.visitMethodInsn(Opcodes.INVOKESPECIAL,"other/tab/Tab","<init>","(Ljava/lang/String;)V",false);
         m.visitFieldInsn(Opcodes.PUTSTATIC,"other/tab/Content","TAB","Lnet/minecraft/creativetab/CreativeTabs;");
         m.visitTypeInsn(Opcodes.NEW,"other/tab/Sword");m.visitInsn(Opcodes.DUP);
         m.visitMethodInsn(Opcodes.INVOKESPECIAL,"other/tab/Sword","<init>","()V",false);
-        m.visitLdcInsn("blade");m.visitMethodInsn(Opcodes.INVOKEVIRTUAL,"net/minecraft/item/Item","setUnlocalizedName","(Ljava/lang/String;)Lnet/minecraft/item/Item;",false);
+        m.visitLdcInsn("blade");m.visitMethodInsn(Opcodes.INVOKEVIRTUAL,"other/tab/Sword","setUnlocalizedName","(Ljava/lang/String;)Lnet/minecraft/item/Item;",false);
         m.visitFieldInsn(Opcodes.GETSTATIC,"other/tab/Content","TAB","Lnet/minecraft/creativetab/CreativeTabs;");
-        m.visitMethodInsn(Opcodes.INVOKEVIRTUAL,"net/minecraft/item/Item","setCreativeTab","(Lnet/minecraft/creativetab/CreativeTabs;)Lnet/minecraft/item/Item;",false);
-        m.visitFieldInsn(Opcodes.PUTSTATIC,"other/tab/Content","BLADE","Lnet/minecraft/item/Item;");
+        m.visitMethodInsn(Opcodes.INVOKEVIRTUAL,"other/tab/Sword","setCreativeTab","(Lnet/minecraft/creativetab/CreativeTabs;)Lnet/minecraft/item/Item;",false);
+        m.visitFieldInsn(Opcodes.PUTSTATIC,"other/tab/Content","BLADE","Lother/tab/Sword;");
         m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
     }
     private static void put(JarOutputStream jar,String name,byte[] bytes)throws Exception{
