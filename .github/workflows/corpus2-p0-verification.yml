@@ -5,16 +5,57 @@ on:
     branches:
       - feature/generic-conversion-bamboo-corpus2
 permissions:
-  contents: write
+  contents: read
 concurrency:
   group: corpus2-p0-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  transfer-complete-batch:
+  verify:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 2
-      - name: Commit the complete verified source batch without building
-        run: python3 tools/rev181-transfer.py
+
+      - name: Verify committed source diff hygiene
+        run: git diff --check HEAD^
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.5.1'
+
+      - name: Full build and tests
+        run: gradle build --stacktrace
+
+      - uses: actions/upload-artifact@v7
+        if: success()
+        with:
+          name: LegacyForgeBridge-bamboo-presentation-batch-181
+          path: build/libs/*.jar
+          if-no-files-found: error
+
+      - name: Preserve source-analysis support
+        if: always()
+        run: |
+          mkdir -p build/verification-support/analysis-deps
+          git rev-parse HEAD > build/verification-support/tested-source-revision.txt
+          git archive --format=tar.gz HEAD -o build/verification-support/source-tree.tar.gz
+          for group in org.ow2.asm com.google.code.gson org.slf4j; do
+            find "$HOME/.gradle/caches/modules-2/files-2.1/$group" -type f -name '*.jar' -exec cp -n {} build/verification-support/analysis-deps/ \;
+          done
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: LegacyForgeBridge-verification-support
+          path: |
+            build/test-results/test/*.xml
+            build/reports/tests/test/
+            build/verification-support/
+          retention-days: 7
+          if-no-files-found: warn
