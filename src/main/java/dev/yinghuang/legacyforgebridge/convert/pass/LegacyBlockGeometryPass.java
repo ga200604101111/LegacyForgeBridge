@@ -65,7 +65,7 @@ public final class LegacyBlockGeometryPass implements ConversionPass {
                 List<LegacyGeometry.Box> world=stairs?LegacyGeometry.stairs(metadata):pane?LegacyGeometry.panes(0)
                         :connected?List.of(LegacyGeometry.connectedCore(connectedRule.minWidth(),connectedRule.maxWidth(),connectedRule.minHeight(),connectedRule.maxHeight(),connectedRule.axisLocked(),metadata))
                         :List.of(box);
-                List<LegacyGeometry.Box> held=stairs?LegacyGeometry.stairs(HELD_STAIR_METADATA):pane?List.of(new LegacyGeometry.Box(0,0,7d/16,1,1,9d/16)):List.of(inv);
+                List<LegacyGeometry.Box> held=stairs?LegacyGeometry.stairs(0):pane?List.of(new LegacyGeometry.Box(0,0,7d/16,1,1,9d/16)):List.of(inv);
                 String worldId=ns+":block/lfb_geometry/"+path+"/"+metadata,heldId=ns+":item/lfb_geometry/"+path+"/"+metadata;
                 boolean paneEdges=input.paneEdges().getOrDefault(metadata,true);
                 var uvRule=uvRotated.get(input.registryName());
