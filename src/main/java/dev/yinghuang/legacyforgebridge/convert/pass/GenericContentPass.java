@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import dev.yinghuang.legacyforgebridge.convert.LegacyBlockInventoryRenderModeAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.LegacyFmlModAnnotationAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.LegacyRegistryAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.api.ConversionContext;
@@ -14,8 +15,10 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Stream;
@@ -38,6 +41,10 @@ public final class GenericContentPass implements ConversionPass {
         if (analysis.registrations().isEmpty()) return;
         for (String diagnostic : analysis.diagnostics()) {
             context.diagnostics().warning("LFB-CONVERT-REGISTRY-0002", SupportLevel.MANUAL_REQUIRED, diagnostic);
+        }
+        Map<String, LegacyBlockInventoryRenderModeAnalyzer.Mode> blockInventoryModes = new LinkedHashMap<>();
+        for (var rule : new LegacyBlockInventoryRenderModeAnalyzer().analyze(context.sourceJar()).rules()) {
+            blockInventoryModes.putIfAbsent(rule.registryName(), rule.mode());
         }
 
         String namespace = context.metadata().fabricId();
@@ -124,7 +131,7 @@ public final class GenericContentPass implements ConversionPass {
             blocks.add(block);
             recordIdentity(context, "blocks", registration, id);
             recordIdentity(context, "items", registration, id); // GameRegistry.registerBlock also creates an ItemBlock identity.
-            writeFallbackBlockModels(context, id, registration.registryName());
+            writeFallbackBlockModels(context, id, registration.registryName(), blockInventoryModes.get(registration.registryName()));
         }
         root.add("blocks", blocks);
 
@@ -212,7 +219,8 @@ public final class GenericContentPass implements ConversionPass {
         Files.writeString(item, "{\n  \"model\": {\"type\": \"minecraft:model\", \"model\": \"" + namespace + ":item/" + path + "\"}\n}\n", StandardCharsets.UTF_8);
     }
 
-    private static void writeFallbackBlockModels(ConversionContext context, String id, String legacyName) throws IOException {
+    private static void writeFallbackBlockModels(ConversionContext context, String id, String legacyName,
+                                                 LegacyBlockInventoryRenderModeAnalyzer.Mode inventoryMode) throws IOException {
         String namespace = id.substring(0, id.indexOf(':'));
         String path = id.substring(id.indexOf(':') + 1);
         Texture texture = findTexture(context.stagingDir(), "blocks", legacyName);
@@ -226,7 +234,9 @@ public final class GenericContentPass implements ConversionPass {
         LegacyPresentationOwnership.record(context.stagingDir(), model);
         Files.writeString(state, "{\n  \"variants\": {\"\": {\"model\": \"" + namespace + ":block/" + path + "\"}}\n}\n", StandardCharsets.UTF_8);
         Texture itemTexture = findTexture(context.stagingDir(), "items", legacyName);
-        if (itemTexture != null) {
+        // A same-named items/ texture is not evidence that a BlockItem was flat in 1.7.10.
+        // Use it only when vanilla RenderBlocks or the registered Forge handler proves 2D inventory.
+        if (inventoryMode == LegacyBlockInventoryRenderModeAnalyzer.Mode.FLAT_2D && itemTexture != null) {
             Files.writeString(itemModel, "{\n  \"parent\": \"minecraft:item/generated\",\n  \"textures\": {\"layer0\": \"" + itemTexture.resource() + "\"}\n}\n", StandardCharsets.UTF_8);
             LegacyPresentationOwnership.record(context.stagingDir(), itemModel);
         } else {

@@ -1,7 +1,9 @@
 package dev.yinghuang.legacyforgebridge.convert;
 
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.Set;
 
 /**
  * Bounded Minecraft 1.7.10 platform facts for effective {@code Block#getRenderType()} values.
@@ -19,6 +21,11 @@ public final class LegacyBlockRenderType1710 {
             "net/minecraft/block/BlockCactus", 13,
             "net/minecraft/block/BlockDoublePlant", 40
     );
+    // Minecraft 1.7.10 RenderBlocks.renderItemIn3d. Custom Forge render IDs are deliberately
+    // excluded here and are resolved from ISimpleBlockRenderingHandler source bytecode instead.
+    private static final Set<Integer> INVENTORY_3D = Set.of(
+            0, 10, 11, 13, 16, 21, 22, 26, 27, 31, 32, 34, 35, 39
+    );
 
     private LegacyBlockRenderType1710() { }
 
@@ -26,5 +33,10 @@ public final class LegacyBlockRenderType1710 {
         if (internalName == null || internalName.isBlank()) return OptionalInt.empty();
         Integer value = EFFECTIVE.get(internalName);
         return value == null ? OptionalInt.empty() : OptionalInt.of(value);
+    }
+
+    public static Optional<Boolean> renderItemIn3d(int renderType) {
+        if (renderType < -1 || renderType > 40) return Optional.empty();
+        return Optional.of(INVENTORY_3D.contains(renderType));
     }
 }
