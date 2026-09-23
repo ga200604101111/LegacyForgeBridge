@@ -44,6 +44,7 @@ public final class ConvertedLegacyRadialModelSpecialRenderer implements NoDataSp
     public void submit(ItemDisplayContext type,PoseStack matrices,SubmitNodeCollector queue,
                        int light,int overlay,boolean hasFoil,int outlineColor){
         matrices.pushPose();
+        LegacyRenderMath.restoreLegacyModelRendererItemOrigin(matrices);
         matrices.translate(0D,definition.translateY(),0D);
         matrices.scale(definition.scale(),definition.scale(),definition.scale());
         for(Rendered rendered:parts){
@@ -59,6 +60,7 @@ public final class ConvertedLegacyRadialModelSpecialRenderer implements NoDataSp
     @SuppressWarnings({"rawtypes","unchecked"})
     public void getExtents(Consumer output){
         PoseStack root=new PoseStack();
+        LegacyRenderMath.restoreLegacyModelRendererItemOrigin(root);
         root.translate(0D,definition.translateY(),0D);
         root.scale(definition.scale(),definition.scale(),definition.scale());
         Cuboid c=definition.cuboid();

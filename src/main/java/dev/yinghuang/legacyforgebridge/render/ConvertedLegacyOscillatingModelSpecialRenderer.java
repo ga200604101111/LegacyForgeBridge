@@ -55,6 +55,7 @@ public final class ConvertedLegacyOscillatingModelSpecialRenderer implements NoD
     }
 
     private void applyRoot(PoseStack matrices){
+        LegacyRenderMath.restoreLegacyModelRendererItemOrigin(matrices);
         matrices.mulPose(Axis.YP.rotationDegrees(definition.yawDegrees()));
         matrices.translate(0D,definition.translateY(),0D);
         matrices.scale(definition.scale(),definition.scale(),definition.scale());

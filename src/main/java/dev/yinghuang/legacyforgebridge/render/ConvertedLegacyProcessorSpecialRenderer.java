@@ -42,7 +42,7 @@ public final class ConvertedLegacyProcessorSpecialRenderer implements NoDataSpec
     public void submit(ItemDisplayContext type,PoseStack matrices,SubmitNodeCollector queue,
                        int light,int overlay,boolean hasFoil,int outlineColor) {
         matrices.pushPose();
-        if(definition.centered())matrices.translate(0.5D,0.5D,0.5D);
+        if(definition.centered())LegacyRenderMath.restoreLegacyModelRendererItemOrigin(matrices);
         queue.submitModelPart(staticUpper,matrices,renderType,light,overlay,null,0xFFFFFFFF,null);
         // Source ModelMillStone.renderInv() explicitly writes lower.rotateAngleY = 0 before render.
         queue.submitModelPart(rotatingLower,matrices,renderType,light,overlay,null,0xFFFFFFFF,null);

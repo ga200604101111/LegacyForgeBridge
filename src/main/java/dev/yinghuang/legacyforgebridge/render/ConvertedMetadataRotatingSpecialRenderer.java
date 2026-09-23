@@ -30,7 +30,7 @@ public final class ConvertedMetadataRotatingSpecialRenderer implements NoDataSpe
     @Override public void submit(ItemDisplayContext type,PoseStack matrices,SubmitNodeCollector queue,int light,int overlay,boolean hasFoil,int outlineColor){
         matrices.pushPose();applyTransform(matrices);for(Rendered rendered:parts)queue.submitModelPart(rendered.part(),matrices,renderType,light,overlay,null,0xFFFFFFFF,null);matrices.popPose();
     }
-    private void applyTransform(PoseStack matrices){matrices.translate(definition.translateX(),definition.translateY(),definition.translateZ());matrices.scale(definition.scale(),definition.scale(),definition.scale());}
+    private void applyTransform(PoseStack matrices){LegacyRenderMath.restoreLegacyModelRendererItemOrigin(matrices);matrices.translate(definition.translateX(),definition.translateY(),definition.translateZ());matrices.scale(definition.scale(),definition.scale(),definition.scale());}
     @Override @SuppressWarnings({"rawtypes","unchecked"}) public void getExtents(Consumer output){
         PoseStack root=new PoseStack();applyTransform(root);
         for(Rendered rendered:parts){Cuboid c=rendered.source();root.pushPose();root.translate(c.pivotX()/16F,c.pivotY()/16F,c.pivotZ()/16F);
