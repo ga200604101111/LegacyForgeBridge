@@ -141,8 +141,7 @@ public final class FmlRuntimeClient {
         ClientLevel level=client.level;FmlRuntimeCodec.EntitySpawnHeader message=spawn.header();
         if(level==null){trace.event("Converted transient-seat spawn skipped: client level is null; entity="+message.entityId());return;}
         ConvertedLegacySeatEntity entity=new ConvertedLegacySeatEntity(LegacySeatEntityRuntime.type(),level);
-        entity.setId(message.entityId());entity.setPos(message.x(),message.y(),message.z());entity.setYRot(message.yaw());entity.setXRot(message.pitch());
-        entity.syncPacketPositionCodec(message.x(),message.y(),message.z());level.addEntity(entity);
+        initializeRemoteSpawnPose(entity,message);level.addEntity(entity);
         trace.event("Converted legacy FML transient-seat entity spawned; entity="+message.entityId()+" legacy="+message.modId()+":"+message.modEntityTypeId()+" watcherEntries="+spawn.watcherEntries());
     }
 
@@ -161,8 +160,7 @@ public final class FmlRuntimeClient {
             trace.event("Converted visible Entity spawn rejected: unmapped/non-default watcher; entity="+message.entityId()+" watcher="+watcher.id()+" type="+watcher.type());
             return;
         }
-        entity.setId(message.entityId());entity.setPos(message.x(),message.y(),message.z());entity.setYRot(message.yaw());entity.setXRot(message.pitch());
-        entity.syncPacketPositionCodec(message.x(),message.y(),message.z());level.addEntity(entity);
+        initializeRemoteSpawnPose(entity,message);level.addEntity(entity);
         trace.event("Converted legacy FML visible Entity spawned; entity="+message.entityId()+" legacy="+message.modId()+":"+message.modEntityTypeId()+" modern="+rule.id()+" adapter="+rule.adapter()+" baseWatchers="+baseWatchers+" customWatchers="+customWatchers);
     }
 
@@ -186,12 +184,9 @@ public final class FmlRuntimeClient {
             trace.event("Converted remote projectile spawn rejected: unmapped watcher; entity="+message.entityId()
                     +" watcher="+watcher.id()+" type="+watcher.type()+" family="+rule.baseFamily());return;
         }
-        entity.setId(message.entityId());entity.setPos(message.x(),message.y(),message.z());
-        entity.setYRot(message.yaw());entity.setXRot(message.pitch());
-        // Initialize both interpolation endpoints from the remote pose, not the default zero angle.
-        entity.yRotO=entity.getYRot();entity.xRotO=entity.getXRot();
+        initializeRemoteSpawnPose(entity,message);
         if(spawn.throwableEnvelope())entity.setDeltaMovement(spawn.velocityX(),spawn.velocityY(),spawn.velocityZ());
-        entity.syncPacketPositionCodec(message.x(),message.y(),message.z());level.addEntity(entity);
+        level.addEntity(entity);
         trace.event("Converted legacy FML remote projectile spawned; entity="+message.entityId()+" legacy="+message.modId()+":"
                 +message.modEntityTypeId()+" modern="+rule.id()+" adapter="+rule.adapter()+" throwerId="+spawn.throwerId()
                 +" velocity="+spawn.velocityX()+","+spawn.velocityY()+","+spawn.velocityZ()
@@ -215,9 +210,8 @@ public final class FmlRuntimeClient {
             trace.event("Converted rotating assembly spawn rejected: unmapped watcher; entity="+message.entityId()
                     +" watcher="+watcher.id()+" type="+watcher.type());return;
         }
-        entity.setId(message.entityId());entity.setPos(message.x(),message.y(),message.z());
-        entity.setYRot(message.yaw());entity.setXRot(message.pitch());entity.initializeVisualPhase();entity.refreshLegacyBounds();
-        entity.syncPacketPositionCodec(message.x(),message.y(),message.z());level.addEntity(entity);
+        initializeRemoteSpawnPose(entity,message);entity.initializeVisualPhase();entity.refreshLegacyBounds();
+        level.addEntity(entity);
         trace.event("Converted legacy FML rotating assembly spawned; entity="+message.entityId()+" legacy="+message.modId()+":"
                 +message.modEntityTypeId()+" modern="+rule.id()+" adapter="+rule.adapter()
                 +" baseWatchers="+baseWatchers+" customWatchers="+customWatchers);
@@ -241,9 +235,21 @@ public final class FmlRuntimeClient {
             trace.event("Converted plain Entity spawn rejected: unmapped/non-default legacy base watcher; entity="+message.entityId()+" watcher="+watcher.id()+" type="+watcher.type()+" value="+watcher.value());
             return;
         }
-        entity.setId(message.entityId());entity.setPos(message.x(),message.y(),message.z());entity.setYRot(message.yaw());entity.setXRot(message.pitch());
-        entity.syncPacketPositionCodec(message.x(),message.y(),message.z());level.addEntity(entity);
+        initializeRemoteSpawnPose(entity,message);level.addEntity(entity);
         trace.event("Converted legacy FML plain Entity spawned; entity="+message.entityId()+" legacy="+message.modId()+":"+message.modEntityTypeId()+" modern="+rule.id()+" baseWatchers="+baseWatchers+" customWatchers="+customWatchers);
+    }
+
+    /**
+     * Forge 1.7.10 spawned remote mod entities through Entity#setLocationAndAngles, which
+     * initialized current and previous render coordinates together. Minecraft 1.21 does the
+     * equivalent in Entity#snapTo. Using setPos/setYRot/setXRot here leaves xOld/yOld/zOld at the
+     * constructor origin for the first rendered frame, so low furniture can visibly interpolate
+     * from the wrong anchor even though the packet coordinates themselves are correct.
+     */
+    private static void initializeRemoteSpawnPose(Entity entity,FmlRuntimeCodec.EntitySpawnHeader message){
+        entity.setId(message.entityId());
+        entity.snapTo(message.x(),message.y(),message.z(),message.yaw(),message.pitch());
+        entity.syncPacketPositionCodec(message.x(),message.y(),message.z());
     }
 
     private static boolean isLegacyEntityBaseWatcher(FmlRuntimeCodec.LegacyDataWatcherEntry watcher){
