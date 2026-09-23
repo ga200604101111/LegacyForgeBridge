@@ -7,6 +7,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import dev.yinghuang.legacyforgebridge.convert.LegacyItemRenderAnalyzer;
+import dev.yinghuang.legacyforgebridge.convert.LegacyRegistryAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.LegacyHandSpace;
 import dev.yinghuang.legacyforgebridge.convert.LegacyItemRenderAnalyzer.Binding;
 import dev.yinghuang.legacyforgebridge.convert.LegacyItemRenderAnalyzer.Context;
@@ -20,9 +21,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
+import java.nio.file.StandardCopyOption;
+import java.util.*;
 
 /** Cross-mod source renderer -> ordinary modern item-model context selection and OBJ transforms. */
 public final class LegacyItemRenderPass implements ConversionPass {
@@ -36,6 +36,7 @@ public final class LegacyItemRenderPass implements ConversionPass {
         itemAnalysis.items().forEach(item -> allocations.put(item.itemName(),item));
         for (String message : analysis.diagnostics()) context.diagnostics().warning(
                 "LFB-CONVERT-ITEM-RENDER-0002", SupportLevel.MANUAL_REQUIRED, message);
+        int materialized=materializeSourceObjDefinitions(context,analysis.bindings());
         int replaced = 0;
         Path assets = context.stagingDir().resolve("assets");
         if (Files.isDirectory(assets)) {
@@ -100,9 +101,84 @@ public final class LegacyItemRenderPass implements ConversionPass {
         Files.createDirectories(report.getParent());
         Files.writeString(report, GSON.toJson(analysis) + "\n", StandardCharsets.UTF_8);
         context.diagnostics().info("LFB-CONVERT-ITEM-RENDER-0001", SupportLevel.ADAPTED,
-                "Source IItemRenderer bindings=" + analysis.bindings().size() + ", modern context-select models=" + replaced
+                "Source IItemRenderer bindings=" + analysis.bindings().size()+", source OBJ definitions materialized="+materialized
+                        + ", modern context-select models=" + replaced
                         + ". Source operations are preserved in order; unknown runtime behavior is not invented.");
     }
+
+    private static int materializeSourceObjDefinitions(ConversionContext context,List<Binding> bindings)throws IOException{
+        Path manifest=context.stagingDir().resolve(LegacyClientContentBaselinePass.CONTENT);
+        if(!Files.isRegularFile(manifest)||bindings.isEmpty())return 0;
+        JsonObject content=JsonParser.parseString(Files.readString(manifest,StandardCharsets.UTF_8)).getAsJsonObject();
+        JsonArray items=content.getAsJsonArray("items");if(items==null)return 0;
+        Map<String,List<JsonObject>> byLegacy=new LinkedHashMap<>();
+        for(JsonElement element:items)if(element.isJsonObject()){
+            JsonObject item=element.getAsJsonObject();String legacy=string(item,"legacyRegistryName");
+            if(legacy!=null)byLegacy.computeIfAbsent(legacy,ignored->new ArrayList<>()).add(item);
+        }
+
+        var registryAnalysis=new LegacyRegistryAnalyzer().analyze(context.sourceJar());
+        Map<String,List<LegacyRegistryAnalyzer.FieldBinding>> fields=new LinkedHashMap<>();
+        for(var binding:registryAnalysis.fieldBindings())if(binding.kind()==LegacyRegistryAnalyzer.Kind.ITEM)
+            fields.computeIfAbsent(binding.owner()+"\u0000"+binding.name(),ignored->new ArrayList<>()).add(binding);
+
+        int emitted=0;
+        for(Binding source:bindings){
+            List<LegacyRegistryAnalyzer.FieldBinding> identities=fields.getOrDefault(source.fieldOwner()+"\u0000"+source.fieldName(),List.of());
+            if(identities.size()!=1)continue;
+            List<JsonObject> converted=byLegacy.getOrDefault(identities.getFirst().registryName(),List.of());
+            if(converted.size()!=1)continue;
+            LinkedHashSet<ResourcePair> pairs=new LinkedHashSet<>();
+            for(Context render:source.contexts().values())if(render.custom())
+                for(Draw draw:render.draws())pairs.add(new ResourcePair(draw.model(),draw.texture()));
+            if(pairs.size()!=1)continue;
+            ResourcePair pair=pairs.getFirst();
+            String model=materializeCaseExactResource(context.stagingDir(),pair.model());
+            String texture=materializeCaseExactResource(context.stagingDir(),pair.texture());
+            if(model==null||texture==null)continue;
+
+            String id=string(converted.getFirst(),"id");if(id==null)continue;
+            int split=id.indexOf(':');if(split<=0)continue;
+            String namespace=id.substring(0,split),path=id.substring(split+1);
+            Path definition=context.stagingDir().resolve("assets/"+namespace+"/items/"+path+".json");
+            if(!Files.isRegularFile(definition))continue;
+            JsonObject root=JsonParser.parseString(Files.readString(definition,StandardCharsets.UTF_8)).getAsJsonObject();
+            JsonObject ordinary=object(root,"model");
+            if(ordinary==null||!"minecraft:model".equals(string(ordinary,"type")))continue;
+            String base=string(ordinary,"model");if(base==null)continue;
+            JsonObject special=new JsonObject();special.addProperty("type","legacyforgebridge:obj");
+            special.addProperty("model",model);special.addProperty("texture",texture);special.addProperty("scale",1F);
+            JsonObject wrapper=new JsonObject();wrapper.addProperty("type","minecraft:special");wrapper.addProperty("base",base);wrapper.add("model",special);
+            root.add("model",wrapper);
+            Files.writeString(definition,GSON.toJson(root)+"\n",StandardCharsets.UTF_8);
+            emitted++;
+        }
+        return emitted;
+    }
+
+    private static String materializeCaseExactResource(Path staging,String id)throws IOException{
+        if(id==null)return null;int split=id.indexOf(':');if(split<=0||split==id.length()-1)return null;
+        String namespace=id.substring(0,split),path=id.substring(split+1).replace('\\','/');
+        if(path.startsWith("/")||path.contains(".."))return null;
+        String canonicalNamespace=namespace.toLowerCase(Locale.ROOT),canonicalPath=path.toLowerCase(Locale.ROOT);
+        Path assets=staging.resolve("assets").toAbsolutePath().normalize();
+        Path target=assets.resolve(canonicalNamespace).resolve(canonicalPath).normalize();
+        if(!target.startsWith(assets))return null;
+        if(Files.isRegularFile(target))return canonicalNamespace+":"+canonicalPath;
+        String expected=(namespace+"/"+path).toLowerCase(Locale.ROOT);
+        List<Path> matches;
+        try(var walk=Files.walk(assets)){
+            matches=walk.filter(Files::isRegularFile)
+                    .filter(file->assets.relativize(file).toString().replace('\\','/').toLowerCase(Locale.ROOT).equals(expected))
+                    .toList();
+        }
+        if(matches.size()!=1)return null;
+        Files.createDirectories(target.getParent());
+        Files.copy(matches.getFirst(),target,StandardCopyOption.REPLACE_EXISTING);
+        return canonicalNamespace+":"+canonicalPath;
+    }
+
+    private record ResourcePair(String model,String texture) { }
 
     private static boolean supported(Binding b) {
         for (String key : List.of("INVENTORY", "ENTITY", "EQUIPPED", "EQUIPPED_FIRST_PERSON")) {

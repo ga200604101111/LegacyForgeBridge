@@ -160,12 +160,12 @@ public final class LegacyRegistryAnalyzer {
             }
         }
 
-        LinkedHashSet<FieldBinding> fieldBindings = recoverFieldBindings();
+        LinkedHashSet<FieldBinding> fieldBindings = recoverFieldBindings(output);
         if (output.isEmpty()) diagnostics.add("No concrete GameRegistry item/block registrations were proven from reachable lifecycle roots.");
         return new Analysis(List.copyOf(output), List.copyOf(fieldBindings), List.copyOf(new LinkedHashSet<>(diagnostics)));
     }
 
-    private LinkedHashSet<FieldBinding> recoverFieldBindings() {
+    private LinkedHashSet<FieldBinding> recoverFieldBindings(Set<Registration> provenRegistrations) {
         LinkedHashSet<FieldBinding> output = new LinkedHashSet<>();
         for (var entry : methods.entrySet()) {
             MethodContext context = entry.getValue();
@@ -202,7 +202,38 @@ public final class LegacyRegistryAnalyzer {
                         registration.registryName(), registration.legacyNamespace(), registration.implementationClass()));
             }
         }
+        // Also bind ordinary static item fields directly from their source-proven allocation.
+        // This covers Forge registration helpers where GameRegistry receives item.getUnlocalizedName()
+        // instead of the static field assignment itself returning a registration helper result.
+        for (var entry : methods.entrySet()) {
+            MethodContext context=entry.getValue();
+            for(int i=0;i<context.method().instructions.size();i++){
+                AbstractInsnNode instruction=context.method().instructions.get(i);
+                if(!(instruction instanceof FieldInsnNode field)||field.getOpcode()!=Opcodes.PUTSTATIC)continue;
+                Frame<SourceValue> frame=context.frames()[i];
+                if(frame==null||frame.getStackSize()<1)continue;
+                Symbol assigned=resolve(context,frame.getStack(frame.getStackSize()-1),i,0,new LinkedHashSet<>());
+                if(!(assigned instanceof ObjectSymbol object)||object.unlocalizedName()==null)continue;
+                String itemName=normalizeLegacyItemName(object.unlocalizedName());
+                List<Registration> candidates=provenRegistrations.stream()
+                        .filter(registration->registration.kind()==Kind.ITEM&&registration.registryName().equals(itemName))
+                        .filter(registration->registration.implementationClass()==null
+                                ||registration.implementationClass().equals(object.internalName()))
+                        .toList();
+                if(candidates.size()!=1)continue;
+                Registration registration=candidates.getFirst();
+                output.add(new FieldBinding(field.owner,field.name,field.desc,registration.kind(),
+                        registration.registryName(),registration.legacyNamespace(),registration.implementationClass()));
+            }
+        }
         return output;
+    }
+
+    private static String normalizeLegacyItemName(String raw){
+        String value=raw==null?"":raw.trim();
+        if(value.startsWith("item."))value=value.substring(5);
+        int namespace=value.indexOf(':');if(namespace>=0)value=value.substring(namespace+1);
+        return value;
     }
 
     public String classifyItem(String implementationClass) {

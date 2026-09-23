@@ -66,8 +66,8 @@ public final class LegacyConversionEngine {
                     .add(new CopyLegacyJarPass())
                     .add(new LegacyLanguagePass());
             profile.configure(builder);
-            builder.add(new LegacyObjPresentationPass());
             builder.add(new LegacyItemRenderPass());
+            builder.add(new LegacyObjPresentationPass());
             builder.add(new NativeItemTagsPass());
             builder.add(new LegacyFoodItemPass());
             builder.add(new LegacyItemBlockBindingPass());

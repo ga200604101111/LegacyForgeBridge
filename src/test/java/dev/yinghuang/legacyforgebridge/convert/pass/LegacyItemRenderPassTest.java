@@ -43,6 +43,29 @@ class LegacyItemRenderPassTest {
         assertFalse(generated.contains("minecraft:blocks_attacks"),"LFB must not bake a second blocking transform");
         assertTrue(Files.isRegularFile(context.stagingDir().resolve("legacyforgebridge/item-render-analysis.json")));
     }
+    @Test void sourceRendererCanMaterializeInitialObjDefinitionFromProvenRegistryField() throws Exception {
+        Path work=Files.createTempDirectory(temp,"materialize-");
+        Path source=LegacyRenderFixture.create(work.resolve("Foreign.jar"),"alchemy",false);
+        Path staging=work.resolve("staging");
+        Files.createDirectories(staging.resolve("legacyforgebridge"));
+        Files.writeString(staging.resolve("legacyforgebridge/converted-content.json"),
+                "{\"namespace\":\"alchemy\",\"items\":[{\"id\":\"alchemy:tool\",\"legacyRegistryName\":\"tool\",\"kind\":\"item\"}]}");
+        Path model=staging.resolve("assets/alchemy/models/item/tool.json");Files.createDirectories(model.getParent());
+        Files.writeString(model,"{\"parent\":\"minecraft:item/generated\",\"textures\":{\"layer0\":\"alchemy:items/tool\"}}");
+        Path item=staging.resolve("assets/alchemy/items/tool.json");Files.createDirectories(item.getParent());
+        Files.writeString(item,"{\"model\":{\"type\":\"minecraft:model\",\"model\":\"alchemy:item/tool\"}}");
+        Path mesh=staging.resolve("assets/alchemy/models/tool.obj");Files.createDirectories(mesh.getParent());Files.writeString(mesh,"v 0 0 0");
+        Path texture=staging.resolve("assets/alchemy/textures/tool.png");Files.createDirectories(texture.getParent());Files.write(texture,new byte[]{1});
+        ConversionContext context=new ConversionContext(source,staging,work.resolve("candidate.jar"),Hashing.sha256(source),Files.size(source),
+                LegacyModMetadata.read(source),new LegacyJarAnalyzer().analyze(source),new DiagnosticCollector(),"generic-forge-1.7.10");
+
+        new LegacyItemRenderPass().apply(context);
+
+        JsonObject root=JsonParser.parseString(Files.readString(item)).getAsJsonObject();
+        assertEquals("minecraft:select",root.getAsJsonObject("model").get("type").getAsString());
+        assertTrue(Files.isRegularFile(staging.resolve("legacyforgebridge/item-render-analysis.json")));
+    }
+
     @Test void dynamicSourceAndMissingTextureRetainExistingModelWithDiagnostics() throws Exception {
         for (boolean dynamic : List.of(true,false)) {
             var context=prepare(dynamic,dynamic);new LegacyItemRenderPass().apply(context);

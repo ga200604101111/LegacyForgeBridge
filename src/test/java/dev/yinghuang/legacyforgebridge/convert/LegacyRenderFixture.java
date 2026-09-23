@@ -48,6 +48,15 @@ public final class LegacyRenderFixture implements Opcodes {
     private static byte[] client(String client, String renderer, String namespace) {
         ClassWriter w = writer(client, null);
         field(w, ACC_PUBLIC | ACC_STATIC, "TOOL", "L" + ITEM + ";");
+        MethodVisitor c=method(w,ACC_STATIC,"<clinit>","()V");
+        c.visitTypeInsn(NEW,ITEM);c.visitInsn(DUP);c.visitMethodInsn(INVOKESPECIAL,ITEM,"<init>","()V",false);
+        c.visitLdcInsn("tool");c.visitMethodInsn(INVOKEVIRTUAL,ITEM,"setUnlocalizedName","(Ljava/lang/String;)L"+ITEM+";",false);
+        c.visitFieldInsn(PUTSTATIC,client,"TOOL","L"+ITEM+";");c.visitInsn(RETURN);end(c);
+        MethodVisitor p=method(w,ACC_PUBLIC,"preInit","(Lcpw/mods/fml/common/event/FMLPreInitializationEvent;)V");
+        AnnotationVisitor av=p.visitAnnotation("Lcpw/mods/fml/common/Mod$EventHandler;",true);av.visitEnd();
+        p.visitFieldInsn(GETSTATIC,client,"TOOL","L"+ITEM+";");p.visitLdcInsn("tool");
+        p.visitMethodInsn(INVOKESTATIC,"cpw/mods/fml/common/registry/GameRegistry","registerItem",
+                "(L"+ITEM+";Ljava/lang/String;)V",false);p.visitInsn(RETURN);end(p);
         MethodVisitor m = method(w, ACC_PUBLIC | ACC_STATIC, "install", "()V");
         m.visitFieldInsn(GETSTATIC, client, "TOOL", "L" + ITEM + ";");
         m.visitTypeInsn(NEW, renderer); m.visitInsn(DUP); m.visitLdcInsn(namespace + ":textures/tool.png");
@@ -56,6 +65,7 @@ public final class LegacyRenderFixture implements Opcodes {
                 "(L" + ITEM + ";L" + RENDERER + ";)V", false);
         m.visitInsn(RETURN); end(m); w.visitEnd(); return w.toByteArray();
     }
+
     private static byte[] renderer(String name, String namespace, boolean dynamic) {
         ClassWriter w = writer(name, new String[]{RENDERER});
         field(w, ACC_PUBLIC | ACC_STATIC, "MESH", "L" + MODEL + ";");

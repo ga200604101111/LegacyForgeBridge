@@ -65,6 +65,9 @@ class LegacyRegistryAnalyzerTest {
         assertEquals("derived_blade",item.registryName());
         assertEquals("other/derived/Blade",item.implementationClass());
         assertEquals("(Ljava/lang/String;)V",item.constructorDescriptor());
+        assertTrue(analysis.fieldBindings().stream().anyMatch(binding->
+                binding.owner().equals("other/derived/Content")&&binding.name().equals("BLADE")
+                        &&binding.registryName().equals("derived_blade")&&binding.kind()==LegacyRegistryAnalyzer.Kind.ITEM));
     }
 
     private static byte[] derivedContent(){
