@@ -188,6 +188,8 @@ public final class FmlRuntimeClient {
         }
         entity.setId(message.entityId());entity.setPos(message.x(),message.y(),message.z());
         entity.setYRot(message.yaw());entity.setXRot(message.pitch());
+        // Initialize both interpolation endpoints from the remote pose, not the default zero angle.
+        entity.yRotO=entity.getYRot();entity.xRotO=entity.getXRot();
         if(spawn.throwableEnvelope())entity.setDeltaMovement(spawn.velocityX(),spawn.velocityY(),spawn.velocityZ());
         entity.syncPacketPositionCodec(message.x(),message.y(),message.z());level.addEntity(entity);
         trace.event("Converted legacy FML remote projectile spawned; entity="+message.entityId()+" legacy="+message.modId()+":"

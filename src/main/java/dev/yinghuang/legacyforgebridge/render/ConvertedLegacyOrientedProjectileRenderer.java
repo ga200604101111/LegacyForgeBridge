@@ -1,64 +1,91 @@
 package dev.yinghuang.legacyforgebridge.render;
 
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.math.Axis;
 import dev.yinghuang.legacyforgebridge.convert.runtime.ConvertedLegacyRemoteProjectile;
 import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.entity.ArrowRenderer;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
-import net.minecraft.client.renderer.entity.state.EntityRenderState;
-import net.minecraft.client.renderer.item.ItemModelResolver;
-import net.minecraft.client.renderer.item.ItemStackRenderState;
+import net.minecraft.client.renderer.entity.state.ArrowRenderState;
 import net.minecraft.client.renderer.state.CameraRenderState;
-import net.minecraft.client.renderer.texture.OverlayTexture;
-import net.minecraft.world.item.ItemDisplayContext;
-import net.minecraft.world.phys.Vec3;
+import net.minecraft.resources.Identifier;
+import net.minecraft.util.Mth;
+import net.minecraft.world.entity.projectile.arrow.AbstractArrow;
 
 /**
- * Directional modern-item carrier for source-proven arrow-family custom projectile renderers.
+ * Vanilla arrow presentation for source-proven remote arrow-family carriers.
  *
- * <p>The legacy renderer proves that the projectile presentation follows interpolated yaw/pitch.
- * Its old immediate-mode quad mesh is not executed. The source-bound converted item remains the
- * visible primitive, but it is aligned to projectile flight rather than camera-billboarded.</p>
+ * <p>The vanilla renderer owns the arrow mesh, model axes, transforms and render submission.
+ * A render-state delegate, rather than a second Arrow entity, lets us reuse that implementation
+ * without running modern projectile physics, impact, damage or pickup logic on the client.
+ * Source entity textures are used directly; inventory item models/atlases are not arrow meshes.</p>
+ *
+ * <p>The class name and v1 ORIENTED_ITEM sidecar value are retained for existing candidates.
+ * Only their arrow-family presentation changes. Throwable item billboards use their own renderer.</p>
  */
 public final class ConvertedLegacyOrientedProjectileRenderer
-        extends EntityRenderer<ConvertedLegacyRemoteProjectile,ConvertedLegacyOrientedProjectileRenderer.State> {
-    private static final double MIN_MOTION_SQUARED=1.0E-7D;
-    private final ItemModelResolver itemModelResolver;
+        extends EntityRenderer<ConvertedLegacyRemoteProjectile, ConvertedLegacyOrientedProjectileRenderer.State> {
+    static final Identifier VANILLA_ARROW_TEXTURE =
+            Identifier.withDefaultNamespace("textures/entity/projectiles/arrow.png");
+    private final VanillaArrowDelegate vanillaArrow;
 
-    public ConvertedLegacyOrientedProjectileRenderer(EntityRendererProvider.Context context){
-        super(context);this.shadowRadius=0F;this.itemModelResolver=context.getItemModelResolver();
+    public ConvertedLegacyOrientedProjectileRenderer(EntityRendererProvider.Context context) {
+        super(context);
+        shadowRadius = 0F;
+        vanillaArrow = new VanillaArrowDelegate(context);
     }
 
-    @Override public State createRenderState(){return new State();}
+    @Override
+    public State createRenderState() {
+        return new State();
+    }
 
     @Override
-    public void extractRenderState(ConvertedLegacyRemoteProjectile entity,State state,float partialTick){
-        super.extractRenderState(entity,state,partialTick);
+    public void extractRenderState(ConvertedLegacyRemoteProjectile entity, State state, float partialTick) {
+        super.extractRenderState(entity, state, partialTick);
         ConvertedLegacyNoOpEntityRenderer.suppressVisualEffects(state);
-        state.yaw=entity.getYRot();state.pitch=entity.getXRot();
-        Vec3 motion=entity.getDeltaMovement();
-        if(motion.lengthSqr()>MIN_MOTION_SQUARED){
-            double horizontal=Math.sqrt(motion.x*motion.x+motion.z*motion.z);
-            state.yaw=(float)Math.toDegrees(Math.atan2(motion.x,motion.z));
-            state.pitch=(float)Math.toDegrees(Math.atan2(motion.y,horizontal));
-        }
-        itemModelResolver.updateForNonLiving(state.item,entity.getItem(),ItemDisplayContext.NONE,entity);
+        // These rotations are updated by the server's spawn/move/look packets. The spawn velocity
+        // can be stale after the arrow bends down or lands; do not replace packet rotations with it.
+        copyPose(state, entity.yRotO, entity.getYRot(), entity.xRotO, entity.getXRot(), partialTick);
+        state.texture = textureOrDefault(entity.projectileRule().fixedTexture());
+    }
+
+    static void copyPose(State state, float previousYaw, float yaw, float previousPitch, float pitch,
+                         float partialTick) {
+        // Vanilla's angular interpolation avoids the long 358-degree turn across the +/-180 seam.
+        state.yRot = Mth.rotLerp(partialTick, previousYaw, yaw);
+        state.xRot = Mth.rotLerp(partialTick, previousPitch, pitch);
+        // No impact/shake counter is supplied by the admitted FML rule. Do not invent one.
+        state.shake = 0F;
+    }
+
+    static Identifier textureOrDefault(Identifier sourceTexture) {
+        return sourceTexture == null ? VANILLA_ARROW_TEXTURE : sourceTexture;
     }
 
     @Override
-    public void submit(State state,PoseStack pose,SubmitNodeCollector queue,CameraRenderState camera){
-        if(state.item.isEmpty())return;
-        pose.pushPose();
-        // 1.7 arrow-like renderer contract: world Y yaw minus 90, then local Z pitch.
-        pose.mulPose(Axis.YP.rotationDegrees(state.yaw-90F));
-        pose.mulPose(Axis.ZP.rotationDegrees(state.pitch));
-        state.item.submit(pose,queue,state.lightCoords,OverlayTexture.NO_OVERLAY,state.outlineColor);
-        pose.popPose();
+    public void submit(State state, PoseStack pose, SubmitNodeCollector queue, CameraRenderState camera) {
+        vanillaArrow.submit(state, pose, queue, camera);
     }
 
-    public static final class State extends EntityRenderState {
-        float yaw,pitch;
-        final ItemStackRenderState item=new ItemStackRenderState();
+    public static final class State extends ArrowRenderState {
+        Identifier texture = VANILLA_ARROW_TEXTURE;
+    }
+
+    /** Only submit is called; no AbstractArrow instance is created, ticked or added to the level. */
+    static final class VanillaArrowDelegate extends ArrowRenderer<AbstractArrow, State> {
+        VanillaArrowDelegate(EntityRendererProvider.Context context) {
+            super(context);
+        }
+
+        @Override
+        public State createRenderState() {
+            return new State();
+        }
+
+        @Override
+        protected Identifier getTextureLocation(State state) {
+            return textureOrDefault(state.texture);
+        }
     }
 }

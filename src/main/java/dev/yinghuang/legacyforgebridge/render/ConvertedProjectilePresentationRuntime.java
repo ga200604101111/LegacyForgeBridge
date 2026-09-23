@@ -14,10 +14,10 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Client renderer registration for source-proven remote projectile carriers.
  *
- * <p>The source-bound converted item model is used as the presentation primitive. Throwable icon
- * renderers map directly to a modern thrown-item billboard. Arrow-family custom renderers use the
- * same bound item identity, but now follow the source-proven yaw/pitch flight orientation instead
- * of camera billboard orientation. Old immediate-mode quad geometry is never executed.</p>
+ * <p>Throwable icon renderers retain modern thrown-item billboards. Source-proven arrow-family
+ * renderers delegate to vanilla ArrowRenderer with a remote pose and source entity texture; they
+ * never use an inventory item model as an arrow mesh. The v1 ORIENTED_ITEM wire value is retained
+ * for existing candidates. No modern arrow entity or local arrow gameplay is introduced.</p>
  */
 public final class ConvertedProjectilePresentationRuntime {
     private static final Set<Identifier> REGISTERED=ConcurrentHashMap.newKeySet();
