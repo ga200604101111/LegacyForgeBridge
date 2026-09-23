@@ -28,6 +28,9 @@ public final class LegacyRenderFixture implements Opcodes {
             add(jar, "mcmod.info", ("[{\"modid\":\"" + namespace + "\",\"name\":\"Fixture\",\"version\":\"1\",\"mcversion\":\"1.7.10\"}]").getBytes(StandardCharsets.UTF_8));
             add(jar, renderer + ".class", renderer(renderer, namespace, dynamic));
             add(jar, client + ".class", client(client, renderer, namespace));
+            add(jar,"assets/"+namespace+"/models/tool.obj","v 0 0 0\n".getBytes(StandardCharsets.UTF_8));
+            add(jar,"assets/"+namespace+"/textures/tool.png",new byte[]{1,2,3,4});
+            add(jar,"assets/"+namespace+"/textures/items/tool.png",new byte[]{1,2,3,4});
         }
         return jarPath;
     }

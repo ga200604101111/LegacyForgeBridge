@@ -101,6 +101,26 @@ class LegacyConversionEngineTest {
     }
 
     @Test
+    void genericNamedItemAndObjRendererFlowProducesLoaderSafeCandidate() throws Exception {
+        Path source=LegacyRenderFixture.create(tempDir.resolve("ForeignRenderedMod.jar"),"foreignrender",false);
+        ConversionResult result=new LegacyConversionEngine().convert(
+                source,tempDir.resolve("converted-rendered"),tempDir.resolve("manifests-rendered"));
+        assertEquals("generic-forge-1.7.10",result.profileId());
+        Path candidate=result.candidateJar().orElseThrow();
+        ManagedCandidateInstaller installer=new ManagedCandidateInstaller(
+                tempDir.resolve("mods-rendered"),tempDir.resolve("cache-rendered"));
+        assertTrue(installer.isLoaderSafeCandidate(candidate),
+                "generic conversion must retire source Forge classes once registry/item presentation is source-proven");
+        try(JarFile jar=new JarFile(candidate.toFile())){
+            JsonObject content=readJson(jar,"legacyforgebridge/converted-content.json");
+            assertEquals(1,content.getAsJsonArray("items").size());
+            assertEquals("foreignrender:tool",content.getAsJsonArray("items").get(0).getAsJsonObject().get("id").getAsString());
+            assertNull(jar.getJarEntry("foreignrender/Client.class"));
+            assertNull(jar.getJarEntry("foreignrender/Renderer.class"));
+        }
+    }
+
+    @Test
     void blocksLegacyCoremodsBeforeCandidateJarIsEmitted() throws Exception {
         Path source = createLegacyJar(tempDir.resolve("LegacyCoremod.jar"), true, true, true, true);
         LegacyConversionEngine engine = new LegacyConversionEngine();
