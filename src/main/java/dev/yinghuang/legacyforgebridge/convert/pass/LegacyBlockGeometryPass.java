@@ -27,11 +27,22 @@ public final class LegacyBlockGeometryPass implements ConversionPass {
         JsonObject icons=Files.isRegularFile(iconPath)?read(iconPath):new JsonObject();
         JsonObject itemMap=icons.has("items")?icons.getAsJsonObject("items"):new JsonObject();
         var analysis=new LegacyBlockGeometryAnalyzer().analyze(context.sourceJar());
+        // A source-proven held-only custom renderer already owns both world visibility states.
+        // Generic geometry may still be useful for its selection/collision proof, but it must not
+        // rewrite that block's JSON/blockstate presentation after the held-only pass has authored it.
+        Set<String> heldPresentationOwned=new HashSet<>();
+        for(var held:new dev.yinghuang.legacyforgebridge.convert.LegacyHeldItemVisibilityAnalyzer().analyze(context.sourceJar()).rules())
+            heldPresentationOwned.add(held.registryName());
         Map<String,dev.yinghuang.legacyforgebridge.convert.LegacyUvRotatedBoxAnalyzer.Rule> uvRotated=new HashMap<>();
         for(var uv:new dev.yinghuang.legacyforgebridge.convert.LegacyUvRotatedBoxAnalyzer().analyze(context.sourceJar()).rules())uvRotated.put(uv.registryName(),uv);
         analysis.excluded().forEach(exclusions::addProperty);int count=0,materialFallbackCount=0;
         for(var rule:analysis.rules()) {
-            var input=rule.input();JsonObject def=definitions.get(input.registryName());if(def==null)continue;
+            var input=rule.input();
+            if(heldPresentationOwned.contains(input.registryName())){
+                exclusions.addProperty(input.registryName(),"Source-proven held-only presentation retained; generic geometry presentation suppressed");
+                continue;
+            }
+            JsonObject def=definitions.get(input.registryName());if(def==null)continue;
             String id=def.get("id").getAsString();String[] split=id.split(":",2);String ns=split[0],path=split[1];
             Path main=staging.resolve("assets/"+ns+"/models/block/"+path+".json"),itemDef=staging.resolve("assets/"+ns+"/items/"+path+".json");
             // The icon stage owns its own generated defaults. Other specialized rewrites remain authoritative.

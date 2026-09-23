@@ -48,6 +48,10 @@ class BambooHeldVisibilityExactTest {
                     states.getAsJsonObject("legacy_meta=0").get("model").getAsString());
             assertEquals("bamboomod:block/kitunebi_lfb_visible_cross",
                     states.getAsJsonObject("legacy_meta=8").get("model").getAsString());
+
+            JsonObject geometry=read(jar,"legacyforgebridge/block-geometry.json");
+            assertFalse(geometry.getAsJsonObject("blocks").has("bamboomod:kitunebi"),
+                    "Generic geometry must not overwrite held-only foxfire presentation ownership");
         }
     }
 
