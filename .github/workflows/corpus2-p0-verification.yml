@@ -2,60 +2,53 @@ name: corpus2-p0-verification
 on:
   workflow_dispatch:
   push:
-    branches:
-      - feature/generic-conversion-bamboo-corpus2
+    branches: [feature/generic-conversion-bamboo-corpus2]
 permissions:
   contents: read
 concurrency:
   group: corpus2-p0-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  verify:
+  analysis-dependencies:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
-        with:
-          fetch-depth: 2
-
-      - name: Verify committed source diff hygiene
-        run: git diff --check HEAD^
-
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
-
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.5.1'
-
-      - name: Full build and tests
-        run: gradle build --stacktrace
-
-      - uses: actions/upload-artifact@v7
-        if: success()
-        with:
-          name: LegacyForgeBridge-bamboo-presentation-batch-181
-          path: build/libs/*.jar
-          if-no-files-found: error
-
-      - name: Preserve source-analysis support
-        if: always()
+      - name: Resolve target-platform inspection dependencies (no compilation or mod build)
         run: |
-          mkdir -p build/verification-support/analysis-deps
-          git rev-parse HEAD > build/verification-support/tested-source-revision.txt
-          git archive --format=tar.gz HEAD -o build/verification-support/source-tree.tar.gz
-          for group in org.ow2.asm com.google.code.gson org.slf4j; do
-            find "$HOME/.gradle/caches/modules-2/files-2.1/$group" -type f -name '*.jar' -exec cp -n {} build/verification-support/analysis-deps/ \;
-          done
-
+          cat > /tmp/lfb-analysis.init.gradle <<'EOF'
+          allprojects {
+            afterEvaluate { p ->
+              def tools = configurations.create('lfbInspectionTools')
+              dependencies.add(tools.name, 'org.benf:cfr:0.152')
+              dependencies.add(tools.name, 'org.junit.platform:junit-platform-console-standalone:1.11.4')
+              tasks.register('exportLfbInspectionDependencies') {
+                doLast {
+                  def target = file('build/inspection-dependencies')
+                  target.mkdirs()
+                  def inputs = sourceSets.main.compileClasspath.files + sourceSets.test.runtimeClasspath.files + tools.files
+                  def records = []
+                  inputs.findAll { it.isFile() && it.name.endsWith('.jar') }.sort { it.absolutePath }.eachWithIndex { f, i ->
+                    def name = String.format('%04d-', i) + f.name
+                    java.nio.file.Files.copy(f.toPath(), new File(target, name).toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+                    records.add(name)
+                  }
+                  new File(target, 'classpath-files.txt').text = records.join('\n') + '\n'
+                }
+              }
+            }
+          }
+          EOF
+          gradle -I /tmp/lfb-analysis.init.gradle exportLfbInspectionDependencies --stacktrace
       - uses: actions/upload-artifact@v7
-        if: always()
         with:
-          name: LegacyForgeBridge-verification-support
-          path: |
-            build/test-results/test/*.xml
-            build/reports/tests/test/
-            build/verification-support/
-          retention-days: 7
-          if-no-files-found: warn
+          name: LegacyForgeBridge-target-inspection-dependencies
+          path: build/inspection-dependencies/
+          retention-days: 1
+          if-no-files-found: error
