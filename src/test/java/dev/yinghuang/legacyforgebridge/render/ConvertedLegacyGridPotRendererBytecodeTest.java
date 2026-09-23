@@ -18,7 +18,7 @@ class ConvertedLegacyGridPotRendererBytecodeTest {
         String resource = "/" + ConvertedLegacyGridPotRenderer.class.getName().replace('.', '/') + ".class";
         try (InputStream input = ConvertedLegacyGridPotRenderer.class.getResourceAsStream(resource)) {
             assertNotNull(input);
-            boolean[] update={false}, contextNone={false}, bounds={false}, submit={false}, translate={false}, scale={false};
+            boolean[] update={false}, contextNone={false}, bounds={false}, submit={false}, submitBlock={false}, translate={false}, scale={false};
             new ClassReader(input.readAllBytes()).accept(new ClassVisitor(Opcodes.ASM9) {
                 @Override public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
                     if (!"extractRenderState".equals(name) && !"submit".equals(name)) return null;
@@ -34,6 +34,8 @@ class ConvertedLegacyGridPotRendererBytecodeTest {
                                     && "getModelBoundingBox".equals(methodName)) bounds[0] = true;
                             if ("net/minecraft/client/renderer/item/ItemStackRenderState".equals(owner)
                                     && "submit".equals(methodName)) submit[0] = true;
+                            if ("net/minecraft/client/renderer/SubmitNodeCollector".equals(owner)
+                                    && "submitBlock".equals(methodName)) submitBlock[0]=true;
                             if ("com/mojang/blaze3d/vertex/PoseStack".equals(owner) && "translate".equals(methodName)) translate[0] = true;
                             if ("com/mojang/blaze3d/vertex/PoseStack".equals(owner) && "scale".equals(methodName)) scale[0] = true;
                         }
@@ -43,7 +45,8 @@ class ConvertedLegacyGridPotRendererBytecodeTest {
             assertTrue(update[0], "GridPot renderer must resolve ItemStack models during extract");
             assertTrue(contextNone[0], "GridPot renderer must use the admitted NONE item display context");
             assertTrue(bounds[0], "GridPot renderer must position contents from modern model bounds");
-            assertTrue(submit[0], "GridPot renderer must submit ItemStackRenderState into the 1.21 renderer pipeline");
+            assertTrue(submit[0], "GridPot renderer must submit stored ItemStackRenderState into the 1.21 renderer pipeline");
+            assertTrue(submitBlock[0], "GridPot world carrier must use a block model independent from the flat BlockItem");
             assertTrue(translate[0] && scale[0], "GridPot renderer must apply source-proven cell transforms");
         }
     }

@@ -30,18 +30,21 @@ public final class ConvertedGridPotPresentationRuntime {
 
     private ConvertedGridPotPresentationRuntime() { }
 
-    public record Presentation(Identifier id, Identifier cellCarrierItemId, float cellBodyWidth, float cellBodyHeight,
+    public record Presentation(Identifier id, Identifier cellCarrierBlockId, float cellBodyWidth, float cellBodyHeight,
                                List<Float> gridOffsets, float contentTranslateY,
                                float sourceContentScale, boolean boundingBoxCentered,
-                               boolean boundingBoxBottomAligned, boolean exactLegacyGeometry) {
+                               boolean boundingBoxBottomAligned, boolean exactLegacyGeometry,
+                               boolean flatInventorySourceProven,boolean flatInventoryModelWired,
+                               boolean inventoryUsesSameCellModel) {
         public Presentation {
             gridOffsets = List.copyOf(gridOffsets);
-            if (id == null || cellCarrierItemId==null || !Float.isFinite(cellBodyWidth) || cellBodyWidth<=0F || cellBodyWidth>1F
+            if (id == null || cellCarrierBlockId==null || !Float.isFinite(cellBodyWidth) || cellBodyWidth<=0F || cellBodyWidth>1F
                     || !Float.isFinite(cellBodyHeight) || cellBodyHeight<=0F || cellBodyHeight>1F
                     || gridOffsets.size() != 3 || !finite(gridOffsets)
                     || !Float.isFinite(contentTranslateY) || contentTranslateY < 0F || contentTranslateY > 1F
                     || !Float.isFinite(sourceContentScale) || sourceContentScale <= 0F || sourceContentScale > 1F
-                    || !boundingBoxCentered || !boundingBoxBottomAligned || exactLegacyGeometry) {
+                    || !boundingBoxCentered || !boundingBoxBottomAligned || exactLegacyGeometry
+                    || inventoryUsesSameCellModel) {
                 throw new IllegalArgumentException("Invalid converted GridPot presentation runtime rule");
             }
         }
@@ -66,7 +69,7 @@ public final class ConvertedGridPotPresentationRuntime {
             JsonObject root = JsonParser.parseReader(reader).getAsJsonObject();
             if (integer(root, "schemaVersion", 0) != 1
                     || !bool(root, "storedContentPresentationRuntimeWired")
-                    || !"SOURCE_SIZED_3D_CELL_ITEM_MODEL".equals(string(root, "adaptation"))) return;
+                    || !"SOURCE_PROVEN_FLAT_ITEM_PLUS_BLOCK_CARRIER".equals(string(root, "adaptation"))) return;
             JsonArray rules = root.getAsJsonArray("rules");
             if (rules == null) return;
             for (JsonElement element : rules) {
@@ -113,11 +116,12 @@ public final class ConvertedGridPotPresentationRuntime {
                 grid.add(offset.getAsFloat());
             }
             if (!"NONE".equals(required(value, "itemDisplayContext"))) return null;
-            return new Presentation(id, Identifier.parse(required(value,"cellCarrierItemId")),
+            return new Presentation(id, Identifier.parse(required(value,"cellCarrierBlockId")),
                     decimal(value,"cellBodyWidth"),decimal(value,"cellBodyHeight"),grid,
                     decimal(value, "contentTranslateY"), decimal(value, "sourceContentScale"),
                     bool(value, "boundingBoxCentered"), bool(value, "boundingBoxBottomAligned"),
-                    bool(value, "exactLegacyGeometry"));
+                    bool(value, "exactLegacyGeometry"),bool(value,"flatInventorySourceProven"),
+                    bool(value,"flatInventoryModelWired"),bool(value,"inventoryUsesSameCellModel"));
         } catch (RuntimeException invalid) {
             return null;
         }

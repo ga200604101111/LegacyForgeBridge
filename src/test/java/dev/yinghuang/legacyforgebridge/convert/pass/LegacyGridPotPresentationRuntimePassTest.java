@@ -27,7 +27,8 @@ class LegacyGridPotPresentationRuntimePassTest {
         Files.writeString(staging.resolve(LegacyGridPotPresentationProofPass.OUTPUT), """
                 {"schemaVersion":1,"rules":[{
                   "registryName":"grid","sourceBlockClass":"third/block/Grid","sourceRendererClass":"third/render/GridRenderer",
-                  "cellCarrierLegacyRegistryName":"flower_pot","storedContentPresentationProven":true,"gridOffsets":[-0.333,0.0,0.333],
+                  "cellCarrierLegacyRegistryName":"flower_pot","flatInventorySourceProven":true,"inventoryTextureName":"foreign:flower_pot",
+                  "storedContentPresentationProven":true,"gridOffsets":[-0.333,0.0,0.333],
                   "contentTranslateY":0.25,"crossedScale":0.75,"cactusHalfWidth":0.125
                 }]}
                 """, StandardCharsets.UTF_8);
@@ -38,23 +39,29 @@ class LegacyGridPotPresentationRuntimePassTest {
                 }]}
                 """, StandardCharsets.UTF_8);
 
+        Files.createDirectories(staging.resolve("assets/foreign/textures/items"));
+        Files.write(staging.resolve("assets/foreign/textures/items/flower_pot.png"),new byte[]{1});
         new LegacyGridPotPresentationRuntimePass().apply(context(staging));
 
         JsonObject root = JsonParser.parseString(Files.readString(
                 staging.resolve(LegacyGridPotPresentationRuntimePass.OUTPUT), StandardCharsets.UTF_8)).getAsJsonObject();
         assertEquals(1, root.get("runtimeRules").getAsInt());
         assertTrue(root.get("storedContentPresentationRuntimeWired").getAsBoolean());
-        assertEquals("SOURCE_SIZED_3D_CELL_ITEM_MODEL", root.get("adaptation").getAsString());
+        assertEquals("SOURCE_PROVEN_FLAT_ITEM_PLUS_BLOCK_CARRIER", root.get("adaptation").getAsString());
         JsonObject rule = root.getAsJsonArray("rules").get(0).getAsJsonObject();
         assertEquals("foreign:grid", rule.get("id").getAsString());
         assertEquals("NONE", rule.get("itemDisplayContext").getAsString());
         assertTrue(rule.get("boundingBoxCentered").getAsBoolean());
         assertTrue(rule.get("boundingBoxBottomAligned").getAsBoolean());
         assertTrue(rule.get("storedContentPresentationRuntimeWired").getAsBoolean());
-        assertEquals("foreign:grid",rule.get("cellCarrierItemId").getAsString());
+        assertEquals("minecraft:flower_pot",rule.get("cellCarrierBlockId").getAsString());
         assertEquals(1.0F/3.0F,rule.get("cellBodyWidth").getAsFloat(),0.0001F);
         assertEquals(0.375F,rule.get("cellBodyHeight").getAsFloat(),0.0001F);
+        assertFalse(rule.get("sourceSizedCellGeometry").getAsBoolean());
         assertFalse(rule.get("exactLegacyGeometry").getAsBoolean());
+        assertTrue(rule.get("flatInventorySourceProven").getAsBoolean());
+        assertTrue(rule.get("flatInventoryModelWired").getAsBoolean());
+        assertFalse(rule.get("inventoryUsesSameCellModel").getAsBoolean());
 
         JsonObject blockModel=JsonParser.parseString(Files.readString(
                 staging.resolve("assets/foreign/models/block/grid.json"),StandardCharsets.UTF_8)).getAsJsonObject();
@@ -65,8 +72,9 @@ class LegacyGridPotPresentationRuntimePassTest {
 
         JsonObject itemModel=JsonParser.parseString(Files.readString(
                 staging.resolve("assets/foreign/models/item/grid.json"),StandardCharsets.UTF_8)).getAsJsonObject();
-        assertEquals("minecraft:block/block",itemModel.get("parent").getAsString());
-        assertEquals(2,itemModel.getAsJsonArray("elements").size());
+        assertEquals("minecraft:item/generated",itemModel.get("parent").getAsString());
+        assertEquals("foreign:items/flower_pot",itemModel.getAsJsonObject("textures").get("layer0").getAsString());
+        assertFalse(itemModel.has("elements"));
 
         JsonObject itemDef=JsonParser.parseString(Files.readString(
                 staging.resolve("assets/foreign/items/grid.json"),StandardCharsets.UTF_8)).getAsJsonObject();

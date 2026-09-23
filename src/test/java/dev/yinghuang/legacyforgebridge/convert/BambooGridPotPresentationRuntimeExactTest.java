@@ -52,7 +52,7 @@ class BambooGridPotPresentationRuntimeExactTest {
 
         JsonObject root = JsonParser.parseString(Files.readString(
                 staging.resolve(LegacyGridPotPresentationRuntimePass.OUTPUT), StandardCharsets.UTF_8)).getAsJsonObject();
-        assertEquals("SOURCE_SIZED_3D_CELL_ITEM_MODEL", root.get("adaptation").getAsString());
+        assertEquals("SOURCE_PROVEN_FLAT_ITEM_PLUS_BLOCK_CARRIER", root.get("adaptation").getAsString());
         assertTrue(root.get("storedContentPresentationRuntimeWired").getAsBoolean());
         assertTrue(root.get("runtimeRules").getAsInt() >= 1);
 
@@ -67,21 +67,19 @@ class BambooGridPotPresentationRuntimeExactTest {
         assertNotNull(rule, "Exact Bamboo MultiPot presentation runtime was not admitted: " + root);
         assertTrue(rule.get("storedContentPresentationProven").getAsBoolean());
         assertTrue(rule.get("storedContentPresentationRuntimeWired").getAsBoolean());
-        assertEquals("bamboomod:bamboomultipot",rule.get("cellCarrierItemId").getAsString());
-        assertTrue(rule.get("sourceSizedCellGeometry").getAsBoolean());
-        assertTrue(rule.get("inventoryUsesSameCellModel").getAsBoolean());
+        assertEquals("minecraft:flower_pot",rule.get("cellCarrierBlockId").getAsString());
+        assertFalse(rule.get("sourceSizedCellGeometry").getAsBoolean());
+        assertTrue(rule.get("flatInventorySourceProven").getAsBoolean());
+        assertTrue(rule.get("flatInventoryModelWired").getAsBoolean());
+        assertFalse(rule.get("inventoryUsesSameCellModel").getAsBoolean());
         assertEquals(1.0F/3.0F,rule.get("cellBodyWidth").getAsFloat(),0.0001F);
         assertEquals(0.375F,rule.get("cellBodyHeight").getAsFloat(),0.0001F);
         assertFalse(rule.get("exactLegacyGeometry").getAsBoolean());
 
         JsonObject itemModel=JsonParser.parseString(Files.readString(
                 staging.resolve("assets/bamboomod/models/item/bamboomultipot.json"),StandardCharsets.UTF_8)).getAsJsonObject();
-        assertEquals("minecraft:block/block",itemModel.get("parent").getAsString());
-        assertEquals("minecraft:block/flower_pot",itemModel.getAsJsonObject("textures").get("pot").getAsString());
-        assertEquals(2,itemModel.getAsJsonArray("elements").size());
-        JsonObject body=itemModel.getAsJsonArray("elements").get(0).getAsJsonObject();
-        assertEquals(5.333333F,body.getAsJsonArray("from").get(0).getAsFloat(),0.001F);
-        assertEquals(10.666667F,body.getAsJsonArray("to").get(0).getAsFloat(),0.001F);
-        assertEquals(6F,body.getAsJsonArray("to").get(1).getAsFloat(),0.001F);
+        assertEquals("minecraft:item/generated",itemModel.get("parent").getAsString());
+        assertEquals("bamboo:items/flower_pot",itemModel.getAsJsonObject("textures").get("layer0").getAsString());
+        assertFalse(itemModel.has("elements"));
     }
 }

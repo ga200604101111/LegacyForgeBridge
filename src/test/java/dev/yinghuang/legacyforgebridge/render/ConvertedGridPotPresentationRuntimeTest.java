@@ -14,20 +14,20 @@ class ConvertedGridPotPresentationRuntimeTest {
     void parsesBoundedAdaptedPresentationRule() {
         JsonObject value = JsonParser.parseString("""
                 {
-                  "id":"foreign:grid","cellCarrierItemId":"minecraft:flower_pot","cellBodyWidth":0.33333334,"cellBodyHeight":0.375,
+                  "id":"foreign:grid","cellCarrierBlockId":"minecraft:flower_pot","cellBodyWidth":0.33333334,"cellBodyHeight":0.375,
                   "gridOffsets":[-0.333,0.0,0.333],
                   "contentTranslateY":0.25,
                   "sourceContentScale":0.75,
                   "itemDisplayContext":"NONE",
                   "boundingBoxCentered":true,
                   "boundingBoxBottomAligned":true,
-                  "exactLegacyGeometry":false
+                  "exactLegacyGeometry":false,"flatInventorySourceProven":true,"flatInventoryModelWired":true,"inventoryUsesSameCellModel":false
                 }
                 """).getAsJsonObject();
         var presentation = ConvertedGridPotPresentationRuntime.parseForTests(value);
         assertNotNull(presentation);
         assertEquals("foreign:grid", presentation.id().toString());
-        assertEquals("minecraft:flower_pot",presentation.cellCarrierItemId().toString());
+        assertEquals("minecraft:flower_pot",presentation.cellCarrierBlockId().toString());
         assertEquals(1.0F/3.0F,presentation.cellBodyWidth(),0.0001F);
         assertEquals(0.375F,presentation.cellBodyHeight(),0.0001F);
         assertEquals(3, presentation.gridOffsets().size());
@@ -40,18 +40,31 @@ class ConvertedGridPotPresentationRuntimeTest {
     }
 
     @Test
+    void worldCarrierAdmissionDoesNotDependOnOptionalFlatInventoryAsset() {
+        JsonObject value=JsonParser.parseString("""
+                {"id":"foreign:grid","cellCarrierBlockId":"minecraft:flower_pot","cellBodyWidth":0.33333334,"cellBodyHeight":0.375,
+                 "gridOffsets":[-0.333,0.0,0.333],"contentTranslateY":0.25,"sourceContentScale":0.75,
+                 "itemDisplayContext":"NONE","boundingBoxCentered":true,"boundingBoxBottomAligned":true,
+                 "exactLegacyGeometry":false,"flatInventorySourceProven":true,"flatInventoryModelWired":false,
+                 "inventoryUsesSameCellModel":false}
+                """).getAsJsonObject();
+        assertNotNull(ConvertedGridPotPresentationRuntime.parseForTests(value),
+                "world BlockEntityRenderer admission must remain independent from optional flat inventory resource recovery");
+    }
+
+    @Test
     void rejectsRulesThatPretendLegacyGeometryIsExactOrUseWrongDisplayContext() {
         JsonObject exact = JsonParser.parseString("""
-                {"id":"foreign:grid","cellCarrierItemId":"minecraft:flower_pot","cellBodyWidth":0.33333334,"cellBodyHeight":0.375,"gridOffsets":[-0.333,0.0,0.333],"contentTranslateY":0.25,
+                {"id":"foreign:grid","cellCarrierBlockId":"minecraft:flower_pot","cellBodyWidth":0.33333334,"cellBodyHeight":0.375,"gridOffsets":[-0.333,0.0,0.333],"contentTranslateY":0.25,
                  "sourceContentScale":0.75,"itemDisplayContext":"NONE","boundingBoxCentered":true,
                  "boundingBoxBottomAligned":true,"exactLegacyGeometry":true}
                 """).getAsJsonObject();
         assertNull(ConvertedGridPotPresentationRuntime.parseForTests(exact));
 
         JsonObject wrongContext = JsonParser.parseString("""
-                {"id":"foreign:grid","cellCarrierItemId":"minecraft:flower_pot","cellBodyWidth":0.33333334,"cellBodyHeight":0.375,"gridOffsets":[-0.333,0.0,0.333],"contentTranslateY":0.25,
+                {"id":"foreign:grid","cellCarrierBlockId":"minecraft:flower_pot","cellBodyWidth":0.33333334,"cellBodyHeight":0.375,"gridOffsets":[-0.333,0.0,0.333],"contentTranslateY":0.25,
                  "sourceContentScale":0.75,"itemDisplayContext":"GUI","boundingBoxCentered":true,
-                 "boundingBoxBottomAligned":true,"exactLegacyGeometry":false}
+                 "boundingBoxBottomAligned":true,"exactLegacyGeometry":false,"flatInventorySourceProven":true,"flatInventoryModelWired":true,"inventoryUsesSameCellModel":false}
                 """).getAsJsonObject();
         assertNull(ConvertedGridPotPresentationRuntime.parseForTests(wrongContext));
     }
@@ -59,9 +72,9 @@ class ConvertedGridPotPresentationRuntimeTest {
     @Test
     void rejectsMalformedOffsetsAndTransforms() {
         JsonObject malformed = JsonParser.parseString("""
-                {"id":"foreign:grid","cellCarrierItemId":"minecraft:flower_pot","cellBodyWidth":0.33333334,"cellBodyHeight":0.375,"gridOffsets":[0.0,0.333],"contentTranslateY":0.25,
+                {"id":"foreign:grid","cellCarrierBlockId":"minecraft:flower_pot","cellBodyWidth":0.33333334,"cellBodyHeight":0.375,"gridOffsets":[0.0,0.333],"contentTranslateY":0.25,
                  "sourceContentScale":0.75,"itemDisplayContext":"NONE","boundingBoxCentered":true,
-                 "boundingBoxBottomAligned":true,"exactLegacyGeometry":false}
+                 "boundingBoxBottomAligned":true,"exactLegacyGeometry":false,"flatInventorySourceProven":true,"flatInventoryModelWired":true,"inventoryUsesSameCellModel":false}
                 """).getAsJsonObject();
         assertNull(ConvertedGridPotPresentationRuntime.parseForTests(malformed));
     }

@@ -49,7 +49,7 @@ public final class LegacyGridPotPresentationRuntimePass implements ConversionPas
         JsonObject root = new JsonObject();
         root.addProperty("schemaVersion", 1);
         root.addProperty("sourceSha256", context.sourceHash());
-        root.addProperty("adaptation", "SOURCE_SIZED_3D_CELL_ITEM_MODEL");
+        root.addProperty("adaptation", "SOURCE_PROVEN_FLAT_ITEM_PLUS_BLOCK_CARRIER");
         root.addProperty("storedContentPresentationRuntimeWired", true);
         JsonArray rules = new JsonArray();
         JsonArray skipped = new JsonArray();
@@ -72,25 +72,33 @@ public final class LegacyGridPotPresentationRuntimePass implements ConversionPas
                 addSkipped(skipped, id, source, "GridPot presentation proof has malformed transforms.");
                 continue;
             }
-            try{LegacyVanillaStackDataFix.upgrade(legacyCarrier,0);}
+            LegacyVanillaStackDataFix.ModernStack modernCarrier;
+            try{modernCarrier=LegacyVanillaStackDataFix.upgrade(legacyCarrier,0);}
             catch(RuntimeException unsupported){
                 addSkipped(skipped,id,source,"GridPot source pot-icon carrier could not be migrated through vanilla DFU: "+unsupported.getMessage());
                 continue;
             }
+            if(modernCarrier.hasComponents()){
+                addSkipped(skipped,id,source,"GridPot cell carrier requires ItemStack components and cannot be replayed as a plain block model.");
+                continue;
+            }
             float cellWidth=1.0F/integer(core,"gridWidth",0);
             float cellHeight=core.get("cellHeight").getAsFloat();
-            writeCellItemModel(context.stagingDir(),id,cellWidth,cellHeight);
+            boolean flatInventory=bool(proof,"flatInventorySourceProven");
+            String inventoryTexture=flatInventory?legacyItemTexture(context.stagingDir(),string(proof,"inventoryTextureName")):null;
+            boolean flatInventoryWired=flatInventory&&inventoryTexture!=null;
+            if(flatInventoryWired)writeFlatItemModel(context.stagingDir(),id,inventoryTexture);
             // Own the custom-renderer block model before the generic icon pass runs later.
             // A particle-only non-rendering model prevents that pass from reclassifying the
-            // GridPot BlockItem as an ordinary metadata cube and overwriting the 3D cell item model.
+            // GridPot BlockItem as an ordinary metadata cube and overwriting its source-proven flat item model.
             LegacySpecialBlockModelWriter.write(context.stagingDir(),id,"minecraft:block/flower_pot");
             JsonObject value = new JsonObject();
             value.addProperty("id", id);
             value.addProperty("sourceBlockClass", source);
             value.addProperty("sourceRendererClass", string(proof, "sourceRendererClass"));
-            // Reuse the converted GridPot BlockItem itself. Its generated item model below is a
-            // source-sized 3D cell rather than a flat legacy item sprite or a full vanilla pot.
-            value.addProperty("cellCarrierItemId",id);
+            // World cell geometry is independent from the BlockItem model. The source renderer
+            // proves a vanilla flower-pot carrier while Forge proves this BlockItem is flat in inventory.
+            value.addProperty("cellCarrierBlockId",modernCarrier.id());
             value.addProperty("cellBodyWidth",cellWidth);
             value.addProperty("cellBodyHeight",cellHeight);
             value.add("gridOffsets", offsets.deepCopy());
@@ -102,8 +110,11 @@ public final class LegacyGridPotPresentationRuntimePass implements ConversionPas
             value.addProperty("storedContentPresentationProven", true);
             value.addProperty("storedContentPresentationRuntimeWired", true);
             value.addProperty("exactLegacyGeometry", false);
-            value.addProperty("sourceSizedCellGeometry", true);
-            value.addProperty("inventoryUsesSameCellModel", true);
+            value.addProperty("sourceSizedCellGeometry", false);
+            value.addProperty("flatInventorySourceProven",flatInventory);
+            value.addProperty("flatInventoryModelWired",flatInventoryWired);
+            if(inventoryTexture!=null)value.addProperty("inventoryTexture",inventoryTexture);
+            value.addProperty("inventoryUsesSameCellModel", false);
             rules.add(value);
         }
         root.add("rules", rules);
@@ -115,36 +126,18 @@ public final class LegacyGridPotPresentationRuntimePass implements ConversionPas
         Files.createDirectories(output.getParent());
         Files.writeString(output, GSON.toJson(root) + "\n", StandardCharsets.UTF_8);
         if (!rules.isEmpty()) context.diagnostics().info("LFB-CONVERT-GRIDPOT-PRESENT-RUNTIME-0001", SupportLevel.ADAPTED,
-                "Admitted source-sized 3D GridPot cell presentation for " + rules.size()
-                        + " block(s); world and inventory now share the same 3D cell model while stored-content render branches remain adapted.");
+                "Admitted adapted GridPot presentation for " + rules.size()
+                        + " block(s); source-proven flat inventory is independent from the world block-carrier renderer and stored-content branches remain adapted.");
     }
 
-    private static void writeCellItemModel(Path staging,String idValue,float width,float height)throws Exception{
+    private static void writeFlatItemModel(Path staging,String idValue,String texture)throws Exception{
         int split=idValue.indexOf(':');if(split<=0||split==idValue.length()-1)throw new IllegalArgumentException("Invalid GridPot id "+idValue);
         String ns=idValue.substring(0,split),path=idValue.substring(split+1);
-        float half=width*8F;
-        float x0=8F-half,x1=8F+half,z0=x0,z1=x1,y1=height*16F;
-        JsonObject model=new JsonObject();model.addProperty("parent","minecraft:block/block");
-        JsonObject textures=new JsonObject();textures.addProperty("pot","minecraft:block/flower_pot");
-        textures.addProperty("dirt","minecraft:block/dirt");textures.addProperty("particle","minecraft:block/flower_pot");
-        model.add("textures",textures);JsonArray elements=new JsonArray();
-
-        JsonObject body=new JsonObject();body.add("from",vec(x0,0F,z0));body.add("to",vec(x1,y1,z1));
-        JsonObject bodyFaces=new JsonObject();
-        for(String face:java.util.List.of("down","north","south","west","east")){
-            JsonObject f=new JsonObject();f.addProperty("texture","#pot");bodyFaces.add(face,f);
-        }
-        // The source renderer draws a separate dirt top rather than closing the cell with the pot icon.
-        body.add("faces",bodyFaces);elements.add(body);
-
-        float inset=Math.max(.5F,width*1.5F);
-        JsonObject dirt=new JsonObject();dirt.add("from",vec(x0+inset,Math.max(0F,y1-.20F),z0+inset));
-        dirt.add("to",vec(x1-inset,y1-.05F,z1-inset));JsonObject dirtFaces=new JsonObject();
-        JsonObject up=new JsonObject();up.addProperty("texture","#dirt");dirtFaces.add("up",up);dirt.add("faces",dirtFaces);elements.add(dirt);
-        model.add("elements",elements);
-
+        JsonObject model=new JsonObject();model.addProperty("parent","minecraft:item/generated");
+        JsonObject textures=new JsonObject();textures.addProperty("layer0",texture);model.add("textures",textures);
         Path modelPath=staging.resolve("assets/"+ns+"/models/item/"+path+".json");Files.createDirectories(modelPath.getParent());
         Files.writeString(modelPath,GSON.toJson(model)+"\n",StandardCharsets.UTF_8);
+        LegacyPresentationOwnership.revoke(staging,modelPath);
 
         JsonObject node=new JsonObject();node.addProperty("type","minecraft:model");node.addProperty("model",ns+":item/"+path);
         JsonObject definition=new JsonObject();definition.add("model",node);
@@ -152,8 +145,16 @@ public final class LegacyGridPotPresentationRuntimePass implements ConversionPas
         Files.writeString(itemPath,GSON.toJson(definition)+"\n",StandardCharsets.UTF_8);
     }
 
-    private static JsonArray vec(float x,float y,float z){
-        JsonArray out=new JsonArray();out.add(x);out.add(y);out.add(z);return out;
+    private static String legacyItemTexture(Path staging,String raw){
+        if(raw==null||raw.isBlank())return null;int split=raw.indexOf(':');
+        if(split<=0||split==raw.length()-1)return null;String ns=raw.substring(0,split),path=raw.substring(split+1);
+        path=path.replaceFirst("^(items?|textures/items?)/","");
+        if(!ns.matches("[a-z0-9_.-]+")||!path.matches("[a-zA-Z0-9_./-]+")||path.contains(".."))return null;
+        for(String dir:java.util.List.of("items","item")){
+            Path file=staging.resolve("assets/"+ns+"/textures/"+dir+"/"+path+".png").normalize();
+            if(file.startsWith(staging)&&Files.isRegularFile(file))return ns+":"+dir+"/"+path;
+        }
+        return null;
     }
 
     private static void addSkipped(JsonArray skipped, String id, String source, String reason) {

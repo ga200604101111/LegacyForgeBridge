@@ -38,6 +38,8 @@ public final class LegacyGridPotPresentationProofPass implements ConversionPass 
             value.addProperty("sourceTileClass", proof.sourceTileClass());
             value.addProperty("sourceRendererClass", proof.sourceRendererClass());
             value.addProperty("cellCarrierLegacyRegistryName", proof.cellCarrierLegacyRegistryName());
+            value.addProperty("flatInventorySourceProven", proof.flatInventory());
+            if(proof.inventoryTextureName()!=null)value.addProperty("inventoryTextureName",proof.inventoryTextureName());
             value.addProperty("storedContentPresentationProven", true);
             JsonArray offsets = new JsonArray();
             proof.gridOffsets().forEach(offsets::add);

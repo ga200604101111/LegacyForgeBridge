@@ -22,7 +22,8 @@ public final class LegacyGridPotPresentationAnalyzer {
     private static final String TESSELLATOR = "net/minecraft/client/renderer/Tessellator";
 
     public record Proof(String registryName, String sourceBlockClass, String sourceTileClass,
-                        String sourceRendererClass, String cellCarrierLegacyRegistryName, List<Float> gridOffsets,
+                        String sourceRendererClass, String cellCarrierLegacyRegistryName,
+                        boolean flatInventory, String inventoryTextureName, List<Float> gridOffsets,
                         float contentTranslateY, float crossedScale, float cactusHalfWidth) {
         public Proof {
             gridOffsets = List.copyOf(gridOffsets);
@@ -43,6 +44,9 @@ public final class LegacyGridPotPresentationAnalyzer {
         LegacyRegisteredBlockRenderTypeAnalyzer.Analysis renderTypes = new LegacyRegisteredBlockRenderTypeAnalyzer().analyze(jarPath);
         Map<String,LegacyRegisteredBlockRenderTypeAnalyzer.RenderIdentity> blockRender = new LinkedHashMap<>();
         for (var rule : renderTypes.rules()) blockRender.putIfAbsent(rule.sourceBlockClass(), rule.renderIdentity());
+        Map<String,LegacyBlockInventoryRenderModeAnalyzer.Mode> inventoryModes = new LinkedHashMap<>();
+        for (var rule : new LegacyBlockInventoryRenderModeAnalyzer().analyze(jarPath).rules())
+            inventoryModes.putIfAbsent(rule.registryName(), rule.mode());
 
         List<Proof> proofs = new ArrayList<>();
         List<Skipped> skipped = new ArrayList<>();
@@ -84,10 +88,27 @@ public final class LegacyGridPotPresentationAnalyzer {
                         "GridPot renderer does not match the bounded stored-content presentation shape."));
                 continue;
             }
+            boolean flatInventory=inventoryModes.get(rule.registryName())==LegacyBlockInventoryRenderModeAnalyzer.Mode.FLAT_2D;
+            String inventoryTexture=directTextureName(classes,rule.sourceBlockClass());
             proofs.add(new Proof(rule.registryName(), rule.sourceBlockClass(), rule.sourceTileClass(), renderer, cellCarrier,
-                    List.of(-0.333F, 0.0F, 0.333F), 0.25F, 0.75F, 0.125F));
+                    flatInventory,inventoryTexture,List.of(-0.333F, 0.0F, 0.333F), 0.25F, 0.75F, 0.125F));
         }
         return new Analysis(proofs, skipped, List.copyOf(diagnostics));
+    }
+
+    private static String directTextureName(Map<String,ClassNode> classes,String sourceClass){
+        LinkedHashSet<String> values=new LinkedHashSet<>();Set<String> seen=new HashSet<>();
+        for(String current=sourceClass;current!=null&&seen.add(current);){
+            ClassNode node=classes.get(current);if(node==null)break;
+            for(MethodNode method:node.methods)if(Set.of("getTextureName","func_149702_O").contains(method.name)
+                    &&"()Ljava/lang/String;".equals(method.desc)){
+                List<AbstractInsnNode> code=real(method);
+                if(code.size()==2&&code.get(0) instanceof LdcInsnNode ldc&&ldc.cst instanceof String value
+                        &&code.get(1).getOpcode()==Opcodes.ARETURN&&!value.isBlank())values.add(value);
+            }
+            current=node.superName;
+        }
+        return values.size()==1?values.getFirst():null;
     }
 
     static String findRendererForIdentity(Map<String,ClassNode> classes, String fieldOwner, String fieldName) {
