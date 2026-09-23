@@ -120,8 +120,19 @@ public final class LegacyInertModelPresentationAnalyzer {
     }
     private static boolean inventoryTransform(MethodNode method,String modelClass){
         return calls(method,"org/lwjgl/opengl/GL11","glPushMatrix","()V")&&calls(method,"org/lwjgl/opengl/GL11","glPopMatrix","()V")
-                &&calls(method,"org/lwjgl/opengl/GL11","glTranslatef","(FFF)V")&&calls(method,"org/lwjgl/opengl/GL11","glScalef","(FFF)V")
-                &&countFloat(method,-0.7F)>=1&&countFloat(method,1.3F)>=3&&countModelZeroArgCalls(method,modelClass)==1;
+                &&callsFloat3(method,"org/lwjgl/opengl/GL11","glTranslatef",0F,-0.7F,0F)
+                &&callsFloat3(method,"org/lwjgl/opengl/GL11","glScalef",1.3F,1.3F,1.3F)
+                &&countModelZeroArgCalls(method,modelClass)==1;
+    }
+
+    private static boolean callsFloat3(MethodNode method,String owner,String name,float a,float b,float c){
+        List<AbstractInsnNode> code=real(method);
+        for(int i=3;i<code.size();i++){
+            if(!(code.get(i) instanceof MethodInsnNode call)||!call.owner.equals(owner)||!call.name.equals(name)||!call.desc.equals("(FFF)V"))continue;
+            Float x=floatConstant(code.get(i-3)),y=floatConstant(code.get(i-2)),z=floatConstant(code.get(i-1));
+            if(x!=null&&y!=null&&z!=null&&Float.compare(x,a)==0&&Float.compare(y,b)==0&&Float.compare(z,c)==0)return true;
+        }
+        return false;
     }
 
     private static int[] modelTexture(ClassNode model){
