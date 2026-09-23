@@ -94,19 +94,31 @@ public final class LegacyRegistryAnalyzer {
         }
     }
 
-    private sealed interface Symbol permits TextSymbol, NumberSymbol, TypeSymbol, ObjectSymbol, ParamSymbol, NullSymbol, UnknownSymbol { }
+    private sealed interface Symbol permits TextSymbol, NumberSymbol, TypeSymbol, ObjectSymbol, ParamSymbol,
+            UnlocalizedNameSymbol, SubstringSymbol, NullSymbol, UnknownSymbol { }
     private record TextSymbol(String value) implements Symbol { }
     private record NumberSymbol(Number value) implements Symbol { }
     private record TypeSymbol(String internalName) implements Symbol { }
     private record ObjectSymbol(String internalName, String constructorDescriptor, List<Symbol> constructorArgs,
-                                StaticFieldReference staticField) implements Symbol {
-        ObjectSymbol(String internalName) { this(internalName, null, List.of(), null); }
+                                StaticFieldReference staticField, String unlocalizedName) implements Symbol {
+        ObjectSymbol(String internalName) { this(internalName, null, List.of(), null, null); }
         ObjectSymbol(String internalName,String constructorDescriptor,List<Symbol> constructorArgs) {
-            this(internalName,constructorDescriptor,constructorArgs,null);
+            this(internalName,constructorDescriptor,constructorArgs,null,null);
         }
-        ObjectSymbol { constructorArgs = List.copyOf(constructorArgs); }
+        ObjectSymbol(String internalName,String constructorDescriptor,List<Symbol> constructorArgs,StaticFieldReference staticField) {
+            this(internalName,constructorDescriptor,constructorArgs,staticField,null);
+        }
+        ObjectSymbol {
+            constructorArgs = List.copyOf(constructorArgs);
+            if(unlocalizedName!=null&&unlocalizedName.isBlank())unlocalizedName=null;
+        }
+        ObjectSymbol withUnlocalizedName(String value) {
+            return new ObjectSymbol(internalName,constructorDescriptor,constructorArgs,staticField,value);
+        }
     }
     private record ParamSymbol(int local) implements Symbol { }
+    private record UnlocalizedNameSymbol(Symbol receiver) implements Symbol { }
+    private record SubstringSymbol(Symbol source,int start,Integer end) implements Symbol { }
     private enum NullSymbol implements Symbol { INSTANCE }
     private enum UnknownSymbol implements Symbol { INSTANCE }
 
@@ -366,13 +378,18 @@ public final class LegacyRegistryAnalyzer {
         if (symbol instanceof ParamSymbol param) return substitution.getOrDefault(param.local(), UnknownSymbol.INSTANCE);
         if (symbol instanceof ObjectSymbol object && !object.constructorArgs().isEmpty()) {
             List<Symbol> args = object.constructorArgs().stream().map(value -> substitute(value, substitution)).toList();
-            return new ObjectSymbol(object.internalName(), object.constructorDescriptor(), args, object.staticField());
+            return new ObjectSymbol(object.internalName(), object.constructorDescriptor(), args, object.staticField(),object.unlocalizedName());
         }
+        if(symbol instanceof UnlocalizedNameSymbol name)
+            return new UnlocalizedNameSymbol(substitute(name.receiver(),substitution));
+        if(symbol instanceof SubstringSymbol substring)
+            return new SubstringSymbol(substitute(substring.source(),substitution),substring.start(),substring.end());
         return symbol;
     }
 
     private Registration materialize(Template template) {
-        if (!(template.name() instanceof TextSymbol name) || name.value().isBlank()) return null;
+        String registryName=materializeText(template.name());
+        if (registryName==null || registryName.isBlank()) return null;
         ObjectSymbol concreteObject = template.object() instanceof ObjectSymbol object ? object : null;
         String implementation = concreteObject != null ? concreteObject.internalName()
                 : template.object() instanceof TypeSymbol type ? type.internalName() : null;
@@ -397,8 +414,26 @@ public final class LegacyRegistryAnalyzer {
             }
         }
         MethodKey source = template.directSource();
-        return new Registration(template.kind(), name.value(), namespace, implementation, itemBlock,
+        return new Registration(template.kind(), registryName, namespace, implementation, itemBlock,
                 constructorDescriptor, constructor, source.owner(), source.name(), source.descriptor());
+    }
+
+    private static String materializeText(Symbol symbol){
+        if(symbol instanceof TextSymbol text)return text.value();
+        if(symbol instanceof UnlocalizedNameSymbol name){
+            Symbol receiver=name.receiver();
+            if(receiver instanceof ObjectSymbol object&&object.unlocalizedName()!=null)
+                return "item."+object.unlocalizedName();
+            return null;
+        }
+        if(symbol instanceof SubstringSymbol substring){
+            String source=materializeText(substring.source());
+            if(source==null)return null;
+            int start=substring.start(),end=substring.end()==null?source.length():substring.end();
+            if(start<0||end<start||end>source.length())return null;
+            return source.substring(start,end);
+        }
+        return null;
     }
 
     private boolean isRoot(MethodContext context) {
@@ -517,6 +552,8 @@ public final class LegacyRegistryAnalyzer {
                     if (candidate.value instanceof Type type && type.getSort() == Type.OBJECT) return new TypeSymbol(type.getInternalName());
                 }
             }
+            Symbol assigned=resolveStaticFieldAssignment(field,depth,guard);
+            if(assigned!=UnknownSymbol.INSTANCE)return assigned;
             Type fieldType = Type.getType(field.desc);
             if (fieldType.getSort() == Type.OBJECT)
                 return new ObjectSymbol(fieldType.getInternalName(),null,List.of(),new StaticFieldReference(field.owner,field.name,field.desc));
@@ -529,6 +566,26 @@ public final class LegacyRegistryAnalyzer {
             if (frame == null) return UnknownSymbol.INSTANCE;
             int argCount = Type.getArgumentTypes(call.desc).length;
             boolean isStatic = call.getOpcode() == Opcodes.INVOKESTATIC;
+
+            if(!isStatic&&Set.of("getUnlocalizedName","func_77658_a").contains(call.name)
+                    &&"()Ljava/lang/String;".equals(call.desc)&&frame.getStackSize()>=1){
+                Symbol receiver=resolve(context,frame.getStack(frame.getStackSize()-1),producerIndex,depth+1,guard);
+                if(receiver!=UnknownSymbol.INSTANCE)return new UnlocalizedNameSymbol(receiver);
+            }
+            if(!isStatic&&call.owner.equals("java/lang/String")&&call.name.equals("substring")
+                    &&(call.desc.equals("(I)Ljava/lang/String;")||call.desc.equals("(II)Ljava/lang/String;"))){
+                List<Symbol> values=invocationValuesIncludingReceiver(context,producerIndex,call,frame);
+                if(values!=null&&values.size()>=2&&values.get(1) instanceof NumberSymbol start){
+                    Integer end=values.size()==3&&values.get(2) instanceof NumberSymbol finish?finish.value().intValue():null;
+                    return new SubstringSymbol(values.getFirst(),start.value().intValue(),end);
+                }
+            }
+            if(!isStatic&&Set.of("setUnlocalizedName","func_77655_b").contains(call.name)
+                    &&call.desc.equals("(Ljava/lang/String;)Lnet/minecraft/item/Item;")){
+                List<Symbol> values=invocationValuesIncludingReceiver(context,producerIndex,call,frame);
+                if(values!=null&&values.size()==2&&values.getFirst() instanceof ObjectSymbol object
+                        &&values.get(1) instanceof TextSymbol name)return object.withUnlocalizedName(name.value());
+            }
             if (!isStatic && returnType.getSort() == Type.OBJECT && frame.getStackSize() >= argCount + 1) {
                 // Fluent legacy setters and source helpers commonly return the receiver. Following
                 // the receiver is conservative for implementation-type proof; the registration
@@ -547,6 +604,28 @@ public final class LegacyRegistryAnalyzer {
         return UnknownSymbol.INSTANCE;
     }
 
+    private Symbol resolveStaticFieldAssignment(FieldInsnNode field,int depth,Set<String> guard){
+        String fieldGuard="static:"+field.owner+"."+field.name+field.desc;
+        if(!guard.add(fieldGuard))return UnknownSymbol.INSTANCE;
+        try{
+            LinkedHashSet<Symbol> values=new LinkedHashSet<>();
+            for(var entry:methods.entrySet()){
+                if(!entry.getKey().owner().equals(field.owner))continue;
+                MethodContext context=entry.getValue();
+                for(int i=0;i<context.method().instructions.size();i++){
+                    AbstractInsnNode instruction=context.method().instructions.get(i);
+                    if(!(instruction instanceof FieldInsnNode put)||put.getOpcode()!=Opcodes.PUTSTATIC
+                            ||!put.owner.equals(field.owner)||!put.name.equals(field.name)||!put.desc.equals(field.desc))continue;
+                    Frame<SourceValue> frame=context.frames()[i];
+                    if(frame==null||frame.getStackSize()<1)continue;
+                    Symbol value=resolve(context,frame.getStack(frame.getStackSize()-1),i,depth+1,guard);
+                    if(value!=UnknownSymbol.INSTANCE&&value!=NullSymbol.INSTANCE)values.add(value);
+                }
+            }
+            return values.size()==1?values.getFirst():UnknownSymbol.INSTANCE;
+        }finally{guard.remove(fieldGuard);}
+    }
+
     private Symbol constructorObject(MethodContext context, String type, int newIndex, int depth, Set<String> guard) {
         int limit = Math.min(context.method().instructions.size(), newIndex + 160);
         for (int i = newIndex + 1; i < limit; i++) {
@@ -562,9 +641,34 @@ public final class LegacyRegistryAnalyzer {
             int start = frame.getStackSize() - count;
             for (int arg = 0; arg < count; arg++)
                 arguments.add(resolve(context, frame.getStack(start + arg), i, depth + 1, guard));
-            return new ObjectSymbol(type, call.desc, arguments);
+            String unlocalizedName=constructorUnlocalizedName(type,call.desc,arguments);
+            return new ObjectSymbol(type,call.desc,arguments,null,unlocalizedName);
         }
         return new ObjectSymbol(type);
+    }
+
+    private String constructorUnlocalizedName(String owner,String desc,List<Symbol> arguments){
+        MethodContext constructor=methods.get(new MethodKey(owner,"<init>",desc));
+        if(constructor==null)return null;
+        List<Symbol> actual=new ArrayList<>(arguments.size()+1);
+        actual.add(UnknownSymbol.INSTANCE);actual.addAll(arguments);
+        Map<Integer,Symbol> substitution=parameterSubstitution(constructor.method(),actual);
+        LinkedHashSet<String> names=new LinkedHashSet<>();
+        for(int i=0;i<constructor.method().instructions.size();i++){
+            AbstractInsnNode instruction=constructor.method().instructions.get(i);
+            if(!(instruction instanceof MethodInsnNode call)||!Set.of("setUnlocalizedName","func_77655_b").contains(call.name)
+                    ||!call.desc.startsWith("(Ljava/lang/String;)"))continue;
+            Frame<SourceValue> frame=constructor.frames()[i];
+            if(frame==null||frame.getStackSize()<1)continue;
+            int argCount=Type.getArgumentTypes(call.desc).length;
+            if(frame.getStackSize()<argCount+1)continue;
+            Symbol receiver=resolve(constructor,frame.getStack(frame.getStackSize()-argCount-1),i,0,new LinkedHashSet<>());
+            if(!(receiver instanceof ParamSymbol param)||param.local()!=0)continue;
+            Symbol raw=resolve(constructor,frame.getStack(frame.getStackSize()-1),i,0,new LinkedHashSet<>());
+            String name=materializeText(substitute(raw,substitution));
+            if(name!=null&&!name.isBlank())names.add(name);
+        }
+        return names.size()==1?names.getFirst():null;
     }
 
     private static boolean isLoad(int opcode) {

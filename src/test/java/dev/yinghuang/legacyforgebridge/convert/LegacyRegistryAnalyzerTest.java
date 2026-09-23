@@ -49,6 +49,74 @@ class LegacyRegistryAnalyzerTest {
         assertTrue(analysis.fieldBindings().isEmpty());
     }
 
+    @Test
+    void registrationNameDerivedFromStaticItemsUnlocalizedNameIsRecovered() throws Exception {
+        Path jar=tempDir.resolve("DerivedNameContent.jar");
+        try(JarOutputStream out=new JarOutputStream(Files.newOutputStream(jar))){
+            put(out,"other/derived/Blade.class",namedSwordSubclass());
+            put(out,"other/derived/Content.class",derivedContent());
+            put(out,"other/derived/Bootstrap.class",derivedBootstrap());
+        }
+
+        var analysis=new LegacyRegistryAnalyzer().analyze(jar);
+        assertTrue(analysis.diagnostics().isEmpty(),String.join("\n",analysis.diagnostics()));
+        assertEquals(1,analysis.items().size());
+        var item=analysis.items().getFirst();
+        assertEquals("derived_blade",item.registryName());
+        assertEquals("other/derived/Blade",item.implementationClass());
+        assertEquals("(Ljava/lang/String;)V",item.constructorDescriptor());
+    }
+
+    private static byte[] derivedContent(){
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,"other/derived/Content",null,"java/lang/Object",null);
+        w.visitField(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"BLADE","Lnet/minecraft/item/Item;",null,null).visitEnd();
+        MethodVisitor c=w.visitMethod(Opcodes.ACC_STATIC,"<clinit>","()V",null,null);c.visitCode();
+        c.visitTypeInsn(Opcodes.NEW,"other/derived/Blade");c.visitInsn(Opcodes.DUP);c.visitLdcInsn("derived_blade");
+        c.visitMethodInsn(Opcodes.INVOKESPECIAL,"other/derived/Blade","<init>","(Ljava/lang/String;)V",false);
+        c.visitFieldInsn(Opcodes.PUTSTATIC,"other/derived/Content","BLADE","Lnet/minecraft/item/Item;");
+        c.visitInsn(Opcodes.RETURN);c.visitMaxs(0,0);c.visitEnd();w.visitEnd();return w.toByteArray();
+    }
+
+    private static byte[] derivedBootstrap(){
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,"other/derived/Bootstrap",null,"java/lang/Object",null);
+        MethodVisitor h=w.visitMethod(Opcodes.ACC_PRIVATE|Opcodes.ACC_STATIC,"register",
+                "(Lnet/minecraft/item/Item;)V",null,null);h.visitCode();
+        h.visitVarInsn(Opcodes.ALOAD,0);h.visitVarInsn(Opcodes.ALOAD,0);
+        h.visitMethodInsn(Opcodes.INVOKEVIRTUAL,"net/minecraft/item/Item","getUnlocalizedName",
+                "()Ljava/lang/String;",false);
+        h.visitInsn(Opcodes.ICONST_5);
+        h.visitMethodInsn(Opcodes.INVOKEVIRTUAL,"java/lang/String","substring",
+                "(I)Ljava/lang/String;",false);
+        h.visitMethodInsn(Opcodes.INVOKESTATIC,"cpw/mods/fml/common/registry/GameRegistry","registerItem",
+                "(Lnet/minecraft/item/Item;Ljava/lang/String;)V",false);
+        h.visitInsn(Opcodes.RETURN);h.visitMaxs(0,1);h.visitEnd();
+
+        MethodVisitor m=w.visitMethod(Opcodes.ACC_PUBLIC,"preInit",
+                "(Lcpw/mods/fml/common/event/FMLPreInitializationEvent;)V",null,null);
+        AnnotationVisitor av=m.visitAnnotation("Lcpw/mods/fml/common/Mod$EventHandler;",true);av.visitEnd();
+        m.visitCode();
+        m.visitFieldInsn(Opcodes.GETSTATIC,"other/derived/Content","BLADE","Lnet/minecraft/item/Item;");
+        m.visitMethodInsn(Opcodes.INVOKESTATIC,"other/derived/Bootstrap","register",
+                "(Lnet/minecraft/item/Item;)V",false);
+        m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,2);m.visitEnd();w.visitEnd();return w.toByteArray();
+    }
+
+    private static byte[] namedSwordSubclass(){
+        String name="other/derived/Blade";
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,name,null,"net/minecraft/item/ItemSword",null);
+        MethodVisitor m=w.visitMethod(Opcodes.ACC_PUBLIC,"<init>","(Ljava/lang/String;)V",null,null);m.visitCode();
+        m.visitVarInsn(Opcodes.ALOAD,0);m.visitInsn(Opcodes.ACONST_NULL);
+        m.visitMethodInsn(Opcodes.INVOKESPECIAL,"net/minecraft/item/ItemSword","<init>",
+                "(Lnet/minecraft/item/Item$ToolMaterial;)V",false);
+        m.visitVarInsn(Opcodes.ALOAD,0);m.visitVarInsn(Opcodes.ALOAD,1);
+        m.visitMethodInsn(Opcodes.INVOKEVIRTUAL,name,"setUnlocalizedName",
+                "(Ljava/lang/String;)Lnet/minecraft/item/Item;",false);
+        m.visitInsn(Opcodes.POP);m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
+    }
+
     private static byte[] simpleSubclass(String name,String parent){
         ClassWriter w=new ClassWriter(0);w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,name,null,parent,null);
         MethodVisitor m=w.visitMethod(Opcodes.ACC_PUBLIC,"<init>","()V",null,null);m.visitCode();m.visitVarInsn(Opcodes.ALOAD,0);m.visitMethodInsn(Opcodes.INVOKESPECIAL,parent,"<init>","()V",false);m.visitInsn(Opcodes.RETURN);m.visitMaxs(1,1);m.visitEnd();w.visitEnd();return w.toByteArray();
