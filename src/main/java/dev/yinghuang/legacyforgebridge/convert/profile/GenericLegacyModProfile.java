@@ -15,6 +15,7 @@ import dev.yinghuang.legacyforgebridge.convert.pass.LegacyEntityPresentationPass
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyEntityRuntimeAdmissionPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyEntityRuntimePlanPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyGridPotPresentationProofPass;
+import dev.yinghuang.legacyforgebridge.convert.pass.LegacyCreativeTabPresentationPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyPlainEntityCodegenPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyPlainEntityConstantOverrideCodegenPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyPlainEntityRegistrationStripPass;
@@ -37,6 +38,7 @@ public final class GenericLegacyModProfile implements LegacyModProfile {
     @Override public boolean matches(LegacyModMetadata metadata,String sourceHash){ return true; }
     @Override public void configure(ConversionPlan.Builder plan){
         plan.add(new GenericContentPass());
+        plan.add(new LegacyCreativeTabPresentationPass());
         plan.add(new LegacyVariantSnowballPass());
         plan.add(new LegacyVariantSnowballLaunchPass());
         plan.add(new LegacyVariantSnowballRuntimeCandidatePass());
