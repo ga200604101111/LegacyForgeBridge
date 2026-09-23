@@ -21,7 +21,7 @@ class ConvertedLegacyGridPotRendererBytecodeTest {
             boolean[] update={false}, contextNone={false}, bounds={false}, submit={false}, submitBlock={false}, translate={false}, scale={false};
             new ClassReader(input.readAllBytes()).accept(new ClassVisitor(Opcodes.ASM9) {
                 @Override public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
-                    if (!"extractRenderState".equals(name) && !"submit".equals(name)) return null;
+                    if (!"extractRenderState".equals(name) && !"submit".equals(name) && !"submitCarrier".equals(name)) return null;
                     return new MethodVisitor(Opcodes.ASM9) {
                         @Override public void visitFieldInsn(int opcode, String owner, String fieldName, String fieldDescriptor) {
                             if (opcode == Opcodes.GETSTATIC && "net/minecraft/world/item/ItemDisplayContext".equals(owner)
@@ -34,7 +34,8 @@ class ConvertedLegacyGridPotRendererBytecodeTest {
                                     && "getModelBoundingBox".equals(methodName)) bounds[0] = true;
                             if ("net/minecraft/client/renderer/item/ItemStackRenderState".equals(owner)
                                     && "submit".equals(methodName)) submit[0] = true;
-                            if ("net/minecraft/client/renderer/SubmitNodeCollector".equals(owner)
+                            if (("net/minecraft/client/renderer/SubmitNodeCollector".equals(owner)
+                                    || "net/minecraft/client/renderer/OrderedSubmitNodeCollector".equals(owner))
                                     && "submitBlock".equals(methodName)) submitBlock[0]=true;
                             if ("com/mojang/blaze3d/vertex/PoseStack".equals(owner) && "translate".equals(methodName)) translate[0] = true;
                             if ("com/mojang/blaze3d/vertex/PoseStack".equals(owner) && "scale".equals(methodName)) scale[0] = true;

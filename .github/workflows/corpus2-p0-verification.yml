@@ -9,7 +9,7 @@ concurrency:
   group: corpus2-p0-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  analysis-dependencies:
+  build-test:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
@@ -20,35 +20,12 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.5.1'
-      - name: Resolve target-platform inspection dependencies (no compilation or mod build)
-        run: |
-          cat > /tmp/lfb-analysis.init.gradle <<'EOF'
-          allprojects {
-            afterEvaluate { p ->
-              def tools = configurations.create('lfbInspectionTools')
-              dependencies.add(tools.name, 'org.benf:cfr:0.152')
-              dependencies.add(tools.name, 'org.junit.platform:junit-platform-console-standalone:1.11.4')
-              tasks.register('exportLfbInspectionDependencies') {
-                doLast {
-                  def target = file('build/inspection-dependencies')
-                  target.mkdirs()
-                  def inputs = sourceSets.main.compileClasspath.files + sourceSets.test.runtimeClasspath.files + tools.files
-                  def records = []
-                  inputs.findAll { it.isFile() && it.name.endsWith('.jar') }.sort { it.absolutePath }.eachWithIndex { f, i ->
-                    def name = String.format('%04d-', i) + f.name
-                    java.nio.file.Files.copy(f.toPath(), new File(target, name).toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
-                    records.add(name)
-                  }
-                  new File(target, 'classpath-files.txt').text = records.join('\n') + '\n'
-                }
-              }
-            }
-          }
-          EOF
-          gradle -I /tmp/lfb-analysis.init.gradle exportLfbInspectionDependencies --stacktrace
+      - name: Full build and unit tests
+        run: gradle build --stacktrace
       - uses: actions/upload-artifact@v7
+        if: success()
         with:
-          name: LegacyForgeBridge-target-inspection-dependencies
-          path: build/inspection-dependencies/
-          retention-days: 1
+          name: LegacyForgeBridge-corpus2
+          path: build/libs/*.jar
+          retention-days: 3
           if-no-files-found: error

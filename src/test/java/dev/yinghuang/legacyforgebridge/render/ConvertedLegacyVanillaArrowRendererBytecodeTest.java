@@ -60,22 +60,29 @@ class ConvertedLegacyVanillaArrowRendererBytecodeTest {
     }
 
     @Test
-    void spawnInitializesPreviousAnglesBeforeClientInsertion() throws Exception {
+    void spawnInitializesPreviousPoseBeforeClientInsertion() throws Exception {
         ClassNode client = read("dev/yinghuang/legacyforgebridge/network/FmlRuntimeClient");
         MethodNode spawn = client.methods.stream().filter(m -> m.name.equals("applyRemoteProjectileSpawn"))
                 .findFirst().orElseThrow();
-        boolean yaw = false, pitch = false, inserted = false;
+        boolean initialized = false, inserted = false;
         for (AbstractInsnNode instruction : spawn.instructions) {
-            if (instruction instanceof FieldInsnNode field && field.getOpcode() == Opcodes.PUTFIELD) {
-                if (field.name.equals("yRotO") && field.desc.equals("F")) yaw = true;
-                if (field.name.equals("xRotO") && field.desc.equals("F")) pitch = true;
+            if (instruction instanceof MethodInsnNode call
+                    && call.owner.equals("dev/yinghuang/legacyforgebridge/network/FmlRuntimeClient")
+                    && call.name.equals("initializeRemoteSpawnPose")) {
+                initialized = true;
             }
             if (instruction instanceof MethodInsnNode call && call.name.equals("addEntity")) {
-                assertTrue(yaw && pitch, "Both initial angles must be set before the first frame");
+                assertTrue(initialized, "Remote spawn pose must be initialized before the first client frame");
                 inserted = true;
             }
         }
         assertTrue(inserted);
+
+        MethodNode helper = client.methods.stream().filter(m -> m.name.equals("initializeRemoteSpawnPose"))
+                .findFirst().orElseThrow();
+        assertTrue(calls(helper).stream().anyMatch(c -> c.owner.equals("net/minecraft/world/entity/Entity")
+                        && c.name.equals("snapTo") && c.desc.equals("(DDDFF)V")),
+                "Entity.snapTo must initialize current and previous position/angles together");
     }
 
     @Test
@@ -93,6 +100,14 @@ class ConvertedLegacyVanillaArrowRendererBytecodeTest {
                 }
             }
         }
+    }
+
+    private static List<MethodInsnNode> calls(MethodNode method) {
+        List<MethodInsnNode> result = new ArrayList<>();
+        for (AbstractInsnNode instruction : method.instructions) {
+            if (instruction instanceof MethodInsnNode call) result.add(call);
+        }
+        return result;
     }
 
     private static List<MethodInsnNode> calls(ClassNode node) {

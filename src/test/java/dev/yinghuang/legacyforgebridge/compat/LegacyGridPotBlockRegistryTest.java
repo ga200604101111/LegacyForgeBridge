@@ -87,7 +87,7 @@ class LegacyGridPotBlockRegistryTest {
         value.addProperty("baseHeight",0.01F);value.addProperty("cellHeight",0.375F);value.addProperty("placementCreatesCell",true);
         value.addProperty("emptyHandRemovalProven",true);value.addProperty("selfItemAddsCellProven",true);value.addProperty("breakDropsEveryEnabledCell",true);
         value.addProperty("normalBlockDropDisabled",true);value.addProperty("persistenceProven",true);value.addProperty("dynamicCellShapeProven",true);
-        value.addProperty("nonOpaqueProven",true);value.addProperty("legacyInsertionPredicateProven",true);value.addProperty("sourceProvenModContentInsertionWired",true);
+        value.addProperty("nonOpaqueProven",true);value.addProperty("coreRuntimeComplete",true);value.addProperty("legacyInsertionPredicateProven",true);value.addProperty("sourceProvenModContentInsertionWired",true);
         JsonArray positive=new JsonArray();positive.add("fixture:flower");value.add("sourceProvenInsertionBlockIds",positive);
         value.addProperty("sourceNegativeInsertionBranchProven",true);value.addProperty("negativeContentInsertionRuntimeWired",true);value.addProperty("negativeNonBlockItemRuntimeWired",true);
         JsonArray negative=new JsonArray();negative.add("fixture:stone");value.add("sourceProvenNegativeBlockIds",negative);

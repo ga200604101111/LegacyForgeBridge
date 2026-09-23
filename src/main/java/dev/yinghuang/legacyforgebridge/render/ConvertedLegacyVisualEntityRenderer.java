@@ -1,6 +1,7 @@
 package dev.yinghuang.legacyforgebridge.render;
 
-import com.mojang.blaze3d.vertex.PoseStack;\nimport com.mojang.blaze3d.vertex.VertexConsumer;
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
 import dev.yinghuang.legacyforgebridge.compat.*;
 import dev.yinghuang.legacyforgebridge.convert.runtime.ConvertedLegacyVisualEntity;

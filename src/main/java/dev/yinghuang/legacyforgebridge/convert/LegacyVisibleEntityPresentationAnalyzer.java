@@ -27,7 +27,8 @@ public final class LegacyVisibleEntityPresentationAnalyzer {
 
     public record Part(String field,int u,int v,float x,float y,float z,int width,int height,int depth,
                        float pivotX,float pivotY,float pivotZ,float xRot,float yRot,float zRot,boolean mirror) { }
-    public record TextureVariant(int value,String texture,boolean translucent) { }\n    public record AtlasVariant(String key,int width,int height,int u,int v) { }
+    public record TextureVariant(int value,String texture,boolean translucent) { }
+    public record AtlasVariant(String key,int width,int height,int u,int v) { }
     public record Rule(String registryName,String sourceClass,String rendererClass,Adapter adapter,
                        int legacyNumericId,int trackingRange,int updateFrequency,boolean velocityUpdates,
                        float width,float height,int modelTextureWidth,int modelTextureHeight,List<Part> parts,
