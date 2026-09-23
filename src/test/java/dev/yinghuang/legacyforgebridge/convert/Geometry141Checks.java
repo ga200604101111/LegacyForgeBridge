@@ -48,7 +48,12 @@ public final class Geometry141Checks {
     public static void heldModelsUseBlockTransforms(){var model=LegacyBlockGeometryPass.model(LegacyGeometry.stairs(0),Collections.nCopies(6,"test:block/face"));check(model.get("parent").getAsString().equals("minecraft:block/block"),"flat generated item parent");check(model.getAsJsonArray("elements").size()>6,"stair reduced to a cube");check(!model.getAsJsonObject("textures").has("layer0"),"2D icon rather than geometry");}
     public static void strictSchema(){
         JsonObject root=JsonParser.parseString("{\"schemaVersion\":1,\"blocks\":{\"test:slab\":{\"family\":\"box\",\"opaque\":false,\"variants\":{\"0\":{\"bounds\":[0,0,0,1,0.5,1],\"inventoryBounds\":[0,0,0,1,0.5,1],\"copyFace\":-1,\"edges\":true,\"collision\":\"inherited\"}}}}}").getAsJsonObject();
-        check(LegacyGeometrySpec.parse(root).size()==1,"valid schema rejected");root.addProperty("schemaVersion",1.5);rejects(()->LegacyGeometrySpec.parse(root));root.addProperty("schemaVersion",1);
+        check(LegacyGeometrySpec.parse(root).size()==1,"valid schema rejected");
+        root.getAsJsonObject("blocks").getAsJsonObject("test:slab").addProperty("renderOffset","xyz");
+        check(LegacyGeometrySpec.parse(root).get("test:slab").renderOffset()==LegacyGeometrySpec.RenderOffset.XYZ,"xyz render offset rejected");
+        root.getAsJsonObject("blocks").getAsJsonObject("test:slab").addProperty("renderOffset","mystery");rejects(()->LegacyGeometrySpec.parse(root));
+        root.getAsJsonObject("blocks").getAsJsonObject("test:slab").remove("renderOffset");
+        root.addProperty("schemaVersion",1.5);rejects(()->LegacyGeometrySpec.parse(root));root.addProperty("schemaVersion",1);
         root.getAsJsonObject("blocks").getAsJsonObject("test:slab").getAsJsonObject("variants").getAsJsonObject("0").addProperty("copyFace",0.5);rejects(()->LegacyGeometrySpec.parse(root));
     }
     public static void mimicDirectionsCyclesAndBudget(){

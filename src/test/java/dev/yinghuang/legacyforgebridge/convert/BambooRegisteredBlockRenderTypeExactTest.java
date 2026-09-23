@@ -40,11 +40,14 @@ class BambooRegisteredBlockRenderTypeExactTest {
         Map<String,LegacySimpleBlockRendererAnalyzer.Rule> byName=analysis.rules().stream()
                 .collect(Collectors.toMap(LegacySimpleBlockRendererAnalyzer.Rule::registryName,Function.identity(),(a,b)->a));
         var shoot=byName.get("blockbambooshoot");assertEquals(LegacySimpleBlockRendererAnalyzer.Mode.CROSS,shoot.mode());
+        assertEquals(LegacySimpleBlockRendererAnalyzer.RenderOffset.XYZ,shoot.renderOffset());
         assertNotNull(shoot.bounds());assertEquals(.3F,shoot.bounds().minX(),0.0001F);assertEquals(.5F,shoot.bounds().maxY(),0.0001F);
         assertEquals(.7F,shoot.bounds().maxZ(),0.0001F);assertTrue(shoot.emptyCollision());
         var single=byName.get("bamboosingle");assertEquals(LegacySimpleBlockRendererAnalyzer.Mode.CROSS,single.mode());
+        assertEquals(LegacySimpleBlockRendererAnalyzer.RenderOffset.XYZ,single.renderOffset());
         assertNotNull(single.bounds());assertEquals(.125F,single.bounds().minX(),0.0001F);assertEquals(.875F,single.bounds().maxZ(),0.0001F);assertTrue(single.emptyCollision());
         var bamboo2=byName.get("bamboo2");assertEquals(LegacySimpleBlockRendererAnalyzer.Mode.CROP,bamboo2.mode());
+        assertEquals(LegacySimpleBlockRendererAnalyzer.RenderOffset.XYZ,bamboo2.renderOffset());
         assertNotNull(bamboo2.bounds());assertEquals(.125F,bamboo2.bounds().minX(),0.0001F);assertEquals(.875F,bamboo2.bounds().maxX(),0.0001F);assertTrue(bamboo2.emptyCollision());
         assertEquals(LegacySimpleBlockRendererAnalyzer.Mode.META_ZERO_CROP_ELSE_STANDARD,byName.get("singleTexDeco").mode());
         assertEquals(LegacySimpleBlockRendererAnalyzer.Mode.HELD_ITEM_CROSS,byName.get("kitunebi").mode());

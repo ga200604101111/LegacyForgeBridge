@@ -7,6 +7,7 @@ import java.util.*;
 public final class LegacyGeometrySpec {
     public static final String PATH="legacyforgebridge/block-geometry.json";
     public static final String INVENTORY_FALLBACK="inventory_fallback";
+    public enum RenderOffset { NONE, XYZ }
     private static final Set<String> FAMILIES=Set.of("box","stairs","pane","mimic_box","mimic_stairs","connected_cuboid");
     public record Variant(LegacyGeometry.Box bounds,LegacyGeometry.Box inventory,int copyFace,boolean edges,String collision) {
         public Variant {if(copyFace < -1||copyFace>5||!Set.of("inherited","empty","full","unsupported").contains(collision))throw new IllegalArgumentException("Invalid geometry variant");}
@@ -20,17 +21,21 @@ public final class LegacyGeometrySpec {
         public double size(){return maxWidth-minWidth;}
         private static boolean range(double min,double max){return Double.isFinite(min)&&Double.isFinite(max)&&min>=0&&max<=1&&min<max;}
     }
-    public record Rule(String id,String family,boolean opaque,Map<Integer,Variant> variants,ConnectedCuboid connectedCuboid,boolean modelOwned) {
+    public record Rule(String id,String family,boolean opaque,Map<Integer,Variant> variants,ConnectedCuboid connectedCuboid,boolean modelOwned,RenderOffset renderOffset) {
         public Rule {
             if(!id.matches("[a-z0-9_.-]+:[a-z0-9/._-]+")||!FAMILIES.contains(family)||variants.isEmpty()||variants.size()>16)throw new IllegalArgumentException("Invalid geometry rule");
             if(Arrays.stream(id.split(":",2)[1].split("/")).anyMatch(v->v.equals("..")||v.equals(".")))throw new IllegalArgumentException("Invalid path segment");
             if(family.equals("connected_cuboid")!=(connectedCuboid!=null))throw new IllegalArgumentException("Connected cuboid config mismatch");
+            renderOffset=Objects.requireNonNull(renderOffset,"renderOffset");
             variants=Map.copyOf(variants);
         }
-        public Rule(String id,String family,boolean opaque,Map<Integer,Variant> variants,ConnectedCuboid connectedCuboid){
-            this(id,family,opaque,variants,connectedCuboid,false);
+        public Rule(String id,String family,boolean opaque,Map<Integer,Variant> variants,ConnectedCuboid connectedCuboid,boolean modelOwned){
+            this(id,family,opaque,variants,connectedCuboid,modelOwned,RenderOffset.NONE);
         }
-        public Rule(String id,String family,boolean opaque,Map<Integer,Variant> variants){this(id,family,opaque,variants,null,false);}
+        public Rule(String id,String family,boolean opaque,Map<Integer,Variant> variants,ConnectedCuboid connectedCuboid){
+            this(id,family,opaque,variants,connectedCuboid,false,RenderOffset.NONE);
+        }
+        public Rule(String id,String family,boolean opaque,Map<Integer,Variant> variants){this(id,family,opaque,variants,null,false,RenderOffset.NONE);}
         public boolean stairs(){return family.equals("stairs")||family.equals("mimic_stairs");}
         public boolean mimic(){return family.startsWith("mimic_");}
         public boolean pane(){return family.equals("pane");}
@@ -66,7 +71,12 @@ public final class LegacyGeometrySpec {
                 connected=new ConnectedCuboid(number(c,"minWidth"),number(c,"maxWidth"),number(c,"minHeight"),number(c,"maxHeight"),
                         bool(c,"axisLocked"),bool(c,"sameMetadataOnly"),bool(c,"connectFullBlocks"),bool(c,"connectWood"),bool(c,"connectRock"));
             }else if(o.has("connectedCuboid"))throw new IllegalArgumentException("Unexpected connected cuboid config");
-            out.put(entry.getKey(),new Rule(entry.getKey(),family,o.get("opaque").getAsBoolean(),variants,connected,o.has("modelOwned")&&bool(o,"modelOwned")));
+            RenderOffset renderOffset=RenderOffset.NONE;
+            if(o.has("renderOffset")){
+                if(!o.get("renderOffset").isJsonPrimitive()||!o.getAsJsonPrimitive("renderOffset").isString())throw new IllegalArgumentException("Invalid render offset");
+                renderOffset=switch(o.get("renderOffset").getAsString()){case "xyz"->RenderOffset.XYZ;case "none"->RenderOffset.NONE;default->throw new IllegalArgumentException("Unknown render offset");};
+            }
+            out.put(entry.getKey(),new Rule(entry.getKey(),family,o.get("opaque").getAsBoolean(),variants,connected,o.has("modelOwned")&&bool(o,"modelOwned"),renderOffset));
         }
         return Map.copyOf(out);
     }

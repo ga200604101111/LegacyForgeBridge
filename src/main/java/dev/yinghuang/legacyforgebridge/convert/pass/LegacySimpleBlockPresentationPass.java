@@ -23,7 +23,8 @@ public final class LegacySimpleBlockPresentationPass implements ConversionPass {
 
     private enum FinalMode { CROSS, CROP, META_ZERO_CROP_ELSE_STANDARD }
     private record Candidate(String registryName,String sourceBlockClass,String sourceRendererClass,FinalMode mode,String proof,
-                             LegacySimpleBlockRendererAnalyzer.Bounds bounds,boolean emptyCollision) { }
+                             LegacySimpleBlockRendererAnalyzer.Bounds bounds,boolean emptyCollision,
+                             LegacySimpleBlockRendererAnalyzer.RenderOffset renderOffset) { }
 
     @Override public String id(){return "legacy-simple-block-presentation";}
 
@@ -50,7 +51,7 @@ public final class LegacySimpleBlockPresentationPass implements ConversionPass {
                 default->null;
             };
             if(mode!=null)candidates.add(new Candidate(rule.registryName(),rule.sourceBlockClass(),rule.sourceRendererClass(),mode,
-                    "source-bound custom renderer",rule.bounds(),rule.emptyCollision()));
+                    "source-bound custom renderer",rule.bounds(),rule.emptyCollision(),rule.renderOffset()));
         }
 
         var renderTypes=new LegacyRegisteredBlockRenderTypeAnalyzer().analyze(context.sourceJar());
@@ -59,7 +60,7 @@ public final class LegacySimpleBlockPresentationPass implements ConversionPass {
             int type=rule.renderIdentity().constant();
             FinalMode mode=type==1?FinalMode.CROSS:type==6?FinalMode.CROP:null;
             if(mode!=null)candidates.add(new Candidate(rule.registryName(),rule.sourceBlockClass(),null,mode,
-                    "direct legacy vanilla renderType="+type,null,false));
+                    "direct legacy vanilla renderType="+type,null,false,LegacySimpleBlockRendererAnalyzer.RenderOffset.NONE));
         }
         candidates.sort(Comparator.comparing(Candidate::registryName));
 
@@ -101,6 +102,7 @@ public final class LegacySimpleBlockPresentationPass implements ConversionPass {
             evidence.addProperty("sourceBlockClass",rule.sourceBlockClass());
             if(rule.sourceRendererClass()!=null)evidence.addProperty("sourceRendererClass",rule.sourceRendererClass());
             evidence.addProperty("mode",rule.mode().name());evidence.addProperty("proof",rule.proof());
+            evidence.addProperty("renderOffset",rule.renderOffset().name());
             if(texture!=null)evidence.addProperty("texture",texture);
             if(rule.bounds()!=null){
                 evidence.add("sourceBounds",boundsArray(rule.bounds()));
@@ -112,8 +114,10 @@ public final class LegacySimpleBlockPresentationPass implements ConversionPass {
             // Collision/selection bounds do not authorize replacing a crossed plant mesh by
             // the six faces of its bounding box. Retain bounds, but leave rendering to JSON.
             if(geometryBlocks.has(id)) {
-                geometryBlocks.getAsJsonObject(id).addProperty("modelOwned",true);
-                geometryBlocks.getAsJsonObject(id).addProperty("opaque",false);
+                JsonObject geometry=geometryBlocks.getAsJsonObject(id);
+                geometry.addProperty("modelOwned",true);
+                geometry.addProperty("opaque",false);
+                if(rule.renderOffset()==LegacySimpleBlockRendererAnalyzer.RenderOffset.XYZ)geometry.addProperty("renderOffset","xyz");
                 mergedShapes++;
             }
             evidence.addProperty("finalModelOwnership",true);rules.add(evidence);written++;

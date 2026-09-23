@@ -38,6 +38,7 @@ public final class LegacyBlockGeometryRegistry {
     public static BlockBehaviour.Properties properties(Identifier id,BlockBehaviour.Properties properties){
         var rule=rule(id);if(rule==null)return properties;
         properties=properties.dynamicShape();
+        if(rule.renderOffset()==LegacyGeometrySpec.RenderOffset.XYZ)properties=properties.offsetType(BlockBehaviour.OffsetType.XYZ);
         if(!rule.opaque()||!rule.family().equals("box")||rule.variants().values().stream().anyMatch(v->!v.bounds().full()))properties=properties.noOcclusion();
         return properties;
     }

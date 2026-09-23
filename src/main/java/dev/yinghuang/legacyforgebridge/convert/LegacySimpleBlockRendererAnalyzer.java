@@ -14,6 +14,7 @@ import java.util.jar.*;
  */
 public final class LegacySimpleBlockRendererAnalyzer {
     public enum Mode { CROSS, CROP, META_ZERO_CROP_ELSE_STANDARD, HELD_ITEM_CROSS }
+    public enum RenderOffset { NONE, XYZ }
     public record Bounds(float minX,float minY,float minZ,float maxX,float maxY,float maxZ) {
         public Bounds {
             if(!finite(minX,minY,minZ,maxX,maxY,maxZ)||minX<0F||minY<0F||minZ<0F||maxX>1F||maxY>1F||maxZ>1F
@@ -21,7 +22,7 @@ public final class LegacySimpleBlockRendererAnalyzer {
         }
     }
     public record Rule(String registryName,String sourceBlockClass,String sourceRendererClass,Mode mode,
-                       Bounds bounds,boolean emptyCollision) { }
+                       Bounds bounds,boolean emptyCollision,RenderOffset renderOffset) { }
     public record Analysis(List<Rule> rules,List<String> diagnostics) {
         public Analysis { rules=List.copyOf(rules);diagnostics=List.copyOf(diagnostics); }
     }
@@ -42,10 +43,49 @@ public final class LegacySimpleBlockRendererAnalyzer {
             String renderer=rendererForField(classes,id.fieldOwner(),id.fieldName());if(renderer==null)continue;
             Mode mode=classify(classes,renderer,block.sourceBlockClass(),registrations.get(block.registryName()),heldItemVisibleClasses.contains(block.sourceBlockClass()));
             if(mode!=null)rules.add(new Rule(block.registryName(),block.sourceBlockClass(),renderer,mode,
-                    uniqueSourceBounds(classes,block.sourceBlockClass()),provesEmptyCollision(classes,block.sourceBlockClass())));
+                    uniqueSourceBounds(classes,block.sourceBlockClass()),provesEmptyCollision(classes,block.sourceBlockClass()),
+                    provesVanillaXyzOffset(renderMethod(classes,renderer))?RenderOffset.XYZ:RenderOffset.NONE));
             else diagnostics.add("Custom block renderer is outside the simple native cross/crop family: "+block.registryName()+" renderer="+renderer);
         }
         return new Analysis(rules,List.copyOf(diagnostics));
+    }
+
+    private static MethodNode renderMethod(Map<String,ClassNode> classes,String renderer){
+        ClassNode node=classes.get(renderer);if(node==null)return null;MethodNode found=null;
+        for(MethodNode method:node.methods)if(method.desc.equals(RENDER_DESC)){if(found!=null)return null;found=method;}
+        return found;
+    }
+
+    /**
+     * Proves the old randomized block-position translation that Minecraft 1.21 exposes as
+     * BlockBehaviour.OffsetType.XYZ. The constants/bit slices are the complete 1.7 formula:
+     * x*3129871 ^ z*116129781; seed=seed*seed*42317861+seed*11; then nibbles 16/20/24.
+     * Unknown/custom translations are not approximated.
+     */
+    static boolean provesVanillaXyzOffset(MethodNode method){
+        if(method==null)return false;List<AbstractInsnNode> code=real(method);
+        boolean xSeed=false,zSeed=false,square=false,plusEleven=false,mask15=false,div15=false,half=false,vertical=false;
+        Set<Integer> shifts=new HashSet<>();int land=0;
+        for(int i=0;i<code.size();i++){
+            AbstractInsnNode insn=code.get(i);
+            if(insn instanceof LdcInsnNode ldc){
+                Object v=ldc.cst;
+                if(Integer.valueOf(3129871).equals(v))xSeed=true;
+                else if(Long.valueOf(116129781L).equals(v))zSeed=true;
+                else if(Long.valueOf(42317861L).equals(v))square=true;
+                else if(Long.valueOf(11L).equals(v))plusEleven=true;
+                else if(Long.valueOf(15L).equals(v))mask15=true;
+                else if(Float.valueOf(15F).equals(v))div15=true;
+                else if(Double.valueOf(.5D).equals(v))half=true;
+                else if(Double.valueOf(.2D).equals(v))vertical=true;
+            }
+            if(insn.getOpcode()==Opcodes.LAND)land++;
+            if(insn.getOpcode()==Opcodes.LSHR&&i>0){
+                Integer shift=integer(code.get(i-1));if(shift!=null)shifts.add(shift);
+            }
+        }
+        return xSeed&&zSeed&&square&&plusEleven&&mask15&&div15&&half&&vertical&&land>=3
+                &&shifts.containsAll(Set.of(16,20,24));
     }
 
     private static Bounds uniqueSourceBounds(Map<String,ClassNode> classes,String source){

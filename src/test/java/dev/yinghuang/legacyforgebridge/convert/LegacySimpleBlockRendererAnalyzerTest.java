@@ -6,6 +6,9 @@ import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.tree.InsnNode;
+import org.objectweb.asm.tree.LdcInsnNode;
+import org.objectweb.asm.tree.MethodNode;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -40,6 +43,8 @@ class LegacySimpleBlockRendererAnalyzerTest {
         assertEquals(LegacySimpleBlockRendererAnalyzer.Mode.META_ZERO_CROP_ELSE_STANDARD, rules.get("meta").mode());
         assertEquals(LegacySimpleBlockRendererAnalyzer.Mode.CROSS, rules.get("srgCtorCross").mode());
         assertEquals(LegacySimpleBlockRendererAnalyzer.Mode.CROP, rules.get("srgCtorCrop").mode());
+        assertEquals(LegacySimpleBlockRendererAnalyzer.RenderOffset.NONE,rules.get("srgCtorCross").renderOffset());
+        assertEquals(LegacySimpleBlockRendererAnalyzer.RenderOffset.NONE,rules.get("srgCtorCrop").renderOffset());
         assertFalse(rules.containsKey("fakeMeta"),
                 "Reading metadata and then rendering both families sequentially must not prove a metadata branch");
 
@@ -49,6 +54,28 @@ class LegacySimpleBlockRendererAnalyzerTest {
                 analysis.diagnostics().toString());
     }
 
+
+    @Test
+    void exactLegacyCoordinateSeedFormulaIsRequiredForXyzOffset() {
+        MethodNode method=new MethodNode(Opcodes.ASM9,Opcodes.ACC_PUBLIC,"render","()V",null,null);
+        method.instructions.add(new LdcInsnNode(3129871));
+        method.instructions.add(new LdcInsnNode(116129781L));
+        method.instructions.add(new LdcInsnNode(42317861L));
+        method.instructions.add(new LdcInsnNode(11L));
+        method.instructions.add(new LdcInsnNode(15L));
+        method.instructions.add(new LdcInsnNode(15F));
+        method.instructions.add(new LdcInsnNode(.5D));
+        method.instructions.add(new LdcInsnNode(.2D));
+        for(int shift:new int[]{16,20,24}){
+            method.instructions.add(new LdcInsnNode(shift));
+            method.instructions.add(new InsnNode(Opcodes.LSHR));
+            method.instructions.add(new InsnNode(Opcodes.LAND));
+        }
+        assertTrue(LegacySimpleBlockRendererAnalyzer.provesVanillaXyzOffset(method));
+        method.instructions.remove(method.instructions.getFirst());
+        assertFalse(LegacySimpleBlockRendererAnalyzer.provesVanillaXyzOffset(method),
+                "nearby random-offset code without the exact x seed constant must fail closed");
+    }
 
     static Path sourceFixture(Path directory)throws Exception {
         Path jar = directory.resolve("foreign-simple-renderers.jar");
