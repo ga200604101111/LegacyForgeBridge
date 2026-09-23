@@ -55,6 +55,23 @@ class LegacyGridPotBlockRegistryTest {
     }
 
     @Test
+    void malformedOptionalInsertionCanFallBackToCoreOnlyWithoutOpeningUnknownInsertion() {
+        JsonObject value=valid();
+        JsonArray overlap=new JsonArray();overlap.add("fixture:flower");
+        value.add("sourceProvenNegativeBlockIds",overlap);
+        assertNull(LegacyGridPotBlockRegistry.parseForTests(value));
+
+        var core=LegacyGridPotBlockRegistry.parseCoreOnlyForTests(value);
+        assertNotNull(core);
+        assertEquals("fixture:grid",core.id().toString());
+        assertEquals(FAIL_CLOSED,core.insertionRoute(Identifier.parse("fixture:flower"),true));
+        assertEquals(FAIL_CLOSED,core.insertionRoute(Identifier.parse("fixture:unknown"),true));
+        assertEquals(FAIL_CLOSED,core.insertionRoute(null,false));
+        assertFalse(core.contentInsertionRuntimeComplete());
+        assertFalse(core.presentationRuntimeComplete());
+    }
+
+    @Test
     void ruleRejectsNonNineCellOrUnprovenCoreShapes() {
         var id=Identifier.parse("fixture:grid");
         assertThrows(IllegalArgumentException.class,()->new LegacyGridPotBlockRegistry.Rule(

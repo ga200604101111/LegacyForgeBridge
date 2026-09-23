@@ -105,8 +105,20 @@ public final class LegacyGridPotBlockRegistry {
                 if (!element.isJsonObject()) continue;
                 JsonObject value = element.getAsJsonObject();
                 if (!bool(value, "coreRuntimeComplete")) continue;
-                Rule rule = parse(value);
-                if (rule == null || !modId.equals(rule.id().getNamespace())) continue;
+                Rule rule;
+                try {
+                    rule = parseStrict(value);
+                } catch (RuntimeException invalidOptionalRule) {
+                    rule = parseCoreOnly(value);
+                    if (rule == null) {
+                        LegacyForgeBridge.LOGGER.warn("Rejected converted grid-pot rule for {}: {}", modId, invalidOptionalRule.toString());
+                        continue;
+                    }
+                    LegacyForgeBridge.LOGGER.warn(
+                            "GridPot {} loaded core-only because optional insertion routing was invalid; content insertion remains fail-closed: {}",
+                            rule.id(), invalidOptionalRule.toString());
+                }
+                if (!modId.equals(rule.id().getNamespace())) continue;
                 Rule previous = RULES.putIfAbsent(rule.id(), rule);
                 if (previous != null && !previous.equals(rule))
                     throw new IllegalStateException("Conflicting converted grid-pot rule for " + rule.id());
@@ -154,9 +166,14 @@ public final class LegacyGridPotBlockRegistry {
 
     static synchronized void clearForTests() { RULES.clear(); TYPES.clear(); }
     static Rule parseForTests(JsonObject value) { return parse(value); }
+    static Rule parseCoreOnlyForTests(JsonObject value) { return parseCoreOnly(value); }
 
     private static Rule parse(JsonObject value) {
-        try {
+        try { return parseStrict(value); }
+        catch (RuntimeException invalid) { return null; }
+    }
+
+    private static Rule parseStrict(JsonObject value) {
             String idValue = string(value, "id");
             if (idValue == null) return null;
             boolean subset = bool(value, "sourceProvenModContentInsertionWired");
@@ -176,7 +193,32 @@ public final class LegacyGridPotBlockRegistry {
                     bool(value, "negativeNonBlockItemRuntimeWired"), negative,
                     bool(value, "contentInsertionRuntimeComplete"), bool(value, "presentationRuntimeComplete")
             );
-        } catch (RuntimeException invalid) {
+    }
+
+    /**
+     * Core GridPot registration must not be lost because an optional insertion classification
+     * sidecar is malformed or stale. The source-proven 3x3 container, BlockEntity, persistence,
+     * shape and non-opaque semantics are independent. Optional content insertion is therefore
+     * dropped to a fail-closed route while the core runtime remains available.
+     */
+    private static Rule parseCoreOnly(JsonObject value) {
+        try {
+            String idValue = string(value, "id");
+            if (idValue == null || !bool(value, "coreRuntimeComplete")) return null;
+            return new Rule(
+                    Identifier.parse(idValue),
+                    integer(value, "cells", 0), integer(value, "gridWidth", 0),
+                    decimal(value, "baseHeight", 0F), decimal(value, "cellHeight", 0F),
+                    bool(value, "placementCreatesCell"), bool(value, "emptyHandRemovalProven"),
+                    bool(value, "selfItemAddsCellProven"), bool(value, "breakDropsEveryEnabledCell"),
+                    bool(value, "normalBlockDropDisabled"), bool(value, "persistenceProven"),
+                    bool(value, "dynamicCellShapeProven"), bool(value, "nonOpaqueProven"),
+                    bool(value, "legacyInsertionPredicateProven"),
+                    false, Set.of(),
+                    false, false, false, Set.of(),
+                    false, false
+            );
+        } catch (RuntimeException invalidCore) {
             return null;
         }
     }
