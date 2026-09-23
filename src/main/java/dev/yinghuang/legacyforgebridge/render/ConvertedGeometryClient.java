@@ -44,7 +44,7 @@ public final class ConvertedGeometryClient implements ClientModInitializer {
                 var micro=LegacyMicroBlockRegistry.rule(BuiltInRegistries.BLOCK.getKey(state.getBlock()));
                 if(micro!=null&&state.hasProperty(ConvertedLegacyBlock.LEGACY_META))return new MicroBlockModel(model,micro);
                 var rule=LegacyBlockGeometryRegistry.rule(state);
-                if(rule==null||!state.hasProperty(ConvertedLegacyBlock.LEGACY_META)||rule.variant(ConvertedLegacyBlock.legacyMeta(state))==null)return model;
+                if(rule==null||rule.modelOwned()||!state.hasProperty(ConvertedLegacyBlock.LEGACY_META)||rule.variant(ConvertedLegacyBlock.legacyMeta(state))==null)return model;
                 return new GeometryModel(model,rule);
             });
         });

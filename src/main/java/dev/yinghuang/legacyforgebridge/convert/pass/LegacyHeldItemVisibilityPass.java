@@ -35,7 +35,13 @@ public final class LegacyHeldItemVisibilityPass implements ConversionPass {
             rule.addProperty("visibleOrMask",source.visibleOrMask());rule.addProperty("hiddenAndMask",source.hiddenAndMask());
             rule.addProperty("emptyCollision",source.emptyCollision());
             rule.addProperty("metaZeroSelectionElseEmpty",source.metaZeroSelectionElseEmpty());
-            rule.addProperty("clientMetadataToggleRuntime",true);rule.addProperty("shapeRuntimeComplete",source.emptyCollision());rules.add(rule);converted++;
+            rule.addProperty("clientMetadataToggleRuntime",true);
+            if(source.selectionBoundsComplete()){
+                rule.add("heldSelectionBounds",JSON.toJsonTree(source.heldSelectionBounds()));
+                rule.add("unheldSelectionBounds",JSON.toJsonTree(source.unheldSelectionBounds()));
+            }
+            rule.addProperty("shapeRuntimeComplete",source.emptyCollision()&&source.selectionBoundsComplete());
+            rules.add(rule);converted++;
         }
         JsonObject root=new JsonObject();root.addProperty("schemaVersion",1);root.addProperty("sourceSha256",context.sourceHash());root.addProperty("runtimeComplete",true);root.add("rules",rules);root.addProperty("convertedBlocks",converted);write(staging.resolve(OUTPUT),root);
         if(converted>0)context.diagnostics().info("LFB-CONVERT-HELD-VIS-0001",SupportLevel.ADAPTED,"Converted held-own-BlockItem visibility blocks="+converted+" with client metadata/model toggles.");

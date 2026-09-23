@@ -93,7 +93,7 @@ public final class GeneratedModSupport {
         BlockBehaviour.Properties blockProperties=BlockBehaviour.Properties.of().setId(blockKey).overrideDescription(descriptionKey);
         blockProperties=LegacyBlockGeometryRegistry.properties(id,blockProperties);
         var heldVisibility=LegacyHeldItemVisibilityRegistry.rule(id);
-        if(heldVisibility!=null&&heldVisibility.emptyCollision())blockProperties=blockProperties.dynamicShape().noOcclusion();
+        if(heldVisibility!=null&&(heldVisibility.emptyCollision()||heldVisibility.selection()!=null))blockProperties=blockProperties.dynamicShape().noOcclusion();
         if(gridPot||microBlock||seatBed)blockProperties=blockProperties.dynamicShape().noOcclusion();
         boolean inert=LegacyInertModelBlockRegistry.hasRule(id);
         boolean radial=LegacyRadialModelBlockRegistry.hasRule(id);

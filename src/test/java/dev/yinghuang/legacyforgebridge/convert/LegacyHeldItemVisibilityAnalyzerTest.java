@@ -39,10 +39,27 @@ class LegacyHeldItemVisibilityAnalyzerTest {
         assertEquals(VISIBLE, rule.sourceBlockClass());
         assertEquals(8, rule.visibleOrMask());
         assertEquals(7, rule.hiddenAndMask());
+        assertTrue(rule.selectionBoundsComplete());
+        assertEquals(java.util.List.of(0D,0D,0D,1D,1D,1D),rule.heldSelectionBounds());
+        assertEquals(java.util.List.of(.25D,0D,.25D,.75D,1D,.75D),rule.unheldSelectionBounds());
         assertTrue(rule.emptyCollision());
         assertTrue(rule.metaZeroSelectionElseEmpty());
         assertTrue(analysis.rules().stream().noneMatch(value -> value.registryName().equals("noise")),
                 "A similar client tick without Block.getBlockFromItem provenance must fail closed");
+    }
+
+    @Test void literalZeroUnheldBoundsAndUnknownOperandsAreNotConfused()throws Exception {
+        var c=new org.objectweb.asm.tree.ClassNode();
+        new org.objectweb.asm.ClassReader(block(VISIBLE,true)).accept(c,0);
+        var tick=c.methods.stream().filter(m->m.name.equals("randomDisplayTick")).findFirst().orElseThrow();
+        org.objectweb.asm.tree.MethodInsnNode last=null;
+        for(var insn:tick.instructions)if(insn instanceof org.objectweb.asm.tree.MethodInsnNode m&&m.name.equals("setBlockBounds"))last=m;
+        assertNotNull(last);var cursor=last.getPrevious();
+        for(int i=0;i<6;i++){var previous=cursor.getPrevious();tick.instructions.set(cursor,new org.objectweb.asm.tree.InsnNode(Opcodes.FCONST_0));cursor=previous;}
+        var bounds=LegacyHeldItemVisibilityAnalyzer.proveSelectionBounds(tick,8,7);
+        assertEquals(java.util.List.of(0D,0D,0D,0D,0D,0D),bounds.get(1));
+        tick.instructions.set(last.getPrevious(),new org.objectweb.asm.tree.VarInsnNode(Opcodes.FLOAD,9));
+        assertTrue(LegacyHeldItemVisibilityAnalyzer.proveSelectionBounds(tick,8,7).isEmpty());
     }
 
     private static byte[] block(String name, boolean proveHeldOwnBlock) {

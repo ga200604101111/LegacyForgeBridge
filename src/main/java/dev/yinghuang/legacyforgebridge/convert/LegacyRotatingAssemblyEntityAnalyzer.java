@@ -319,7 +319,8 @@ public final class LegacyRotatingAssemblyEntityAnalyzer {
                     yaw|=call.name.equals("glRotatef");
                 }
             }
-            Float f=floatConstant(insn);if(f!=null&&Float.compare(f,90F)==0)ninety=true;
+            Number angle=numberConstant(insn);
+            if(angle!=null&&Double.compare(angle.doubleValue(),90D)==0)ninety=true;
         }
         return dir&&sizeSeen&&translate&&scale&&yaw&&roll&&ninety;
     }

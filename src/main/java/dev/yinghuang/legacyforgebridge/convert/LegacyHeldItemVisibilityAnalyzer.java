@@ -10,8 +10,17 @@ import java.util.jar.*;
 /** Proves the legacy client pattern "show this block only while holding its own BlockItem". */
 public final class LegacyHeldItemVisibilityAnalyzer {
     public record Rule(String registryName,String sourceBlockClass,int visibleOrMask,int hiddenAndMask,
-                       boolean emptyCollision,boolean metaZeroSelectionElseEmpty) {
+                       boolean emptyCollision,boolean metaZeroSelectionElseEmpty,
+                       List<Double> heldSelectionBounds,List<Double> unheldSelectionBounds) {
+        public Rule(String registryName,String sourceBlockClass,int visibleOrMask,int hiddenAndMask,
+                    boolean emptyCollision,boolean metaZeroSelectionElseEmpty) {
+            this(registryName,sourceBlockClass,visibleOrMask,hiddenAndMask,emptyCollision,
+                    metaZeroSelectionElseEmpty,List.of(),List.of());
+        }
+        public boolean selectionBoundsComplete(){return heldSelectionBounds.size()==6&&unheldSelectionBounds.size()==6;}
         public Rule {
+            heldSelectionBounds=List.copyOf(heldSelectionBounds);
+            unheldSelectionBounds=List.copyOf(unheldSelectionBounds);
             if(registryName==null||sourceBlockClass==null||visibleOrMask<=0||visibleOrMask>15
                     ||hiddenAndMask<0||hiddenAndMask>15||(visibleOrMask&hiddenAndMask)!=0)
                 throw new IllegalArgumentException("Invalid held-item visibility rule");
@@ -30,7 +39,9 @@ public final class LegacyHeldItemVisibilityAnalyzer {
                 if(rule!=null){rule=null;diagnostics.add("Multiple held-item visibility toggle methods are reachable for "+source);break;}
                 boolean emptyCollision=provesEmptyCollision(classes,source);
                 boolean metaZeroSelection=provesMetaZeroSelectionElseEmpty(classes,source);
-                rule=new Rule(registration.registryName(),source,masks[0],masks[1],emptyCollision,metaZeroSelection);
+                List<List<Double>> selection=proveSelectionBounds(method,masks[0],masks[1]);
+                rule=new Rule(registration.registryName(),source,masks[0],masks[1],emptyCollision,metaZeroSelection,
+                        selection.isEmpty()?List.of():selection.get(0),selection.isEmpty()?List.of():selection.get(1));
             }
             if(rule!=null)rules.add(rule);
         }
@@ -85,6 +96,51 @@ public final class LegacyHeldItemVisibilityAnalyzer {
         }
         if(!client||!held||!item||!blockFromItem||!compare||setBlock<2||bounds<2||orMask==null||andMask==null)return null;
         if(orMask<=0||orMask>15||andMask<0||andMask>15||(orMask&andMask)!=0)return null;return new int[]{orMask,andMask};
+    }
+    /**
+     * The old selected AABB is only an outline; collisionRayTrace instead used the mutable
+     * setBlockBounds values. Tie each literal bounds call to the admitted mask branch,
+     * rather than inferring selection from the metadata value or from the collision AABB.
+     */
+    static List<List<Double>> proveSelectionBounds(MethodNode method,int heldMask,int hiddenMask){
+        List<AbstractInsnNode> code=real(method);List<Double> held=null,hidden=null;
+        int branch=0;boolean updated=false;
+        for(int i=0;i<code.size();i++){
+            AbstractInsnNode insn=code.get(i);
+            if(insn.getOpcode()==Opcodes.IOR||insn.getOpcode()==Opcodes.IAND){
+                Integer mask=i>0?integer(code.get(i-1)):null;
+                branch=mask!=null&&insn.getOpcode()==Opcodes.IOR&&mask==heldMask?1:
+                        mask!=null&&insn.getOpcode()==Opcodes.IAND&&mask==hiddenMask?2:0;
+                updated=false;
+            }
+            if(insn instanceof MethodInsnNode call){
+                if(call.owner.equals("net/minecraft/world/World")
+                        &&Set.of("setBlock","func_147465_d").contains(call.name)
+                        &&call.desc.equals("(IIILnet/minecraft/block/Block;II)Z"))updated=true;
+                if(Set.of("setBlockBounds","func_149676_a").contains(call.name)&&call.desc.equals("(FFFFFF)V")){
+                    if(!updated||branch==0||i<7||!(code.get(i-7) instanceof VarInsnNode self)
+                            ||self.getOpcode()!=Opcodes.ALOAD||self.var!=0)return List.of();
+                    List<Double> values=new ArrayList<>();
+                    for(int j=i-6;j<i;j++){
+                        Float value=floatConstant(code.get(j));
+                        if(value==null||!Float.isFinite(value)||value<0F||value>1F)return List.of();
+                        values.add(value.doubleValue());
+                    }
+                    for(int axis=0;axis<3;axis++)if(values.get(axis)>values.get(axis+3))return List.of();
+                    if(branch==1){if(held!=null)return List.of();held=List.copyOf(values);}
+                    else {if(hidden!=null)return List.of();hidden=List.copyOf(values);}
+                    branch=0;updated=false;
+                }
+            }
+        }
+        return held==null||hidden==null?List.of():List.of(held,hidden);
+    }
+    private static Float floatConstant(AbstractInsnNode insn){
+        return switch(insn.getOpcode()){
+            case Opcodes.FCONST_0->0F;case Opcodes.FCONST_1->1F;case Opcodes.FCONST_2->2F;
+            case Opcodes.LDC->insn instanceof LdcInsnNode ldc&&ldc.cst instanceof Float f?f:null;
+            default->null;
+        };
     }
     private static Set<MethodNode> reachableSourceMethods(Map<String,ClassNode> classes,MethodNode root,int limit){LinkedHashSet<MethodNode> out=new LinkedHashSet<>();ArrayDeque<MethodNode> queue=new ArrayDeque<>();queue.add(root);while(!queue.isEmpty()&&out.size()<limit){MethodNode method=queue.removeFirst();if(!out.add(method))continue;for(AbstractInsnNode insn:method.instructions)if(insn instanceof MethodInsnNode call&&classes.containsKey(call.owner)){ClassNode owner=classes.get(call.owner);for(MethodNode target:owner.methods)if(target.name.equals(call.name)&&target.desc.equals(call.desc))queue.addLast(target);}}return out;}
     private static MethodNode findHierarchy(Map<String,ClassNode> classes,String owner,Set<String> names,String desc){Set<String> seen=new HashSet<>();while(owner!=null&&seen.add(owner)){ClassNode node=classes.get(owner);if(node==null)return null;for(MethodNode method:node.methods)if(names.contains(method.name)&&method.desc.equals(desc))return method;owner=node.superName;}return null;}

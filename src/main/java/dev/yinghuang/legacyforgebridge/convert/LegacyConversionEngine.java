@@ -125,10 +125,12 @@ public final class LegacyConversionEngine {
             builder.add(new LegacyCreativeVariantsPass());
             builder.add(new LegacyBlockGeometryPass());
             builder.add(new LegacyLiquidPresentationPass());
-            builder.add(new LegacyTextureAtlasPass());
             builder.add(new LegacyConnectedCuboidPresentationPass());
             builder.add(new LegacySimpleBlockPresentationPass());
             builder.add(new LegacyCombatItemPass());
+            // Finalize sprites only after every block/item model producer has finished. In
+            // particular CROSS/CROP and bow pulling stages must not bypass atlas migration.
+            builder.add(new LegacyTextureAtlasPass());
             builder.add(new GeneratedSemanticCodePass());
             builder.add(new GeneratedModEntrypointPass());
             builder.add(new LegacyClassDependencyAnalysisPass());

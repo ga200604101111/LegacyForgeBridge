@@ -25,24 +25,7 @@ class LegacySimpleBlockRendererAnalyzerTest {
 
     @Test
     void unrelatedNamespaceClassifiesOnlyBoundSimpleRendererFamilies() throws Exception {
-        Path jar = tempDir.resolve("foreign-simple-renderers.jar");
-        try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(jar))) {
-            put(out, IDS + ".class", ids());
-            put(out, "foreign/simple/CrossBlock.class", block("foreign/simple/CrossBlock", "cross"));
-            put(out, "foreign/simple/CropBlock.class", block("foreign/simple/CropBlock", "crop"));
-            put(out, "foreign/simple/MetaBlock.class", block("foreign/simple/MetaBlock", "meta"));
-            put(out, "foreign/simple/FakeMetaBlock.class", block("foreign/simple/FakeMetaBlock", "fakeMeta"));
-            put(out, "foreign/simple/NoiseBlock.class", block("foreign/simple/NoiseBlock", "noise"));
-            put(out, "foreign/simple/ModeBlock.class", modeBlock());
-            put(out, "foreign/simple/CrossRenderer.class", renderer("foreign/simple/CrossRenderer", "cross"));
-            put(out, "foreign/simple/CropRenderer.class", renderer("foreign/simple/CropRenderer", "crop"));
-            put(out, "foreign/simple/MetaRenderer.class", renderer("foreign/simple/MetaRenderer", "meta"));
-            put(out, "foreign/simple/FakeMetaRenderer.class", renderer("foreign/simple/FakeMetaRenderer", "fakeMeta"));
-            put(out, "foreign/simple/NoiseRenderer.class", renderer("foreign/simple/NoiseRenderer", "noise"));
-            put(out, "foreign/simple/CoordinateRenderer.class", coordinateRenderer());
-            put(out, "foreign/simple/Bootstrap.class", bootstrap());
-            put(out, "foreign/simple/Bindings.class", bindings());
-        }
+        Path jar=sourceFixture(tempDir);
 
         var analysis = new LegacySimpleBlockRendererAnalyzer().analyze(jar);
         Map<String, LegacySimpleBlockRendererAnalyzer.Rule> rules = analysis.rules().stream()
@@ -64,6 +47,30 @@ class LegacySimpleBlockRendererAnalyzerTest {
                 "An otherwise-cross renderer with an unproved source callback must fail closed");
         assertTrue(analysis.diagnostics().stream().anyMatch(value -> value.contains("noise") || value.contains("NoiseRenderer")),
                 analysis.diagnostics().toString());
+    }
+
+
+    static Path sourceFixture(Path directory)throws Exception {
+        Path jar = directory.resolve("foreign-simple-renderers.jar");
+        try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(jar))) {
+            put(out, IDS + ".class", ids());
+            put(out, "foreign/simple/CrossBlock.class", block("foreign/simple/CrossBlock", "cross"));
+            put(out, "foreign/simple/CropBlock.class", block("foreign/simple/CropBlock", "crop"));
+            put(out, "foreign/simple/MetaBlock.class", block("foreign/simple/MetaBlock", "meta"));
+            put(out, "foreign/simple/FakeMetaBlock.class", block("foreign/simple/FakeMetaBlock", "fakeMeta"));
+            put(out, "foreign/simple/NoiseBlock.class", block("foreign/simple/NoiseBlock", "noise"));
+            put(out, "foreign/simple/ModeBlock.class", modeBlock());
+            put(out, "foreign/simple/CrossRenderer.class", renderer("foreign/simple/CrossRenderer", "cross"));
+            put(out, "foreign/simple/CropRenderer.class", renderer("foreign/simple/CropRenderer", "crop"));
+            put(out, "foreign/simple/MetaRenderer.class", renderer("foreign/simple/MetaRenderer", "meta"));
+            put(out, "foreign/simple/FakeMetaRenderer.class", renderer("foreign/simple/FakeMetaRenderer", "fakeMeta"));
+            put(out, "foreign/simple/NoiseRenderer.class", renderer("foreign/simple/NoiseRenderer", "noise"));
+            put(out, "foreign/simple/CoordinateRenderer.class", coordinateRenderer());
+            put(out, "foreign/simple/Bootstrap.class", bootstrap());
+            put(out, "foreign/simple/Bindings.class", bindings());
+        }
+
+        return jar;
     }
 
     private static byte[] ids() {

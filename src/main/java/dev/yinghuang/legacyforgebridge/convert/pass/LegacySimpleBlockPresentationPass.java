@@ -107,8 +107,14 @@ public final class LegacySimpleBlockPresentationPass implements ConversionPass {
                 evidence.addProperty("emptyCollision",rule.emptyCollision());
                 if(!geometryBlocks.has(id)){
                     geometryBlocks.add(id,geometryRule(rule));
-                    mergedShapes++;
                 }
+            }
+            // Collision/selection bounds do not authorize replacing a crossed plant mesh by
+            // the six faces of its bounding box. Retain bounds, but leave rendering to JSON.
+            if(geometryBlocks.has(id)) {
+                geometryBlocks.getAsJsonObject(id).addProperty("modelOwned",true);
+                geometryBlocks.getAsJsonObject(id).addProperty("opaque",false);
+                mergedShapes++;
             }
             evidence.addProperty("finalModelOwnership",true);rules.add(evidence);written++;
         }
@@ -124,7 +130,7 @@ public final class LegacySimpleBlockPresentationPass implements ConversionPass {
     }
 
     private static JsonObject geometryRule(Candidate rule){
-        JsonObject spec=new JsonObject();spec.addProperty("family","box");spec.addProperty("opaque",true);
+        JsonObject spec=new JsonObject();spec.addProperty("family","box");spec.addProperty("opaque",false);spec.addProperty("modelOwned",true);
         spec.addProperty("sourceClass",rule.sourceBlockClass());spec.addProperty("proof","Source constructor bounds + simple CROSS/CROP renderer; collision="+(rule.emptyCollision()?"empty":"inherited"));
         JsonObject variants=new JsonObject();
         for(int meta=0;meta<16;meta++){

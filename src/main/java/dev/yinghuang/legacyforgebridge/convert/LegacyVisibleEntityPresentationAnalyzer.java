@@ -442,14 +442,14 @@ public final class LegacyVisibleEntityPresentationAnalyzer {
         return out.size()==16?List.copyOf(out):List.of();
     }
 
-    private int[] itemWatcherRange(MethodNode method){
+    static int[] itemWatcherRange(MethodNode method){
         if(method==null)return null;List<AbstractInsnNode> c=real(method);Integer base=null,count=null;
-        for(int i=3;i<c.size();i++){
-            if(c.get(i) instanceof MethodInsnNode call&&call.owner.equals(DATA_WATCHER)&&call.desc.equals("(I)Lnet/minecraft/item/ItemStack;")
+        for(int i=0;i<c.size();i++){
+            if(i>=3&&c.get(i) instanceof MethodInsnNode call&&call.owner.equals(DATA_WATCHER)&&call.desc.equals("(I)Lnet/minecraft/item/ItemStack;")
                     &&c.get(i-1).getOpcode()==Opcodes.IADD&&c.get(i-2) instanceof VarInsnNode v&&v.getOpcode()==Opcodes.ILOAD){
                 Integer b=intConst(c.get(i-3));if(b!=null)base=b;
             }
-            if(c.get(i) instanceof JumpInsnNode j&&Set.of(Opcodes.IF_ICMPGE,Opcodes.IF_ICMPGT,Opcodes.IF_ICMPLE,Opcodes.IF_ICMPLT).contains(j.getOpcode())
+            if(i>=2&&c.get(i) instanceof JumpInsnNode j&&Set.of(Opcodes.IF_ICMPGE,Opcodes.IF_ICMPGT,Opcodes.IF_ICMPLE,Opcodes.IF_ICMPLT).contains(j.getOpcode())
                     &&c.get(i-2) instanceof VarInsnNode v&&v.getOpcode()==Opcodes.ILOAD&&v.var==1){
                 Integer n=intConst(c.get(i-1));if(n!=null)count=n;
             }

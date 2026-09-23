@@ -19,13 +19,7 @@ class LegacyCombatItemAnalyzerTest {
 
     @Test
     void unrelatedPlainItemWeaponIsInferredFromSourceDamageBehavior() throws Exception {
-        Path jar=tempDir.resolve("foreign-weapons.jar");
-        try(JarOutputStream out=new JarOutputStream(Files.newOutputStream(jar))){
-            put(out,"foreign/weapons/Blade.class",weapon("foreign/weapons/Blade",false));
-            put(out,"foreign/weapons/AmbiguousBlade.class",weapon("foreign/weapons/AmbiguousBlade",true));
-            put(out,"foreign/weapons/BowLike.class",bow());
-            put(out,"foreign/weapons/Bootstrap.class",bootstrap());
-        }
+        Path jar=sourceFixture(tempDir);
 
         var analysis=new LegacyCombatItemAnalyzer().analyze(jar);
         var blade=analysis.rules().stream().filter(rule->rule.registryName().equals("foreign_blade")).findFirst().orElseThrow();
@@ -42,6 +36,19 @@ class LegacyCombatItemAnalyzerTest {
         assertEquals(3,bow.pullStages());
         assertEquals("foreign:bow_pull_",bow.pullTexturePrefix());
         assertEquals(java.util.List.of(1,26,40),bow.pullStageMinTicks());
+    }
+
+
+    static Path sourceFixture(Path directory)throws Exception {
+        Path jar=directory.resolve("foreign-weapons.jar");
+        try(JarOutputStream out=new JarOutputStream(Files.newOutputStream(jar))){
+            put(out,"foreign/weapons/Blade.class",weapon("foreign/weapons/Blade",false));
+            put(out,"foreign/weapons/AmbiguousBlade.class",weapon("foreign/weapons/AmbiguousBlade",true));
+            put(out,"foreign/weapons/BowLike.class",bow());
+            put(out,"foreign/weapons/Bootstrap.class",bootstrap());
+        }
+
+        return jar;
     }
 
     private static byte[] weapon(String name,boolean branchFirst){

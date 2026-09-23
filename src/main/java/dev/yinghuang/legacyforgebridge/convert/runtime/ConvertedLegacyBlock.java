@@ -137,6 +137,11 @@ public class ConvertedLegacyBlock extends Block {
     @Override
     protected VoxelShape getShape(BlockState state, BlockGetter world, BlockPos pos, CollisionContext context) {
         LegacyHeldItemVisibilityRegistry.Rule visibility = LegacyHeldItemVisibilityRegistry.rule(convertedId);
+        // Modern picking uses getShape, unlike the old outline-only selected AABB.
+        // Query the current hand directly: metadata toggles may lag until randomDisplayTick.
+        if (visibility != null && visibility.selection() != null) {
+            return visibility.selectionShape(context.isHoldingItem(asItem()));
+        }
         if (visibility != null && visibility.metaZeroSelectionElseEmpty() && legacyMeta(state) != 0) {
             return Shapes.empty();
         }

@@ -19,6 +19,15 @@ class ConversionCacheIdentityTest {
     Path tempDir;
 
     @Test
+    void batchRevisionInvalidatesBothFailedLiveCandidates() {
+        for(String previous : java.util.List.of("2026-09-22.179-seat-bed-collision-shape",
+                "2026-09-23.180-vanilla-arrow-renderer")) {
+            assertNotEquals(ConversionCacheIdentity.fingerprint("0.2.0-alpha.27",2,previous,SOURCE_A),
+                    ConversionCacheIdentity.current(SOURCE_A));
+        }
+    }
+
+    @Test
     void converterSchemaRevisionAndSourceAllParticipateInFingerprint() {
         String baseline = ConversionCacheIdentity.fingerprint("0.2.0-alpha.27", 2, "r1", SOURCE_A);
         assertNotEquals(baseline, ConversionCacheIdentity.fingerprint("0.2.0-alpha.28", 2, "r1", SOURCE_A));
