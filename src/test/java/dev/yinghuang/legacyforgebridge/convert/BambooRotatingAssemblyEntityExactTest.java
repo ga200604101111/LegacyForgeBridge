@@ -47,7 +47,7 @@ class BambooRotatingAssemblyEntityExactTest {
         assertEquals(2,wind.staticParts().size());assertEquals(2,wind.repeatedPrimary().size());assertTrue(wind.repeatedSecondary().isEmpty());
         assertEquals(.0625F,wind.modelScale(),0.0001F);assertEquals(64,wind.modelTextureWidth());assertEquals(32,wind.modelTextureHeight());
         assertEquals(java.util.List.of("bamboo:textures/entitys/windmill.png","bamboo:textures/entitys/windmill_cloth.png"),wind.textures());
-        assertTrue(wind.physicalCollision());assertTrue(wind.playerAttackRemoves());assertTrue(wind.randomInitialPhase());
+        assertTrue(wind.physicalCollision());assertFalse(wind.blocksEntityMovement());assertTrue(wind.playerAttackRemoves());assertTrue(wind.randomInitialPhase());
 
         var water=rules.get("WaterMill");assertNotNull(water);
         assertEquals("ruby/bamboo/entity/EntityWaterwheel",water.sourceClass());
@@ -61,7 +61,7 @@ class BambooRotatingAssemblyEntityExactTest {
         assertEquals(1,water.staticParts().size());assertEquals(3,water.repeatedPrimary().size());assertEquals(2,water.repeatedSecondary().size());
         assertEquals(.0625F,water.modelScale(),0.0001F);assertEquals(64,water.modelTextureWidth());assertEquals(32,water.modelTextureHeight());
         assertEquals(java.util.List.of("bamboo:textures/entitys/waterwheel.png"),water.textures());
-        assertTrue(water.physicalCollision());assertTrue(water.playerAttackRemoves());assertTrue(water.randomInitialPhase());
+        assertTrue(water.physicalCollision());assertFalse(water.blocksEntityMovement());assertTrue(water.playerAttackRemoves());assertTrue(water.randomInitialPhase());
 
         var converted=new LegacyConversionEngine().convert(source,tempDir.resolve("converted"),tempDir.resolve("manifests"));
         try(JarFile jar=new JarFile(converted.candidateJar().orElseThrow().toFile())){

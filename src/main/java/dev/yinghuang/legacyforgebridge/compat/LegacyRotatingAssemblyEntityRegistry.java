@@ -37,7 +37,7 @@ public final class LegacyRotatingAssemblyEntityRegistry {
                        int directionWatcher,int sizeWatcher,int countWatcher,int textureWatcher,int reverseWatcher,
                        int directionDefault,int sizeDefault,int sizeMin,int sizeMax,int countDefault,int textureDefault,int reverseDefault,
                        int countBase,int countMax,int fixedRepeatCount,float secondaryPhaseDegrees,List<Identifier> textures,
-                       boolean physicalCollision,boolean playerAttackRemoves,boolean randomInitialPhase){
+                       boolean physicalCollision,boolean blocksEntityMovement,boolean playerAttackRemoves,boolean randomInitialPhase){
         public Rule{
             staticParts=List.copyOf(staticParts);repeatedPrimary=List.copyOf(repeatedPrimary);
             repeatedSecondary=List.copyOf(repeatedSecondary);textures=List.copyOf(textures);
@@ -135,7 +135,7 @@ public final class LegacyRotatingAssemblyEntityRegistry {
                     integer(value,"directionDefault",0),integer(value,"sizeDefault",0),integer(value,"sizeMin",0),integer(value,"sizeMax",0),
                     integer(value,"countDefault",0),integer(value,"textureDefault",0),integer(value,"reverseDefault",0),
                     integer(value,"countBase",0),integer(value,"countMax",0),integer(value,"fixedRepeatCount",0),
-                    decimal(value,"secondaryPhaseDegrees"),textures,bool(value,"physicalCollision"),bool(value,"playerAttackRemoves"),bool(value,"randomInitialPhase"));
+                    decimal(value,"secondaryPhaseDegrees"),textures,bool(value,"physicalCollision"),bool(value,"blocksEntityMovement"),bool(value,"playerAttackRemoves"),bool(value,"randomInitialPhase"));
     }
     private static List<Cuboid> parts(JsonObject root,String key){
         JsonArray raw=root.getAsJsonArray(key);if(raw==null)return List.of();List<Cuboid> out=new ArrayList<>();

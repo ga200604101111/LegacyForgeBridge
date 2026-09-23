@@ -97,8 +97,8 @@ public final class ConvertedLegacyRotatingAssemblyEntity extends Entity {
         return false;
     }
 
-    @Override public boolean canCollideWith(Entity other){return rule.physicalCollision()&&!isRemoved();}
-    @Override public boolean canBeCollidedWith(Entity other){return rule.physicalCollision()&&!isRemoved();}
+    @Override public boolean canCollideWith(Entity other){return rule.blocksEntityMovement()&&!isRemoved();}
+    @Override public boolean canBeCollidedWith(Entity other){return rule.blocksEntityMovement()&&!isRemoved();}
     @Override public boolean isPickable(){return rule.playerAttackRemoves()&&!isRemoved();}
     @Override public boolean isAttackable(){return rule.playerAttackRemoves()&&!isRemoved();}
 

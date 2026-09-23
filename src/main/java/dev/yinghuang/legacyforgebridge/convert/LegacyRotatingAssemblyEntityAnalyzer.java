@@ -47,7 +47,7 @@ public final class LegacyRotatingAssemblyEntityAnalyzer {
                        int directionWatcher,int sizeWatcher,int countWatcher,int textureWatcher,int reverseWatcher,
                        int directionDefault,int sizeDefault,int sizeMin,int sizeMax,int countDefault,int textureDefault,int reverseDefault,
                        int countBase,int countMax,int fixedRepeatCount,float secondaryPhaseDegrees,float modelScale,
-                       int modelTextureWidth,int modelTextureHeight,List<String> textures,boolean physicalCollision,boolean playerAttackRemoves,boolean randomInitialPhase){
+                       int modelTextureWidth,int modelTextureHeight,List<String> textures,boolean physicalCollision,boolean blocksEntityMovement,boolean playerAttackRemoves,boolean randomInitialPhase){
         public Rule{
             staticParts=List.copyOf(staticParts);repeatedPrimary=List.copyOf(repeatedPrimary);
             repeatedSecondary=List.copyOf(repeatedSecondary);textures=List.copyOf(textures);
@@ -108,6 +108,7 @@ public final class LegacyRotatingAssemblyEntityAnalyzer {
             String rollGetter=rollGetter(renderMethod,watcher.sourceClass());String rollField=rollGetter==null?null:returnedFloatField(watcher.sourceClass(),rollGetter);
             if(rollField==null||!randomInitialRoll(watcher.sourceClass(),rollField))continue;
             if(!provesPhysicalCollision(watcher.sourceClass())||!provesPlayerAttackRemoval(watcher.sourceClass()))continue;
+            Boolean blocksEntityMovement=blocksEntityMovement(watcher.sourceClass());if(blocksEntityMovement==null)continue;
             if(!aabbFamily(watcher.sourceClass(),size,direction))continue;
 
             List<MutablePart> parts=parseParts(model);if(parts.isEmpty())continue;
@@ -130,7 +131,7 @@ public final class LegacyRotatingAssemblyEntityAnalyzer {
                             Adapter.VARIABLE_Z_RADIAL,variable.staticParts(),variable.repeated(),List.of(),direction,size,count.watcherIndex(),texture,-1,
                             watcherDefault(watcher,direction,0),watcherDefault(watcher,size,1),sizeBounds.min(),sizeBounds.max(),
                             watcherDefault(watcher,count.watcherIndex(),0),watcherDefault(watcher,texture,0),0,
-                            count.base(),countMax,0,0F,scale,textureSize[0],textureSize[1],textures,true,true,true);
+                            count.base(),countMax,0,0F,scale,textureSize[0],textureSize[1],textures,true,blocksEntityMovement,true,true);
             }else{
                 int reverse=remainingOwnByteWatcher(watcher,Set.of(size));
                 FixedModel fixed=proveFixedModel(model,parts);
@@ -141,7 +142,7 @@ public final class LegacyRotatingAssemblyEntityAnalyzer {
                             Adapter.FLUID_X_RADIAL,fixed.staticParts(),fixed.primary(),fixed.secondary(),direction,size,-1,-1,reverse,
                             watcherDefault(watcher,direction,0),watcherDefault(watcher,size,1),sizeBounds.min(),sizeBounds.max(),
                             0,0,watcherDefault(watcher,reverse,0),
-                            0,0,fixed.count(),fixed.secondaryPhaseDegrees(),scale,textureSize[0],textureSize[1],textures,true,true,true);
+                            0,0,fixed.count(),fixed.secondaryPhaseDegrees(),scale,textureSize[0],textureSize[1],textures,true,blocksEntityMovement,true,true);
             }
             if(rule!=null)rules.add(rule);
             else skipped.add(new Skipped(watcher.registryName(),watcher.sourceClass(),"Renderer/model/tick/AABB shape is outside the admitted rotating-assembly families"));
@@ -408,6 +409,40 @@ public final class LegacyRotatingAssemblyEntityAnalyzer {
     private boolean provesPhysicalCollision(String entity){
         MethodNode method=effective(entity,Set.of("canBeCollidedWith","func_70067_L"),"()Z");List<AbstractInsnNode> code=real(method);
         return code.size()>=3&&code.get(code.size()-1).getOpcode()==Opcodes.IRETURN&&containsField(method,"Z",Set.of("field_70128_L","isDead"));
+    }
+    /**
+     * 1.7.10 separates targetability from movement blocking. Entity#canBeCollidedWith can make a
+     * large custom boundingBox hittable without making it a solid obstacle: World movement uses
+     * getBoundingBox/getCollisionBox, whose vanilla Entity implementations return null. Preserve
+     * that distinction instead of promoting a pick/attack box into a modern solid entity wall.
+     */
+    private Boolean blocksEntityMovement(String entity){
+        MethodNode ownBox=sourceOverride(entity,Set.of("getBoundingBox","func_70046_E"),"()Lnet/minecraft/util/AxisAlignedBB;");
+        MethodNode collisionBox=sourceOverride(entity,Set.of("getCollisionBox","func_70114_g"),"(Lnet/minecraft/entity/Entity;)Lnet/minecraft/util/AxisAlignedBB;");
+        if(ownBox==null&&collisionBox==null)return false;
+        Boolean own=ownBox==null?false:returnsDefiniteCollisionBox(ownBox);
+        Boolean collision=collisionBox==null?false:returnsDefiniteCollisionBox(collisionBox);
+        if(own==null||collision==null)return null;
+        return own||collision;
+    }
+    private MethodNode sourceOverride(String owner,Set<String> names,String desc){
+        Set<String> seen=new HashSet<>();
+        for(String c=owner;c!=null&&seen.add(c);){
+            ClassNode node=classes.get(c);if(node==null)return null;
+            for(MethodNode method:node.methods)if(names.contains(method.name)&&method.desc.equals(desc))return method;
+            c=node.superName;
+        }
+        return null;
+    }
+    private static Boolean returnsDefiniteCollisionBox(MethodNode method){
+        List<AbstractInsnNode> code=real(method);if(code.isEmpty())return null;
+        if(code.size()==2&&code.get(0).getOpcode()==Opcodes.ACONST_NULL&&code.get(1).getOpcode()==Opcodes.ARETURN)return false;
+        if(code.get(code.size()-1).getOpcode()!=Opcodes.ARETURN)return null;
+        int returns=0;for(AbstractInsnNode insn:code)if(insn.getOpcode()==Opcodes.ARETURN)returns++;
+        if(returns!=1)return null;
+        for(AbstractInsnNode insn:code)if(insn instanceof FieldInsnNode field&&field.getOpcode()==Opcodes.GETFIELD
+                &&field.desc.equals("Lnet/minecraft/util/AxisAlignedBB;"))return true;
+        return null;
     }
     private boolean provesPlayerAttackRemoval(String entity){
         MethodNode method=effective(entity,Set.of("attackEntityFrom","func_70097_a"),"(Lnet/minecraft/util/DamageSource;F)Z");if(method==null)return false;

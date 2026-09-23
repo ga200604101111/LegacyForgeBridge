@@ -44,7 +44,7 @@ public final class LegacyRotatingAssemblyEntityPass implements ConversionPass {
             JsonArray textures=new JsonArray();rule.textures().forEach(textures::add);value.add("textures",textures);
             value.add("staticParts",parts(rule.staticParts()));value.add("repeatedPrimary",parts(rule.repeatedPrimary()));
             value.add("repeatedSecondary",parts(rule.repeatedSecondary()));
-            value.addProperty("physicalCollision",rule.physicalCollision());value.addProperty("playerAttackRemoves",rule.playerAttackRemoves());
+            value.addProperty("physicalCollision",rule.physicalCollision());value.addProperty("blocksEntityMovement",rule.blocksEntityMovement());value.addProperty("playerAttackRemoves",rule.playerAttackRemoves());
             value.addProperty("randomInitialPhase",rule.randomInitialPhase());value.addProperty("runtimeComplete",true);
             try{LegacyRotatingAssemblyEntityRegistry.validateCandidateRule(value,context.metadata().primary().modId());}
             catch(RuntimeException invalid){throw new IllegalStateException("Rotating assembly runtime schema rejected source-proven rule "+rule.registryName()+"#"+rule.legacyNumericId(),invalid);}
