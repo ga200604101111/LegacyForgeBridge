@@ -13,7 +13,6 @@ import dev.yinghuang.legacyforgebridge.convert.manifest.ConversionManifestWriter
 import dev.yinghuang.legacyforgebridge.convert.manifest.FabricMetadataWriter;
 import dev.yinghuang.legacyforgebridge.convert.pass.*;
 import dev.yinghuang.legacyforgebridge.convert.profile.GenericLegacyModProfile;
-import dev.yinghuang.legacyforgebridge.convert.profile.RpgTool1Profile;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -30,7 +29,7 @@ public final class LegacyConversionEngine {
     private final List<LegacyModProfile> profiles;
 
     public LegacyConversionEngine() { this(new LegacyJarAnalyzer()); }
-    public LegacyConversionEngine(LegacyJarAnalyzer analyzer) { this(analyzer, List.of(new RpgTool1Profile(), new GenericLegacyModProfile())); }
+    public LegacyConversionEngine(LegacyJarAnalyzer analyzer) { this(analyzer, List.of(new GenericLegacyModProfile())); }
     public LegacyConversionEngine(LegacyJarAnalyzer analyzer, List<LegacyModProfile> profiles) { this.analyzer = analyzer; this.profiles = List.copyOf(profiles); }
 
     public ConversionResult convert(Path sourceJar, Path convertedDir, Path manifestsDir) throws IOException {

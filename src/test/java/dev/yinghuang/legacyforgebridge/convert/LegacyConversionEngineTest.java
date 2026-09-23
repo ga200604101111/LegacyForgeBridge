@@ -92,6 +92,15 @@ class LegacyConversionEngineTest {
     }
 
     @Test
+    void defaultEngineDoesNotSelectModSpecificProfileFromFileName() throws Exception {
+        Path source=createLegacyJar(tempDir.resolve("RPGTool1-Fake.jar"),false,true,false);
+        ConversionResult result=new LegacyConversionEngine().convert(
+                source,tempDir.resolve("converted-generic-name"),tempDir.resolve("manifests-generic-name"));
+        assertEquals("generic-forge-1.7.10",result.profileId(),
+                "production default conversion must remain structural/generic even when a legacy filename resembles an old corpus profile");
+    }
+
+    @Test
     void blocksLegacyCoremodsBeforeCandidateJarIsEmitted() throws Exception {
         Path source = createLegacyJar(tempDir.resolve("LegacyCoremod.jar"), true, true, true, true);
         LegacyConversionEngine engine = new LegacyConversionEngine();
