@@ -28,7 +28,18 @@ class BambooVisibleEntityExactTest {
         var analysis=new LegacyVisibleEntityPresentationAnalyzer().analyze(source);
         Map<String,LegacyVisibleEntityPresentationAnalyzer.Rule> rules=analysis.rules().stream()
                 .collect(Collectors.toMap(LegacyVisibleEntityPresentationAnalyzer.Rule::registryName,Function.identity()));
-        assertEquals(4,rules.size(),analysis.diagnostics().toString());
+        assertEquals(5,rules.size(),analysis.diagnostics().toString());
+
+        var hanging=rules.get("Kakeziku");assertNotNull(hanging);
+        assertEquals(LegacyVisibleEntityPresentationAnalyzer.Adapter.HANGING_ATLAS,hanging.adapter());
+        assertEquals(0,hanging.legacyNumericId());assertEquals(80,hanging.trackingRange());assertEquals(10,hanging.updateFrequency());assertFalse(hanging.velocityUpdates());
+        assertEquals(17,hanging.watcherIndices().get("direction"));assertEquals(18,hanging.watcherIndices().get("variant"));
+        assertEquals(Map.of(17,0,18,4),hanging.watcherTypes());assertEquals("bamboo:textures/entitys/kakeziku.png",hanging.fixedTexture());
+        assertTrue(hanging.parts().isEmpty());assertEquals(24,hanging.atlasVariants().size());
+        var tatu=hanging.atlasVariants().getFirst();assertEquals("Tatu",tatu.key());assertEquals(16,tatu.width());assertEquals(32,tatu.height());assertEquals(0,tatu.u());assertEquals(0,tatu.v());
+        var matsh=hanging.atlasVariants().stream().filter(v->"Matsh".equals(v.key())).findFirst().orElseThrow();
+        assertEquals(16,matsh.width());assertEquals(48,matsh.height());assertEquals(0,matsh.u());assertEquals(32,matsh.v());
+        assertFalse(hanging.physicalCollision());assertTrue(hanging.playerAttackRemoves());
 
         var door=rules.get("Syouzi");assertNotNull(door);assertEquals(LegacyVisibleEntityPresentationAnalyzer.Adapter.SLIDE_PANEL,door.adapter());
         assertEquals(2,door.legacyNumericId());assertEquals(1F,door.width());assertEquals(2F,door.height());
@@ -57,7 +68,7 @@ class BambooVisibleEntityExactTest {
         var converted=new LegacyConversionEngine().convert(source,tempDir.resolve("converted"),tempDir.resolve("manifests"));
         try(JarFile jar=new JarFile(converted.candidateJar().orElseThrow().toFile())){
             JsonObject sidecar=read(jar,"legacyforgebridge/visible-entity-rules.json");
-            assertEquals(4,sidecar.getAsJsonArray("rules").size(),sidecar.toString());
+            assertEquals(5,sidecar.getAsJsonArray("rules").size(),sidecar.toString());
             String legacyModId=sidecar.get("legacyModId").getAsString();
             for(JsonElement element:sidecar.getAsJsonArray("rules")){
                 JsonObject value=element.getAsJsonObject();

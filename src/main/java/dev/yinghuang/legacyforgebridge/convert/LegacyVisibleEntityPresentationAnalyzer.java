@@ -23,20 +23,20 @@ public final class LegacyVisibleEntityPresentationAnalyzer {
     private static final String RESOURCE="net/minecraft/util/ResourceLocation";
     private static final String WORLD_CTOR="(Lnet/minecraft/world/World;)V";
 
-    public enum Adapter { SLIDE_PANEL, TINTED_CUSHION, TRAY_ITEMS }
+    public enum Adapter { SLIDE_PANEL, TINTED_CUSHION, TRAY_ITEMS, HANGING_ATLAS }
 
     public record Part(String field,int u,int v,float x,float y,float z,int width,int height,int depth,
                        float pivotX,float pivotY,float pivotZ,float xRot,float yRot,float zRot,boolean mirror) { }
-    public record TextureVariant(int value,String texture,boolean translucent) { }
+    public record TextureVariant(int value,String texture,boolean translucent) { }\n    public record AtlasVariant(String key,int width,int height,int u,int v) { }
     public record Rule(String registryName,String sourceClass,String rendererClass,Adapter adapter,
                        int legacyNumericId,int trackingRange,int updateFrequency,boolean velocityUpdates,
                        float width,float height,int modelTextureWidth,int modelTextureHeight,List<Part> parts,
                        String fixedTexture,Map<String,Integer> watcherIndices,Map<Integer,Integer> watcherTypes,
                        List<TextureVariant> textureVariants,List<Integer> palette,int itemWatcherBase,int itemWatcherCount,
-                       boolean physicalCollision,boolean playerAttackRemoves,String proof) {
+                       List<AtlasVariant> atlasVariants,boolean physicalCollision,boolean playerAttackRemoves,String proof) {
         public Rule {
             parts=List.copyOf(parts);watcherIndices=Map.copyOf(watcherIndices);watcherTypes=Map.copyOf(watcherTypes);
-            textureVariants=List.copyOf(textureVariants);palette=List.copyOf(palette);
+            textureVariants=List.copyOf(textureVariants);palette=List.copyOf(palette);atlasVariants=List.copyOf(atlasVariants);
         }
     }
     public record Analysis(List<Rule> rules,List<String> diagnostics) {
@@ -44,6 +44,8 @@ public final class LegacyVisibleEntityPresentationAnalyzer {
     }
     private record Registration(String name,String sourceClass,int numericId,int tracking,int update,boolean velocity) { }
     private record ModelProof(int textureWidth,int textureHeight,List<Part> parts) { }
+    private record AtlasEnumProof(String type,String titleField,String widthField,String heightField,String uField,String vField,
+                                  List<AtlasVariant> variants) { }
 
     private final Map<String,ClassNode> classes=new LinkedHashMap<>();
     private final Map<String,LegacyEntityDataWatcherAnalyzer.Rule> watcherSchemas=new HashMap<>();
@@ -71,6 +73,7 @@ public final class LegacyVisibleEntityPresentationAnalyzer {
             Rule rule=proveSlidePanel(registration,rendererNode,entity,size,physicalCollision,playerAttackRemoves);
             if(rule==null)rule=proveTintedCushion(registration,rendererNode,entity,size,physicalCollision,playerAttackRemoves);
             if(rule==null)rule=proveTray(registration,rendererNode,entity,size,physicalCollision,playerAttackRemoves);
+            if(rule==null)rule=proveHangingAtlas(registration,rendererNode,entity,size,physicalCollision,playerAttackRemoves);
             if(rule!=null)out.add(rule);
         }
         out.sort(Comparator.comparing(Rule::registryName));
@@ -115,7 +118,7 @@ public final class LegacyVisibleEntityPresentationAnalyzer {
         if(watcherTypes==null||watcherTypes.get(direction)!=0||watcherTypes.get(mirror)!=0||watcherTypes.get(doorId)!=1)return null;
         return new Rule(reg.name(),reg.sourceClass(),renderer.name,Adapter.SLIDE_PANEL,reg.numericId(),reg.tracking(),reg.update(),reg.velocity(),
                 size[0],size[1],model.textureWidth(),model.textureHeight(),model.parts(),null,watchers,watcherTypes,variants,List.of(),-1,0,
-                physicalCollision,playerAttackRemoves,
+                List.of(),physicalCollision,playerAttackRemoves,
                 "Source-bound dual-mirror single-cuboid renderer; complete source-proven watcher schema plus direction/mirror/texture semantics and enum texture/translucency table");
     }
 
@@ -145,7 +148,7 @@ public final class LegacyVisibleEntityPresentationAnalyzer {
         if(watcherTypes==null||watcherTypes.get(color)!=0)return null;
         return new Rule(reg.name(),reg.sourceClass(),renderer.name,Adapter.TINTED_CUSHION,reg.numericId(),reg.tracking(),reg.update(),reg.velocity(),
                 size[0],size[1],model.textureWidth(),model.textureHeight(),model.parts(),texture,watchers,watcherTypes,List.of(),palette,-1,0,
-                physicalCollision,playerAttackRemoves,
+                List.of(),physicalCollision,playerAttackRemoves,
                 "Source-bound single-cuboid renderer with fixed texture, complete source-proven watcher schema, entity yaw/pitch transform and 16-entry watcher-selected source palette");
     }
 
@@ -166,8 +169,135 @@ public final class LegacyVisibleEntityPresentationAnalyzer {
         Map<Integer,Integer> watcherTypes=new LinkedHashMap<>();for(int i=0;i<range[1];i++)watcherTypes.put(range[0]+i,5);
         return new Rule(reg.name(),reg.sourceClass(),renderer.name,Adapter.TRAY_ITEMS,reg.numericId(),reg.tracking(),reg.update(),reg.velocity(),
                 size[0],size[1],model.textureWidth(),model.textureHeight(),model.parts(),texture,Map.of(),watcherTypes,List.of(),List.of(),range[0],range[1],
-                physicalCollision,playerAttackRemoves,
+                List.of(),physicalCollision,playerAttackRemoves,
                 "Source-bound fixed multi-cuboid tray renderer plus bounded five-slot ItemStack watcher range and radial modern-item presentation adapter");
+    }
+
+    private Rule proveHangingAtlas(Registration reg,ClassNode renderer,ClassNode entity,float[] size,
+                                     boolean physicalCollision,boolean playerAttackRemoves)throws IOException{
+        MethodNode render=renderMethod(renderer,entity.name);
+        if(render==null||!calls(render,"org/lwjgl/opengl/GL11","glTranslatef","(FFF)V")
+                ||!calls(render,"org/lwjgl/opengl/GL11","glRotatef","(FFFF)V")
+                ||!calls(render,"org/lwjgl/opengl/GL11","glScalef","(FFF)V")
+                ||!containsFloat(render,1F)||!containsFloat(render,.0625F))return null;
+        String texture=fixedTexture(renderer);if(texture==null||!resourceExists(texture))return null;
+
+        MethodInsnNode artCall=null;String enumType=null;
+        for(AbstractInsnNode insn:render.instructions)if(insn instanceof MethodInsnNode call&&call.owner.equals(entity.name)){
+            Type returnType=Type.getReturnType(call.desc);
+            if(returnType.getSort()!=Type.OBJECT)continue;
+            ClassNode candidate=classes.get(returnType.getInternalName());
+            if(candidate==null||!"java/lang/Enum".equals(candidate.superName))continue;
+            if(artCall!=null)return null;artCall=call;enumType=returnType.getInternalName();
+        }
+        if(artCall==null||enumType==null)return null;
+        AtlasEnumProof atlas=parseAtlasEnum(enumType);if(atlas==null||atlas.variants().size()<2)return null;
+        if(!rendererUsesAtlasFields(render,atlas)||!rendererHasTessellatedAtlas(renderer,entity.name))return null;
+
+        Integer variantWatcher=watcherIndex(entity,artCall.name,artCall.desc,"(I)Ljava/lang/String;",0,new HashSet<>());
+        Integer directionWatcher=directionWatcher(entity);
+        if(variantWatcher==null||directionWatcher==null||variantWatcher.equals(directionWatcher))return null;
+        if(!constructorDefinesWatcher(entity,directionWatcher,0)||!constructorDefinesWatcher(entity,variantWatcher,4))return null;
+        Map<String,Integer> watchers=new LinkedHashMap<>();watchers.put("direction",directionWatcher);watchers.put("variant",variantWatcher);
+        Map<Integer,Integer> watcherTypes=new LinkedHashMap<>();watcherTypes.put(directionWatcher,0);watcherTypes.put(variantWatcher,4);
+        return new Rule(reg.name(),reg.sourceClass(),renderer.name,Adapter.HANGING_ATLAS,reg.numericId(),reg.tracking(),reg.update(),reg.velocity(),
+                size[0],size[1],256,256,List.of(),texture,watchers,watcherTypes,List.of(),List.of(),-1,0,atlas.variants(),
+                physicalCollision,playerAttackRemoves,
+                "Source-bound wall-hanging tessellated atlas renderer; constructor-defined byte direction and String variant watchers plus enum-proven title/size/UV regions");
+    }
+
+    private AtlasEnumProof parseAtlasEnum(String type){
+        ClassNode node=classes.get(type);if(node==null||!"java/lang/Enum".equals(node.superName))return null;
+        List<FieldNode> strings=node.fields.stream().filter(f->(f.access&Opcodes.ACC_STATIC)==0&&"Ljava/lang/String;".equals(f.desc)).toList();
+        List<FieldNode> ints=node.fields.stream().filter(f->(f.access&Opcodes.ACC_STATIC)==0&&"I".equals(f.desc)).toList();
+        if(strings.size()!=1||ints.size()!=4)return null;
+        List<MethodNode> ctors=node.methods.stream().filter(m->m.name.equals("<init>")).toList();if(ctors.size()!=1)return null;
+        MethodNode ctor=ctors.getFirst();Type[] args=Type.getArgumentTypes(ctor.desc);if(args.length<7)return null;
+        Map<Integer,Integer> slotToArg=new HashMap<>();int slot=1;
+        for(int i=0;i<args.length;i++){slotToArg.put(slot,i);slot+=args[i].getSize();}
+        Map<String,Integer> argByField=new HashMap<>();List<AbstractInsnNode> constructor=real(ctor);
+        for(int i=1;i<constructor.size();i++)if(constructor.get(i) instanceof FieldInsnNode put&&put.getOpcode()==Opcodes.PUTFIELD&&put.owner.equals(type)){
+            AbstractInsnNode previous=constructor.get(i-1);
+            if(previous instanceof VarInsnNode load){
+                Integer arg=slotToArg.get(load.var);if(arg!=null)argByField.put(put.name,arg);
+            }
+        }
+        Integer titleArg=argByField.get(strings.getFirst().name);if(titleArg==null)return null;
+        List<FieldNode> orderedInts=new ArrayList<>(ints);
+        orderedInts.sort(Comparator.comparingInt(f->argByField.getOrDefault(f.name,Integer.MAX_VALUE)));
+        if(orderedInts.stream().anyMatch(f->!argByField.containsKey(f.name)))return null;
+        String widthField=orderedInts.get(0).name,heightField=orderedInts.get(1).name,uField=orderedInts.get(2).name,vField=orderedInts.get(3).name;
+        int widthArg=argByField.get(widthField),heightArg=argByField.get(heightField),uArg=argByField.get(uField),vArg=argByField.get(vField);
+
+        LinkedHashMap<String,AtlasVariant> variants=new LinkedHashMap<>();List<AbstractInsnNode> clinit=real(find(node,"<clinit>","()V"));
+        for(int i=0;i<clinit.size();i++)if(clinit.get(i) instanceof MethodInsnNode call&&call.getOpcode()==Opcodes.INVOKESPECIAL
+                &&call.owner.equals(type)&&call.name.equals("<init>")&&call.desc.equals(ctor.desc)){
+            Type[] callArgs=Type.getArgumentTypes(call.desc);if(i<callArgs.length)return null;
+            Object[] values=new Object[callArgs.length];
+            for(int j=0;j<callArgs.length;j++){values[j]=constantValue(clinit.get(i-callArgs.length+j));if(values[j]==null)return null;}
+            if(!(values[titleArg] instanceof String key)||key.isBlank()
+                    ||!(values[widthArg] instanceof Integer width)||!(values[heightArg] instanceof Integer height)
+                    ||!(values[uArg] instanceof Integer u)||!(values[vArg] instanceof Integer v))return null;
+            if(width<=0||height<=0||width%16!=0||height%16!=0||u<0||v<0||u+width>256||v+height>256)return null;
+            if(variants.putIfAbsent(key,new AtlasVariant(key,width,height,u,v))!=null)return null;
+        }
+        if(variants.isEmpty())return null;
+        return new AtlasEnumProof(type,strings.getFirst().name,widthField,heightField,uField,vField,List.copyOf(variants.values()));
+    }
+
+    private static Object constantValue(AbstractInsnNode insn){
+        if(insn instanceof LdcInsnNode ldc&&(ldc.cst instanceof String||ldc.cst instanceof Integer))return ldc.cst;
+        return intConst(insn);
+    }
+
+    private static boolean rendererUsesAtlasFields(MethodNode render,AtlasEnumProof atlas){
+        List<String> used=new ArrayList<>();
+        Set<String> expected=Set.of(atlas.widthField(),atlas.heightField(),atlas.uField(),atlas.vField());
+        for(AbstractInsnNode insn:render.instructions)if(insn instanceof FieldInsnNode field&&field.getOpcode()==Opcodes.GETFIELD
+                &&field.owner.equals(atlas.type())&&"I".equals(field.desc)&&expected.contains(field.name))used.add(field.name);
+        return used.equals(List.of(atlas.widthField(),atlas.heightField(),atlas.uField(),atlas.vField()));
+    }
+
+    private static boolean rendererHasTessellatedAtlas(ClassNode renderer,String entityType){
+        MethodNode atlas=null;
+        for(MethodNode method:renderer.methods)if(method.desc.equals("(L"+entityType+";IIII)V")){if(atlas!=null)return false;atlas=method;}
+        if(atlas==null||!containsFloat(atlas,256F)||!containsFloat(atlas,-.5F)||!containsFloat(atlas,.5F)
+                ||!containsFloat(atlas,.75F)||!containsFloat(atlas,.8125F))return false;
+        int vertices=0;boolean begin=false,normal=false,draw=false;
+        for(AbstractInsnNode insn:atlas.instructions)if(insn instanceof MethodInsnNode call&&call.owner.equals("net/minecraft/client/renderer/Tessellator")){
+            vertices+=call.desc.equals("(DDDDD)V")?1:0;normal|=call.desc.equals("(FFF)V");begin|=call.desc.equals("()V");draw|=call.desc.equals("()I");
+        }
+        return vertices>=6&&begin&&normal&&draw;
+    }
+
+    private Integer directionWatcher(ClassNode entity){
+        LinkedHashSet<Integer> found=new LinkedHashSet<>();
+        for(MethodNode method:entity.methods)if(method.desc.equals("()B")){
+            Integer watcher=directWatcherIndex(method,"(I)B");if(watcher==null)continue;
+            boolean yaw=false,ninety=false;
+            for(AbstractInsnNode insn:method.instructions){
+                Integer value=intConst(insn);ninety|=Integer.valueOf(90).equals(value);
+                if(insn instanceof FieldInsnNode field&&field.getOpcode()==Opcodes.PUTFIELD&&"F".equals(field.desc)
+                        &&Set.of("field_70177_z","field_70126_B","yRot","yRotO").contains(field.name))yaw=true;
+            }
+            if(yaw&&ninety)found.add(watcher);
+        }
+        return found.size()==1?found.getFirst():null;
+    }
+
+    private static boolean constructorDefinesWatcher(ClassNode entity,int index,int wireType){
+        for(MethodNode method:entity.methods)if(method.name.equals("<init>")){
+            List<AbstractInsnNode> code=real(method);
+            for(int i=0;i<code.size();i++)if(code.get(i) instanceof MethodInsnNode call&&call.owner.equals(DATA_WATCHER)
+                    &&Set.of("addObject","func_75682_a").contains(call.name)&&call.desc.equals("(ILjava/lang/Object;)V")){
+                if(wireType==4&&i>=2&&Integer.valueOf(index).equals(intConst(code.get(i-2)))&&stringConst(code.get(i-1))!=null)return true;
+                if(wireType==0&&i>=2&&code.get(i-1) instanceof MethodInsnNode box&&box.owner.equals("java/lang/Byte")
+                        &&box.name.equals("valueOf")&&box.desc.equals("(B)Ljava/lang/Byte;")){
+                    for(int j=Math.max(0,i-8);j<i-1;j++)if(Integer.valueOf(index).equals(intConst(code.get(j))))return true;
+                }
+            }
+        }
+        return false;
     }
 
     private boolean provesPhysicalCollision(ClassNode entity){

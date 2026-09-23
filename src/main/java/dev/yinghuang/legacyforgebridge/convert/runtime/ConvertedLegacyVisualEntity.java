@@ -31,6 +31,7 @@ public final class ConvertedLegacyVisualEntity extends Entity {
             case SLIDE_PANEL -> applySlide(type,id,value);
             case TINTED_CUSHION -> applyCushion(type,id,value);
             case TRAY_ITEMS -> applyTray(type,id,value);
+            case HANGING_ATLAS -> applyHangingAtlas(type,id,value);
         };
         if(semantic)return true;
         Integer expected=rule.watcherTypes().get(id);
@@ -54,6 +55,11 @@ public final class ConvertedLegacyVisualEntity extends Entity {
     public int watcherInt(String semantic,int fallback){
         Integer index=rule.watcherIndices().get(semantic);if(index==null)return fallback;Object value=legacyWatchers[index];
         return value instanceof Number n?n.intValue():fallback;
+    }
+
+    public String watcherString(String semantic,String fallback){
+        Integer index=rule.watcherIndices().get(semantic);if(index==null)return fallback;Object value=legacyWatchers[index];
+        return value instanceof String s?s:fallback;
     }
 
     public FmlRuntimeCodec.LegacyItemStack watcherStack(int slot){
@@ -81,6 +87,13 @@ public final class ConvertedLegacyVisualEntity extends Entity {
         return false;
     }
 
+    private boolean applyHangingAtlas(int type,int id,Object value){
+        Integer direction=rule.watcherIndices().get("direction"),variant=rule.watcherIndices().get("variant");
+        if(id==direction&&type==0&&value instanceof Byte){legacyWatchers[id]=value;return true;}
+        if(id==variant&&type==4&&value instanceof String){legacyWatchers[id]=value;return true;}
+        return false;
+    }
+
     private void installDefaults(){
         Arrays.fill(legacyWatchers,null);
         switch(rule.adapter()){
@@ -92,6 +105,10 @@ public final class ConvertedLegacyVisualEntity extends Entity {
             case TINTED_CUSHION -> legacyWatchers[rule.watcherIndices().get("color")]=Byte.valueOf((byte)15);
             case TRAY_ITEMS -> {
                 for(int i=0;i<rule.itemWatcherCount();i++)legacyWatchers[rule.itemWatcherBase()+i]=FmlRuntimeCodec.LegacyItemStack.EMPTY;
+            }
+            case HANGING_ATLAS -> {
+                legacyWatchers[rule.watcherIndices().get("direction")]=Byte.valueOf((byte)0);
+                legacyWatchers[rule.watcherIndices().get("variant")]=rule.atlasVariants().getFirst().key();
             }
         }
     }
