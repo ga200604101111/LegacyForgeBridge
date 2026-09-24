@@ -100,9 +100,9 @@ public final class LegacyEquipmentRenderPass implements ConversionPass {
         return name.indexOf(':') >= 0 ? id.equals(name) : id.substring(id.indexOf(':') + 1).equals(name);
     }
     private static Path resource(Path staging, String name) throws IOException {
-        String id = name.toLowerCase(Locale.ROOT);
+        String id = LegacyItemRenderPass.materializeCaseExactResource(staging, name);
+        if (id == null) throw new IOException("Missing or ambiguous resource " + String.valueOf(name).toLowerCase(Locale.ROOT));
         int split = id.indexOf(':');
-        if (split < 1 || id.contains("..") || id.contains("\\")) throw new IOException("Unsafe resource " + name);
         Path root = staging.resolve("assets").toAbsolutePath().normalize();
         Path path = root.resolve(id.substring(0, split)).resolve(id.substring(split + 1)).normalize();
         if (!path.startsWith(root) || !Files.isRegularFile(path)) throw new IOException("Missing resource " + id);
