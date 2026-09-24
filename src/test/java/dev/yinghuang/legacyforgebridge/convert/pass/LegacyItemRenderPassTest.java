@@ -87,6 +87,21 @@ class LegacyItemRenderPassTest {
         assertTrue(Files.isRegularFile(staging.resolve("legacyforgebridge/item-render-analysis.json")));
     }
 
+    @Test void mixedCaseLegacyResourceDirectoriesAreActuallyRenamedToCanonicalLowercase() throws Exception {
+        Path staging=temp.resolve("case-staging");
+        Path obj=staging.resolve("assets/ForeignMod/textures/items3D/Blade.OBJ");
+        Files.createDirectories(obj.getParent());
+        Files.writeString(obj,"v 0 0 0");
+
+        String id=LegacyItemRenderPass.materializeCaseExactResource(
+                staging,"ForeignMod:textures/items3D/Blade.OBJ");
+
+        assertEquals("foreignmod:textures/items3d/blade.obj",id);
+        assertTrue(Files.isRegularFile(staging.resolve("assets/foreignmod/textures/items3d/blade.obj")));
+        assertFalse(Files.exists(staging.resolve("assets/ForeignMod")),
+                "source mixed-case namespace/directory spelling must not survive candidate staging");
+    }
+
     @Test void dynamicSourceAndMissingTextureRetainExistingModelWithDiagnostics() throws Exception {
         for (boolean dynamic : List.of(true,false)) {
             var context=prepare(dynamic,dynamic);new LegacyItemRenderPass().apply(context);
