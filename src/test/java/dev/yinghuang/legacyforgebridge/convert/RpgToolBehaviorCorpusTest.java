@@ -31,9 +31,29 @@ class RpgToolBehaviorCorpusTest {
         var engine = new LegacyConversionEngine();
         var first = engine.convert(named,temp.resolve("a"),temp.resolve("ma"));
         var second = engine.convert(named,temp.resolve("b"),temp.resolve("mb"));
+        assertEquals("generic-forge-1.7.10",first.profileId(),"RPGTool must stay on the common generic profile");
         candidate = first.candidateJar().orElseThrow();
         assertEquals(Hashing.sha256(candidate),Hashing.sha256(second.candidateJar().orElseThrow()),"Real conversion must be deterministic");
+        assertTrue(new ManagedCandidateInstaller(temp.resolve("mods"),temp.resolve("cache")).isLoaderSafeCandidate(candidate),
+                "Exact RPGTool generic candidate must retire every source class before staging");
         try(var jar = new JarFile(candidate.toFile())) {
+            var convertedEntry=jar.getJarEntry("legacyforgebridge/converted-content.json");assertNotNull(convertedEntry);
+            try(var stream=jar.getInputStream(convertedEntry)){
+                JsonObject converted=JsonParser.parseString(new String(stream.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
+                assertEquals(71,converted.getAsJsonArray("items").size(),"Generic registry recovery must discover every RPGTool item");
+            }
+            var stripEntry=jar.getJarEntry("legacyforgebridge/client-only-source-strip.json");assertNotNull(stripEntry);
+            try(var stream=jar.getInputStream(stripEntry)){
+                JsonObject strip=JsonParser.parseString(new String(stream.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
+                assertEquals(53,strip.get("sourceClassCount").getAsInt());
+                assertEquals(53,strip.get("deletedSourceClasses").getAsInt());
+                assertEquals(0,strip.get("remainingSourceClasses").getAsInt());
+                assertTrue(strip.get("loaderClassClosureComplete").getAsBoolean());
+                assertFalse(strip.get("restoredAfterFailedStrip").getAsBoolean());
+            }
+            assertFalse(jar.stream().anyMatch(e->e.getName().endsWith(".class")
+                    &&!e.getName().startsWith("dev/yinghuang/legacyforgebridge/generated/")),
+                    "No original RPGTool class may survive in the generic candidate");
             try(var stream = jar.getInputStream(jar.getJarEntry("legacyforgebridge/behavior-analysis.json"))) {
                 report = JsonParser.parseString(new String(stream.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
             }
