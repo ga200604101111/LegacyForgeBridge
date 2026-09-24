@@ -160,6 +160,13 @@ public final class LegacyRegistryAnalyzer {
             }
         }
 
+        // Some legacy mods construct all Items up-front, have each Item constructor add itself to
+        // one source-owned static List<Item>, then register that list from a lifecycle helper using
+        // item.getUnlocalizedName().substring(5). Ordinary source-frame propagation intentionally
+        // keeps reference locals fail-closed, so prove this collection loop as a separate bounded
+        // family and expand only concrete static allocations whose exact constructor self-enrols.
+        output.addAll(recoverIterableDerivedNameItemRegistrations());
+
         LinkedHashSet<FieldBinding> fieldBindings = recoverFieldBindings(output);
         if (output.isEmpty()) diagnostics.add("No concrete GameRegistry item/block registrations were proven from reachable lifecycle roots.");
         return new Analysis(List.copyOf(output), List.copyOf(fieldBindings), List.copyOf(new LinkedHashSet<>(diagnostics)));
@@ -227,6 +234,169 @@ public final class LegacyRegistryAnalyzer {
             }
         }
         return output;
+    }
+
+    private LinkedHashSet<Registration> recoverIterableDerivedNameItemRegistrations() {
+        LinkedHashSet<Registration> output = new LinkedHashSet<>();
+        Set<MethodKey> reachable = reachableSourceMethods();
+        LinkedHashMap<StaticFieldReference,MethodKey> registrationLoops = new LinkedHashMap<>();
+
+        for (MethodKey key : reachable) {
+            MethodContext context = methods.get(key);
+            if (context == null) continue;
+            StaticFieldReference list = iterableDerivedNameRegistrationList(context.method());
+            if (list == null) continue;
+            MethodKey previous = registrationLoops.putIfAbsent(list, key);
+            if (previous != null && !previous.equals(key)) {
+                diagnostics.add("Multiple reachable iterable item-registration loops use " + list.owner() + "." + list.name());
+            }
+        }
+
+        for (var loop : registrationLoops.entrySet()) {
+            StaticFieldReference list = loop.getKey();
+            MethodKey source = loop.getValue();
+            for (var entry : methods.entrySet()) {
+                if (!entry.getKey().name().equals("<clinit>")) continue;
+                MethodContext context = entry.getValue();
+                for (int i = 0; i < context.method().instructions.size(); i++) {
+                    AbstractInsnNode instruction = context.method().instructions.get(i);
+                    if (!(instruction instanceof FieldInsnNode field) || field.getOpcode() != Opcodes.PUTSTATIC) continue;
+                    Frame<SourceValue> frame = context.frames()[i];
+                    if (frame == null || frame.getStackSize() < 1) continue;
+                    Symbol assigned = resolve(context, frame.getStack(frame.getStackSize() - 1), i, 0, new LinkedHashSet<>());
+                    if (!(assigned instanceof ObjectSymbol object) || object.constructorDescriptor() == null
+                            || object.unlocalizedName() == null || !isSubclass(object.internalName(), "net/minecraft/item/Item")) continue;
+                    if (!constructorAddsSelfToList(object.internalName(), object.constructorDescriptor(), list, 0, new LinkedHashSet<>())) continue;
+
+                    String registryName = normalizeLegacyItemName(object.unlocalizedName());
+                    if (registryName.isBlank()) continue;
+                    Registration registration = materialize(new Template(
+                            Kind.ITEM, object, new TextSymbol(registryName), NullSymbol.INSTANCE, NullSymbol.INSTANCE, source));
+                    if (registration != null) output.add(registration);
+                }
+            }
+        }
+        if (!output.isEmpty()) diagnostics.add("Recovered " + output.size()
+                + " concrete Item registrations from source-proven iterable derived-name registration loop(s).");
+        return output;
+    }
+
+    private Set<MethodKey> reachableSourceMethods() {
+        LinkedHashSet<MethodKey> reachable = new LinkedHashSet<>();
+        java.util.ArrayDeque<MethodKey> queue = new java.util.ArrayDeque<>();
+        for (var entry : methods.entrySet()) if (isRoot(entry.getValue())) queue.add(entry.getKey());
+        while (!queue.isEmpty() && reachable.size() <= MAX_TEMPLATE_COUNT) {
+            MethodKey key = queue.removeFirst();
+            if (!reachable.add(key)) continue;
+            MethodContext context = methods.get(key);
+            if (context == null) continue;
+            for (AbstractInsnNode instruction : context.method().instructions) {
+                if (!(instruction instanceof MethodInsnNode call)) continue;
+                MethodKey target = new MethodKey(call.owner, call.name, call.desc);
+                if (methods.containsKey(target) && !reachable.contains(target)) queue.addLast(target);
+            }
+        }
+        return reachable;
+    }
+
+    private static StaticFieldReference iterableDerivedNameRegistrationList(MethodNode method) {
+        List<AbstractInsnNode> code = realInstructions(method);
+        LinkedHashSet<StaticFieldReference> lists = new LinkedHashSet<>();
+        for (int i = 5; i < code.size(); i++) {
+            if (!(code.get(i) instanceof MethodInsnNode register)
+                    || register.getOpcode() != Opcodes.INVOKESTATIC
+                    || !GAME_REGISTRY.equals(register.owner)
+                    || !"registerItem".equals(register.name)
+                    || !"(Lnet/minecraft/item/Item;Ljava/lang/String;)V".equals(register.desc)) continue;
+            if (!(code.get(i - 5) instanceof VarInsnNode objectLoad) || objectLoad.getOpcode() != Opcodes.ALOAD
+                    || !(code.get(i - 4) instanceof VarInsnNode nameLoad) || nameLoad.getOpcode() != Opcodes.ALOAD
+                    || objectLoad.var != nameLoad.var
+                    || !(code.get(i - 3) instanceof MethodInsnNode nameCall)
+                    || !Set.of("getUnlocalizedName","func_77658_a").contains(nameCall.name)
+                    || !"()Ljava/lang/String;".equals(nameCall.desc)
+                    || !Integer.valueOf(5).equals(integerConstant(code.get(i - 2)))
+                    || !(code.get(i - 1) instanceof MethodInsnNode substring)
+                    || !"java/lang/String".equals(substring.owner)
+                    || !"substring".equals(substring.name)
+                    || !"(I)Ljava/lang/String;".equals(substring.desc)) continue;
+
+            int local = objectLoad.var;
+            boolean iteratorValue = false;
+            for (int j = i - 6; j >= 2; j--) {
+                if (!(code.get(j) instanceof VarInsnNode store) || store.getOpcode() != Opcodes.ASTORE || store.var != local) continue;
+                if (!(code.get(j - 1) instanceof TypeInsnNode cast) || cast.getOpcode() != Opcodes.CHECKCAST
+                        || !"net/minecraft/item/Item".equals(cast.desc)
+                        || !(code.get(j - 2) instanceof MethodInsnNode next)
+                        || !"java/util/Iterator".equals(next.owner) || !"next".equals(next.name)
+                        || !"()Ljava/lang/Object;".equals(next.desc)) continue;
+                iteratorValue = true;
+                break;
+            }
+            if (!iteratorValue) continue;
+
+            for (int j = 0; j + 1 < i; j++) {
+                if (!(code.get(j) instanceof FieldInsnNode field) || field.getOpcode() != Opcodes.GETSTATIC
+                        || !"Ljava/util/List;".equals(field.desc)) continue;
+                if (!(code.get(j + 1) instanceof MethodInsnNode iterator)
+                        || !"java/util/List".equals(iterator.owner) || !"iterator".equals(iterator.name)
+                        || !"()Ljava/util/Iterator;".equals(iterator.desc)) continue;
+                lists.add(new StaticFieldReference(field.owner, field.name, field.desc));
+            }
+        }
+        return lists.size() == 1 ? lists.getFirst() : null;
+    }
+
+    private boolean constructorAddsSelfToList(String owner,String descriptor,StaticFieldReference list,
+                                              int depth,Set<String> guard) {
+        if (owner == null || descriptor == null || depth > 12) return false;
+        String key = owner + descriptor;
+        if (!guard.add(key)) return false;
+        try {
+            MethodContext context = methods.get(new MethodKey(owner, "<init>", descriptor));
+            if (context == null) return false;
+            List<AbstractInsnNode> code = realInstructions(context.method());
+            for (int i = 0; i + 2 < code.size(); i++) {
+                if (!(code.get(i) instanceof FieldInsnNode field) || field.getOpcode() != Opcodes.GETSTATIC
+                        || !field.owner.equals(list.owner()) || !field.name.equals(list.name()) || !field.desc.equals(list.descriptor())) continue;
+                if (!(code.get(i + 1) instanceof VarInsnNode self) || self.getOpcode() != Opcodes.ALOAD || self.var != 0) continue;
+                if (code.get(i + 2) instanceof MethodInsnNode add
+                        && (add.getOpcode() == Opcodes.INVOKEINTERFACE || add.getOpcode() == Opcodes.INVOKEVIRTUAL)
+                        && "java/util/List".equals(add.owner) && "add".equals(add.name)
+                        && "(Ljava/lang/Object;)Z".equals(add.desc)) return true;
+            }
+            for (AbstractInsnNode instruction : code) {
+                if (!(instruction instanceof MethodInsnNode call) || call.getOpcode() != Opcodes.INVOKESPECIAL
+                        || !"<init>".equals(call.name) || !classes.containsKey(call.owner)
+                        || !isSubclass(owner, call.owner) || owner.equals(call.owner)) continue;
+                if (constructorAddsSelfToList(call.owner, call.desc, list, depth + 1, guard)) return true;
+            }
+            return false;
+        } finally {
+            guard.remove(key);
+        }
+    }
+
+    private static List<AbstractInsnNode> realInstructions(MethodNode method) {
+        List<AbstractInsnNode> out = new ArrayList<>();
+        if (method != null) for (AbstractInsnNode instruction : method.instructions)
+            if (instruction.getOpcode() >= 0) out.add(instruction);
+        return out;
+    }
+
+    private static Integer integerConstant(AbstractInsnNode instruction) {
+        if (instruction == null) return null;
+        return switch (instruction.getOpcode()) {
+            case Opcodes.ICONST_M1 -> -1;
+            case Opcodes.ICONST_0 -> 0;
+            case Opcodes.ICONST_1 -> 1;
+            case Opcodes.ICONST_2 -> 2;
+            case Opcodes.ICONST_3 -> 3;
+            case Opcodes.ICONST_4 -> 4;
+            case Opcodes.ICONST_5 -> 5;
+            case Opcodes.BIPUSH, Opcodes.SIPUSH -> ((IntInsnNode) instruction).operand;
+            case Opcodes.LDC -> instruction instanceof LdcInsnNode ldc && ldc.cst instanceof Integer value ? value : null;
+            default -> null;
+        };
     }
 
     private static String normalizeLegacyItemName(String raw){
