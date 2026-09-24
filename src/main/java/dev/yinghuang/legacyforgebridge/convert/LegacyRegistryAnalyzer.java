@@ -276,8 +276,6 @@ public final class LegacyRegistryAnalyzer {
                 }
             }
         }
-        if (!output.isEmpty()) diagnostics.add("Recovered " + output.size()
-                + " concrete Item registrations from source-proven iterable derived-name registration loop(s).");
         return output;
     }
 
