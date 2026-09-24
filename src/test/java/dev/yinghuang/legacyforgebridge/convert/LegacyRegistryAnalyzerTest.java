@@ -50,6 +50,28 @@ class LegacyRegistryAnalyzerTest {
     }
 
     @Test
+    void iterableDerivedNameRegistrationExpandsConcreteSelfEnrolledItems() throws Exception {
+        Path jar=tempDir.resolve("IterableContent.jar");
+        try(JarOutputStream out=new JarOutputStream(Files.newOutputStream(jar))){
+            put(out,"other/iterable/BaseItem.class",iterableBaseItem());
+            put(out,"other/iterable/ChildItem.class",iterableChildItem());
+            put(out,"other/iterable/Content.class",iterableContent());
+            put(out,"other/iterable/Bootstrap.class",iterableBootstrap());
+        }
+
+        var analysis=new LegacyRegistryAnalyzer().analyze(jar);
+        assertEquals(2,analysis.items().size(),String.join("\n",analysis.diagnostics()));
+        assertEquals(java.util.Set.of("alpha","beta"),
+                analysis.items().stream().map(LegacyRegistryAnalyzer.Registration::registryName).collect(java.util.stream.Collectors.toSet()));
+        assertTrue(analysis.items().stream().anyMatch(item->item.registryName().equals("alpha")
+                &&item.implementationClass().equals("other/iterable/BaseItem")));
+        assertTrue(analysis.items().stream().anyMatch(item->item.registryName().equals("beta")
+                &&item.implementationClass().equals("other/iterable/ChildItem")));
+        assertEquals(2,analysis.fieldBindings().stream().filter(binding->binding.owner().equals("other/iterable/Content")).count());
+        assertTrue(analysis.diagnostics().stream().anyMatch(value->value.contains("iterable derived-name registration")));
+    }
+
+    @Test
     void registrationNameDerivedFromStaticItemsUnlocalizedNameIsRecovered() throws Exception {
         Path jar=tempDir.resolve("DerivedNameContent.jar");
         try(JarOutputStream out=new JarOutputStream(Files.newOutputStream(jar))){
@@ -68,6 +90,77 @@ class LegacyRegistryAnalyzerTest {
         assertTrue(analysis.fieldBindings().stream().anyMatch(binding->
                 binding.owner().equals("other/derived/Content")&&binding.name().equals("BLADE")
                         &&binding.registryName().equals("derived_blade")&&binding.kind()==LegacyRegistryAnalyzer.Kind.ITEM));
+    }
+
+    private static byte[] iterableBaseItem(){
+        String name="other/iterable/BaseItem";
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,name,null,"net/minecraft/item/Item",null);
+        MethodVisitor m=w.visitMethod(Opcodes.ACC_PUBLIC,"<init>","(Ljava/lang/String;)V",null,null);m.visitCode();
+        m.visitVarInsn(Opcodes.ALOAD,0);
+        m.visitMethodInsn(Opcodes.INVOKESPECIAL,"net/minecraft/item/Item","<init>","()V",false);
+        m.visitVarInsn(Opcodes.ALOAD,0);m.visitVarInsn(Opcodes.ALOAD,1);
+        m.visitMethodInsn(Opcodes.INVOKEVIRTUAL,name,"setUnlocalizedName",
+                "(Ljava/lang/String;)Lnet/minecraft/item/Item;",false);m.visitInsn(Opcodes.POP);
+        m.visitFieldInsn(Opcodes.GETSTATIC,"other/iterable/Content","ALL","Ljava/util/List;");
+        m.visitVarInsn(Opcodes.ALOAD,0);
+        m.visitMethodInsn(Opcodes.INVOKEINTERFACE,"java/util/List","add","(Ljava/lang/Object;)Z",true);m.visitInsn(Opcodes.POP);
+        m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
+    }
+
+    private static byte[] iterableChildItem(){
+        String name="other/iterable/ChildItem";
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,name,null,"other/iterable/BaseItem",null);
+        MethodVisitor m=w.visitMethod(Opcodes.ACC_PUBLIC,"<init>","(Ljava/lang/String;)V",null,null);m.visitCode();
+        m.visitVarInsn(Opcodes.ALOAD,0);m.visitVarInsn(Opcodes.ALOAD,1);
+        m.visitMethodInsn(Opcodes.INVOKESPECIAL,"other/iterable/BaseItem","<init>","(Ljava/lang/String;)V",false);
+        m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
+    }
+
+    private static byte[] iterableContent(){
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,"other/iterable/Content",null,"java/lang/Object",null);
+        w.visitField(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"ALL","Ljava/util/List;",null,null).visitEnd();
+        w.visitField(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"FIRST","Lnet/minecraft/item/Item;",null,null).visitEnd();
+        w.visitField(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"SECOND","Lnet/minecraft/item/Item;",null,null).visitEnd();
+        MethodVisitor m=w.visitMethod(Opcodes.ACC_STATIC,"<clinit>","()V",null,null);m.visitCode();
+        m.visitTypeInsn(Opcodes.NEW,"java/util/ArrayList");m.visitInsn(Opcodes.DUP);
+        m.visitMethodInsn(Opcodes.INVOKESPECIAL,"java/util/ArrayList","<init>","()V",false);
+        m.visitFieldInsn(Opcodes.PUTSTATIC,"other/iterable/Content","ALL","Ljava/util/List;");
+        m.visitTypeInsn(Opcodes.NEW,"other/iterable/BaseItem");m.visitInsn(Opcodes.DUP);m.visitLdcInsn("alpha");
+        m.visitMethodInsn(Opcodes.INVOKESPECIAL,"other/iterable/BaseItem","<init>","(Ljava/lang/String;)V",false);
+        m.visitFieldInsn(Opcodes.PUTSTATIC,"other/iterable/Content","FIRST","Lnet/minecraft/item/Item;");
+        m.visitTypeInsn(Opcodes.NEW,"other/iterable/ChildItem");m.visitInsn(Opcodes.DUP);m.visitLdcInsn("beta");
+        m.visitMethodInsn(Opcodes.INVOKESPECIAL,"other/iterable/ChildItem","<init>","(Ljava/lang/String;)V",false);
+        m.visitFieldInsn(Opcodes.PUTSTATIC,"other/iterable/Content","SECOND","Lnet/minecraft/item/Item;");
+        m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
+    }
+
+    private static byte[] iterableBootstrap(){
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,"other/iterable/Bootstrap",null,"java/lang/Object",null);
+        MethodVisitor h=w.visitMethod(Opcodes.ACC_PRIVATE|Opcodes.ACC_STATIC,"registerAll","()V",null,null);h.visitCode();
+        h.visitFieldInsn(Opcodes.GETSTATIC,"other/iterable/Content","ALL","Ljava/util/List;");
+        h.visitMethodInsn(Opcodes.INVOKEINTERFACE,"java/util/List","iterator","()Ljava/util/Iterator;",true);
+        h.visitVarInsn(Opcodes.ASTORE,0);
+        org.objectweb.asm.Label loop=new org.objectweb.asm.Label(),end=new org.objectweb.asm.Label();
+        h.visitLabel(loop);h.visitVarInsn(Opcodes.ALOAD,0);
+        h.visitMethodInsn(Opcodes.INVOKEINTERFACE,"java/util/Iterator","hasNext","()Z",true);h.visitJumpInsn(Opcodes.IFEQ,end);
+        h.visitVarInsn(Opcodes.ALOAD,0);h.visitMethodInsn(Opcodes.INVOKEINTERFACE,"java/util/Iterator","next","()Ljava/lang/Object;",true);
+        h.visitTypeInsn(Opcodes.CHECKCAST,"net/minecraft/item/Item");h.visitVarInsn(Opcodes.ASTORE,1);
+        h.visitVarInsn(Opcodes.ALOAD,1);h.visitVarInsn(Opcodes.ALOAD,1);
+        h.visitMethodInsn(Opcodes.INVOKEVIRTUAL,"net/minecraft/item/Item","getUnlocalizedName","()Ljava/lang/String;",false);
+        h.visitInsn(Opcodes.ICONST_5);
+        h.visitMethodInsn(Opcodes.INVOKEVIRTUAL,"java/lang/String","substring","(I)Ljava/lang/String;",false);
+        h.visitMethodInsn(Opcodes.INVOKESTATIC,"cpw/mods/fml/common/registry/GameRegistry","registerItem",
+                "(Lnet/minecraft/item/Item;Ljava/lang/String;)V",false);
+        h.visitJumpInsn(Opcodes.GOTO,loop);h.visitLabel(end);h.visitInsn(Opcodes.RETURN);h.visitMaxs(0,0);h.visitEnd();
+
+        MethodVisitor m=w.visitMethod(Opcodes.ACC_PUBLIC,"preInit","(Lcpw/mods/fml/common/event/FMLPreInitializationEvent;)V",null,null);
+        AnnotationVisitor av=m.visitAnnotation("Lcpw/mods/fml/common/Mod$EventHandler;",true);av.visitEnd();m.visitCode();
+        m.visitMethodInsn(Opcodes.INVOKESTATIC,"other/iterable/Bootstrap","registerAll","()V",false);
+        m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
     }
 
     private static byte[] derivedContent(){
