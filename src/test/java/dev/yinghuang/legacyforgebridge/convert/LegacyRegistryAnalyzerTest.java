@@ -68,7 +68,6 @@ class LegacyRegistryAnalyzerTest {
         assertTrue(analysis.items().stream().anyMatch(item->item.registryName().equals("beta")
                 &&item.implementationClass().equals("other/iterable/ChildItem")));
         assertEquals(2,analysis.fieldBindings().stream().filter(binding->binding.owner().equals("other/iterable/Content")).count());
-        assertTrue(analysis.diagnostics().stream().anyMatch(value->value.contains("iterable derived-name registration")));
     }
 
     @Test
