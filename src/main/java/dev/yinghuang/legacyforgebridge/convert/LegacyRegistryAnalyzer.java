@@ -849,27 +849,51 @@ public final class LegacyRegistryAnalyzer {
     }
 
     private String constructorUnlocalizedName(String owner,String desc,List<Symbol> arguments){
-        MethodContext constructor=methods.get(new MethodKey(owner,"<init>",desc));
-        if(constructor==null)return null;
-        List<Symbol> actual=new ArrayList<>(arguments.size()+1);
-        actual.add(UnknownSymbol.INSTANCE);actual.addAll(arguments);
-        Map<Integer,Symbol> substitution=parameterSubstitution(constructor.method(),actual);
-        LinkedHashSet<String> names=new LinkedHashSet<>();
-        for(int i=0;i<constructor.method().instructions.size();i++){
-            AbstractInsnNode instruction=constructor.method().instructions.get(i);
-            if(!(instruction instanceof MethodInsnNode call)||!Set.of("setUnlocalizedName","func_77655_b").contains(call.name)
-                    ||!call.desc.startsWith("(Ljava/lang/String;)"))continue;
-            Frame<SourceValue> frame=constructor.frames()[i];
-            if(frame==null||frame.getStackSize()<1)continue;
-            int argCount=Type.getArgumentTypes(call.desc).length;
-            if(frame.getStackSize()<argCount+1)continue;
-            Symbol receiver=resolve(constructor,frame.getStack(frame.getStackSize()-argCount-1),i,0,new LinkedHashSet<>());
-            if(!(receiver instanceof ParamSymbol param)||param.local()!=0)continue;
-            Symbol raw=resolve(constructor,frame.getStack(frame.getStackSize()-1),i,0,new LinkedHashSet<>());
-            String name=materializeText(substitute(raw,substitution));
-            if(name!=null&&!name.isBlank())names.add(name);
-        }
-        return names.size()==1?names.getFirst():null;
+        return constructorUnlocalizedName(owner,desc,arguments,0,new LinkedHashSet<>());
+    }
+
+    private String constructorUnlocalizedName(String owner,String desc,List<Symbol> arguments,int depth,Set<String> guard){
+        if(owner==null||desc==null||depth>12||!guard.add(owner+desc))return null;
+        try{
+            MethodContext constructor=methods.get(new MethodKey(owner,"<init>",desc));
+            if(constructor==null)return null;
+            List<Symbol> actual=new ArrayList<>(arguments.size()+1);
+            actual.add(UnknownSymbol.INSTANCE);actual.addAll(arguments);
+            Map<Integer,Symbol> substitution=parameterSubstitution(constructor.method(),actual);
+            LinkedHashSet<String> names=new LinkedHashSet<>();
+            for(int i=0;i<constructor.method().instructions.size();i++){
+                AbstractInsnNode instruction=constructor.method().instructions.get(i);
+                if(!(instruction instanceof MethodInsnNode call))continue;
+                Frame<SourceValue> frame=constructor.frames()[i];
+                if(frame==null)continue;
+                if(Set.of("setUnlocalizedName","func_77655_b").contains(call.name)
+                        &&call.desc.startsWith("(Ljava/lang/String;)")){
+                    int argCount=Type.getArgumentTypes(call.desc).length;
+                    if(frame.getStackSize()<argCount+1)continue;
+                    Symbol receiver=resolve(constructor,frame.getStack(frame.getStackSize()-argCount-1),i,0,new LinkedHashSet<>());
+                    if(!(receiver instanceof ParamSymbol param)||param.local()!=0)continue;
+                    Symbol raw=resolve(constructor,frame.getStack(frame.getStackSize()-1),i,0,new LinkedHashSet<>());
+                    String name=materializeText(substitute(raw,substitution));
+                    if(name!=null&&!name.isBlank())names.add(name);
+                    continue;
+                }
+                if(call.getOpcode()!=Opcodes.INVOKESPECIAL||!"<init>".equals(call.name)
+                        ||!classes.containsKey(call.owner)||owner.equals(call.owner)||!isSubclass(owner,call.owner))continue;
+                int argCount=Type.getArgumentTypes(call.desc).length;
+                if(frame.getStackSize()<argCount+1)continue;
+                Symbol receiver=resolve(constructor,frame.getStack(frame.getStackSize()-argCount-1),i,0,new LinkedHashSet<>());
+                if(!(receiver instanceof ParamSymbol param)||param.local()!=0)continue;
+                List<Symbol> inheritedArgs=new ArrayList<>(argCount);
+                int start=frame.getStackSize()-argCount;
+                for(int arg=0;arg<argCount;arg++){
+                    Symbol raw=resolve(constructor,frame.getStack(start+arg),i,0,new LinkedHashSet<>());
+                    inheritedArgs.add(substitute(raw,substitution));
+                }
+                String inherited=constructorUnlocalizedName(call.owner,call.desc,inheritedArgs,depth+1,guard);
+                if(inherited!=null&&!inherited.isBlank())names.add(inherited);
+            }
+            return names.size()==1?names.getFirst():null;
+        }finally{guard.remove(owner+desc);}
     }
 
     private static boolean isLoad(int opcode) {
