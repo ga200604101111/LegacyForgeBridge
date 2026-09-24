@@ -54,6 +54,11 @@ class RpgToolBehaviorCorpusTest {
             assertFalse(jar.stream().anyMatch(e->e.getName().endsWith(".class")
                     &&!e.getName().startsWith("dev/yinghuang/legacyforgebridge/generated/")),
                     "No original RPGTool class may survive in the generic candidate");
+            assertNotNull(jar.getJarEntry("assets/rpgtool1/textures/items3d/dark_sword.obj"),
+                    "Case-normalized OBJ resources must exist at the exact modern Identifier path");
+            assertNotNull(jar.getJarEntry("assets/rpgtool1/textures/items3d/dark_sword.png"));
+            assertNull(jar.getJarEntry("assets/rpgtool1/textures/items3D/dark_sword.obj"),
+                    "Mixed-case legacy resource directories must not survive deterministic packaging");
             try(var stream = jar.getInputStream(jar.getJarEntry("legacyforgebridge/behavior-analysis.json"))) {
                 report = JsonParser.parseString(new String(stream.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
             }
