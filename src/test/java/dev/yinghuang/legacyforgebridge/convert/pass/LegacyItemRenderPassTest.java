@@ -43,6 +43,27 @@ class LegacyItemRenderPassTest {
         assertFalse(generated.contains("minecraft:blocks_attacks"),"LFB must not bake a second blocking transform");
         assertTrue(Files.isRegularFile(context.stagingDir().resolve("legacyforgebridge/item-render-analysis.json")));
     }
+    @Test void mixedCaseLegacyResourceDirectoryIsPhysicallyCanonicalizedForJarLookup() throws Exception {
+        Path staging=temp.resolve("case-normalization");
+        Path mixed=staging.resolve("assets/alchemy/textures/items3D");
+        Files.createDirectories(mixed);
+        Files.writeString(mixed.resolve("Tool.obj"),"v 0 0 0");
+        Files.write(mixed.resolve("Tool.png"),new byte[]{1,2,3});
+
+        assertEquals("alchemy:textures/items3d/tool.obj",
+                LegacyItemRenderPass.materializeCaseExactResource(staging,"Alchemy:textures/items3D/Tool.obj"));
+        assertEquals("alchemy:textures/items3d/tool.png",
+                LegacyItemRenderPass.materializeCaseExactResource(staging,"Alchemy:textures/items3D/Tool.png"));
+
+        Path textures=staging.resolve("assets/alchemy/textures");
+        try(var children=Files.list(textures)){
+            assertEquals(List.of("items3d"),children.map(p->p.getFileName().toString()).sorted().toList(),
+                    "The physical directory spelling must be canonical before deterministic JAR packaging");
+        }
+        assertTrue(Files.isRegularFile(textures.resolve("items3d/tool.obj")));
+        assertTrue(Files.isRegularFile(textures.resolve("items3d/tool.png")));
+    }
+
     @Test void sourceRendererCanMaterializeInitialObjDefinitionFromProvenRegistryField() throws Exception {
         Path work=Files.createTempDirectory(temp,"materialize-");
         Path source=LegacyRenderFixture.create(work.resolve("Foreign.jar"),"alchemy",false);
