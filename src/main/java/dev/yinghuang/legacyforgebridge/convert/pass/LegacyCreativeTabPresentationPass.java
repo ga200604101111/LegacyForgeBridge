@@ -73,7 +73,12 @@ public final class LegacyCreativeTabPresentationPass implements ConversionPass {
         return fallback;
     }
     private static void add(Map<String,List<JsonObject>> map,String key,JsonObject item){
-        if(key==null||key.isBlank())return;map.computeIfAbsent(key,ignored->new ArrayList<>()).add(item);
+        if(key==null||key.isBlank()||item==null)return;
+        List<JsonObject> values=map.computeIfAbsent(key,ignored->new ArrayList<>());
+        // The modern id path and the recovered legacy registry name commonly normalize to the
+        // same key. That is one identity proof, not two competing candidates. Keep ambiguity
+        // fail-closed only when distinct converted items really share the same legacy name.
+        if(values.stream().noneMatch(existing->existing==item))values.add(item);
     }
     private static String uniqueId(String namespace,String label,String field,Set<String> used){
         String path=sanitize(label);if(path.isBlank())path=sanitize(field);if(path.isBlank())path="legacy_tab";
