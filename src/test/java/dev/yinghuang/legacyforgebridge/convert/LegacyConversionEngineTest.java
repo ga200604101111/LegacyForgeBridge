@@ -6,6 +6,7 @@ import dev.yinghuang.legacyforgebridge.convert.api.ConversionResult;
 import dev.yinghuang.legacyforgebridge.convert.api.ConversionStatus;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
@@ -122,6 +123,34 @@ class LegacyConversionEngineTest {
     }
 
     @Test
+    void iterableDerivedNameItemsBecomeLoaderSafeThroughTheGenericPipeline() throws Exception {
+        Path source=createIterableLegacyJar(tempDir.resolve("IterableGeneric.jar"));
+        ConversionResult result=new LegacyConversionEngine().convert(
+                source,tempDir.resolve("converted-iterable"),tempDir.resolve("manifests-iterable"));
+        assertEquals("generic-forge-1.7.10",result.profileId());
+        Path candidate=result.candidateJar().orElseThrow();
+        assertTrue(new ManagedCandidateInstaller(tempDir.resolve("mods-iterable"),tempDir.resolve("cache-iterable"))
+                .isLoaderSafeCandidate(candidate));
+
+        try(JarFile jar=new JarFile(candidate.toFile())){
+            JsonObject content=readJson(jar,"legacyforgebridge/converted-content.json");
+            assertEquals(2,content.getAsJsonArray("items").size());
+            var ids=content.getAsJsonArray("items").asList().stream()
+                    .map(value->value.getAsJsonObject().get("id").getAsString())
+                    .collect(java.util.stream.Collectors.toSet());
+            assertEquals(java.util.Set.of("iterablegeneric:alpha","iterablegeneric:beta"),ids);
+            assertNull(jar.getJarEntry("other/iterable/BaseItem.class"));
+            assertNull(jar.getJarEntry("other/iterable/ChildItem.class"));
+            assertNull(jar.getJarEntry("other/iterable/Content.class"));
+            assertNull(jar.getJarEntry("other/iterable/Bootstrap.class"));
+            JsonObject strip=readJson(jar,"legacyforgebridge/client-only-source-strip.json");
+            assertEquals(4,strip.get("sourceClassCount").getAsInt());
+            assertEquals(0,strip.get("remainingSourceClasses").getAsInt());
+            assertTrue(strip.get("loaderClassClosureComplete").getAsBoolean());
+        }
+    }
+
+    @Test
     void blocksLegacyCoremodsBeforeCandidateJarIsEmitted() throws Exception {
         Path source = createLegacyJar(tempDir.resolve("LegacyCoremod.jar"), true, true, true, true);
         LegacyConversionEngine engine = new LegacyConversionEngine();
@@ -187,6 +216,85 @@ class LegacyConversionEngineTest {
         assertEquals(ConversionStatus.PARTIAL, result.status());
         assertFalse(result.installable());
         assertTrue(result.diagnostics().stream().anyMatch(diagnostic -> diagnostic.ruleId().equals("LFB-CONVERT-LANG-0002")));
+    }
+
+    private static Path createIterableLegacyJar(Path jar) throws IOException {
+        String mcmod="[{\"modid\":\"iterablegeneric\",\"name\":\"Iterable Generic\",\"version\":\"1.0\",\"mcversion\":\"1.7.10\",\"dependencies\":[]}]";
+        try(JarOutputStream out=new JarOutputStream(Files.newOutputStream(jar))){
+            writeEntry(out,"mcmod.info",mcmod.getBytes(StandardCharsets.UTF_8));
+            writeEntry(out,"other/iterable/BaseItem.class",iterableBaseItem());
+            writeEntry(out,"other/iterable/ChildItem.class",iterableChildItem());
+            writeEntry(out,"other/iterable/Content.class",iterableContent());
+            writeEntry(out,"other/iterable/Bootstrap.class",iterableBootstrap());
+        }
+        return jar;
+    }
+
+    private static byte[] iterableBaseItem(){
+        String name="other/iterable/BaseItem";
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,name,null,"net/minecraft/item/Item",null);
+        MethodVisitor m=w.visitMethod(Opcodes.ACC_PUBLIC,"<init>","(Ljava/lang/String;)V",null,null);m.visitCode();
+        m.visitVarInsn(Opcodes.ALOAD,0);m.visitMethodInsn(Opcodes.INVOKESPECIAL,"net/minecraft/item/Item","<init>","()V",false);
+        m.visitVarInsn(Opcodes.ALOAD,0);m.visitVarInsn(Opcodes.ALOAD,1);
+        m.visitMethodInsn(Opcodes.INVOKEVIRTUAL,name,"setUnlocalizedName","(Ljava/lang/String;)Lnet/minecraft/item/Item;",false);m.visitInsn(Opcodes.POP);
+        m.visitFieldInsn(Opcodes.GETSTATIC,"other/iterable/Content","ALL","Ljava/util/List;");m.visitVarInsn(Opcodes.ALOAD,0);
+        m.visitMethodInsn(Opcodes.INVOKEINTERFACE,"java/util/List","add","(Ljava/lang/Object;)Z",true);m.visitInsn(Opcodes.POP);
+        m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
+    }
+
+    private static byte[] iterableChildItem(){
+        String name="other/iterable/ChildItem";
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,name,null,"other/iterable/BaseItem",null);
+        MethodVisitor m=w.visitMethod(Opcodes.ACC_PUBLIC,"<init>","(Ljava/lang/String;)V",null,null);m.visitCode();
+        m.visitVarInsn(Opcodes.ALOAD,0);m.visitVarInsn(Opcodes.ALOAD,1);
+        m.visitMethodInsn(Opcodes.INVOKESPECIAL,"other/iterable/BaseItem","<init>","(Ljava/lang/String;)V",false);
+        m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
+    }
+
+    private static byte[] iterableContent(){
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,"other/iterable/Content",null,"java/lang/Object",null);
+        w.visitField(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"ALL","Ljava/util/List;",null,null).visitEnd();
+        w.visitField(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"FIRST","Lnet/minecraft/item/Item;",null,null).visitEnd();
+        w.visitField(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"SECOND","Lnet/minecraft/item/Item;",null,null).visitEnd();
+        MethodVisitor m=w.visitMethod(Opcodes.ACC_STATIC,"<clinit>","()V",null,null);m.visitCode();
+        m.visitTypeInsn(Opcodes.NEW,"java/util/ArrayList");m.visitInsn(Opcodes.DUP);
+        m.visitMethodInsn(Opcodes.INVOKESPECIAL,"java/util/ArrayList","<init>","()V",false);
+        m.visitFieldInsn(Opcodes.PUTSTATIC,"other/iterable/Content","ALL","Ljava/util/List;");
+        m.visitTypeInsn(Opcodes.NEW,"other/iterable/BaseItem");m.visitInsn(Opcodes.DUP);m.visitLdcInsn("alpha");
+        m.visitMethodInsn(Opcodes.INVOKESPECIAL,"other/iterable/BaseItem","<init>","(Ljava/lang/String;)V",false);
+        m.visitFieldInsn(Opcodes.PUTSTATIC,"other/iterable/Content","FIRST","Lnet/minecraft/item/Item;");
+        m.visitTypeInsn(Opcodes.NEW,"other/iterable/ChildItem");m.visitInsn(Opcodes.DUP);m.visitLdcInsn("beta");
+        m.visitMethodInsn(Opcodes.INVOKESPECIAL,"other/iterable/ChildItem","<init>","(Ljava/lang/String;)V",false);
+        m.visitFieldInsn(Opcodes.PUTSTATIC,"other/iterable/Content","SECOND","Lnet/minecraft/item/Item;");
+        m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
+    }
+
+    private static byte[] iterableBootstrap(){
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,"other/iterable/Bootstrap",null,"java/lang/Object",null);
+        MethodVisitor h=w.visitMethod(Opcodes.ACC_PRIVATE|Opcodes.ACC_STATIC,"registerAll","()V",null,null);h.visitCode();
+        h.visitFieldInsn(Opcodes.GETSTATIC,"other/iterable/Content","ALL","Ljava/util/List;");
+        h.visitMethodInsn(Opcodes.INVOKEINTERFACE,"java/util/List","iterator","()Ljava/util/Iterator;",true);
+        h.visitVarInsn(Opcodes.ASTORE,0);
+        org.objectweb.asm.Label loop=new org.objectweb.asm.Label(),end=new org.objectweb.asm.Label();
+        h.visitLabel(loop);h.visitVarInsn(Opcodes.ALOAD,0);
+        h.visitMethodInsn(Opcodes.INVOKEINTERFACE,"java/util/Iterator","hasNext","()Z",true);h.visitJumpInsn(Opcodes.IFEQ,end);
+        h.visitVarInsn(Opcodes.ALOAD,0);h.visitMethodInsn(Opcodes.INVOKEINTERFACE,"java/util/Iterator","next","()Ljava/lang/Object;",true);
+        h.visitTypeInsn(Opcodes.CHECKCAST,"net/minecraft/item/Item");h.visitVarInsn(Opcodes.ASTORE,1);
+        h.visitVarInsn(Opcodes.ALOAD,1);h.visitVarInsn(Opcodes.ALOAD,1);
+        h.visitMethodInsn(Opcodes.INVOKEVIRTUAL,"net/minecraft/item/Item","getUnlocalizedName","()Ljava/lang/String;",false);
+        h.visitInsn(Opcodes.ICONST_5);h.visitMethodInsn(Opcodes.INVOKEVIRTUAL,"java/lang/String","substring","(I)Ljava/lang/String;",false);
+        h.visitMethodInsn(Opcodes.INVOKESTATIC,"cpw/mods/fml/common/registry/GameRegistry","registerItem",
+                "(Lnet/minecraft/item/Item;Ljava/lang/String;)V",false);
+        h.visitJumpInsn(Opcodes.GOTO,loop);h.visitLabel(end);h.visitInsn(Opcodes.RETURN);h.visitMaxs(0,0);h.visitEnd();
+
+        MethodVisitor m=w.visitMethod(Opcodes.ACC_PUBLIC,"preInit","(Lcpw/mods/fml/common/event/FMLPreInitializationEvent;)V",null,null);
+        AnnotationVisitor av=m.visitAnnotation("Lcpw/mods/fml/common/Mod$EventHandler;",true);av.visitEnd();m.visitCode();
+        m.visitMethodInsn(Opcodes.INVOKESTATIC,"other/iterable/Bootstrap","registerAll","()V",false);
+        m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
     }
 
     private static Path createLegacyJar(
