@@ -55,6 +55,26 @@ class LegacyEquipmentRenderPassTest {
         }
     }
 
+    @Test void mixedCaseSourceEquipmentResourcesAreCanonicalizedBeforeCodegen() throws Exception {
+        ConversionContext context=prepare("alchemy",true);
+        Path assets=context.stagingDir().resolve("assets/alchemy");
+        Files.move(assets.resolve("models"),assets.resolve("Models"));
+        Files.move(assets.resolve("textures"),assets.resolve("Textures"));
+
+        new LegacyEquipmentRenderPass().apply(context);
+
+        assertTrue(item(context).has("sourceEquipmentProgram"));
+        assertTrue(Files.isRegularFile(assets.resolve("models/relic.obj")));
+        assertTrue(Files.isRegularFile(assets.resolve("textures/relic.png")));
+        try(var children=Files.list(assets)){
+            var names=children.map(p->p.getFileName().toString()).toList();
+            assertTrue(names.contains("models"));
+            assertTrue(names.contains("textures"));
+            assertFalse(names.contains("Models"));
+            assertFalse(names.contains("Textures"));
+        }
+    }
+
     @Test void missingSourceTextureKeepsExistingFallbackAndDiagnosesTheFailure() throws Exception {
         ConversionContext context = prepare("alchemy", false);
         new LegacyEquipmentRenderPass().apply(context);
