@@ -156,16 +156,21 @@ public final class LegacyItemRenderPass implements ConversionPass {
         return emitted;
     }
 
-    private static String materializeCaseExactResource(Path staging,String id)throws IOException{
+    static String materializeCaseExactResource(Path staging,String id)throws IOException{
         if(id==null)return null;int split=id.indexOf(':');if(split<=0||split==id.length()-1)return null;
         String namespace=id.substring(0,split),path=id.substring(split+1).replace('\\','/');
         if(path.startsWith("/")||path.contains(".."))return null;
         String canonicalNamespace=namespace.toLowerCase(Locale.ROOT),canonicalPath=path.toLowerCase(Locale.ROOT);
         Path assets=staging.resolve("assets").toAbsolutePath().normalize();
-        Path target=assets.resolve(canonicalNamespace).resolve(canonicalPath).normalize();
+        if(!Files.isDirectory(assets))return null;
+        String desiredRelative=canonicalNamespace+"/"+canonicalPath;
+        Path target=assets.resolve(desiredRelative).normalize();
         if(!target.startsWith(assets))return null;
-        if(Files.isRegularFile(target))return canonicalNamespace+":"+canonicalPath;
-        String expected=(namespace+"/"+path).toLowerCase(Locale.ROOT);
+
+        // Existence through the lowercase path is not proof that the entry spelling is lowercase.
+        // Windows can resolve items3d/x.obj to an existing items3D/x.obj, but the later ZIP and
+        // Minecraft ResourceManager are case-sensitive. Recover the real spelling before packing.
+        String expected=desiredRelative.toLowerCase(Locale.ROOT);
         List<Path> matches;
         try(var walk=Files.walk(assets)){
             matches=walk.filter(Files::isRegularFile)
@@ -173,9 +178,51 @@ public final class LegacyItemRenderPass implements ConversionPass {
                     .toList();
         }
         if(matches.size()!=1)return null;
-        Files.createDirectories(target.getParent());
-        Files.copy(matches.getFirst(),target,StandardCopyOption.REPLACE_EXISTING);
-        return canonicalNamespace+":"+canonicalPath;
+        Path source=matches.getFirst();
+        String actualRelative=assets.relativize(source).toString().replace('\\','/');
+        if(!actualRelative.equals(desiredRelative))normalizePathSpelling(assets,actualRelative,desiredRelative);
+        return Files.isRegularFile(target)?canonicalNamespace+":"+canonicalPath:null;
+    }
+
+    /**
+     * Canonicalizes each path component. A temporary sibling hop is required for a case-only rename
+     * when the old and new names resolve to the same entry on a case-insensitive filesystem.
+     */
+    private static void normalizePathSpelling(Path root,String actualRelative,String desiredRelative)throws IOException{
+        String[] actual=actualRelative.split("/"),desired=desiredRelative.split("/");
+        if(actual.length!=desired.length)throw new IOException(
+                "Resource canonicalization shape mismatch: "+actualRelative+" -> "+desiredRelative);
+        Path parent=root;
+        for(int i=0;i<actual.length;i++){
+            String fromName=actual[i],toName=desired[i];
+            Path from=parent.resolve(fromName),to=parent.resolve(toName);
+            if(fromName.equals(toName)){parent=to;continue;}
+            if(!Files.exists(from))throw new IOException("Resource disappeared during canonicalization: "+from);
+            if(Files.exists(to)){
+                boolean same;
+                try{same=Files.isSameFile(from,to);}catch(IOException ignored){same=false;}
+                if(!same)throw new IOException("Case-fold resource collision: "+from+" <-> "+to);
+            }
+            Path temporary=temporaryCasePath(parent,fromName,toName,i);
+            Files.move(from,temporary,StandardCopyOption.REPLACE_EXISTING);
+            try{
+                Files.move(temporary,to,StandardCopyOption.REPLACE_EXISTING);
+            }catch(IOException failure){
+                try{Files.move(temporary,from,StandardCopyOption.REPLACE_EXISTING);}
+                catch(IOException restore){failure.addSuppressed(restore);}
+                throw failure;
+            }
+            parent=to;
+        }
+    }
+
+    private static Path temporaryCasePath(Path parent,String fromName,String toName,int depth)throws IOException{
+        String base=".lfb-case-normalize-"+Integer.toUnsignedString(Objects.hash(fromName,toName,depth),16);
+        for(int attempt=0;attempt<1024;attempt++){
+            Path candidate=parent.resolve(attempt==0?base:base+"-"+attempt);
+            if(!Files.exists(candidate))return candidate;
+        }
+        throw new IOException("Unable to reserve temporary case-normalization path under "+parent);
     }
 
     private record ResourcePair(String model,String texture) { }
