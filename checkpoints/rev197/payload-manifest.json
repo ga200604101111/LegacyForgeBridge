@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "sha256": "5546477781d2127b5d881902ed4cb19a46e896650dd55bf8b967f7139eb2680f",
+  "decompressed_bytes": 128834,
+  "parts": [
+    "source-and-tests.json.xz.00",
+    "source-and-tests.json.xz.01",
+    "source-and-tests.json.xz.02",
+    "source-and-tests.json.xz.03",
+    "source-and-tests.json.xz.04"
+  ]
+}

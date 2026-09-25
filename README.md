@@ -2,22 +2,22 @@
 
 LegacyForgeBridge is an experimental Fabric 1.21.11 compatibility and conversion layer for legacy Minecraft Forge 1.7.10 mods.
 
-## Latest delivered local build: rev196
+## Latest delivered local build: rev197
 
-Main replacement: `legacyforgebridge-0.2.0-alpha.27-rev196.jar` (3,729,098 bytes).
-SHA-256: `1ab2c04282987fd67b1ddea4d9e66ff3563e1fd227464e06e57bb35264152f9e`.
+Main replacement: `legacyforgebridge-0.2.0-alpha.27-rev197.jar` (3,736,135 bytes).
+SHA-256: `e3c28cccbe3fab0b6ac2d003ad26a7e3565a6bf38f22bd4c1b1544b109a885c5`.
 
-rev196 removes an extra world-local tray scale, restores source-proven white spa steam, adds VillagerBlock head/nose and client-motion presentation, and waits for a real server-returned written book before opening the cookbook. It retains the rev195 Property/world-clock fixes. Do not use rev194, which has a confirmed GridPot JVM VerifyError. No separate hotfix mod is required. Preserve dependencies, settings and `old-mods`; regenerate converted output and restart the client.
+rev197 fixes repeated reading after the cookbook becomes a real written book, replaces its exact return-method fingerprint with bounded symbolic recognition, and hardens shared source/FML identity, version, alias and numeric-map handling. Existing rev195 ABI and rev196 presentation changes remain. Do not use rev194, which has a confirmed GridPot VerifyError. No separate hotfix mod is required. Preserve dependencies, settings and old-mods; regenerate converted output and restart.
 
-**Scope:** VillagerBlock gameplay is not complete; spa water still has its distinct source identity and full vanilla fluid-renderer parity is not certified. Cookbook inventory replacement requires the remote server. No invented recipe pages or dummy inventory are used.
+**Genericity is limited:** many renderer/menu/steam/head families still use constrained source templates. The dormant RPGTool1 profile is not selected by the default engine but still exists. Successful handshake is not universal mod compatibility. Read the [genericity and identity audit](checkpoints/rev197/Generality-Audit.zh-TW.md).
 
-**Source storage note:** this branch retains rev189-196 in source checkpoints; the root `src/` tree is still the rev188 base. Do not compile that old tree and label it rev196. Restore all revisions into a new directory first:
+**Source storage note:** rev189-197 remain in cumulative source checkpoints; root src is the rev188 base. Do not compile that old tree and label it rev197. Restore into a new directory outside this checkout:
 
 ```sh
-python checkpoints/rev196/restore.py --output ../LegacyForgeBridge-rev196
+python checkpoints/rev197/restore.py --output ../LegacyForgeBridge-rev197
 ```
 
-See [rev196 implementation, local verification and limitations](checkpoints/rev196/README.md). Local targeted compilation, 232 recording-fixture assertions, 17 source-mutation/contract assertions and an independent identical rebuild passed. The 17 related conversion passes completed with PARTIAL status; the entire engine could not run locally without the Mojang DFU dependency. This is NOT a full Gradle/Loom build, Minecraft/Fabric/Mixin launch or live server certification. Optional GridPot insertion conflicts remain unchanged. No Actions build was requested.
+See [rev197 changes, local verification and limits](checkpoints/rev197/README.md). Targeted local compilation, old-release negative controls, 391 checks plus 17 source-mutation/contract assertions and an identical fresh rebuild passed. The 17 selected conversion passes remain PARTIAL. No complete Gradle/Loom build, actual Minecraft/Fabric/Mixin launch or live server test was performed. Optional GridPot insertion conflict and previously incomplete gameplay remain unresolved. No Actions build was requested.
 
 ## Project goals
 
