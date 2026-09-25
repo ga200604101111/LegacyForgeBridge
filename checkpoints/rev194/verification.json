@@ -1,0 +1,43 @@
+{
+  "revision": "2026-09-25.194-furniture-world-presentation-and-remote-menus",
+  "artifact": "legacyforgebridge-0.2.0-alpha.27-rev194.jar",
+  "sha256": "5cc1cdd4ef617150e87af5e607c0b56241f067853ef63a527efcaf2302e42376",
+  "size_bytes": 3702402,
+  "changed_class_count": 45,
+  "exact_base_sha256": "840fb56d7cd8013b3c813fd3d0f4781acd4e571abd105d4be512c99046ec8cc8",
+  "git_parent": "8cd565af7307a420386571ee1673dbc388ce1c3c",
+  "build": "local JDK 21 incremental javac and checksum-guarded host method transplantation",
+  "deterministic_packaging_repeat": true,
+  "full_gradle_loom_build": false,
+  "minecraft_launch_test": false,
+  "github_actions_used": false,
+  "standalone_hotfix_required": false,
+  "source_checkpoint": {
+    "source_patch_sha256": "a5aaf12636babfba0fa295071fad06b771015ee7d9fbed46fee9ea110fc116b9",
+    "payload_sha256": "e3dbf587ae262c817bcd708fef23641fc3d69888b446774772eb64f0ef43e3db",
+    "payload_size": 26604,
+    "source_patch_bytes": 62779,
+    "changed_java_files": 22,
+    "ordered_parts": ["source-delta.json.xz.part00", "source-delta.json.xz.part01", "source-delta.json.xz.part02", "source-delta.json.xz.part03", "source-delta.json.xz.part04"]
+  },
+  "verification": {
+    "recording_assertions": 176,
+    "source_mutation_contract_assertions": 25,
+    "selected_conversion_passes": 19,
+    "selected_conversion_status": "PARTIAL",
+    "visible_entity_rules": 6,
+    "remote_menu_rules": 1,
+    "remote_menu_slots": 47,
+    "asm_classes": 45,
+    "asm_methods": 448,
+    "unchanged_base_entries": 1408,
+    "isolated_source_delta_files": 22
+  },
+  "limitations": [
+    "No full clean Gradle/Loom build",
+    "No Minecraft/Fabric/Mixin launch",
+    "No live complete ViaVersion inventory packet pipeline verification",
+    "Optional GridPot insertion predicate conflict is not changed",
+    "Source stored in cumulative checkpoints; root src remains rev188"
+  ]
+}

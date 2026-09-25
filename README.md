@@ -2,17 +2,17 @@
 
 LegacyForgeBridge is an experimental Fabric 1.21.11 compatibility and conversion layer for legacy Minecraft Forge 1.7.10 mods.
 
-## Latest delivered local build: rev193
+## Latest delivered local build: rev194
 
-The latest locally delivered replacement is `legacyforgebridge-0.2.0-alpha.27-rev193.jar`. It integrates vanilla tray/pot display-stack handling into the main bridge; the old `lfb_visual_stack_hotfix` add-on is no longer needed and must be removed.
+The latest locally delivered replacement is `legacyforgebridge-0.2.0-alpha.27-rev194.jar`. It integrates tray item height/camera-facing presentation, world-model pot contents, source-proven wind-chime rendering, initial client block-entity hydration and source-proven remote campfire GUI dispatch into the main bridge. Remove the obsolete `lfb_visual_stack_hotfix` add-on. Preserve `old-mods`; complete conversion and restart before testing the new contracts.
 
-**Source storage note:** this branch currently retains rev189–193 in checksum-verified source checkpoints; the root `src/` tree is still the rev188 base. Do not build that old tree and label it rev193. Restore all revisions into a new directory first:
+**Source storage note:** this branch retains rev189–194 in checksum-verified source checkpoints; the root `src/` tree is still the rev188 base. Do not build that old tree and label it rev194. Restore all revisions into a new directory first:
 
 ```sh
-python checkpoints/rev193/restore.py --output ../LegacyForgeBridge-rev193
+python checkpoints/rev194/restore.py --output ../LegacyForgeBridge-rev194
 ```
 
-See [rev193 source, installation and validation boundaries](checkpoints/rev193/README.md). The local build was incremental, not a full clean Gradle/Loom or Minecraft integration run. Wind chimes and campfire GUI dispatch remain unresolved. No new Actions build was requested.
+See [rev194 source, installation and validation boundaries](checkpoints/rev194/README.md). Local incremental JDK 21 compilation, recording-double tests and selected source-conversion checks passed. This is not a full clean Gradle/Loom build, Minecraft/Fabric/Mixin launch or live complete inventory packet-pipeline certification. The selected Bamboo pipeline remains PARTIAL. Optional GridPot insertion-predicate conflicts are not changed. No new Actions build was requested.
 
 ## Project goals
 
