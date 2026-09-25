@@ -1,0 +1,81 @@
+{
+  "artifact": "legacyforgebridge-0.2.0-alpha.27-rev196.jar",
+  "sha256": "1ab2c04282987fd67b1ddea4d9e66ff3563e1fd227464e06e57bb35264152f9e",
+  "size_bytes": 3729098,
+  "revision": "2026-09-25.196-source-scale-steam-head-and-books",
+  "input_sha256": "5187fbbefa1adb73a0ca9b94d96552636619dec98acdbcf2b240e1da849e627e",
+  "git_parent": "8d1dc371a5d30073c896ce6da2e0f907985d5c9e",
+  "branch": "feature/generic-conversion-bamboo-corpus2",
+  "changed_entries": [
+    "dev/yinghuang/legacyforgebridge/BuildInfo.class",
+    "dev/yinghuang/legacyforgebridge/compat/LegacyInertModelBlockRegistry.class",
+    "dev/yinghuang/legacyforgebridge/convert/LegacyConversionEngine.class",
+    "dev/yinghuang/legacyforgebridge/mixin/client/LegacyRandomDisplayParticleMixin.class",
+    "dev/yinghuang/legacyforgebridge/render/ConvertedLegacyInertModelRenderer$State.class",
+    "dev/yinghuang/legacyforgebridge/render/ConvertedLegacyInertModelRenderer.class",
+    "dev/yinghuang/legacyforgebridge/render/ConvertedLegacyInertModelSpecialRenderer.class",
+    "dev/yinghuang/legacyforgebridge/render/ConvertedLegacyVisualEntityRenderer.class",
+    "dev/yinghuang/legacyforgebridge/render/ConvertedLiquidPresentationRuntime.class",
+    "dev/yinghuang/legacyforgebridge/render/LegacyFurnitureVisualMath.class"
+  ],
+  "added_entries": [
+    "legacyforgebridge/auxiliary-instruction-shapes.json",
+    "dev/yinghuang/legacyforgebridge/compat/LegacyAuxiliaryPresentationSpec.class",
+    "dev/yinghuang/legacyforgebridge/compat/LegacyAuxiliaryPresentationSpec$HeadMotion.class",
+    "dev/yinghuang/legacyforgebridge/compat/LegacyAuxiliaryPresentationSpec$Box.class",
+    "dev/yinghuang/legacyforgebridge/compat/LegacyAuxiliaryPresentationSpec$Rule.class",
+    "dev/yinghuang/legacyforgebridge/compat/LegacyAuxiliaryPresentationSpec$Family.class",
+    "dev/yinghuang/legacyforgebridge/convert/LegacyAuxiliaryPresentationAnalyzer.class",
+    "dev/yinghuang/legacyforgebridge/convert/LegacyAuxiliaryPresentationAnalyzer$Entry.class",
+    "dev/yinghuang/legacyforgebridge/convert/LegacyAuxiliaryPresentationAnalyzer$Analysis.class",
+    "dev/yinghuang/legacyforgebridge/convert/LegacyInstructionShape.class",
+    "dev/yinghuang/legacyforgebridge/convert/pass/LegacyAuxiliaryPresentationPass.class",
+    "dev/yinghuang/legacyforgebridge/compat/LegacyAuxiliaryPresentationRegistry.class",
+    "dev/yinghuang/legacyforgebridge/render/LegacyAuxiliaryClientPresentation.class",
+    "dev/yinghuang/legacyforgebridge/render/LegacyAuxiliaryClientPresentation$PendingBook.class"
+  ],
+  "unchanged_entries": 1444,
+  "standalone_hotfix_required": false,
+  "github_actions_used": false,
+  "full_gradle_loom_build": false,
+  "minecraft_fabric_mixin_launch": false,
+  "live_server_test": false,
+  "fresh_directory_rebuild_identical": true,
+  "source_patch_files_checked": 17,
+  "source_patch_sha256": "bfb24dfb878f14aac5bd2db40f2e26ccee987b147621a3630cea3bca08e8286a",
+  "validation": {
+    "previous_recording_assertions": 176,
+    "new_recording_assertions": 56,
+    "source_mutation_contract_assertions": 17,
+    "source_class_rename_control": true,
+    "old_new_tray_radius_control": [0.175, 0.25],
+    "selected_conversion_pass_count": 17,
+    "selected_conversion_status": "PARTIAL",
+    "source_families_emitted": 3,
+    "asm": {
+      "asm_basic_verifier_classes": 23,
+      "asm_basic_verifier_methods": 180,
+      "internal_member_references_checked": 892,
+      "internal_member_errors": 0
+    },
+    "targeted_abi_audit": {
+      "classes_scanned": 1452,
+      "property_presence_calls_checked": 14,
+      "current_world_clock_calls_checked": 4,
+      "invalid_targeted_calls": 0,
+      "asm_checked_changed_classes": 23,
+      "asm_checked_changed_methods": 180,
+      "scope": "Targeted two-family ABI scan; not universal Minecraft member/linkage verification"
+    },
+    "property_and_world_clock_195_regressions_passed": true
+  },
+  "limitations": [
+    "All runtime checks use explicitly declared API fixtures, not actual Minecraft/Fabric/Mixin networking or rendering.",
+    "Full conversion-engine run could not complete locally because com.mojang.serialization.DynamicOps (DFU dependency) is absent; the 17 related selected passes did complete.",
+    "Steam branch restored, not complete old underwater motes/drips/dyed-water visuals or vanilla fluid renderer parity.",
+    "VillagerBlock fixes cover head/nose visuals, metadata-driven spin/hearts and client stick acceleration, not complete trading/inventory/ritual/local-server gameplay.",
+    "Cookbook requires the remote server to return a real written_book; live inventory replacement and book UI not tested.",
+    "Optional GridPot insertion routing conflict remains unchanged.",
+    "Root src is still rev188; restore cumulative checkpoints before source builds."
+  ]
+}

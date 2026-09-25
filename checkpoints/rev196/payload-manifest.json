@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "sha256": "5799132c1919c67dd863837d739a944874ccffe62ca4c08a4870f90527802ffa",
+  "decompressed_bytes": 312599,
+  "parts": [
+    "payload.json.xz.00",
+    "payload.json.xz.01",
+    "payload.json.xz.02",
+    "payload.json.xz.03",
+    "payload.json.xz.04",
+    "payload.json.xz.05",
+    "payload.json.xz.06"
+  ]
+}
