@@ -2,17 +2,19 @@
 
 LegacyForgeBridge is an experimental Fabric 1.21.11 compatibility and conversion layer for legacy Minecraft Forge 1.7.10 mods.
 
-## Latest delivered local build: rev194
+## Latest delivered local build: rev195
 
-The latest locally delivered replacement is `legacyforgebridge-0.2.0-alpha.27-rev194.jar`. It integrates tray item height/camera-facing presentation, world-model pot contents, source-proven wind-chime rendering, initial client block-entity hydration and source-proven remote campfire GUI dispatch into the main bridge. Remove the obsolete `lfb_visual_stack_hotfix` add-on. Preserve `old-mods`; complete conversion and restart before testing the new contracts.
+**Do not use rev194: its GridPot renderer has a confirmed JVM VerifyError.** The replacement is `legacyforgebridge-0.2.0-alpha.27-rev195.jar`, SHA-256 `e5e7a60ae49ee1b934badd9e791c82ae13fd4d20c15877619a2caa39d9c2ec78`.
 
-**Source storage note:** this branch retains rev189–194 in checksum-verified source checkpoints; the root `src/` tree is still the rev188 base. Do not build that old tree and label it rev194. Restore all revisions into a new directory first:
+rev195 corrects the Property/BooleanProperty ABI error in the locally compiled GridPot renderer and an obsolete world-clock method in the suspended-model renderer. Only the two extraction bodies and BuildInfo change; 1,451 other archive entries are retained byte-for-byte. No companion hotfix mod is required. Preserve `old-mods`, dependencies and settings; finish conversion and restart when requested.
+
+**Source storage note:** this branch retains rev189-195 in source checkpoints; the root `src/` tree is still the rev188 base. Do not build that old tree and label it rev195. Restore all revisions into a new directory first:
 
 ```sh
-python checkpoints/rev194/restore.py --output ../LegacyForgeBridge-rev194
+python checkpoints/rev195/restore.py --output ../LegacyForgeBridge-rev195
 ```
 
-See [rev194 source, installation and validation boundaries](checkpoints/rev194/README.md). Local incremental JDK 21 compilation, recording-double tests and selected source-conversion checks passed. This is not a full clean Gradle/Loom build, Minecraft/Fabric/Mixin launch or live complete inventory packet-pipeline certification. The selected Bamboo pipeline remains PARTIAL. Optional GridPot insertion-predicate conflicts are not changed. No new Actions build was requested.
+See [rev195 source, JVM regressions and validation boundaries](checkpoints/rev195/README.md). Both old-release defects are reproduced with corrected documented API fixtures; rev195 passes the corresponding negative/positive controls and 176 recording-fixture assertions. The local targeted rebuild is NOT a full Gradle/Loom build, Minecraft/Fabric/Mixin launch or live server certification. Optional GridPot insertion conflicts remain unchanged. No Actions build was requested.
 
 ## Project goals
 
