@@ -1,0 +1,20 @@
+{
+  "patch_sha256": "8560db39b4a306804798bdce0b5c1022d865833d2692fc0840d8a44140649254",
+  "files": [
+    {
+      "path": "src/main/java/dev/yinghuang/legacyforgebridge/convert/LegacyRegistryAnalyzer.java",
+      "before_sha256": "5edff7798d2ad88676dc1b930c9bbbd5eaf7e09a6648ae5edd5d6cdd03d60b55",
+      "after_sha256": "16677f67562c0823fb1a9889d128959854223eaecf9c206f7803c1adf20b76f5"
+    },
+    {
+      "path": "src/main/java/dev/yinghuang/legacyforgebridge/convert/LegacyBehaviorCompiler.java",
+      "before_sha256": "bf28e11b40ea6d5cf5ae77c98795332b7fc1ac51f24e9a2cb64a8c98147094b2",
+      "after_sha256": "436dde16d8769aad5dcd21a98b795ffa32547a9353912bade7689b7b5bd8b3f6"
+    },
+    {
+      "path": "src/main/java/dev/yinghuang/legacyforgebridge/BuildInfo.java",
+      "before_sha256": "3ebc663a650e3b2615b15fe7070f34095105cb07bbc4ce39edc7cd8fc094127c",
+      "after_sha256": "f672dcc7be6ab240b4aceb4c998231025d6f448478c516091a079b53ec136b00"
+    }
+  ]
+}

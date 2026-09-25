@@ -1,0 +1,76 @@
+{
+  "repository": "ga200604101111/LegacyForgeBridge",
+  "main_merge_pr": 17,
+  "main_merge_commit": "912cb905ce61e97ccdd6e54e2a5a26b3b6ae8c5f",
+  "branch": "feature/generic-conversion-iyamato-corpus3",
+  "baseline_revision": "rev197",
+  "experimental_revision": "rev198",
+  "source_inventory": {
+    "source_file": "iYAMATOs-Mod-1.7.10.jar",
+    "source_sha256": "35a79ca5a034fd6cda4fe4ee1f658c4ce058f9b7ec026516e76363ebdf89635e",
+    "source_bytes": 1029340,
+    "class_count": 243,
+    "png_count": 157,
+    "entity_mob_classes": 30,
+    "entity_weapon_helper_classes": 24,
+    "manifest": "Manifest-Version: 1.0"
+  },
+  "metadata": {
+    "sourceFileName": "iYAMATOs-Mod-1.7.10.jar",
+    "metadataSource": "forge-mod-annotation+mcmod.info",
+    "mods": [{"modId": "iymts_mod", "name": "iYAMATO's mod", "version": "1.7.10-1.6.8", "mcVersion": "1.7.10", "dependencies": []}]
+  },
+  "old_registry": {"items": 99, "blocks": 0},
+  "new_registry": {"items": 99, "blocks": 4, "field_bindings": 103},
+  "diagnostic_trial": {
+    "sourceFile": "iYAMATOs-Mod-1.7.10.jar",
+    "sourceSha256": "35a79ca5a034fd6cda4fe4ee1f658c4ce058f9b7ec026516e76363ebdf89635e",
+    "converterRevision": "2026-09-26.198-generic-block-names-and-bootstrap-arguments",
+    "runner": "diagnostic-only released plan with explicit host dependency omission",
+    "completeEngine": false,
+    "installable": false,
+    "gameLaunch": false,
+    "liveServerTest": false,
+    "fullPlanSize": 105,
+    "completedPasses": 104,
+    "passFailure": false,
+    "diagnosticStatus": "PARTIAL"
+  },
+  "presentation": {"source_proven_icon_defaults": 0, "unresolved_models": 103, "admitted_entity_rules": 0, "skipped_entity_registrations": 54, "behavior_item_bindings": 19, "behavior_diagnostics": 163},
+  "source_patch_sha256": "8560db39b4a306804798bdce0b5c1022d865833d2692fc0840d8a44140649254",
+  "limitations": [
+    "No complete iYAMATO converted mod is delivered. Model, entity and weapon-specific client behavior remain unimplemented.",
+    "The released full conversion engine stopped at a missing real Mojang Codec dependency in this container. The diagnostic runner deliberately omits only LegacyRecipeMaterializationPass and forces installable=false.",
+    "104 completed diagnostic pass calls are not 104 implemented feature families; many passes emit exclusions or no matching rules.",
+    "Opaque/symbolic non-literal constructor arguments are rejected per binding rather than replaced with fake materials; rejection is not full armor/tool support.",
+    "New block name extraction supports literal/ConstantValue names, verified direct/source-inherited Block methods, direct/static-field/helper argument paths. Reference locals, unknown hierarchy, overrides, dynamic name/index expressions remain unproven.",
+    "No complete Gradle/Loom build, actual Minecraft/Fabric/Mixin launch, live server test, or new RPGTool1 source-regression run.",
+    "Main remains the merged rev197 baseline. Rev198 changes are confined to the new branch. Source root still requires cumulative checkpoint restoration."
+  ],
+  "github_actions_build_requested": false,
+  "artifact": {
+    "artifact": "legacyforgebridge-0.2.0-alpha.27-rev198-experimental.jar",
+    "sha256": "0208f6d22e19875bbbff52d8d65fef2ebfb455866fff548ba72b64f4cf31cdb9",
+    "sizeBytes": 3735329,
+    "baseSha256": "e3c28cccbe3fab0b6ac2d003ad26a7e3565a6bf38f22bd4c1b1544b109a885c5",
+    "unchangedEntries": 1446,
+    "fullGradleLoomBuild": false,
+    "minecraftLaunch": false,
+    "liveServerTest": false,
+    "apiFixturesUsed": false,
+    "sourceModExecuted": false
+  },
+  "validation": {
+    "new_block_name_assertions": 74,
+    "new_constructor_argument_assertions": 27,
+    "old_constructor_verify_error_reproduced": true,
+    "baseline_source_semantic_checks": 36,
+    "release_checks": {"normalizedBaselineClassesEqual": 36, "checkedChangedOrAddedClasses": 29, "basicVerifierMethods": 255, "preservedExposedMembers": 128, "jvmVerifiedPureClasses": 29, "unchangedArchiveEntries": 1446, "actualMinecraftLinkageChecked": false},
+    "bamboo_regression": {"registry_analysis_equal": true, "registrations": 100, "field_bindings": 99, "behavior_analysis_equal": true, "item_bindings": 87, "event_bindings": 3, "generated_classes_byte_identical": 40, "full_bamboo_game_test": false},
+    "independent_rebuild_byte_identical": true,
+    "source_patch_files_verified": 3,
+    "full_checkpoint_restore_executed_this_revision": false,
+    "compressed_payload_check": {"compressed_payloads_validated": 2, "source_files_applied_and_hash_verified": 3, "validation_source_files_byte_identical": 8, "path_escape_negative_controls": 3, "full_cumulative_restore": false},
+    "compressed_payload_targeted_rebuild_identical": true
+  }
+}

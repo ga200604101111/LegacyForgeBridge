@@ -1,0 +1,7 @@
+{
+  "source_patch_compressed_sha256": "b324ebd577b568351be00b4e2338428702211cc00f2459970876c2ffb8d6b446",
+  "source_patch_decompressed_sha256": "8560db39b4a306804798bdce0b5c1022d865833d2692fc0840d8a44140649254",
+  "validation_compressed_sha256": "dcd9657fa8d3ead42169a711adc3ebf8bc93bca07996fff56f4cb5f962095197",
+  "validation_files": 8,
+  "validation_decompressed_bytes": 31431
+}
