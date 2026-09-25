@@ -1,0 +1,94 @@
+@@ -91,13 +98,16 @@ public final class LegacyBlockGeometryPass implements ConversionPass {
+     }
+     private static boolean placeholder(JsonObject o){return o.size()==1&&o.has("parent")&&Set.of("minecraft:item/barrier","minecraft:block/magenta_glazed_terracotta").contains(o.get("parent").getAsString());}
+     public static JsonObject model(List<LegacyGeometry.Box> boxes,List<String> sprites) {
++        return faceModel(LegacyGeometry.surfaces(boxes),sprites);
++    }
++    public static JsonObject faceModel(List<LegacyGeometry.Face> surface,List<String> sprites) {
+         if(sprites.size()!=6)throw new IllegalArgumentException("Six source face sprites required");
+         JsonObject model=new JsonObject(),textures=new JsonObject();model.addProperty("parent","minecraft:block/block");
+         for(int side=0;side<6;side++)textures.addProperty(FACES.get(side),sprites.get(side));textures.addProperty("particle",sprites.getFirst());model.add("textures",textures);
+         JsonArray elements=new JsonArray();
+         // Surface quads are represented as zero-thickness elements. This avoids coplanar internal
+         // stair faces while retaining vanilla GUI/first-/third-person block transforms.
+-        for(var quad:LegacyGeometry.surfaces(boxes)) {
++        for(var quad:surface) {
+             List<Double> pos=quad.positions();double[] lo={1,1,1},hi={0,0,0};
+             for(int v=0;v<4;v++)for(int axis=0;axis<3;axis++){double n=pos.get(v*3+axis);lo[axis]=Math.min(lo[axis],n);hi[axis]=Math.max(hi[axis],n);}
+             JsonObject element=new JsonObject(),faces=new JsonObject(),face=new JsonObject();JsonArray from=new JsonArray(),to=new JsonArray();for(int axis=0;axis<3;axis++){from.add(lo[axis]*16);to.add(hi[axis]*16);}element.add("from",from);element.add("to",to);
+diff --git a/src/main/java/dev/yinghuang/legacyforgebridge/render/ConvertedGeometryClient.java b/src/main/java/dev/yinghuang/legacyforgebridge/render/ConvertedGeometryClient.java
+index 800d034e6ff13f1faf3825244efa22f025b8e157..eb8dbac19e2011f946d2798df4b04c93da4f448d 100644
+--- a/src/main/java/dev/yinghuang/legacyforgebridge/render/ConvertedGeometryClient.java
++++ b/src/main/java/dev/yinghuang/legacyforgebridge/render/ConvertedGeometryClient.java
+@@ -16,7 +16,7 @@ import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
+ import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+ import net.minecraft.core.BlockPos;
+ import net.minecraft.core.Direction;
+-import net.minecraft.tags.FluidTags;
++import net.minecraft.world.level.block.Blocks;
+ import net.minecraft.util.RandomSource;
+ import net.minecraft.world.level.BlockAndTintGetter;
+ import net.minecraft.world.level.block.state.BlockState;
+@@ -54,11 +54,11 @@ public final class ConvertedGeometryClient implements ClientModInitializer {
+             int meta=ConvertedLegacyBlock.legacyMeta(state);var variant=rule.variant(meta);
+             if(variant==null){super.emitQuads(emitter,world,pos,state,random,cullTest);return;}
+             List<LegacyGeometry.Face> faces;
+-            if(rule.pane()&&!variant.edges())faces=LegacyGeometry.curtainFaces(LegacyBlockGeometryRegistry.paneMask(world,pos,state));
++            if(rule.pane())faces=LegacyGeometry.paneFaces(LegacyBlockGeometryRegistry.paneMask(world,pos,state),variant.edges());
+             else faces=surfaces(LegacyBlockGeometryRegistry.boxes(rule,meta,world,pos,state));
+             Material[] chosen=materials;BlockState tintState=state;BlockPos tintPos=pos;
+             ChunkSectionLayer layer=ChunkSectionLayer.CUTOUT;
+-            if(rule.mimic()){
++            if(rule.mimic()&&variant.copyFace()>=0){
+                 Target target=referenced(world,pos,state);
+                 if(target!=null){
+                     BlockStateModel targetModel=Minecraft.getInstance().getBlockRenderer().getBlockModel(target.state());
+@@ -95,7 +95,9 @@ public final class ConvertedGeometryClient implements ClientModInitializer {
+             return variant==null?-2:variant.copyFace();
+         },(pos,face)->pos.relative(DIRECTIONS[face]),256);
+         if(target==null)return null;BlockState result=world.getBlockState(target);
+-        return result.isAir()||result.getFluidState().is(FluidTags.WATER)?null:new Target(target,result);
++        // A waterlogged solid is still a material source. Checking its fluid state would
++        // incorrectly reject waterlogged stairs/slabs/panes as though the block were water.
++        return result.isAir()||result.is(Blocks.WATER)?null:new Target(target,result);
+     }
+ 
+     private static Material[] materials(BlockStateModel model){
+diff --git a/src/test/java/dev/yinghuang/legacyforgebridge/compat/MimicShapeRegressionChecks.java b/src/test/java/dev/yinghuang/legacyforgebridge/compat/MimicShapeRegressionChecks.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..cdeb731c960f8dbb6313d8bf93e80a1d3c2ef189
+--- /dev/null
++++ b/src/test/java/dev/yinghuang/legacyforgebridge/compat/MimicShapeRegressionChecks.java
+@@ -0,0 +1,88 @@
++package dev.yinghuang.legacyforgebridge.compat;
++
++import com.google.gson.*;
++import dev.yinghuang.legacyforgebridge.convert.pass.LegacyBlockGeometryPass;
++import java.util.*;
++
++/** Pure regression assertions; can also run with main without a game or a JUnit runner. */
++public final class MimicShapeRegressionChecks {
++    private MimicShapeRegressionChecks() { }
++    public static void main(String[] args) {
++        checkSchema();
++        checkGeometry();
++        System.out.println("PASS mimic material schema; 256 stair shapes; 32 pane/curtain meshes; held curtain");
++    }
++    public static void checkSchema() {
++        LegacyGeometrySpec.parse(spec("mimic_box", 0, null, null));
++        LegacyGeometrySpec.parse(spec("box", -1, null, null));
++        LegacyGeometrySpec.parse(spec("mimic_box", -1, "inventory_fallback", "Unproven source configuration"));
++        rejects(() -> LegacyGeometrySpec.parse(spec("mimic_box", -1, null, null)));
++        rejects(() -> LegacyGeometrySpec.parse(spec("mimic_box", -1, "inventory_fallback", null)));
++        rejects(() -> LegacyGeometrySpec.parse(spec("mimic_box", -1, "inventory_fallback", " ")));
++        rejects(() -> LegacyGeometrySpec.parse(spec("mimic_box", 0, "inventory_fallback", "reason")));
++        rejects(() -> LegacyGeometrySpec.parse(spec("box", -1, "inventory_fallback", "reason")));
++        rejects(() -> LegacyGeometrySpec.parse(spec("mimic_box", 0, "invented_mode", "reason")));
++        rejects(() -> LegacyGeometrySpec.parse(spec("mimic_box", -2, "inventory_fallback", "reason")));
++        rejects(() -> LegacyGeometrySpec.parse(spec("mimic_box", 6, null, null)));
++    }
++    public static void checkGeometry() {
++        for (int meta=0; meta<16; meta++) {
++            for (int mask=0; mask<16; mask++) {
++                var boxes=LegacyGeometry.stairs(meta, mask);
++                double volume=boxes.stream().mapToDouble(b -> (b.x1()-b.x0())*(b.y1()-b.y0())*(b.z1()-b.z0())).sum();

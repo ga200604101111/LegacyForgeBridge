@@ -1,0 +1,20 @@
+{
+  "key.legacyforgebridge.open_blocking_pose_config": "Open blocking-pose settings",
+  "legacyforgebridge.config.blocking_pose.title": "LegacyForgeBridge Blocking Pose",
+  "legacyforgebridge.config.blocking_pose.general": "General",
+  "legacyforgebridge.config.blocking_pose.first_person": "First Person",
+  "legacyforgebridge.config.blocking_pose.third_person": "Third Person",
+  "legacyforgebridge.config.blocking_pose.enabled": "Enable pose correction",
+  "legacyforgebridge.config.blocking_pose.enabled.tooltip": "Visual position and rotation only; Via behavior, packets, damage and blocking rules are unchanged.",
+  "legacyforgebridge.config.blocking_pose.mirror_left": "Mirror left hand",
+  "legacyforgebridge.config.blocking_pose.mirror_left.tooltip": "Mirrors X translation and Y/Z rotation for the left hand.",
+  "legacyforgebridge.config.blocking_pose.scope": "Applies to every non-shield item actively using the BLOCK animation, including vanilla/Via and converted mod weapons. Save applies immediately.",
+  "legacyforgebridge.config.blocking_pose.translation.tooltip": "First-person translation uses screen axes; third-person translation uses player/arm-local axes and turns with the character. X left/right, Y up/down, Z forward/back. Step 0.01.",
+  "legacyforgebridge.config.blocking_pose.rotation.tooltip": "Rotation values are degrees.",
+  "legacyforgebridge.config.blocking_pose.translation_x": "Position X (left/right)",
+  "legacyforgebridge.config.blocking_pose.translation_y": "Position Y (up/down)",
+  "legacyforgebridge.config.blocking_pose.translation_z": "Position Z (forward/back)",
+  "legacyforgebridge.config.blocking_pose.rotation_x": "Rotation X (pitch)",
+  "legacyforgebridge.config.blocking_pose.rotation_y": "Rotation Y (yaw)",
+  "legacyforgebridge.config.blocking_pose.rotation_z": "Rotation Z (roll)"
+}

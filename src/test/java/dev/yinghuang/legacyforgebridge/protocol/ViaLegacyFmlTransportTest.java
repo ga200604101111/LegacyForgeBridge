@@ -8,10 +8,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class ViaLegacyFmlTransportTest {
     @Test
-    void clientRegistrationUsesModernAliasesThatViaVersionCanReverseMap() {
+    void clientRegistrationUsesExactForge1710ChannelNames() {
         assertEquals(
-                "legacyforgebridge:fml_hs\0legacyforgebridge:fml\0legacyforgebridge:forge",
-                new String(ViaLegacyFmlTransport.clientChannelRegistrationForTest(), StandardCharsets.UTF_8)
+                "FML|HS\0FML\0FORGE",
+                new String(LegacyFmlWireConstants.clientChannelRegistration(), StandardCharsets.UTF_8)
         );
+        assertEquals(0x17, LegacyFmlWireConstants.CUSTOM_PAYLOAD_PACKET_ID);
+        assertEquals("FML|HS", LegacyFmlWireConstants.HANDSHAKE_CHANNEL);
+        assertEquals("REGISTER", LegacyFmlWireConstants.REGISTER_CHANNEL);
     }
 }

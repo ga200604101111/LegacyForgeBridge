@@ -4,7 +4,9 @@
   "version": "${version}",
   "name": "LegacyForgeBridge",
   "description": "Fabric 1.21.11 compatibility and conversion layer for legacy Forge 1.7.10 mods.",
-  "authors": ["YingHunag09"],
+  "authors": [
+    "YingHunag09"
+  ],
   "contact": {
     "sources": "https://github.com/ga200604101111/LegacyForgeBridge"
   },
@@ -15,10 +17,16 @@
       "dev.yinghuang.legacyforgebridge.LegacyForgeBridge"
     ],
     "client": [
-      "dev.yinghuang.legacyforgebridge.LegacyForgeBridgeClient"
+      "dev.yinghuang.legacyforgebridge.LegacyForgeBridgeClient",
+      "dev.yinghuang.legacyforgebridge.ConvertedRenderingClient",
+      "dev.yinghuang.legacyforgebridge.behavior.LegacyBehaviorClient",
+      "dev.yinghuang.legacyforgebridge.render.ConvertedGeometryClient"
     ],
     "viafabricplus": [
       "dev.yinghuang.legacyforgebridge.protocol.ViaFabricPlusEntrypoint"
+    ],
+    "modmenu": [
+      "dev.yinghuang.legacyforgebridge.config.LegacyForgeBridgeModMenu"
     ]
   },
   "mixins": [
@@ -29,6 +37,11 @@
     "minecraft": "1.21.11",
     "java": ">=21",
     "fabric-api": "*",
-    "viafabricplus": ">=4.4.15"
+    "team_reborn_energy": ">=4.2.0",
+    "viafabricplus": ">=4.4.15",
+    "cloth-config": ">=21.11.153"
+  },
+  "suggests": {
+    "modmenu": ">=17.0.0"
   }
 }

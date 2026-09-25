@@ -1,0 +1,9 @@
+{
+  "class_2769.java": "package net.minecraft;\npublic abstract class class_2769<T extends Comparable<T>> {}\n",
+  "class_2746.java": "package net.minecraft;\npublic final class class_2746 extends class_2769<Boolean> {}\n",
+  "class_2758.java": "package net.minecraft;\npublic final class class_2758 extends class_2769<Integer> {}\n",
+  "class_2680.java": "package net.minecraft;\npublic class class_2680 {public class_2248 method_26204(){throw new UnsupportedOperationException(\"compile-only declaration, never packaged\");} public boolean method_28498(class_2769<?> p){throw new UnsupportedOperationException(\"compile-only declaration, never packaged\");}}\n",
+  "class_1936.java": "package net.minecraft;\npublic interface class_1936 {default long method_75260(){throw new UnsupportedOperationException(\"compile-only declaration, never packaged\");}}\n",
+  "class_1937.java": "package net.minecraft;\npublic class class_1937 implements class_1922, class_1936 {public class_2680 method_8320(class_2338 p){throw new UnsupportedOperationException(\"compile-only declaration, never packaged\");}}\n",
+  "class_638.java": "package net.minecraft;\npublic class class_638 extends class_1937 {}\n"
+}

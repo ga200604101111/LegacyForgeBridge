@@ -1,0 +1,198 @@
+diff --git a/src/main/java/dev/yinghuang/legacyforgebridge/convert/runtime/ConvertedLegacyProcessorBlock.java b/src/main/java/dev/yinghuang/legacyforgebridge/convert/runtime/ConvertedLegacyProcessorBlock.java
+index 4116407..3ac08c0 100644
+--- a/src/main/java/dev/yinghuang/legacyforgebridge/convert/runtime/ConvertedLegacyProcessorBlock.java
++++ b/src/main/java/dev/yinghuang/legacyforgebridge/convert/runtime/ConvertedLegacyProcessorBlock.java
+@@ -12,6 +12,7 @@ import net.minecraft.world.entity.player.Player;
+ import net.minecraft.world.inventory.AbstractContainerMenu;
+ import net.minecraft.world.level.Level;
+ import net.minecraft.world.level.block.EntityBlock;
++import net.minecraft.world.level.block.RenderShape;
+ import net.minecraft.world.level.block.entity.BlockEntity;
+ import net.minecraft.world.level.block.entity.BlockEntityTicker;
+ import net.minecraft.world.level.block.entity.BlockEntityType;
+@@ -21,14 +22,22 @@ import net.minecraft.world.phys.BlockHitResult;
+ 
+ /** Modern block host for an admitted generic three-slot legacy processor. */
+ public final class ConvertedLegacyProcessorBlock extends ConvertedLegacyBlock implements EntityBlock {
++    private final Identifier convertedId;
+     private final LegacySingleInputProcessorRegistry.Rule processorRule;
+ 
+     public ConvertedLegacyProcessorBlock(Identifier convertedId,BlockBehaviour.Properties properties){
+         super(convertedId,properties);
++        this.convertedId=convertedId;
+         processorRule=LegacySingleInputProcessorRegistry.rule(convertedId);
+         if(processorRule==null)throw new IllegalArgumentException("Missing processor rule for "+convertedId);
+     }
+ 
++    @Override
++    public RenderShape getRenderShape(BlockState state){
++        return LegacySingleInputProcessorRegistry.hasWorldPresentation(convertedId)
++                ?RenderShape.INVISIBLE:RenderShape.MODEL;
++    }
++
+     @Override public BlockEntity newBlockEntity(BlockPos pos,BlockState state){
+         return new ConvertedLegacyProcessorBlockEntity(pos,state);
+     }
+diff --git a/src/main/java/dev/yinghuang/legacyforgebridge/convert/runtime/ConvertedLegacySeatBedBlock.java b/src/main/java/dev/yinghuang/legacyforgebridge/convert/runtime/ConvertedLegacySeatBedBlock.java
+index ba0f5fb..16725fe 100644
+--- a/src/main/java/dev/yinghuang/legacyforgebridge/convert/runtime/ConvertedLegacySeatBedBlock.java
++++ b/src/main/java/dev/yinghuang/legacyforgebridge/convert/runtime/ConvertedLegacySeatBedBlock.java
+@@ -21,6 +21,7 @@ import net.minecraft.world.level.ScheduledTickAccess;
+ import net.minecraft.world.level.block.BedBlock;
+ import net.minecraft.world.level.block.Block;
+ import net.minecraft.world.level.block.Blocks;
++import net.minecraft.world.level.block.RenderShape;
+ import net.minecraft.world.level.block.entity.BlockEntity;
+ import net.minecraft.world.level.block.state.BlockBehaviour;
+ import net.minecraft.world.level.block.state.BlockState;
+@@ -55,6 +56,8 @@ public final class ConvertedLegacySeatBedBlock extends BedBlock {
+                 .setValue(LEGACY_META, 0));
+     }
+ 
++    @Override public RenderShape getRenderShape(BlockState state) { return RenderShape.INVISIBLE; }
++
+     @Override
+     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
+         super.createBlockStateDefinition(builder);
+diff --git a/src/main/java/dev/yinghuang/legacyforgebridge/convert/runtime/GeneratedModSupport.java b/src/main/java/dev/yinghuang/legacyforgebridge/convert/runtime/GeneratedModSupport.java
+index c083446..a7d402c 100644
+--- a/src/main/java/dev/yinghuang/legacyforgebridge/convert/runtime/GeneratedModSupport.java
++++ b/src/main/java/dev/yinghuang/legacyforgebridge/convert/runtime/GeneratedModSupport.java
+@@ -2,6 +2,7 @@ package dev.yinghuang.legacyforgebridge.convert.runtime;
+ 
+ import dev.yinghuang.legacyforgebridge.LegacyForgeBridge;
+ import dev.yinghuang.legacyforgebridge.behavior.ConvertedBehaviorItem;
++import dev.yinghuang.legacyforgebridge.behavior.ConvertedLegacyBowItem;
+ import dev.yinghuang.legacyforgebridge.behavior.LegacyBehaviorRegistry;
+ import dev.yinghuang.legacyforgebridge.compat.LegacyBlockActivationEffectsRegistry;
+ import dev.yinghuang.legacyforgebridge.compat.LegacyBlockActivationRegistry;
+@@ -56,6 +57,7 @@ public final class GeneratedModSupport {
+ 
+     public static void beginMod(String modId){
+         LegacyStackComponents.bootstrap();
++        LegacyOscillatingModelBootstrap.bootstrapMod(modId);
+         LegacyVariantSnowballRuntimeRegistry.loadMod(modId);
+         LegacyPlantRuntimeRegistry.loadMod(modId);
+         LegacyPlantPlacementRegistry.loadMod(modId);
+@@ -118,6 +120,7 @@ public final class GeneratedModSupport {
+         Item.Properties properties=new Item.Properties().setId(key).overrideDescription(descriptionKey)
+                 .component(LegacyStackComponents.legacyMeta(),0);
+         if("snowball".equals(kind))properties.stacksTo(16);
++        if("bow".equals(kind))properties.stacksTo(1);
+         var plantingRule=LegacyPlantPlacementRegistry.rule(id);
+         var seatBedRule=LegacySeatBedRegistry.placementItemRule(id);
+         var variantSnowballRule=LegacyVariantSnowballRuntimeRegistry.rule(id);
+@@ -170,7 +173,8 @@ public final class GeneratedModSupport {
+             if(!(target instanceof ConvertedLegacySeatBedBlock seatBlock))
+                 throw new IllegalStateException("Seat-bed placement item registered before specialized target block: "+id+" -> "+seatBedRule.id());
+             item=new ConvertedLegacySeatBedItem(seatBlock,properties);
+-        }else item=new ConvertedBehaviorItem(properties);
++        }else if("bow".equals(kind))item=new ConvertedLegacyBowItem(properties);
++        else item=new ConvertedBehaviorItem(properties);
+         Registry.register(BuiltInRegistries.ITEM,key,item);
+         ITEMS.put(id,item);
+         int[] counts=COUNTS.get(id.getNamespace());if(counts!=null)counts[0]++;
+diff --git a/src/main/java/dev/yinghuang/legacyforgebridge/mixin/client/SpecialModelRenderersMixin.java b/src/main/java/dev/yinghuang/legacyforgebridge/mixin/client/SpecialModelRenderersMixin.java
+index e1396c0..babd36a 100644
+--- a/src/main/java/dev/yinghuang/legacyforgebridge/mixin/client/SpecialModelRenderersMixin.java
++++ b/src/main/java/dev/yinghuang/legacyforgebridge/mixin/client/SpecialModelRenderersMixin.java
+@@ -1,6 +1,7 @@
+ package dev.yinghuang.legacyforgebridge.mixin.client;
+ 
+ import dev.yinghuang.legacyforgebridge.render.ConvertedLegacyInertModelSpecialRenderer;
++import dev.yinghuang.legacyforgebridge.render.ConvertedLegacyOscillatingModelSpecialRenderer;
+ import dev.yinghuang.legacyforgebridge.render.ConvertedLegacyProcessorSpecialRenderer;
+ import dev.yinghuang.legacyforgebridge.render.ObjSpecialRenderer;
+ import net.minecraft.client.renderer.special.SpecialModelRenderers;
+@@ -21,5 +22,6 @@ public abstract class SpecialModelRenderersMixin {
+         ID_MAPPER.put(Identifier.fromNamespaceAndPath("legacyforgebridge","obj"),ObjSpecialRenderer.Unbaked.MAP_CODEC);
+         ID_MAPPER.put(Identifier.fromNamespaceAndPath("legacyforgebridge","processor"),ConvertedLegacyProcessorSpecialRenderer.Unbaked.MAP_CODEC);
+         ID_MAPPER.put(Identifier.fromNamespaceAndPath("legacyforgebridge","inert_model"),ConvertedLegacyInertModelSpecialRenderer.Unbaked.MAP_CODEC);
++        ID_MAPPER.put(Identifier.fromNamespaceAndPath("legacyforgebridge","oscillating_model"),ConvertedLegacyOscillatingModelSpecialRenderer.Unbaked.MAP_CODEC);
+     }
+ }
+diff --git a/src/main/java/dev/yinghuang/legacyforgebridge/render/ConvertedOscillatingModelPresentationRuntime.java b/src/main/java/dev/yinghuang/legacyforgebridge/render/ConvertedOscillatingModelPresentationRuntime.java
+new file mode 100644
+index 0000000..9fb3342
+--- /dev/null
++++ b/src/main/java/dev/yinghuang/legacyforgebridge/render/ConvertedOscillatingModelPresentationRuntime.java
+@@ -0,0 +1,40 @@
++package dev.yinghuang.legacyforgebridge.render;
++
++import dev.yinghuang.legacyforgebridge.LegacyForgeBridge;
++import dev.yinghuang.legacyforgebridge.compat.LegacyOscillatingModelBlockRegistry;
++import dev.yinghuang.legacyforgebridge.convert.runtime.ConvertedLegacyOscillatingModelBlockEntity;
++import dev.yinghuang.legacyforgebridge.convert.runtime.ConvertedLegacyOscillatingModelRenderer;
++import dev.yinghuang.legacyforgebridge.convert.runtime.LegacyOscillatingModelBootstrap;
++import net.minecraft.client.renderer.blockentity.BlockEntityRenderers;
++import net.minecraft.world.level.block.entity.BlockEntityType;
++
++import java.util.Set;
++import java.util.concurrent.ConcurrentHashMap;
++
++/** Client-only BER registration for fully proven oscillating decorative blocks. */
++public final class ConvertedOscillatingModelPresentationRuntime {
++    private static final Set<String> INITIALIZED_MODS = ConcurrentHashMap.newKeySet();
++    private ConvertedOscillatingModelPresentationRuntime() { }
++
++    public static void initializeMod(String modId) {
++        if (modId == null || modId.isBlank() || !INITIALIZED_MODS.add(modId)) return;
++        int renderers = 0;
++        try {
++            for (var rule : LegacyOscillatingModelBlockRegistry.rules(modId)) {
++                BlockEntityType<ConvertedLegacyOscillatingModelBlockEntity> type = LegacyOscillatingModelBootstrap.type(rule.id());
++                if (type == null) {
++                    LegacyForgeBridge.LOGGER.error("Oscillating presentation {} has no BlockEntityType", rule.id());
++                    continue;
++                }
++                BlockEntityRenderers.register(type, context -> new ConvertedLegacyOscillatingModelRenderer(context, rule));
++                renderers++;
++            }
++        } catch (Exception exception) {
++            INITIALIZED_MODS.remove(modId);
++            LegacyForgeBridge.LOGGER.error("Failed to initialize oscillating model presentation for {}", modId, exception);
++            return;
++        }
++        if (renderers > 0) LegacyForgeBridge.LOGGER.info(
++                "Initialized converted oscillating model presentation: mod={}, worldRenderers={}", modId, renderers);
++    }
++}
+diff --git a/src/test/java/dev/yinghuang/legacyforgebridge/convert/MimicShapeExactCorpusChecks.java b/src/test/java/dev/yinghuang/legacyforgebridge/convert/MimicShapeExactCorpusChecks.java
+index 31bdaf8..400b17c 100644
+--- a/src/test/java/dev/yinghuang/legacyforgebridge/convert/MimicShapeExactCorpusChecks.java
++++ b/src/test/java/dev/yinghuang/legacyforgebridge/convert/MimicShapeExactCorpusChecks.java
+@@ -25,7 +25,7 @@ public final class MimicShapeExactCorpusChecks {
+                 new DiagnosticCollector(),"generic-forge-1.7.10");
+         ConversionPass[] passes={new CopyLegacyJarPass(),new LegacyLanguagePass(),new GenericContentPass(),
+                 new LegacyClientContentBaselinePass(),new LegacyIconPresentationPass(),new LegacyItemNamePass(),
+-                new LegacyCreativeVariantsPass(),new LegacyBlockGeometryPass(),new LegacyTextureAtlasPass()};
++                new LegacyCreativeVariantsPass(),new LegacyBlockGeometryPass(),new LegacyTextureAtlasPass(),new LegacyCombatItemPass()};
+         for(var pass:passes){pass.apply(context);System.out.println("PASS "+pass.id());}
+         var root=JsonParser.parseString(Files.readString(stage.resolve(LegacyGeometrySpec.PATH))).getAsJsonObject();
+         var rules=LegacyGeometrySpec.parse(root);
+@@ -36,6 +36,16 @@ public final class MimicShapeExactCorpusChecks {
+             require(rules.get("bamboomod:"+name).variants().size()==16,"lost state: "+name);
+         require(rules.get("bamboomod:bamboopanel").pane(),"panel became cube family");
+         require(rules.get("bamboomod:bamboopanel").variants().size()==7,"invented unsupported panel states");
++        var combat=JsonParser.parseString(Files.readString(stage.resolve(LegacyCombatItemPass.OUTPUT))).getAsJsonObject();
++        require(combat.getAsJsonArray("rules").size()==2,"combat item proof count");
++        var content=JsonParser.parseString(Files.readString(stage.resolve(LegacyClientContentBaselinePass.CONTENT))).getAsJsonObject();
++        java.util.Map<String,com.google.gson.JsonObject> itemById=new java.util.HashMap<>();
++        for(var element:content.getAsJsonArray("items")){var item=element.getAsJsonObject();itemById.put(item.get("id").getAsString(),item);}
++        require(itemById.get("bamboomod:katana").get("attackDamage").getAsFloat()==4F,"katana attack damage");
++        require(itemById.get("bamboomod:katana").get("durability").getAsInt()==150,"katana durability");
++        require(itemById.get("bamboomod:bamboobow").get("durability").getAsInt()==300,"bow durability");
++        require(Files.readString(stage.resolve("assets/bamboomod/models/item/katana.json")).contains("minecraft:item/handheld"),"katana held parent");
++        require(Files.readString(stage.resolve("assets/bamboomod/items/bamboobow.json")).contains("minecraft:using_item"),"bow pulling condition");
+         int count=0;
+         try(var jar=new JarFile(source.toFile())){
+             var entries=jar.entries();
+@@ -49,7 +59,7 @@ public final class MimicShapeExactCorpusChecks {
+             }
+         }
+         require(count==223,"source image/animation count");
+-        System.out.println("PASS 21 rules / 327 states / 8 explicit material fallbacks / 223 unchanged source assets");
++        System.out.println("PASS 21 rules / 327 states / 8 material fallbacks / katana+bow semantics / 223 unchanged source assets");
+     }
+     private static void require(boolean value,String message){if(!value)throw new AssertionError(message);}
+ }

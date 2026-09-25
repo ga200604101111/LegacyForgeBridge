@@ -1,0 +1,32 @@
+{
+  "revision": "2026-09-25.193-native-vanilla-display-stacks",
+  "base_commit": "dc6e166f5b49355d40c2d5a6cb6ab7628fb44a27",
+  "base_sha256": "f979f83b57f8014022e707d86a7c4674194cdbee16cf0d83bdd8480766c1acfe",
+  "source_base": "471db9187a8b17c4cd02a7749c8a09395104e03a",
+  "preserved_source_revisions": [189, 190, 191, 192],
+  "build": "local JDK 21 incremental javac and checksum-guarded method transplantation",
+  "full_gradle_build": false,
+  "minecraft_launch_test": false,
+  "standalone_hotfix_required": false,
+  "not_fixed": ["wind chime renderer/spawn mapping", "campfire GUI dispatch", "optional pot insertion predicate conflict"],
+  "artifact": "legacyforgebridge-0.2.0-alpha.27-rev193.jar",
+  "artifact_sha256": "840fb56d7cd8013b3c813fd3d0f4781acd4e571abd105d4be512c99046ec8cc8",
+  "size_bytes": 3672128,
+  "changed_class_count": 110,
+  "deterministic_repeat": true,
+  "source_patch_sha256": "73fd58696acf24f85ad0f48c1ad5b0348282b9add5e57170785905ebf9108476",
+  "tests": {
+    "cache_assertions": 28,
+    "inventory_cases": 14,
+    "pane_masks": 16,
+    "hanging_mesh_contract": true,
+    "executed_cache_and_launch_fingerprint": true,
+    "asm_checked_classes": 110,
+    "asm_checked_methods": 966,
+    "selected_bamboo_passes": 16,
+    "selected_bamboo_status": "PARTIAL",
+    "integration_manifest_and_class_sanity": true,
+    "restored_source_files_identical": 53
+  },
+  "git_parent": "38555c30594e773024c5e68d4b03559690cafe75"
+}

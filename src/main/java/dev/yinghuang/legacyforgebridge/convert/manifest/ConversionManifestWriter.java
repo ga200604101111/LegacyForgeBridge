@@ -24,8 +24,9 @@ public final class ConversionManifestWriter {
 
     public static JsonObject create(ConversionContext context, ConversionStatus status, boolean installable) {
         JsonObject root = new JsonObject();
-        root.addProperty("schemaVersion", 1);
+        root.addProperty("schemaVersion", BuildInfo.CONVERSION_SCHEMA);
         root.addProperty("converterVersion", BuildInfo.VERSION);
+        root.addProperty("converterRevision", BuildInfo.CONVERTER_REVISION);
         root.addProperty("profile", context.profileId());
         root.addProperty("status", status.name().toLowerCase());
         root.addProperty("installable", installable);

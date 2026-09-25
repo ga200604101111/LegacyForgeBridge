@@ -1,0 +1,20 @@
+{
+  "key.legacyforgebridge.open_blocking_pose_config": "開啟劍擋姿勢設定",
+  "legacyforgebridge.config.blocking_pose.title": "LegacyForgeBridge 劍擋姿勢",
+  "legacyforgebridge.config.blocking_pose.general": "一般",
+  "legacyforgebridge.config.blocking_pose.first_person": "第一人稱",
+  "legacyforgebridge.config.blocking_pose.third_person": "第三人稱",
+  "legacyforgebridge.config.blocking_pose.enabled": "啟用姿勢修正",
+  "legacyforgebridge.config.blocking_pose.enabled.tooltip": "只修正顯示位置與旋轉，不更改 Via、封包、傷害或格擋判定。",
+  "legacyforgebridge.config.blocking_pose.mirror_left": "左手自動鏡像",
+  "legacyforgebridge.config.blocking_pose.mirror_left.tooltip": "左手時自動反轉 X 位置與 Y/Z 旋轉。",
+  "legacyforgebridge.config.blocking_pose.scope": "套用到所有實際使用 BLOCK 劍擋動畫的非盾牌武器，包含原版/Via 武器與轉換模組武器。儲存後立即生效。",
+  "legacyforgebridge.config.blocking_pose.translation.tooltip": "第一人稱位置使用畫面座標；第三人稱位置使用玩家／手臂局部座標，會隨角色旋轉。X 左右、Y 上下、Z 前後，每格 0.01。",
+  "legacyforgebridge.config.blocking_pose.rotation.tooltip": "旋轉單位為度數。",
+  "legacyforgebridge.config.blocking_pose.translation_x": "位置 X（左右）",
+  "legacyforgebridge.config.blocking_pose.translation_y": "位置 Y（上下）",
+  "legacyforgebridge.config.blocking_pose.translation_z": "位置 Z（前後）",
+  "legacyforgebridge.config.blocking_pose.rotation_x": "旋轉 X（上下傾斜）",
+  "legacyforgebridge.config.blocking_pose.rotation_y": "旋轉 Y（左右轉向）",
+  "legacyforgebridge.config.blocking_pose.rotation_z": "旋轉 Z（劍身翻轉）"
+}

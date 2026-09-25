@@ -1,0 +1,983 @@
+package dev.yinghuang.legacyforgebridge.convert;
+
+import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Type;
+import org.objectweb.asm.tree.AbstractInsnNode;
+import org.objectweb.asm.tree.AnnotationNode;
+import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.FieldInsnNode;
+import org.objectweb.asm.tree.FieldNode;
+import org.objectweb.asm.tree.InsnNode;
+import org.objectweb.asm.tree.IntInsnNode;
+import org.objectweb.asm.tree.LdcInsnNode;
+import org.objectweb.asm.tree.MethodInsnNode;
+import org.objectweb.asm.tree.MethodNode;
+import org.objectweb.asm.tree.TypeInsnNode;
+import org.objectweb.asm.tree.VarInsnNode;
+import org.objectweb.asm.tree.analysis.Analyzer;
+import org.objectweb.asm.tree.analysis.AnalyzerException;
+import org.objectweb.asm.tree.analysis.Frame;
+import org.objectweb.asm.tree.analysis.SourceInterpreter;
+import org.objectweb.asm.tree.analysis.SourceValue;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
+
+/**
+ * Interprocedural, non-executing extractor for ordinary Forge 1.7.x GameRegistry registrations.
+ *
+ * <p>The analyzer uses ASM source frames to prove where registration arguments came from, then
+ * propagates parameterized registration templates through source helper methods until an FML
+ * lifecycle root supplies concrete names/types. It never defines source classes or invokes legacy
+ * code. Ambiguous merged values are rejected rather than guessed.</p>
+ */
+public final class LegacyRegistryAnalyzer {
+    private static final String GAME_REGISTRY = "cpw/mods/fml/common/registry/GameRegistry";
+    private static final int MAX_PROPAGATION_ROUNDS = 64;
+    private static final int MAX_TEMPLATE_COUNT = 16_384;
+
+    public enum Kind { ITEM, BLOCK }
+
+    public record Registration(
+            Kind kind,
+            String registryName,
+            String legacyNamespace,
+            String implementationClass,
+            String itemBlockClass,
+            String constructorDescriptor,
+            List<ConstructorArgument> constructorArguments,
+            String sourceOwner,
+            String sourceMethod,
+            String sourceDescriptor
+    ) {
+        public Registration { constructorArguments = List.copyOf(constructorArguments); }
+    }
+
+    public record ConstructorArgument(String descriptor, Object value) { }
+    /** Exact static-field provenance retained for constructor object arguments such as Blocks.log. */
+    public record StaticFieldReference(String owner,String name,String descriptor) {
+        public StaticFieldReference {
+            if(owner==null||owner.isBlank()||name==null||name.isBlank()||descriptor==null||descriptor.isBlank())
+                throw new IllegalArgumentException("Invalid static field reference");
+        }
+    }
+
+    public record FieldBinding(String owner, String name, String descriptor, Kind kind, String registryName,
+                               String legacyNamespace, String implementationClass) { }
+
+    public record Analysis(List<Registration> registrations, List<FieldBinding> fieldBindings, List<String> diagnostics) {
+        public Analysis {
+            registrations = List.copyOf(registrations);
+            fieldBindings = List.copyOf(fieldBindings);
+            diagnostics = List.copyOf(diagnostics);
+        }
+
+        public List<Registration> items() {
+            return registrations.stream().filter(value -> value.kind() == Kind.ITEM).toList();
+        }
+
+        public List<Registration> blocks() {
+            return registrations.stream().filter(value -> value.kind() == Kind.BLOCK).toList();
+        }
+    }
+
+    private sealed interface Symbol permits TextSymbol, NumberSymbol, TypeSymbol, ObjectSymbol, ParamSymbol,
+            UnlocalizedNameSymbol, SubstringSymbol, NullSymbol, UnknownSymbol { }
+    private record TextSymbol(String value) implements Symbol { }
+    private record NumberSymbol(Number value) implements Symbol { }
+    private record TypeSymbol(String internalName) implements Symbol { }
+    private record ObjectSymbol(String internalName, String constructorDescriptor, List<Symbol> constructorArgs,
+                                StaticFieldReference staticField, String unlocalizedName) implements Symbol {
+        ObjectSymbol(String internalName) { this(internalName, null, List.of(), null, null); }
+        ObjectSymbol(String internalName,String constructorDescriptor,List<Symbol> constructorArgs) {
+            this(internalName,constructorDescriptor,constructorArgs,null,null);
+        }
+        ObjectSymbol(String internalName,String constructorDescriptor,List<Symbol> constructorArgs,StaticFieldReference staticField) {
+            this(internalName,constructorDescriptor,constructorArgs,staticField,null);
+        }
+        ObjectSymbol {
+            constructorArgs = List.copyOf(constructorArgs);
+            if(unlocalizedName!=null&&unlocalizedName.isBlank())unlocalizedName=null;
+        }
+        ObjectSymbol withUnlocalizedName(String value) {
+            return new ObjectSymbol(internalName,constructorDescriptor,constructorArgs,staticField,value);
+        }
+    }
+    private record ParamSymbol(int local) implements Symbol { }
+    private record UnlocalizedNameSymbol(Symbol receiver) implements Symbol { }
+    private record SubstringSymbol(Symbol source,int start,Integer end) implements Symbol { }
+    private enum NullSymbol implements Symbol { INSTANCE }
+    private enum UnknownSymbol implements Symbol { INSTANCE }
+
+    private record MethodKey(String owner, String name, String descriptor) { }
+    private record Template(Kind kind, Symbol object, Symbol name, Symbol namespace, Symbol itemBlock,
+                            MethodKey directSource) { }
+    private record MethodContext(ClassNode owner, MethodNode method, Frame<SourceValue>[] frames,
+                                 Map<AbstractInsnNode, Integer> indices, Set<Integer> parameterLocals) { }
+
+    private final Map<String, ClassNode> classes = new LinkedHashMap<>();
+    private final Map<MethodKey, MethodContext> methods = new LinkedHashMap<>();
+    private final Map<MethodKey, LinkedHashSet<Template>> templates = new LinkedHashMap<>();
+    private final List<String> diagnostics = new ArrayList<>();
+
+    public Analysis analyze(Path jarPath) throws IOException {
+        classes.clear(); methods.clear(); templates.clear(); diagnostics.clear();
+        load(jarPath);
+        analyzeFrames();
+        collectDirectTemplates();
+        propagateTemplates();
+
+        LinkedHashSet<Registration> output = new LinkedHashSet<>();
+        for (Map.Entry<MethodKey, MethodContext> entry : methods.entrySet()) {
+            if (!isRoot(entry.getValue())) continue;
+            for (Template template : templates.getOrDefault(entry.getKey(), new LinkedHashSet<>())) {
+                Registration registration = materialize(template);
+                if (registration != null) output.add(registration);
+            }
+        }
+
+        // Static initializers are implicit class-load roots. Include only fully concrete
+        // registrations; this preserves the common 1.7.x static-content-holder pattern without
+        // treating arbitrary unused helper methods as registrations.
+        for (Map.Entry<MethodKey, MethodContext> entry : methods.entrySet()) {
+            if (!entry.getKey().name().equals("<clinit>")) continue;
+            for (Template template : templates.getOrDefault(entry.getKey(), new LinkedHashSet<>())) {
+                Registration registration = materialize(template);
+                if (registration != null) output.add(registration);
+            }
+        }
+
+        // Some legacy mods construct all Items up-front, have each Item constructor add itself to
+        // one source-owned static List<Item>, then register that list from a lifecycle helper using
+        // item.getUnlocalizedName().substring(5). Ordinary source-frame propagation intentionally
+        // keeps reference locals fail-closed, so prove this collection loop as a separate bounded
+        // family and expand only concrete static allocations whose exact constructor self-enrols.
+        output.addAll(recoverIterableDerivedNameItemRegistrations());
+
+        LinkedHashSet<FieldBinding> fieldBindings = recoverFieldBindings(output);
+        if (output.isEmpty()) diagnostics.add("No concrete GameRegistry item/block registrations were proven from reachable lifecycle roots.");
+        return new Analysis(List.copyOf(output), List.copyOf(fieldBindings), List.copyOf(new LinkedHashSet<>(diagnostics)));
+    }
+
+    private LinkedHashSet<FieldBinding> recoverFieldBindings(Set<Registration> provenRegistrations) {
+        LinkedHashSet<FieldBinding> output = new LinkedHashSet<>();
+        for (var entry : methods.entrySet()) {
+            MethodContext context = entry.getValue();
+            for (int i = 0; i < context.method().instructions.size(); i++) {
+                AbstractInsnNode instruction = context.method().instructions.get(i);
+                if (!(instruction instanceof FieldInsnNode field) || field.getOpcode() != Opcodes.PUTSTATIC) continue;
+                Frame<SourceValue> frame = context.frames()[i];
+                if (frame == null || frame.getStackSize() < 1) continue;
+                SourceValue source = frame.getStack(frame.getStackSize() - 1);
+                if (source == null || source.insns == null || source.insns.size() != 1) continue;
+                AbstractInsnNode producer = source.insns.iterator().next();
+                if (!(producer instanceof MethodInsnNode call)) continue;
+                MethodKey callee = new MethodKey(call.owner, call.name, call.desc);
+                LinkedHashSet<Template> possible = templates.get(callee);
+                MethodContext calleeContext = methods.get(callee);
+                Integer callIndex = context.indices().get(call);
+                if (possible == null || possible.isEmpty() || calleeContext == null || callIndex == null) continue;
+                Frame<SourceValue> callFrame = context.frames()[callIndex];
+                if (callFrame == null) continue;
+                List<Symbol> actual = invocationValuesIncludingReceiver(context, callIndex, call, callFrame);
+                if (actual == null) continue;
+                Map<Integer, Symbol> substitution = parameterSubstitution(calleeContext.method(), actual);
+                LinkedHashSet<Registration> resolved = new LinkedHashSet<>();
+                for (Template template : possible) {
+                    Template instantiated = new Template(template.kind(), substitute(template.object(), substitution),
+                            substitute(template.name(), substitution), substitute(template.namespace(), substitution),
+                            substitute(template.itemBlock(), substitution), template.directSource());
+                    Registration registration = materialize(instantiated);
+                    if (registration != null) resolved.add(registration);
+                }
+                if (resolved.size() != 1) continue;
+                Registration registration = resolved.getFirst();
+                output.add(new FieldBinding(field.owner, field.name, field.desc, registration.kind(),
+                        registration.registryName(), registration.legacyNamespace(), registration.implementationClass()));
+            }
+        }
+        // Also bind ordinary static item fields directly from their source-proven allocation.
+        // This covers Forge registration helpers where GameRegistry receives item.getUnlocalizedName()
+        // instead of the static field assignment itself returning a registration helper result.
+        for (var entry : methods.entrySet()) {
+            MethodContext context=entry.getValue();
+            for(int i=0;i<context.method().instructions.size();i++){
+                AbstractInsnNode instruction=context.method().instructions.get(i);
+                if(!(instruction instanceof FieldInsnNode field)||field.getOpcode()!=Opcodes.PUTSTATIC)continue;
+                Frame<SourceValue> frame=context.frames()[i];
+                if(frame==null||frame.getStackSize()<1)continue;
+                Symbol assigned=resolve(context,frame.getStack(frame.getStackSize()-1),i,0,new LinkedHashSet<>());
+                if(!(assigned instanceof ObjectSymbol object)||object.unlocalizedName()==null)continue;
+                String itemName=normalizeLegacyItemName(object.unlocalizedName());
+                List<Registration> candidates=provenRegistrations.stream()
+                        .filter(registration->registration.kind()==Kind.ITEM&&registration.registryName().equals(itemName))
+                        .filter(registration->registration.implementationClass()==null
+                                ||registration.implementationClass().equals(object.internalName()))
+                        .toList();
+                if(candidates.size()!=1)continue;
+                Registration registration=candidates.getFirst();
+                output.add(new FieldBinding(field.owner,field.name,field.desc,registration.kind(),
+                        registration.registryName(),registration.legacyNamespace(),registration.implementationClass()));
+            }
+        }
+        return output;
+    }
+
+    private LinkedHashSet<Registration> recoverIterableDerivedNameItemRegistrations() {
+        LinkedHashSet<Registration> output = new LinkedHashSet<>();
+        Set<MethodKey> reachable = reachableSourceMethods();
+        LinkedHashMap<StaticFieldReference,MethodKey> registrationLoops = new LinkedHashMap<>();
+
+        for (MethodKey key : reachable) {
+            MethodContext context = methods.get(key);
+            if (context == null) continue;
+            StaticFieldReference list = iterableDerivedNameRegistrationList(context.method());
+            if (list == null) continue;
+            MethodKey previous = registrationLoops.putIfAbsent(list, key);
+            if (previous != null && !previous.equals(key)) {
+                diagnostics.add("Multiple reachable iterable item-registration loops use " + list.owner() + "." + list.name());
+            }
+        }
+
+        for (var loop : registrationLoops.entrySet()) {
+            StaticFieldReference list = loop.getKey();
+            MethodKey source = loop.getValue();
+            for (var entry : methods.entrySet()) {
+                if (!entry.getKey().name().equals("<clinit>")) continue;
+                MethodContext context = entry.getValue();
+                for (int i = 0; i < context.method().instructions.size(); i++) {
+                    AbstractInsnNode instruction = context.method().instructions.get(i);
+                    if (!(instruction instanceof FieldInsnNode field) || field.getOpcode() != Opcodes.PUTSTATIC) continue;
+                    Frame<SourceValue> frame = context.frames()[i];
+                    if (frame == null || frame.getStackSize() < 1) continue;
+                    Symbol assigned = resolve(context, frame.getStack(frame.getStackSize() - 1), i, 0, new LinkedHashSet<>());
+                    if (!(assigned instanceof ObjectSymbol object) || object.constructorDescriptor() == null
+                            || object.unlocalizedName() == null || !isSubclass(object.internalName(), "net/minecraft/item/Item")) continue;
+                    if (!constructorAddsSelfToList(object.internalName(), object.constructorDescriptor(), list, 0, new LinkedHashSet<>())) continue;
+
+                    String registryName = normalizeLegacyItemName(object.unlocalizedName());
+                    if (registryName.isBlank()) continue;
+                    Registration registration = materialize(new Template(
+                            Kind.ITEM, object, new TextSymbol(registryName), NullSymbol.INSTANCE, NullSymbol.INSTANCE, source));
+                    if (registration != null) output.add(registration);
+                }
+            }
+        }
+        return output;
+    }
+
+    private Set<MethodKey> reachableSourceMethods() {
+        LinkedHashSet<MethodKey> reachable = new LinkedHashSet<>();
+        java.util.ArrayDeque<MethodKey> queue = new java.util.ArrayDeque<>();
+        for (var entry : methods.entrySet()) if (isRoot(entry.getValue())) queue.add(entry.getKey());
+        while (!queue.isEmpty() && reachable.size() <= MAX_TEMPLATE_COUNT) {
+            MethodKey key = queue.removeFirst();
+            if (!reachable.add(key)) continue;
+            MethodContext context = methods.get(key);
+            if (context == null) continue;
+            for (AbstractInsnNode instruction : context.method().instructions) {
+                if (!(instruction instanceof MethodInsnNode call)) continue;
+                MethodKey target = new MethodKey(call.owner, call.name, call.desc);
+                if (methods.containsKey(target) && !reachable.contains(target)) queue.addLast(target);
+            }
+        }
+        return reachable;
+    }
+
+    private static StaticFieldReference iterableDerivedNameRegistrationList(MethodNode method) {
+        List<AbstractInsnNode> code = realInstructions(method);
+        LinkedHashSet<StaticFieldReference> lists = new LinkedHashSet<>();
+        for (int i = 5; i < code.size(); i++) {
+            if (!(code.get(i) instanceof MethodInsnNode register)
+                    || register.getOpcode() != Opcodes.INVOKESTATIC
+                    || !GAME_REGISTRY.equals(register.owner)
+                    || !"registerItem".equals(register.name)
+                    || !"(Lnet/minecraft/item/Item;Ljava/lang/String;)V".equals(register.desc)) continue;
+            if (!(code.get(i - 5) instanceof VarInsnNode objectLoad) || objectLoad.getOpcode() != Opcodes.ALOAD
+                    || !(code.get(i - 4) instanceof VarInsnNode nameLoad) || nameLoad.getOpcode() != Opcodes.ALOAD
+                    || objectLoad.var != nameLoad.var
+                    || !(code.get(i - 3) instanceof MethodInsnNode nameCall)
+                    || !Set.of("getUnlocalizedName","func_77658_a").contains(nameCall.name)
+                    || !"()Ljava/lang/String;".equals(nameCall.desc)
+                    || !Integer.valueOf(5).equals(integerConstant(code.get(i - 2)))
+                    || !(code.get(i - 1) instanceof MethodInsnNode substring)
+                    || !"java/lang/String".equals(substring.owner)
+                    || !"substring".equals(substring.name)
+                    || !"(I)Ljava/lang/String;".equals(substring.desc)) continue;
+
+            int local = objectLoad.var;
+            boolean iteratorValue = false;
+            for (int j = i - 6; j >= 2; j--) {
+                if (!(code.get(j) instanceof VarInsnNode store) || store.getOpcode() != Opcodes.ASTORE || store.var != local) continue;
+                if (!(code.get(j - 1) instanceof TypeInsnNode cast) || cast.getOpcode() != Opcodes.CHECKCAST
+                        || !"net/minecraft/item/Item".equals(cast.desc)
+                        || !(code.get(j - 2) instanceof MethodInsnNode next)
+                        || !"java/util/Iterator".equals(next.owner) || !"next".equals(next.name)
+                        || !"()Ljava/lang/Object;".equals(next.desc)) continue;
+                iteratorValue = true;
+                break;
+            }
+            if (!iteratorValue) continue;
+
+            for (int j = 0; j + 1 < i; j++) {
+                if (!(code.get(j) instanceof FieldInsnNode field) || field.getOpcode() != Opcodes.GETSTATIC
+                        || !"Ljava/util/List;".equals(field.desc)) continue;
+                if (!(code.get(j + 1) instanceof MethodInsnNode iterator)
+                        || !"java/util/List".equals(iterator.owner) || !"iterator".equals(iterator.name)
+                        || !"()Ljava/util/Iterator;".equals(iterator.desc)) continue;
+                lists.add(new StaticFieldReference(field.owner, field.name, field.desc));
+            }
+        }
+        return lists.size() == 1 ? lists.getFirst() : null;
+    }
+
+    private boolean constructorAddsSelfToList(String owner,String descriptor,StaticFieldReference list,
+                                              int depth,Set<String> guard) {
+        if (owner == null || descriptor == null || depth > 12) return false;
+        String key = owner + descriptor;
+        if (!guard.add(key)) return false;
+        try {
+            MethodContext context = methods.get(new MethodKey(owner, "<init>", descriptor));
+            if (context == null) return false;
+            List<AbstractInsnNode> code = realInstructions(context.method());
+            for (int i = 0; i + 2 < code.size(); i++) {
+                if (!(code.get(i) instanceof FieldInsnNode field) || field.getOpcode() != Opcodes.GETSTATIC
+                        || !field.owner.equals(list.owner()) || !field.name.equals(list.name()) || !field.desc.equals(list.descriptor())) continue;
+                if (!(code.get(i + 1) instanceof VarInsnNode self) || self.getOpcode() != Opcodes.ALOAD || self.var != 0) continue;
+                if (code.get(i + 2) instanceof MethodInsnNode add
+                        && (add.getOpcode() == Opcodes.INVOKEINTERFACE || add.getOpcode() == Opcodes.INVOKEVIRTUAL)
+                        && "java/util/List".equals(add.owner) && "add".equals(add.name)
+                        && "(Ljava/lang/Object;)Z".equals(add.desc)) return true;
+            }
+            for (AbstractInsnNode instruction : code) {
+                if (!(instruction instanceof MethodInsnNode call) || call.getOpcode() != Opcodes.INVOKESPECIAL
+                        || !"<init>".equals(call.name) || !classes.containsKey(call.owner)
+                        || !isSubclass(owner, call.owner) || owner.equals(call.owner)) continue;
+                if (constructorAddsSelfToList(call.owner, call.desc, list, depth + 1, guard)) return true;
+            }
+            return false;
+        } finally {
+            guard.remove(key);
+        }
+    }
+
+    private static List<AbstractInsnNode> realInstructions(MethodNode method) {
+        List<AbstractInsnNode> out = new ArrayList<>();
+        if (method != null) for (AbstractInsnNode instruction : method.instructions)
+            if (instruction.getOpcode() >= 0) out.add(instruction);
+        return out;
+    }
+
+    private static Integer integerConstant(AbstractInsnNode instruction) {
+        if (instruction == null) return null;
+        return switch (instruction.getOpcode()) {
+            case Opcodes.ICONST_M1 -> -1;
+            case Opcodes.ICONST_0 -> 0;
+            case Opcodes.ICONST_1 -> 1;
+            case Opcodes.ICONST_2 -> 2;
+            case Opcodes.ICONST_3 -> 3;
+            case Opcodes.ICONST_4 -> 4;
+            case Opcodes.ICONST_5 -> 5;
+            case Opcodes.BIPUSH, Opcodes.SIPUSH -> ((IntInsnNode) instruction).operand;
+            case Opcodes.LDC -> instruction instanceof LdcInsnNode ldc && ldc.cst instanceof Integer value ? value : null;
+            default -> null;
+        };
+    }
+
+    private static String normalizeLegacyItemName(String raw){
+        String value=raw==null?"":raw.trim();
+        if(value.startsWith("item."))value=value.substring(5);
+        int namespace=value.indexOf(':');if(namespace>=0)value=value.substring(namespace+1);
+        return value;
+    }
+
+    public String classifyItem(String implementationClass) {
+        if (implementationClass == null) return "item";
+        if (isSubclass(implementationClass, "net/minecraft/item/ItemSword")) return "sword";
+        if (isSubclass(implementationClass, "net/minecraft/item/ItemArmor")) return "armor";
+        if (isSubclass(implementationClass, "net/minecraft/item/ItemBow")) return "bow";
+        if (isSubclass(implementationClass, "net/minecraft/item/ItemHoe")) return "hoe";
+        if (isSubclass(implementationClass, "net/minecraft/item/ItemPickaxe")) return "pickaxe";
+        if (isSubclass(implementationClass, "net/minecraft/item/ItemAxe")) return "axe";
+        if (isSubclass(implementationClass, "net/minecraft/item/ItemSpade")) return "shovel";
+        if (isSubclass(implementationClass, "net/minecraft/item/ItemTool")) return "tool";
+        return "item";
+    }
+
+    private void load(Path jarPath) throws IOException {
+        try (JarFile jar = new JarFile(jarPath.toFile())) {
+            var entries = jar.entries();
+            while (entries.hasMoreElements()) {
+                JarEntry entry = entries.nextElement();
+                if (entry.isDirectory() || !entry.getName().endsWith(".class")) continue;
+                try (InputStream input = jar.getInputStream(entry)) {
+                    ClassNode node = new ClassNode(Opcodes.ASM9);
+                    new ClassReader(input).accept(node, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+                    classes.put(node.name, node);
+                } catch (RuntimeException malformed) {
+                    diagnostics.add("Unreadable registry-analysis class " + entry.getName() + ": " + malformed.getClass().getSimpleName());
+                }
+            }
+        }
+    }
+
+    private void analyzeFrames() {
+        for (ClassNode owner : classes.values()) {
+            for (MethodNode method : owner.methods) {
+                MethodKey key = new MethodKey(owner.name, method.name, method.desc);
+                try {
+                    Analyzer<SourceValue> analyzer = new Analyzer<>(new SourceInterpreter());
+                    Frame<SourceValue>[] frames = analyzer.analyze(owner.name, method);
+                    Map<AbstractInsnNode, Integer> indices = new HashMap<>();
+                    for (int i = 0; i < method.instructions.size(); i++) indices.put(method.instructions.get(i), i);
+                    methods.put(key, new MethodContext(owner, method, frames, indices, parameterLocals(method)));
+                    templates.put(key, new LinkedHashSet<>());
+                } catch (AnalyzerException | RuntimeException unsupported) {
+                    diagnostics.add("Registry dataflow unavailable for " + owner.name + "." + method.name + method.desc + ": " + unsupported.getMessage());
+                }
+            }
+        }
+    }
+
+    private static Set<Integer> parameterLocals(MethodNode method) {
+        LinkedHashSet<Integer> slots = new LinkedHashSet<>();
+        int local = 0;
+        if ((method.access & Opcodes.ACC_STATIC) == 0) slots.add(local++);
+        for (Type type : Type.getArgumentTypes(method.desc)) {
+            slots.add(local);
+            local += type.getSize();
+        }
+        return Collections.unmodifiableSet(slots);
+    }
+
+    private void collectDirectTemplates() {
+        for (Map.Entry<MethodKey, MethodContext> entry : methods.entrySet()) {
+            MethodKey key = entry.getKey(); MethodContext context = entry.getValue();
+            for (int i = 0; i < context.method().instructions.size(); i++) {
+                AbstractInsnNode instruction = context.method().instructions.get(i);
+                if (!(instruction instanceof MethodInsnNode call) || !call.owner.equals(GAME_REGISTRY)) continue;
+                Kind kind = switch (call.name) {
+                    case "registerItem" -> Kind.ITEM;
+                    case "registerBlock" -> Kind.BLOCK;
+                    default -> null;
+                };
+                if (kind == null) continue;
+                Frame<SourceValue> frame = context.frames()[i];
+                if (frame == null) continue;
+                List<Symbol> args = invocationArgs(context, i, call, frame);
+                if (args == null || args.isEmpty()) {
+                    diagnostics.add("Unable to recover GameRegistry arguments at " + key);
+                    continue;
+                }
+                Template template = directTemplate(kind, call, args, key);
+                if (template != null) templates.get(key).add(template);
+            }
+        }
+    }
+
+    private Template directTemplate(Kind kind, MethodInsnNode call, List<Symbol> args, MethodKey source) {
+        Type[] types = Type.getArgumentTypes(call.desc);
+        if (types.length != args.size() || args.isEmpty()) return null;
+        Symbol object = args.getFirst();
+        Symbol name = UnknownSymbol.INSTANCE;
+        Symbol namespace = NullSymbol.INSTANCE;
+        Symbol itemBlock = NullSymbol.INSTANCE;
+
+        if (kind == Kind.ITEM) {
+            for (int i = 1; i < types.length; i++) {
+                if (types[i].getSort() == Type.OBJECT && types[i].getInternalName().equals("java/lang/String")) {
+                    if (name == UnknownSymbol.INSTANCE) name = args.get(i); else namespace = args.get(i);
+                }
+            }
+        } else {
+            for (int i = 1; i < types.length; i++) {
+                if (types[i].getSort() == Type.OBJECT && types[i].getInternalName().equals("java/lang/Class")) itemBlock = args.get(i);
+                if (types[i].getSort() == Type.OBJECT && types[i].getInternalName().equals("java/lang/String")) name = args.get(i);
+            }
+        }
+        if (name == UnknownSymbol.INSTANCE) {
+            diagnostics.add("Registration name is not represented by a String argument at " + source);
+            return null;
+        }
+        return new Template(kind, object, name, namespace, itemBlock, source);
+    }
+
+    private void propagateTemplates() {
+        for (int round = 0; round < MAX_PROPAGATION_ROUNDS; round++) {
+            boolean changed = false;
+            for (Map.Entry<MethodKey, MethodContext> entry : methods.entrySet()) {
+                MethodKey caller = entry.getKey(); MethodContext context = entry.getValue();
+                LinkedHashSet<Template> callerTemplates = templates.get(caller);
+                for (int i = 0; i < context.method().instructions.size(); i++) {
+                    AbstractInsnNode instruction = context.method().instructions.get(i);
+                    if (!(instruction instanceof MethodInsnNode call)) continue;
+                    MethodKey callee = new MethodKey(call.owner, call.name, call.desc);
+                    LinkedHashSet<Template> calleeTemplates = templates.get(callee);
+                    MethodContext calleeContext = methods.get(callee);
+                    if (calleeTemplates == null || calleeTemplates.isEmpty() || calleeContext == null) continue;
+                    Frame<SourceValue> frame = context.frames()[i];
+                    if (frame == null) continue;
+                    List<Symbol> actual = invocationValuesIncludingReceiver(context, i, call, frame);
+                    if (actual == null) continue;
+                    Map<Integer, Symbol> substitution = parameterSubstitution(calleeContext.method(), actual);
+                    for (Template template : calleeTemplates) {
+                        Template instantiated = new Template(
+                                template.kind(),
+                                substitute(template.object(), substitution),
+                                substitute(template.name(), substitution),
+                                substitute(template.namespace(), substitution),
+                                substitute(template.itemBlock(), substitution),
+                                template.directSource()
+                        );
+                        if (callerTemplates.add(instantiated)) {
+                            changed = true;
+                            if (totalTemplateCount() > MAX_TEMPLATE_COUNT) throw new IllegalArgumentException("Registry template propagation budget exceeded");
+                        }
+                    }
+                }
+            }
+            if (!changed) return;
+        }
+        diagnostics.add("Registry helper propagation reached its round budget; deeply recursive registration helpers were not trusted.");
+    }
+
+    private int totalTemplateCount() {
+        return templates.values().stream().mapToInt(Set::size).sum();
+    }
+
+    private static Map<Integer, Symbol> parameterSubstitution(MethodNode method, List<Symbol> actual) {
+        LinkedHashMap<Integer, Symbol> result = new LinkedHashMap<>();
+        int actualIndex = 0, local = 0;
+        if ((method.access & Opcodes.ACC_STATIC) == 0) {
+            if (actualIndex >= actual.size()) return Map.of();
+            result.put(local++, actual.get(actualIndex++));
+        }
+        for (Type type : Type.getArgumentTypes(method.desc)) {
+            if (actualIndex >= actual.size()) return Map.of();
+            result.put(local, actual.get(actualIndex++));
+            local += type.getSize();
+        }
+        return result;
+    }
+
+    private static Symbol substitute(Symbol symbol, Map<Integer, Symbol> substitution) {
+        if (symbol instanceof ParamSymbol param) return substitution.getOrDefault(param.local(), UnknownSymbol.INSTANCE);
+        if (symbol instanceof ObjectSymbol object && !object.constructorArgs().isEmpty()) {
+            List<Symbol> args = object.constructorArgs().stream().map(value -> substitute(value, substitution)).toList();
+            return new ObjectSymbol(object.internalName(), object.constructorDescriptor(), args, object.staticField(),object.unlocalizedName());
+        }
+        if(symbol instanceof UnlocalizedNameSymbol name)
+            return new UnlocalizedNameSymbol(substitute(name.receiver(),substitution));
+        if(symbol instanceof SubstringSymbol substring)
+            return new SubstringSymbol(substitute(substring.source(),substitution),substring.start(),substring.end());
+        return symbol;
+    }
+
+    private Registration materialize(Template template) {
+        String registryName=materializeText(template.name());
+        if (registryName==null || registryName.isBlank()) return null;
+        ObjectSymbol concreteObject = template.object() instanceof ObjectSymbol object ? object : null;
+        String implementation = concreteObject != null ? concreteObject.internalName()
+                : template.object() instanceof TypeSymbol type ? type.internalName() : null;
+        // The registry call itself proves Item/Block kind even when a value travelled through a
+        // broad-typed static field, so an unknown implementation class does not invalidate ID proof.
+        String namespace = template.namespace() instanceof TextSymbol text && !text.value().isBlank() ? text.value() : null;
+        String itemBlock = template.itemBlock() instanceof TypeSymbol type ? type.internalName()
+                : template.itemBlock() instanceof ObjectSymbol object ? object.internalName() : null;
+        List<ConstructorArgument> constructor = new ArrayList<>();
+        String constructorDescriptor = concreteObject == null ? null : concreteObject.constructorDescriptor();
+        if (concreteObject != null && constructorDescriptor != null) {
+            Type[] argumentTypes = Type.getArgumentTypes(constructorDescriptor);
+            if (argumentTypes.length == concreteObject.constructorArgs().size()) {
+                for (int i = 0; i < argumentTypes.length; i++) {
+                    Symbol value = concreteObject.constructorArgs().get(i);
+                    Object raw = value instanceof TextSymbol text ? text.value()
+                            : value instanceof NumberSymbol number ? number.value()
+                            : value instanceof ObjectSymbol object && object.staticField()!=null ? object.staticField()
+                            : value == NullSymbol.INSTANCE ? null : null;
+                    constructor.add(new ConstructorArgument(argumentTypes[i].getDescriptor(), raw));
+                }
+            }
+        }
+        MethodKey source = template.directSource();
+        return new Registration(template.kind(), registryName, namespace, implementation, itemBlock,
+                constructorDescriptor, constructor, source.owner(), source.name(), source.descriptor());
+    }
+
+    private static String materializeText(Symbol symbol){
+        if(symbol instanceof TextSymbol text)return text.value();
+        if(symbol instanceof UnlocalizedNameSymbol name){
+            Symbol receiver=name.receiver();
+            if(receiver instanceof ObjectSymbol object&&object.unlocalizedName()!=null)
+                return "item."+object.unlocalizedName();
+            return null;
+        }
+        if(symbol instanceof SubstringSymbol substring){
+            String source=materializeText(substring.source());
+            if(source==null)return null;
+            int start=substring.start(),end=substring.end()==null?source.length():substring.end();
+            if(start<0||end<start||end>source.length())return null;
+            return source.substring(start,end);
+        }
+        return null;
+    }
+
+    private boolean isRoot(MethodContext context) {
+        MethodNode method = context.method();
+        if (hasAnnotation(method.visibleAnnotations, "Lcpw/mods/fml/common/Mod$EventHandler;")
+                || hasAnnotation(method.invisibleAnnotations, "Lcpw/mods/fml/common/Mod$EventHandler;")) return true;
+        // Some 1.7.x compilers/mods omit the annotation in transformed fixtures. Event parameter
+        // types are still a bounded, source-derived lifecycle root signal.
+        return method.desc.contains("Lcpw/mods/fml/common/event/FML") && method.desc.endsWith(")V");
+    }
+
+    private static boolean hasAnnotation(List<AnnotationNode> annotations, String descriptor) {
+        if (annotations == null) return false;
+        return annotations.stream().anyMatch(annotation -> descriptor.equals(annotation.desc));
+    }
+
+    private List<Symbol> invocationArgs(MethodContext context, int index, MethodInsnNode call, Frame<SourceValue> frame) {
+        Type[] args = Type.getArgumentTypes(call.desc);
+        int count = args.length;
+        if (frame.getStackSize() < count) return null;
+        List<Symbol> result = new ArrayList<>(count);
+        int start = frame.getStackSize() - count;
+        for (int i = 0; i < count; i++) result.add(resolve(context, frame.getStack(start + i), index, 0, new LinkedHashSet<>()));
+        return result;
+    }
+
+    private List<Symbol> invocationValuesIncludingReceiver(MethodContext context, int index, MethodInsnNode call, Frame<SourceValue> frame) {
+        int argCount = Type.getArgumentTypes(call.desc).length;
+        boolean isStatic = call.getOpcode() == Opcodes.INVOKESTATIC;
+        int count = argCount + (isStatic ? 0 : 1);
+        if (frame.getStackSize() < count) return null;
+        List<Symbol> result = new ArrayList<>(count);
+        int start = frame.getStackSize() - count;
+        for (int i = 0; i < count; i++) result.add(resolve(context, frame.getStack(start + i), index, 0, new LinkedHashSet<>()));
+        return result;
+    }
+
+    private Symbol resolve(MethodContext context, SourceValue value, int currentIndex, int depth, Set<String> guard) {
+        if (value == null || depth > 32) return UnknownSymbol.INSTANCE;
+        if (value.insns == null || value.insns.isEmpty()) return UnknownSymbol.INSTANCE;
+        LinkedHashSet<Symbol> possibilities = new LinkedHashSet<>();
+        for (AbstractInsnNode producer : value.insns) {
+            Integer producerIndex = context.indices().get(producer);
+            if (producerIndex == null) continue;
+            String guardKey = context.owner().name + ":" + context.method().name + context.method().desc + ":" + producerIndex;
+            if (!guard.add(guardKey)) continue;
+            possibilities.add(resolveProducer(context, producer, producerIndex, depth + 1, guard));
+            guard.remove(guardKey);
+        }
+        possibilities.remove(UnknownSymbol.INSTANCE);
+        if (possibilities.size() == 1) return possibilities.getFirst();
+        return UnknownSymbol.INSTANCE;
+    }
+
+    private Symbol resolveProducer(MethodContext context, AbstractInsnNode producer, int producerIndex, int depth, Set<String> guard) {
+        if (producer instanceof LdcInsnNode ldc) {
+            if (ldc.cst instanceof String text) return new TextSymbol(text);
+            if (ldc.cst instanceof Number number) return new NumberSymbol(number);
+            if (ldc.cst instanceof Type type && type.getSort() == Type.OBJECT) return new TypeSymbol(type.getInternalName());
+            return UnknownSymbol.INSTANCE;
+        }
+        if (producer instanceof TypeInsnNode typeInsn) {
+            if (typeInsn.getOpcode() == Opcodes.NEW) return constructorObject(context, typeInsn.desc, producerIndex, depth, guard);
+            if (typeInsn.getOpcode() == Opcodes.CHECKCAST) {
+                Frame<SourceValue> frame = context.frames()[producerIndex];
+                if (frame != null && frame.getStackSize() > 0)
+                    return resolve(context, frame.getStack(frame.getStackSize() - 1), producerIndex, depth + 1, guard);
+            }
+        }
+        if (producer instanceof InsnNode insn) {
+            if (insn.getOpcode() == Opcodes.ACONST_NULL) return NullSymbol.INSTANCE;
+            if (insn.getOpcode() >= Opcodes.ICONST_M1 && insn.getOpcode() <= Opcodes.ICONST_5)
+                return new NumberSymbol(insn.getOpcode() - Opcodes.ICONST_0);
+            if (insn.getOpcode() == Opcodes.FCONST_0) return new NumberSymbol(0.0F);
+            if (insn.getOpcode() == Opcodes.FCONST_1) return new NumberSymbol(1.0F);
+            if (insn.getOpcode() == Opcodes.FCONST_2) return new NumberSymbol(2.0F);
+            if (insn.getOpcode() == Opcodes.DCONST_0) return new NumberSymbol(0.0D);
+            if (insn.getOpcode() == Opcodes.DCONST_1) return new NumberSymbol(1.0D);
+            if (insn.getOpcode() == Opcodes.LCONST_0) return new NumberSymbol(0L);
+            if (insn.getOpcode() == Opcodes.LCONST_1) return new NumberSymbol(1L);
+            if (insn.getOpcode() == Opcodes.DUP) {
+                Frame<SourceValue> frame = context.frames()[producerIndex];
+                if (frame != null && frame.getStackSize() > 0)
+                    return resolve(context, frame.getStack(frame.getStackSize() - 1), producerIndex, depth + 1, guard);
+            }
+        }
+        if (producer instanceof VarInsnNode variable && isLoad(variable.getOpcode())) {
+            if (context.parameterLocals().contains(variable.var)) return new ParamSymbol(variable.var);
+            Frame<SourceValue> frame = context.frames()[producerIndex];
+            if (frame != null && variable.var < frame.getLocals()) return resolve(context, frame.getLocal(variable.var), producerIndex, depth + 1, guard);
+            return UnknownSymbol.INSTANCE;
+        }
+        if (producer instanceof VarInsnNode variable && isStore(variable.getOpcode())) {
+            Frame<SourceValue> frame=context.frames()[producerIndex];
+            if(frame!=null&&frame.getStackSize()>0)
+                return resolve(context,frame.getStack(frame.getStackSize()-1),producerIndex,depth+1,guard);
+            return UnknownSymbol.INSTANCE;
+        }
+        if (isNumericBinary(producer.getOpcode())) {
+            Frame<SourceValue> frame=context.frames()[producerIndex];
+            if(frame==null||frame.getStackSize()<2)return UnknownSymbol.INSTANCE;
+            Symbol left=resolve(context,frame.getStack(frame.getStackSize()-2),producerIndex,depth+1,guard);
+            Symbol right=resolve(context,frame.getStack(frame.getStackSize()-1),producerIndex,depth+1,guard);
+            return numericBinary(producer.getOpcode(),left,right);
+        }
+        if (isNumericUnary(producer.getOpcode())) {
+            Frame<SourceValue> frame=context.frames()[producerIndex];
+            if(frame==null||frame.getStackSize()<1)return UnknownSymbol.INSTANCE;
+            return numericUnary(producer.getOpcode(),resolve(context,frame.getStack(frame.getStackSize()-1),producerIndex,depth+1,guard));
+        }
+        if (producer instanceof FieldInsnNode field && field.getOpcode() == Opcodes.GETSTATIC) {
+            ClassNode owner = classes.get(field.owner);
+            if (owner != null) {
+                for (FieldNode candidate : owner.fields) if (candidate.name.equals(field.name) && candidate.desc.equals(field.desc)) {
+                    if (candidate.value instanceof String text) return new TextSymbol(text);
+                    if (candidate.value instanceof Type type && type.getSort() == Type.OBJECT) return new TypeSymbol(type.getInternalName());
+                }
+            }
+            Symbol assigned=resolveStaticFieldAssignment(field,depth,guard);
+            if(assigned!=UnknownSymbol.INSTANCE)return assigned;
+            Type fieldType = Type.getType(field.desc);
+            if (fieldType.getSort() == Type.OBJECT)
+                return new ObjectSymbol(fieldType.getInternalName(),null,List.of(),new StaticFieldReference(field.owner,field.name,field.desc));
+            return UnknownSymbol.INSTANCE;
+        }
+        if (producer instanceof MethodInsnNode call) {
+            Type returnType = Type.getReturnType(call.desc);
+            if (returnType.getSort() == Type.VOID) return UnknownSymbol.INSTANCE;
+            Frame<SourceValue> frame = context.frames()[producerIndex];
+            if (frame == null) return UnknownSymbol.INSTANCE;
+            int argCount = Type.getArgumentTypes(call.desc).length;
+            boolean isStatic = call.getOpcode() == Opcodes.INVOKESTATIC;
+
+            if(!isStatic&&Set.of("getUnlocalizedName","func_77658_a").contains(call.name)
+                    &&"()Ljava/lang/String;".equals(call.desc)&&frame.getStackSize()>=1){
+                Symbol receiver=resolve(context,frame.getStack(frame.getStackSize()-1),producerIndex,depth+1,guard);
+                if(receiver!=UnknownSymbol.INSTANCE)return new UnlocalizedNameSymbol(receiver);
+            }
+            if(!isStatic&&call.owner.equals("java/lang/String")&&call.name.equals("substring")
+                    &&(call.desc.equals("(I)Ljava/lang/String;")||call.desc.equals("(II)Ljava/lang/String;"))){
+                List<Symbol> values=invocationValuesIncludingReceiver(context,producerIndex,call,frame);
+                if(values!=null&&values.size()>=2&&values.get(1) instanceof NumberSymbol start){
+                    Integer end=values.size()==3&&values.get(2) instanceof NumberSymbol finish?finish.value().intValue():null;
+                    return new SubstringSymbol(values.getFirst(),start.value().intValue(),end);
+                }
+            }
+            if(!isStatic&&Set.of("setUnlocalizedName","func_77655_b").contains(call.name)
+                    &&call.desc.equals("(Ljava/lang/String;)Lnet/minecraft/item/Item;")){
+                List<Symbol> values=invocationValuesIncludingReceiver(context,producerIndex,call,frame);
+                if(values!=null&&values.size()==2&&values.getFirst() instanceof ObjectSymbol object
+                        &&values.get(1) instanceof TextSymbol name)return object.withUnlocalizedName(name.value());
+            }
+            if (!isStatic && returnType.getSort() == Type.OBJECT && frame.getStackSize() >= argCount + 1) {
+                // Fluent legacy setters and source helpers commonly return the receiver. Following
+                // the receiver is conservative for implementation-type proof; the registration
+                // name itself is proved independently by the String argument.
+                SourceValue receiver = frame.getStack(frame.getStackSize() - argCount - 1);
+                Symbol resolved = resolve(context, receiver, producerIndex, depth + 1, guard);
+                if (resolved instanceof ObjectSymbol || resolved instanceof ParamSymbol) return resolved;
+            }
+            if (returnType.getSort() == Type.OBJECT && returnType.getInternalName().equals("java/lang/Class")) {
+                return new TypeSymbol(call.owner);
+            }
+            return UnknownSymbol.INSTANCE;
+        }
+        if (producer instanceof IntInsnNode integer && (integer.getOpcode() == Opcodes.BIPUSH || integer.getOpcode() == Opcodes.SIPUSH))
+            return new NumberSymbol(integer.operand);
+        return UnknownSymbol.INSTANCE;
+    }
+
+    private Symbol resolveStaticFieldAssignment(FieldInsnNode field,int depth,Set<String> guard){
+        String fieldGuard="static:"+field.owner+"."+field.name+field.desc;
+        if(!guard.add(fieldGuard))return UnknownSymbol.INSTANCE;
+        try{
+            LinkedHashSet<Symbol> values=new LinkedHashSet<>();
+            for(var entry:methods.entrySet()){
+                if(!entry.getKey().owner().equals(field.owner))continue;
+                MethodContext context=entry.getValue();
+                for(int i=0;i<context.method().instructions.size();i++){
+                    AbstractInsnNode instruction=context.method().instructions.get(i);
+                    if(!(instruction instanceof FieldInsnNode put)||put.getOpcode()!=Opcodes.PUTSTATIC
+                            ||!put.owner.equals(field.owner)||!put.name.equals(field.name)||!put.desc.equals(field.desc))continue;
+                    Frame<SourceValue> frame=context.frames()[i];
+                    if(frame==null||frame.getStackSize()<1)continue;
+                    Symbol value=resolve(context,frame.getStack(frame.getStackSize()-1),i,depth+1,guard);
+                    if(value!=UnknownSymbol.INSTANCE&&value!=NullSymbol.INSTANCE)values.add(value);
+                }
+            }
+            return values.size()==1?values.getFirst():UnknownSymbol.INSTANCE;
+        }finally{guard.remove(fieldGuard);}
+    }
+
+    private Symbol constructorObject(MethodContext context, String type, int newIndex, int depth, Set<String> guard) {
+        int limit = Math.min(context.method().instructions.size(), newIndex + 160);
+        for (int i = newIndex + 1; i < limit; i++) {
+            AbstractInsnNode next = context.method().instructions.get(i);
+            if (!(next instanceof MethodInsnNode call) || call.getOpcode() != Opcodes.INVOKESPECIAL
+                    || !call.name.equals("<init>") || !call.owner.equals(type)) continue;
+            Frame<SourceValue> frame = context.frames()[i];
+            if (frame == null) break;
+            Type[] types = Type.getArgumentTypes(call.desc);
+            int count = types.length;
+            if (frame.getStackSize() < count + 1) break;
+            List<Symbol> arguments = new ArrayList<>(count);
+            int start = frame.getStackSize() - count;
+            for (int arg = 0; arg < count; arg++)
+                arguments.add(resolve(context, frame.getStack(start + arg), i, depth + 1, guard));
+            String unlocalizedName=constructorUnlocalizedName(type,call.desc,arguments);
+            return new ObjectSymbol(type,call.desc,arguments,null,unlocalizedName);
+        }
+        return new ObjectSymbol(type);
+    }
+
+    private String constructorUnlocalizedName(String owner,String desc,List<Symbol> arguments){
+        return constructorUnlocalizedName(owner,desc,arguments,0,new LinkedHashSet<>());
+    }
+
+    private String constructorUnlocalizedName(String owner,String desc,List<Symbol> arguments,int depth,Set<String> guard){
+        if(owner==null||desc==null||depth>12||!guard.add(owner+desc))return null;
+        try{
+            MethodContext constructor=methods.get(new MethodKey(owner,"<init>",desc));
+            if(constructor==null)return null;
+            List<Symbol> actual=new ArrayList<>(arguments.size()+1);
+            actual.add(UnknownSymbol.INSTANCE);actual.addAll(arguments);
+            Map<Integer,Symbol> substitution=parameterSubstitution(constructor.method(),actual);
+            LinkedHashSet<String> names=new LinkedHashSet<>();
+            for(int i=0;i<constructor.method().instructions.size();i++){
+                AbstractInsnNode instruction=constructor.method().instructions.get(i);
+                if(!(instruction instanceof MethodInsnNode call))continue;
+                Frame<SourceValue> frame=constructor.frames()[i];
+                if(frame==null)continue;
+                if(Set.of("setUnlocalizedName","func_77655_b").contains(call.name)
+                        &&call.desc.startsWith("(Ljava/lang/String;)")){
+                    int argCount=Type.getArgumentTypes(call.desc).length;
+                    if(frame.getStackSize()<argCount+1)continue;
+                    Symbol receiver=resolve(constructor,frame.getStack(frame.getStackSize()-argCount-1),i,0,new LinkedHashSet<>());
+                    if(!(receiver instanceof ParamSymbol param)||param.local()!=0)continue;
+                    Symbol raw=resolve(constructor,frame.getStack(frame.getStackSize()-1),i,0,new LinkedHashSet<>());
+                    String name=materializeText(substitute(raw,substitution));
+                    if(name!=null&&!name.isBlank())names.add(name);
+                    continue;
+                }
+                if(call.getOpcode()!=Opcodes.INVOKESPECIAL||!"<init>".equals(call.name)
+                        ||!classes.containsKey(call.owner)||owner.equals(call.owner)||!isSubclass(owner,call.owner))continue;
+                int argCount=Type.getArgumentTypes(call.desc).length;
+                if(frame.getStackSize()<argCount+1)continue;
+                Symbol receiver=resolve(constructor,frame.getStack(frame.getStackSize()-argCount-1),i,0,new LinkedHashSet<>());
+                if(!(receiver instanceof ParamSymbol param)||param.local()!=0)continue;
+                List<Symbol> inheritedArgs=new ArrayList<>(argCount);
+                int start=frame.getStackSize()-argCount;
+                for(int arg=0;arg<argCount;arg++){
+                    Symbol raw=resolve(constructor,frame.getStack(start+arg),i,0,new LinkedHashSet<>());
+                    inheritedArgs.add(substitute(raw,substitution));
+                }
+                String inherited=constructorUnlocalizedName(call.owner,call.desc,inheritedArgs,depth+1,guard);
+                if(inherited!=null&&!inherited.isBlank())names.add(inherited);
+            }
+            return names.size()==1?names.getFirst():null;
+        }finally{guard.remove(owner+desc);}
+    }
+
+    private static boolean isLoad(int opcode) {
+        return opcode==Opcodes.ALOAD||opcode==Opcodes.ILOAD||opcode==Opcodes.LLOAD||opcode==Opcodes.FLOAD||opcode==Opcodes.DLOAD;
+    }
+
+    private static boolean isStore(int opcode) {
+        // Primitive locals are safe scalar provenance. Reference locals intentionally remain
+        // fail-closed so object allocation aliases cannot widen registration proof.
+        return opcode==Opcodes.ISTORE||opcode==Opcodes.LSTORE||opcode==Opcodes.FSTORE||opcode==Opcodes.DSTORE;
+    }
+
+    private static boolean isNumericBinary(int opcode){
+        return switch(opcode){
+            case Opcodes.IADD,Opcodes.ISUB,Opcodes.IMUL,Opcodes.IDIV,Opcodes.IREM,
+                    Opcodes.LADD,Opcodes.LSUB,Opcodes.LMUL,Opcodes.LDIV,Opcodes.LREM,
+                    Opcodes.FADD,Opcodes.FSUB,Opcodes.FMUL,Opcodes.FDIV,Opcodes.FREM,
+                    Opcodes.DADD,Opcodes.DSUB,Opcodes.DMUL,Opcodes.DDIV,Opcodes.DREM -> true;
+            default -> false;
+        };
+    }
+
+    private static boolean isNumericUnary(int opcode){
+        return switch(opcode){
+            case Opcodes.INEG,Opcodes.LNEG,Opcodes.FNEG,Opcodes.DNEG,
+                    Opcodes.I2L,Opcodes.I2F,Opcodes.I2D,Opcodes.L2I,Opcodes.L2F,Opcodes.L2D,
+                    Opcodes.F2I,Opcodes.F2L,Opcodes.F2D,Opcodes.D2I,Opcodes.D2L,Opcodes.D2F -> true;
+            default -> false;
+        };
+    }
+
+    private static Symbol numericBinary(int opcode,Symbol left,Symbol right){
+        if(!(left instanceof NumberSymbol a)||!(right instanceof NumberSymbol b))return UnknownSymbol.INSTANCE;
+        try{
+            return switch(opcode){
+                case Opcodes.IADD->new NumberSymbol(a.value().intValue()+b.value().intValue());
+                case Opcodes.ISUB->new NumberSymbol(a.value().intValue()-b.value().intValue());
+                case Opcodes.IMUL->new NumberSymbol(a.value().intValue()*b.value().intValue());
+                case Opcodes.IDIV->b.value().intValue()==0?UnknownSymbol.INSTANCE:new NumberSymbol(a.value().intValue()/b.value().intValue());
+                case Opcodes.IREM->b.value().intValue()==0?UnknownSymbol.INSTANCE:new NumberSymbol(a.value().intValue()%b.value().intValue());
+                case Opcodes.LADD->new NumberSymbol(a.value().longValue()+b.value().longValue());
+                case Opcodes.LSUB->new NumberSymbol(a.value().longValue()-b.value().longValue());
+                case Opcodes.LMUL->new NumberSymbol(a.value().longValue()*b.value().longValue());
+                case Opcodes.LDIV->b.value().longValue()==0L?UnknownSymbol.INSTANCE:new NumberSymbol(a.value().longValue()/b.value().longValue());
+                case Opcodes.LREM->b.value().longValue()==0L?UnknownSymbol.INSTANCE:new NumberSymbol(a.value().longValue()%b.value().longValue());
+                case Opcodes.FADD->new NumberSymbol(a.value().floatValue()+b.value().floatValue());
+                case Opcodes.FSUB->new NumberSymbol(a.value().floatValue()-b.value().floatValue());
+                case Opcodes.FMUL->new NumberSymbol(a.value().floatValue()*b.value().floatValue());
+                case Opcodes.FDIV->new NumberSymbol(a.value().floatValue()/b.value().floatValue());
+                case Opcodes.FREM->new NumberSymbol(a.value().floatValue()%b.value().floatValue());
+                case Opcodes.DADD->new NumberSymbol(a.value().doubleValue()+b.value().doubleValue());
+                case Opcodes.DSUB->new NumberSymbol(a.value().doubleValue()-b.value().doubleValue());
+                case Opcodes.DMUL->new NumberSymbol(a.value().doubleValue()*b.value().doubleValue());
+                case Opcodes.DDIV->new NumberSymbol(a.value().doubleValue()/b.value().doubleValue());
+                case Opcodes.DREM->new NumberSymbol(a.value().doubleValue()%b.value().doubleValue());
+                default->UnknownSymbol.INSTANCE;
+            };
+        }catch(ArithmeticException invalid){return UnknownSymbol.INSTANCE;}
+    }
+
+    private static Symbol numericUnary(int opcode,Symbol input){
+        if(!(input instanceof NumberSymbol n))return UnknownSymbol.INSTANCE;
+        return switch(opcode){
+            case Opcodes.INEG->new NumberSymbol(-n.value().intValue());
+            case Opcodes.LNEG->new NumberSymbol(-n.value().longValue());
+            case Opcodes.FNEG->new NumberSymbol(-n.value().floatValue());
+            case Opcodes.DNEG->new NumberSymbol(-n.value().doubleValue());
+            case Opcodes.I2L,Opcodes.F2L,Opcodes.D2L->new NumberSymbol(n.value().longValue());
+            case Opcodes.I2F,Opcodes.L2F,Opcodes.D2F->new NumberSymbol(n.value().floatValue());
+            case Opcodes.I2D,Opcodes.L2D,Opcodes.F2D->new NumberSymbol(n.value().doubleValue());
+            case Opcodes.L2I,Opcodes.F2I,Opcodes.D2I->new NumberSymbol(n.value().intValue());
+            default->UnknownSymbol.INSTANCE;
+        };
+    }
+
+    private boolean isSubclass(String type, String target) {
+        for (int depth = 0; type != null && depth < 64; depth++) {
+            if (type.equals(target)) return true;
+            ClassNode node = classes.get(type);
+            if (node == null) {
+                if (target.equals("net/minecraft/item/Item")) return type.startsWith("net/minecraft/item/Item");
+                if (target.equals("net/minecraft/block/Block")) return type.startsWith("net/minecraft/block/Block");
+                return false;
+            }
+            type = node.superName;
+        }
+        return false;
+    }
+}

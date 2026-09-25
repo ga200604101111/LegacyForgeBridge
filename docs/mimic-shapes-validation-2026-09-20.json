@@ -1,0 +1,40 @@
+{
+  "status": "passed",
+  "base_commit": "fd75cadf77bd25ab7f46ff6fb887412921737f18",
+  "source_sha256": "bcceb588950f911398cfc94856a45527b4aa17b6e130927b2e0516fdf059b402",
+  "source_description": "BambooMod Minecraft 1.7.10 v2.6.8.5 (user supplied)",
+  "before": {
+    "geometry_rules": 19,
+    "metadata_variants": 287
+  },
+  "after": {
+    "geometry_rules": 21,
+    "metadata_variants": 327
+  },
+  "existing_variants_preserved": 287,
+  "new_metadata_variants": 40,
+  "explicit_inventory_material_fallbacks": [
+    "bamboomod:delude_height/14",
+    "bamboomod:delude_height/15",
+    "bamboomod:delude_height/6",
+    "bamboomod:delude_height/7",
+    "bamboomod:delude_width/14",
+    "bamboomod:delude_width/15",
+    "bamboomod:delude_width/6",
+    "bamboomod:delude_width/7"
+  ],
+  "geometry_model_files_checked": 654,
+  "owned_texture_references_checked": 4578,
+  "missing_owned_texture_references": 0,
+  "original_png_and_animation_entries_byte_identical": 223,
+  "pure_java_checks": "MimicShapeRegressionChecks: material schema; 256 stair shapes; 32 pane/curtain meshes; held curtain",
+  "presentation_passes_executed": 9,
+  "scope": "Standalone presentation pipeline and source/model regression checks, not full conversion/game acceptance",
+  "not_verified": [
+    "Full Gradle/JUnit suite",
+    "Minecraft-dependent client compilation",
+    "Full conversion engine",
+    "In-game rendering and interactions"
+  ],
+  "github_push_performed": true
+}

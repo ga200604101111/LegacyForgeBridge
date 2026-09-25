@@ -1,0 +1,224 @@
+diff --git a/src/main/java/dev/yinghuang/legacyforgebridge/convert/pass/GeneratedModEntrypointPass.java b/src/main/java/dev/yinghuang/legacyforgebridge/convert/pass/GeneratedModEntrypointPass.java
+index 701c986..868064f 100644
+--- a/src/main/java/dev/yinghuang/legacyforgebridge/convert/pass/GeneratedModEntrypointPass.java
++++ b/src/main/java/dev/yinghuang/legacyforgebridge/convert/pass/GeneratedModEntrypointPass.java
+@@ -30,6 +30,6 @@ public final class GeneratedModEntrypointPass implements ConversionPass {
+         ClassWriter writer=new ClassWriter(0);writer.visit(Opcodes.V21,Opcodes.ACC_PUBLIC|Opcodes.ACC_FINAL|Opcodes.ACC_SUPER,internalName,null,"java/lang/Object",new String[]{"net/fabricmc/api/ModInitializer","net/fabricmc/api/ClientModInitializer"});
+         MethodVisitor constructor=writer.visitMethod(Opcodes.ACC_PUBLIC,"<init>","()V",null,null);constructor.visitCode();constructor.visitVarInsn(Opcodes.ALOAD,0);constructor.visitMethodInsn(Opcodes.INVOKESPECIAL,"java/lang/Object","<init>","()V",false);constructor.visitInsn(Opcodes.RETURN);constructor.visitMaxs(1,1);constructor.visitEnd();
+         MethodVisitor main=writer.visitMethod(Opcodes.ACC_PUBLIC,"onInitialize","()V",null,null);main.visitCode();main.visitLdcInsn(modId);main.visitMethodInsn(Opcodes.INVOKESTATIC,"dev/yinghuang/legacyforgebridge/compat/LegacyPlainEntityRegistry","loadMod","(Ljava/lang/String;)V",false);main.visitMethodInsn(Opcodes.INVOKESTATIC,generatedBase+"/GeneratedContent","initialize","()V",false);main.visitInsn(Opcodes.RETURN);main.visitMaxs(1,1);main.visitEnd();
+-        MethodVisitor client=writer.visitMethod(Opcodes.ACC_PUBLIC,"onInitializeClient","()V",null,null);client.visitCode();client.visitMethodInsn(Opcodes.INVOKESTATIC,generatedBase+"/GeneratedClient","initialize","()V",false);client.visitLdcInsn(modId);client.visitMethodInsn(Opcodes.INVOKESTATIC,"dev/yinghuang/legacyforgebridge/render/ConvertedGridPotPresentationRuntime","initializeMod","(Ljava/lang/String;)V",false);client.visitLdcInsn(modId);client.visitMethodInsn(Opcodes.INVOKESTATIC,"dev/yinghuang/legacyforgebridge/render/ConvertedPlainEntityPresentationRuntime","initializeMod","(Ljava/lang/String;)V",false);client.visitLdcInsn(modId);client.visitMethodInsn(Opcodes.INVOKESTATIC,"dev/yinghuang/legacyforgebridge/render/ConvertedProcessorPresentationRuntime","initializeMod","(Ljava/lang/String;)V",false);client.visitLdcInsn(modId);client.visitMethodInsn(Opcodes.INVOKESTATIC,"dev/yinghuang/legacyforgebridge/render/ConvertedInertModelPresentationRuntime","initializeMod","(Ljava/lang/String;)V",false);client.visitLdcInsn(modId);client.visitMethodInsn(Opcodes.INVOKESTATIC,"dev/yinghuang/legacyforgebridge/render/ConvertedSeatBedPresentationRuntime","initializeMod","(Ljava/lang/String;)V",false);client.visitLdcInsn(modId);client.visitMethodInsn(Opcodes.INVOKESTATIC,"dev/yinghuang/legacyforgebridge/render/ConvertedPlantPresentationRuntime","initializeMod","(Ljava/lang/String;)V",false);client.visitLdcInsn(modId);client.visitMethodInsn(Opcodes.INVOKESTATIC,"dev/yinghuang/legacyforgebridge/render/ConvertedVariantSnowballPresentationRuntime","initializeMod","(Ljava/lang/String;)V",false);client.visitInsn(Opcodes.RETURN);client.visitMaxs(1,1);client.visitEnd();writer.visitEnd();return writer.toByteArray();
++        MethodVisitor client=writer.visitMethod(Opcodes.ACC_PUBLIC,"onInitializeClient","()V",null,null);client.visitCode();client.visitMethodInsn(Opcodes.INVOKESTATIC,generatedBase+"/GeneratedClient","initialize","()V",false);client.visitLdcInsn(modId);client.visitMethodInsn(Opcodes.INVOKESTATIC,"dev/yinghuang/legacyforgebridge/render/ConvertedGridPotPresentationRuntime","initializeMod","(Ljava/lang/String;)V",false);client.visitLdcInsn(modId);client.visitMethodInsn(Opcodes.INVOKESTATIC,"dev/yinghuang/legacyforgebridge/render/ConvertedPlainEntityPresentationRuntime","initializeMod","(Ljava/lang/String;)V",false);client.visitLdcInsn(modId);client.visitMethodInsn(Opcodes.INVOKESTATIC,"dev/yinghuang/legacyforgebridge/render/ConvertedProcessorPresentationRuntime","initializeMod","(Ljava/lang/String;)V",false);client.visitLdcInsn(modId);client.visitMethodInsn(Opcodes.INVOKESTATIC,"dev/yinghuang/legacyforgebridge/render/ConvertedInertModelPresentationRuntime","initializeMod","(Ljava/lang/String;)V",false);client.visitLdcInsn(modId);client.visitMethodInsn(Opcodes.INVOKESTATIC,"dev/yinghuang/legacyforgebridge/render/ConvertedOscillatingModelPresentationRuntime","initializeMod","(Ljava/lang/String;)V",false);client.visitLdcInsn(modId);client.visitMethodInsn(Opcodes.INVOKESTATIC,"dev/yinghuang/legacyforgebridge/render/ConvertedSeatBedPresentationRuntime","initializeMod","(Ljava/lang/String;)V",false);client.visitLdcInsn(modId);client.visitMethodInsn(Opcodes.INVOKESTATIC,"dev/yinghuang/legacyforgebridge/render/ConvertedPlantPresentationRuntime","initializeMod","(Ljava/lang/String;)V",false);client.visitLdcInsn(modId);client.visitMethodInsn(Opcodes.INVOKESTATIC,"dev/yinghuang/legacyforgebridge/render/ConvertedVariantSnowballPresentationRuntime","initializeMod","(Ljava/lang/String;)V",false);client.visitInsn(Opcodes.RETURN);client.visitMaxs(1,1);client.visitEnd();writer.visitEnd();return writer.toByteArray();
+     }
+ }
+diff --git a/src/main/java/dev/yinghuang/legacyforgebridge/convert/pass/LegacyBlockGeometryPass.java b/src/main/java/dev/yinghuang/legacyforgebridge/convert/pass/LegacyBlockGeometryPass.java
+index a260f63..4d82a94 100644
+--- a/src/main/java/dev/yinghuang/legacyforgebridge/convert/pass/LegacyBlockGeometryPass.java
++++ b/src/main/java/dev/yinghuang/legacyforgebridge/convert/pass/LegacyBlockGeometryPass.java
+@@ -14,6 +14,8 @@ import java.util.*;
+ public final class LegacyBlockGeometryPass implements ConversionPass {
+     private static final Gson JSON=new GsonBuilder().setPrettyPrinting().create();
+     private static final List<String> FACES=List.of("down","up","north","south","west","east");
++    // Matches the vanilla inventory stair silhouette (upper step on the west/left side).
++    private static final int HELD_STAIR_METADATA=1;
+     @Override public String id(){return "source-block-geometry";}
+     @Override public void apply(ConversionContext context)throws IOException {
+         Path staging=context.stagingDir(),manifest=staging.resolve(LegacyClientContentBaselinePass.CONTENT);
+@@ -56,7 +58,7 @@ public final class LegacyBlockGeometryPass implements ConversionPass {
+                 LegacyGeometry.Box box=LegacyGeometry.Box.from(v.bounds()),inv=LegacyGeometry.Box.from(v.inventoryBounds());
+                 boolean stairs=rule.family().endsWith("stairs"),pane=rule.family().equals("pane");
+                 List<LegacyGeometry.Box> world=stairs?LegacyGeometry.stairs(metadata):pane?LegacyGeometry.panes(0):List.of(box);
+-                List<LegacyGeometry.Box> held=stairs?LegacyGeometry.stairs(0):pane?List.of(new LegacyGeometry.Box(0,0,7d/16,1,1,9d/16)):List.of(inv);
++                List<LegacyGeometry.Box> held=stairs?LegacyGeometry.stairs(HELD_STAIR_METADATA):pane?List.of(new LegacyGeometry.Box(0,0,7d/16,1,1,9d/16)):List.of(inv);
+                 String worldId=ns+":block/lfb_geometry/"+path+"/"+metadata,heldId=ns+":item/lfb_geometry/"+path+"/"+metadata;
+                 boolean paneEdges=input.paneEdges().getOrDefault(metadata,true);
+                 JsonObject worldModel=pane?faceModel(LegacyGeometry.paneFaces(0,paneEdges),sprites):model(world,sprites);
+diff --git a/src/main/java/dev/yinghuang/legacyforgebridge/convert/pass/LegacyCombatItemPass.java b/src/main/java/dev/yinghuang/legacyforgebridge/convert/pass/LegacyCombatItemPass.java
+new file mode 100644
+index 0000000..c058871
+--- /dev/null
++++ b/src/main/java/dev/yinghuang/legacyforgebridge/convert/pass/LegacyCombatItemPass.java
+@@ -0,0 +1,184 @@
++package dev.yinghuang.legacyforgebridge.convert.pass;
++
++import com.google.gson.Gson;
++import com.google.gson.GsonBuilder;
++import com.google.gson.JsonArray;
++import com.google.gson.JsonElement;
++import com.google.gson.JsonObject;
++import com.google.gson.JsonParser;
++import dev.yinghuang.legacyforgebridge.convert.LegacyCombatItemAnalyzer;
++import dev.yinghuang.legacyforgebridge.convert.api.ConversionContext;
++import dev.yinghuang.legacyforgebridge.convert.api.ConversionPass;
++import dev.yinghuang.legacyforgebridge.convert.api.SupportLevel;
++
++import java.io.IOException;
++import java.nio.charset.StandardCharsets;
++import java.nio.file.Files;
++import java.nio.file.Path;
++import java.util.LinkedHashMap;
++import java.util.Map;
++
++/**
++ * Restores source-proven sword constants and bow use presentation without executing legacy code.
++ */
++public final class LegacyCombatItemPass implements ConversionPass {
++    public static final String OUTPUT = "legacyforgebridge/combat-item-rules.json";
++    private static final Gson JSON = new GsonBuilder().setPrettyPrinting().create();
++    private static final float MODERN_SWORD_ATTACK_SPEED = -2.4F;
++
++    @Override public String id() { return "legacy-combat-item-semantics"; }
++
++    @Override
++    public void apply(ConversionContext context) throws Exception {
++        Path contentPath = context.stagingDir().resolve(LegacyClientContentBaselinePass.CONTENT);
++        if (!Files.isRegularFile(contentPath)) return;
++        JsonObject content = read(contentPath);
++        JsonArray items = content.getAsJsonArray("items");
++        if (items == null) return;
++
++        Map<String, JsonObject> bySourceClass = new LinkedHashMap<>();
++        for (JsonElement element : items) {
++            if (!element.isJsonObject()) continue;
++            JsonObject item = element.getAsJsonObject();
++            if (item.has("sourceClass")) bySourceClass.put(item.get("sourceClass").getAsString(), item);
++        }
++
++        var analysis = new LegacyCombatItemAnalyzer().analyze(context.sourceJar());
++        JsonObject evidence = new JsonObject();
++        evidence.addProperty("schemaVersion", 1);
++        evidence.addProperty("sourceSha256", context.sourceHash());
++        JsonArray rules = new JsonArray();
++        int swords = 0, bows = 0;
++
++        for (var rule : analysis.rules()) {
++            JsonObject item = bySourceClass.get(rule.sourceClass());
++            if (item == null || !item.has("id")) continue;
++            String id = item.get("id").getAsString();
++            if (!id.equals(rule.registryName()) && !item.get("legacyRegistryName").getAsString().equals(rule.registryName())) {
++                // Registry analyzers may expose the legacy name while converted content owns a namespaced id.
++                String legacy = item.has("legacyRegistryName") ? item.get("legacyRegistryName").getAsString() : "";
++                if (!legacy.equals(rule.registryName())) continue;
++            }
++            if (rule.durability() > 0) item.addProperty("durability", rule.durability());
++            JsonObject value = new JsonObject();
++            value.addProperty("id", id);
++            value.addProperty("sourceClass", rule.sourceClass());
++            value.addProperty("kind", rule.kind().name().toLowerCase());
++            value.addProperty("durability", rule.durability());
++
++            String[] split = id.split(":", 2);
++            if (split.length != 2) continue;
++            String namespace = split[0], path = split[1];
++            if (rule.kind() == LegacyCombatItemAnalyzer.Kind.SWORD) {
++                item.addProperty("attackDamage", rule.attackDamage());
++                item.addProperty("attackSpeed", MODERN_SWORD_ATTACK_SPEED);
++                rewriteItemModels(context.stagingDir(), namespace, path, "minecraft:item/handheld");
++                value.addProperty("attackDamage", rule.attackDamage());
++                value.addProperty("attackSpeed", MODERN_SWORD_ATTACK_SPEED);
++                swords++;
++            } else {
++                item.addProperty("useDuration", rule.useDuration());
++                item.addProperty("pullTexturePrefix", rule.pullTexturePrefix());
++                item.addProperty("pullStages", rule.pullStages());
++                rewriteBow(context.stagingDir(), namespace, path, rule);
++                value.addProperty("useDuration", rule.useDuration());
++                value.addProperty("pullTexturePrefix", rule.pullTexturePrefix());
++                value.addProperty("pullStages", rule.pullStages());
++                bows++;
++            }
++            rules.add(value);
++        }
++        evidence.add("rules", rules);
++        JsonArray skipped = new JsonArray();
++        for (var item : analysis.skipped()) {
++            JsonObject value = new JsonObject();
++            value.addProperty("registryName", item.registryName());
++            value.addProperty("sourceClass", item.sourceClass());
++            value.addProperty("reason", item.reason());
++            skipped.add(value);
++        }
++        evidence.add("skipped", skipped);
++        JsonArray diagnostics = new JsonArray();
++        analysis.diagnostics().forEach(diagnostics::add);
++        evidence.add("diagnostics", diagnostics);
++        write(contentPath, content);
++        write(context.stagingDir().resolve(OUTPUT), evidence);
++        context.diagnostics().info("LFB-CONVERT-COMBAT-0001", SupportLevel.ADAPTED,
++                "Source-proven combat item semantics: swords=" + swords + ", bows=" + bows
++                        + "; bow projectile behavior remains a separate runtime adapter.");
++    }
++
++    private static void rewriteItemModels(Path staging, String namespace, String path, String parent) throws IOException {
++        Path root = staging.resolve("assets/" + namespace + "/models/item");
++        if (!Files.isDirectory(root)) return;
++        try (var walk = Files.walk(root)) {
++            for (Path model : walk.filter(Files::isRegularFile)
++                    .filter(file -> file.getFileName().toString().equals(path + ".json")
++                            || file.getFileName().toString().startsWith(path + "_lfb_meta_"))
++                    .toList()) {
++                JsonObject value = read(model);
++                if (!value.has("textures")) continue;
++                value.addProperty("parent", parent);
++                write(model, value);
++            }
++        }
++    }
++
++    private static void rewriteBow(Path staging, String namespace, String path,
++                                   LegacyCombatItemAnalyzer.Rule rule) throws IOException {
++        rewriteItemModels(staging, namespace, path, "minecraft:item/bow");
++        String prefix = modernTexture(rule.pullTexturePrefix());
++        for (int stage = 0; stage < rule.pullStages(); stage++) {
++            JsonObject model = new JsonObject();
++            model.addProperty("parent", "minecraft:item/bow");
++            JsonObject textures = new JsonObject();
++            textures.addProperty("layer0", prefix + stage);
++            model.add("textures", textures);
++            write(staging.resolve("assets/" + namespace + "/models/item/" + path + "_pulling_" + stage + ".json"), model);
++        }
++        Path defaultDefinition = staging.resolve("assets/" + namespace + "/items/" + path + ".json");
++        rewriteBowDefinition(defaultDefinition, namespace + ":item/" + path + "_pulling_0");
++        Path aliases = staging.resolve("assets/" + namespace + "/items/lfb_meta/" + path);
++        if (Files.isDirectory(aliases)) {
++            try (var walk = Files.walk(aliases)) {
++                for (Path definition : walk.filter(Files::isRegularFile)
++                        .filter(file -> file.toString().endsWith(".json")).toList()) {
++                    rewriteBowDefinition(definition, namespace + ":item/" + path + "_pulling_0");
++                }
++            }
++        }
++    }
++
++    private static void rewriteBowDefinition(Path path, String pullingModel) throws IOException {
++        if (!Files.isRegularFile(path)) return;
++        JsonObject root = read(path);
++        JsonElement ordinary = root.get("model");
++        if (ordinary == null || !ordinary.isJsonObject()) return;
++        JsonObject pulling = new JsonObject();
++        pulling.addProperty("type", "minecraft:model");
++        pulling.addProperty("model", pullingModel);
++        JsonObject condition = new JsonObject();
++        condition.addProperty("type", "minecraft:condition");
++        condition.addProperty("property", "minecraft:using_item");
++        condition.add("on_true", pulling);
++        condition.add("on_false", ordinary.deepCopy());
++        root.add("model", condition);
++        write(path, root);
++    }
++
++    private static String modernTexture(String legacyPrefix) {
++        int split = legacyPrefix.indexOf(':');
++        String namespace = split < 0 ? "minecraft" : legacyPrefix.substring(0, split);
++        String path = split < 0 ? legacyPrefix : legacyPrefix.substring(split + 1);
++        path = path.replaceFirst("^items?/", "");
++        return namespace + ":item/" + path;
++    }
++
++    private static JsonObject read(Path path) throws IOException {
++        return JsonParser.parseString(Files.readString(path, StandardCharsets.UTF_8)).getAsJsonObject();
++    }
++    private static void write(Path path, JsonObject value) throws IOException {
++        Files.createDirectories(path.getParent());
++        Files.writeString(path, JSON.toJson(value) + "\n", StandardCharsets.UTF_8);
++    }
++}

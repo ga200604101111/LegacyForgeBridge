@@ -6,7 +6,27 @@
     "TranslatableContentsMixin",
     "ViaComponentTranslationMixin",
     "ViaLegacyTextRewriterMixin",
-    "ViaLegacyGameModeMessageMixin"
+    "ViaLegacyGameModeMessageMixin",
+    "ViaLegacyEntityTrackerMixin",
+    "ViaLegacyEntityDataRewriterMixin",
+    "ViaLegacyModItemBoundaryMixin",
+    "ViaModernModItemBoundaryMixin",
+    "ViaLegacyModBlockBoundaryMixin",
+    "ViaLegacyMicroBlockDataMixin",
+    "ViaBlockStateMappingBoundaryMixin",
+    "SpecialModelRenderersMixin",
+    "LegacyLivingBehaviorMixin",
+    "LegacyHurtBehaviorMixin",
+    "LegacyLocalPlayerSoundMixin",
+    "LegacyNameTagBehaviorMixin",
+    "LegacyFuelValuesMixin",
+    "ViaTerminalBlockRewriteMixin",
+    "ViaNativeMetadataCodecMixin",
+    "LegacyMimicBlockUpdateMixin",
+    "LegacyFirstPersonBlockingPoseMixin",
+    "LegacyThirdPersonBlockingPoseMixin",
+    "LegacyHeldItemVisibilityMixin",
+    "LegacyRandomDisplayParticleMixin"
   ],
   "injectors": {
     "defaultRequire": 1

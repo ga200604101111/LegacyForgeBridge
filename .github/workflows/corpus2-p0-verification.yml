@@ -1,0 +1,31 @@
+name: corpus2-p0-verification
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/generic-conversion-bamboo-corpus2]
+permissions:
+  contents: read
+concurrency:
+  group: corpus2-p0-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build-test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.5.1'
+      - name: Full build and unit tests
+        run: gradle build --stacktrace
+      - uses: actions/upload-artifact@v7
+        if: success()
+        with:
+          name: LegacyForgeBridge-corpus2
+          path: build/libs/*.jar
+          retention-days: 3
+          if-no-files-found: error

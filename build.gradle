@@ -11,6 +11,8 @@ base {
 
 repositories {
     mavenCentral()
+    maven { name = 'Fabric'; url = 'https://maven.fabricmc.net/' }
+    maven { name = 'Cloth Config'; url = 'https://maven.shedaniel.me/' }
     maven { name = 'ViaVersion'; url = 'https://repo.viaversion.com' }
     maven { name = 'Lenni0451'; url = 'https://maven.lenni0451.net/everything' }
     maven { name = 'Terraformers'; url = 'https://maven.terraformersmc.com/releases' }
@@ -26,21 +28,42 @@ dependencies {
     mappings loom.officialMojangMappings()
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+    modImplementation "me.shedaniel.cloth:cloth-config-fabric:${project.cloth_config_version}"
+    modCompileOnly "com.terraformersmc:modmenu:${project.mod_menu_version}"
+
+    // Fabric ecosystem energy interoperability for source-proven legacy IEnergyHandler receivers.
+    // 4.2.x is the upstream Minecraft 1.21.5+ line and remains Java-21 compatible.
+    include modApi('teamreborn:energy:4.2.0')
 
     // ViaFabricPlus is an external runtime mod. Only its public API is used at compile time.
     // 4.4.15 is the required runtime; the public API artifact currently available for this
     // API-v6 line is 4.4.14 and exposes the same methods used by LegacyForgeBridge.
     modCompileOnly "com.viaversion:viafabricplus-api:${project.viafabricplus_api_version}"
 
+    // Exercise carrier NBT and the real upstream fallback policy in unit tests only.
+    // These dependencies are NOT included or shaded into LegacyForgeBridge.
+    testImplementation 'com.viaversion:viaversion-common:5.12.0-SNAPSHOT'
+    testImplementation 'net.raphimc:ViaLegacy:3.1.0-SNAPSHOT'
+
     // Fabric Loader 0.19.3 already supplies ASM 9.10.1 from the application class loader.
     // Never include/shade ASM inside this mod: doing so creates Knot/app ClassLoader conflicts
     // with Mixin, MixinExtras and preLaunch mods such as AsyncLogger.
     compileOnly 'org.ow2.asm:asm:9.10.1'
+    compileOnly 'org.ow2.asm:asm-tree:9.10.1'
+    compileOnly 'org.ow2.asm:asm-analysis:9.10.1'
     testImplementation 'org.ow2.asm:asm:9.10.1'
+    testImplementation 'org.ow2.asm:asm-tree:9.10.1'
+    testImplementation 'org.ow2.asm:asm-analysis:9.10.1'
 
     testImplementation platform('org.junit:junit-bom:5.11.4')
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+java {
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
 }
 
 // The user supplied original 1.7.10 .lang files. Keep those filtered message sources in the
@@ -128,16 +151,44 @@ tasks.withType(JavaCompile).configureEach {
 
 tasks.withType(Test).configureEach {
     useJUnitPlatform()
+    // CI #631 compiled successfully and passed the new regressions, then the aggregate
+    // compiler/Minecraft test worker exhausted its heap. Bound one test worker to 2 GiB;
+    // this affects verification only, never the user's Minecraft launch or shipped JAR.
+    maxHeapSize = '2g'
+    maxParallelForks = 1
     testLogging {
         events 'passed', 'skipped', 'failed'
         exceptionFormat = 'full'
     }
 }
 
-java {
-    withSourcesJar()
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
+// Binary corpora are never committed. The normal unit-test task excludes exact external corpus
+// tests; the dedicated task is fail-closed when explicitly requested without a pinned binary.
+tasks.named('test', Test) {
+    useJUnitPlatform {
+        excludeTags 'exact-corpus'
+    }
+}
+
+def exactCorpusJar = providers.gradleProperty('lfbExactCorpusJar')
+        .orElse(providers.environmentVariable('LFB_EXACT_CORPUS_JAR'))
+
+tasks.register('exactCorpusTest', Test) {
+    group = 'verification'
+    description = 'Runs checksum-pinned whole-JAR corpus regressions; fails if the external corpus is absent.'
+    dependsOn tasks.named('testClasses')
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform {
+        includeTags 'exact-corpus'
+    }
+    doFirst {
+        String corpus = exactCorpusJar.orNull
+        if (corpus == null || corpus.isBlank()) {
+            throw new GradleException('exactCorpusTest requires -PlfbExactCorpusJar=/path/to/Bamboo-2.6.8.5.jar or LFB_EXACT_CORPUS_JAR')
+        }
+        systemProperty 'lfb.exactCorpus.jar', corpus
+    }
 }
 
 jar {
@@ -168,8 +219,41 @@ tasks.register('verifyNoBundledAsm') {
     }
 }
 
+// The shipped mod namespace is dev.yinghuang. Catch any stale package path or class/resource
+// constant before an artifact can be published.
+tasks.register('verifyNoLongyuNamespace') {
+    dependsOn tasks.named('remapJar')
+
+    doLast {
+        File outputJar = tasks.named('remapJar').get().archiveFile.get().asFile
+        def offenders = []
+        def zip = new java.util.zip.ZipFile(outputJar)
+        try {
+            zip.entries().each { entry ->
+                if (entry.name.contains('longyu')) {
+                    offenders.add(entry.name)
+                    return
+                }
+                if (!entry.directory) {
+                    byte[] bytes = zip.getInputStream(entry).bytes
+                    String raw = new String(bytes, java.nio.charset.StandardCharsets.ISO_8859_1)
+                    if (raw.contains('dev.longyu') || raw.contains('dev/longyu')) {
+                        offenders.add(entry.name)
+                    }
+                }
+            }
+        } finally {
+            zip.close()
+        }
+        if (!offenders.isEmpty()) {
+            throw new GradleException("Final mod JAR still contains the retired longyu namespace: ${offenders}")
+        }
+    }
+}
+
 tasks.named('build') {
     dependsOn tasks.named('verifyNoBundledAsm')
+    dependsOn tasks.named('verifyNoLongyuNamespace')
 }
 
 publishing {

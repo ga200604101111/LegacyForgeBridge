@@ -1,0 +1,52 @@
+--- a/src/main/java/dev/yinghuang/legacyforgebridge/BuildInfo.java
++++ b/src/main/java/dev/yinghuang/legacyforgebridge/BuildInfo.java
+@@ -4,7 +4,7 @@
+     /* Runtime fields: logging, cache and manifest must observe one converter identity. */
+     public static final String VERSION = text("0.2.0-alpha.27");
+     public static final int CONVERSION_SCHEMA = number(2);
+-    public static final String CONVERTER_REVISION = text("2026-09-25.194-furniture-world-presentation-and-remote-menus");
++    public static final String CONVERTER_REVISION = text("2026-09-25.195-gridpot-property-abi");
+ 
+     private BuildInfo() { }
+     private static String text(String value) { return value; }
+--- a/src/main/java/dev/yinghuang/legacyforgebridge/render/ConvertedLegacyGridPotRenderer.java
++++ b/src/main/java/dev/yinghuang/legacyforgebridge/render/ConvertedLegacyGridPotRenderer.java
+@@ -18,6 +18,7 @@
+ import dev.yinghuang.legacyforgebridge.compat.LegacyStackComponents;
+ import dev.yinghuang.legacyforgebridge.convert.runtime.ConvertedLegacyBlock;
+ import net.minecraft.world.level.block.state.BlockState;
++import net.minecraft.world.level.block.state.properties.Property;
+ import net.minecraft.world.phys.AABB;
+ import net.minecraft.world.phys.Vec3;
+ import org.jetbrains.annotations.Nullable;
+@@ -60,7 +61,9 @@
+             state.items[slot]=null;state.blocks[slot]=null;
+             if(stack.isEmpty()||!(stack.getItem() instanceof BlockItem blockItem))continue;
+             BlockState content=blockItem.getBlock().defaultBlockState();
+-            if(content.hasProperty(ConvertedLegacyBlock.LEGACY_META))
++            // Keep the common Property ABI explicit: IntegerProperty and BooleanProperty are siblings.
++            Property<?> metadataProperty = ConvertedLegacyBlock.LEGACY_META;
++            if(content.hasProperty(metadataProperty))
+                 content=ConvertedLegacyBlock.withLegacyMeta(content,LegacyStackComponents.get(stack));
+             state.blocks[slot]=content;
+ 
+--- a/src/main/java/dev/yinghuang/legacyforgebridge/render/LegacySuspendedModelRenderer.java
++++ b/src/main/java/dev/yinghuang/legacyforgebridge/render/LegacySuspendedModelRenderer.java
+@@ -27,6 +27,7 @@
+         if(level!=world){level=world;MOTION.clear();}
+         if(world==null){state.swingX=state.swingY=0;return;}
+         var swing=MOTION.computeIfAbsent(entity,e->new LegacyFurnitureVisualMath.Swing(e.getId()));
++        // 1.21.11 resolves getGameTime through LevelAccessor, not the removed Level ABI.
+         swing.update(world.getGameTime());state.swingX=swing.x(fraction);state.swingY=swing.y(fraction);
+     }
+     public static void submit(LegacyVisibleEntityRegistry.Rule rule,List<ModelPart> parts,
+--- a/src/test/java/dev/yinghuang/legacyforgebridge/BuildInfoTest.java
++++ b/src/test/java/dev/yinghuang/legacyforgebridge/BuildInfoTest.java
+@@ -31,6 +31,6 @@
+             }, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+         }
+         assertEquals(expected, visited);
+-        assertEquals("2026-09-25.194-furniture-world-presentation-and-remote-menus", BuildInfo.CONVERTER_REVISION);
++        assertEquals("2026-09-25.195-gridpot-property-abi", BuildInfo.CONVERTER_REVISION);
+     }
+ }

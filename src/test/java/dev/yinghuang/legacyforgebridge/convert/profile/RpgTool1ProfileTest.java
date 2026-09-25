@@ -21,7 +21,7 @@ class RpgTool1ProfileTest {
     Path tempDir;
 
     @Test
-    void exactCorpusBaselineIsAcceptedAndProfileDoesNotForkTheCommonEngine() throws Exception {
+    void exactCorpusBaselineIsAcceptedAndProfileAddsSemanticPasses() throws Exception {
         RpgTool1Profile profile = new RpgTool1Profile();
         LegacyModMetadata metadata = metadata();
         LegacyJarAnalyzer.Analysis analysis = baselineAnalysis(53);
@@ -33,8 +33,14 @@ class RpgTool1ProfileTest {
         ConversionPlan.Builder builder = ConversionPlan.builder(profile.id());
         profile.configure(builder);
         ConversionPlan plan = builder.build();
-        assertEquals(1, plan.passes().size(), "The RPGTool profile should only contribute a corpus guard, not a forked converter");
+        assertEquals(
+                4,
+                plan.passes().size(),
+                "RPGTool contributes corpus guard + semantic content + resource normalization + presentation metadata"
+        );
 
+        // This profile test only exercises the corpus guard. The semantic/resource/presentation
+        // passes have dedicated staging-tree tests because they intentionally read/write resources.
         plan.passes().getFirst().apply(context);
         context.markPassApplied(plan.passes().getFirst().id());
 
