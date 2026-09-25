@@ -2,6 +2,18 @@
 
 LegacyForgeBridge is an experimental Fabric 1.21.11 compatibility and conversion layer for legacy Minecraft Forge 1.7.10 mods.
 
+## Latest delivered local build: rev193
+
+The latest locally delivered replacement is `legacyforgebridge-0.2.0-alpha.27-rev193.jar`. It integrates vanilla tray/pot display-stack handling into the main bridge; the old `lfb_visual_stack_hotfix` add-on is no longer needed and must be removed.
+
+**Source storage note:** this branch currently retains rev189–193 in checksum-verified source checkpoints; the root `src/` tree is still the rev188 base. Do not build that old tree and label it rev193. Restore all revisions into a new directory first:
+
+```sh
+python checkpoints/rev193/restore.py --output ../LegacyForgeBridge-rev193
+```
+
+See [rev193 source, installation and validation boundaries](checkpoints/rev193/README.md). The local build was incremental, not a full clean Gradle/Loom or Minecraft integration run. Wind chimes and campfire GUI dispatch remain unresolved. No new Actions build was requested.
+
 ## Project goals
 
 1. Let a modern Fabric 1.21.11 client interoperate with a clean Forge 1.7.10 server as the first networking milestone.

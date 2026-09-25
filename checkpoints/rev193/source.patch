@@ -1,0 +1,285 @@
+diff --git a/src/main/java/dev/yinghuang/legacyforgebridge/BuildInfo.java b/src/main/java/dev/yinghuang/legacyforgebridge/BuildInfo.java
+index ec66b98..02266a2 100644
+--- a/src/main/java/dev/yinghuang/legacyforgebridge/BuildInfo.java
++++ b/src/main/java/dev/yinghuang/legacyforgebridge/BuildInfo.java
+@@ -4,7 +4,7 @@ public final class BuildInfo {
+     /* Runtime fields: logging, cache and manifest must observe one converter identity. */
+     public static final String VERSION = text("0.2.0-alpha.27");
+     public static final int CONVERSION_SCHEMA = number(2);
+-    public static final String CONVERTER_REVISION = text("2026-09-25.192-selection-subtypes-and-shape-parity");
++    public static final String CONVERTER_REVISION = text("2026-09-25.193-native-vanilla-display-stacks");
+ 
+     private BuildInfo() { }
+     private static String text(String value) { return value; }
+diff --git a/src/main/java/dev/yinghuang/legacyforgebridge/compat/LegacyDisplayStackCache.java b/src/main/java/dev/yinghuang/legacyforgebridge/compat/LegacyDisplayStackCache.java
+new file mode 100644
+index 0000000..a18353c
+--- /dev/null
++++ b/src/main/java/dev/yinghuang/legacyforgebridge/compat/LegacyDisplayStackCache.java
+@@ -0,0 +1,52 @@
++package dev.yinghuang.legacyforgebridge.compat;
++
++import java.util.LinkedHashMap;
++import java.util.Map;
++
++/** Bounded visual-stack templates, scoped to the live client world and FML identity. */
++public final class LegacyDisplayStackCache<T> {
++    public interface Backend<T> {
++        String identity(int legacyId);
++        Object world();
++        T migrate(String identity, int metadata, Object world);
++        T copy(T stack);
++        int maxCount(T stack);
++        void count(T stack, int count);
++    }
++    private record Key(String identity, int metadata) { }
++    private final int capacity;
++    private final Map<Key, T> templates = new LinkedHashMap<>(16, 0.75f, true);
++    private Object world;
++
++    public LegacyDisplayStackCache(int capacity) {
++        if (capacity < 1) throw new IllegalArgumentException("capacity");
++        this.capacity = capacity;
++    }
++
++    /** Null leaves the caller's existing modded/unknown-item path in control. */
++    public synchronized T resolve(int id, int count, int meta, Backend<T> api) {
++        if (id < 0 || count <= 0 || count > 255 || meta < 0 || meta > 65535) return null;
++        // Never memoize numeric ids: FML may replace their identities between sessions.
++        String identity = api.identity(id);
++        if (identity == null || !identity.startsWith("minecraft:") || identity.length() <= 10) return null;
++        Object currentWorld = api.world();
++        if (currentWorld != world) { templates.clear(); world = currentWorld; }
++        if (world == null) return null;
++        Key key = new Key(identity, meta);
++        T template = templates.get(key);
++        if (template == null) {
++            template = api.migrate(identity, meta, world);
++            // A temporarily unavailable registry must be retried, not negatively cached.
++            if (template == null) return null;
++            if (templates.size() >= capacity) templates.remove(templates.keySet().iterator().next());
++            templates.put(key, template);
++        }
++        T result = api.copy(template);
++        int maximum = api.maxCount(result);
++        if (maximum < 1) return null;
++        api.count(result, Math.min(count, maximum));
++        return result;
++    }
++
++    public synchronized int size() { return templates.size(); }
++}
+diff --git a/src/main/java/dev/yinghuang/legacyforgebridge/compat/LegacyVanillaDisplayStacks.java b/src/main/java/dev/yinghuang/legacyforgebridge/compat/LegacyVanillaDisplayStacks.java
+new file mode 100644
+index 0000000..7df877e
+--- /dev/null
++++ b/src/main/java/dev/yinghuang/legacyforgebridge/compat/LegacyVanillaDisplayStacks.java
+@@ -0,0 +1,52 @@
++package dev.yinghuang.legacyforgebridge.compat;
++
++import com.google.gson.JsonObject;
++import com.mojang.serialization.JsonOps;
++import dev.yinghuang.legacyforgebridge.LegacyForgeBridge;
++import dev.yinghuang.legacyforgebridge.convert.LegacyVanillaStackDataFix;
++import net.minecraft.client.Minecraft;
++import net.minecraft.client.multiplayer.ClientLevel;
++import net.minecraft.resources.RegistryOps;
++import net.minecraft.world.item.ItemStack;
++
++/** Native bridge display-stack resolution. DFU, not per-mod tables, owns vanilla flattening. */
++public final class LegacyVanillaDisplayStacks {
++    private static final LegacyDisplayStackCache<ItemStack> CACHE = new LegacyDisplayStackCache<>(2048);
++    private static final LegacyDisplayStackCache.Backend<ItemStack> BACKEND = new RuntimeBackend();
++    private static final java.util.concurrent.atomic.AtomicBoolean WARNED = new java.util.concurrent.atomic.AtomicBoolean();
++    private LegacyVanillaDisplayStacks() { }
++
++    /** Null means retain the original modded/unknown-item implementation. Never changes a packet. */
++    public static ItemStack tryVanilla(int legacyId, int count, int metadata) {
++        try {
++            return CACHE.resolve(legacyId, count, metadata, BACKEND);
++        } catch (RuntimeException | LinkageError error) {
++            if (WARNED.compareAndSet(false, true))
++                LegacyForgeBridge.LOGGER.warn("Vanilla display-stack migration failed; retaining the original visual path: {}", error.toString());
++            return null;
++        }
++    }
++
++    private static final class RuntimeBackend implements LegacyDisplayStackCache.Backend<ItemStack> {
++        @Override public String identity(int id) {
++            var identity = LegacyModItemRegistryMap.legacyAnyIdentity(id);
++            return identity == null ? null : identity.toString();
++        }
++        @Override public Object world() { return Minecraft.getInstance().level; }
++        @Override public ItemStack migrate(String identity, int metadata, Object world) {
++            var fixed = LegacyVanillaStackDataFix.upgrade(identity, metadata);
++            JsonObject value = new JsonObject();
++            value.addProperty("id", fixed.id());
++            value.add("components", fixed.components());
++            var ops = RegistryOps.create(JsonOps.INSTANCE, ((ClientLevel) world).registryAccess());
++            ItemStack stack = ItemStack.CODEC.parse(ops, value).result().orElse(null);
++            if (stack == null || stack.isEmpty()) return null;
++            // Keep the raw subtype separately; do not turn a flower variant into durability.
++            LegacyStackComponents.set(stack, metadata);
++            return stack;
++        }
++        @Override public ItemStack copy(ItemStack stack) { return stack.copy(); }
++        @Override public int maxCount(ItemStack stack) { return stack.getMaxStackSize(); }
++        @Override public void count(ItemStack stack, int count) { stack.setCount(count); }
++    }
++}
+diff --git a/src/main/java/dev/yinghuang/legacyforgebridge/render/ConvertedLegacyVisualEntityRenderer.java b/src/main/java/dev/yinghuang/legacyforgebridge/render/ConvertedLegacyVisualEntityRenderer.java
+index b461624..9a53b54 100644
+--- a/src/main/java/dev/yinghuang/legacyforgebridge/render/ConvertedLegacyVisualEntityRenderer.java
++++ b/src/main/java/dev/yinghuang/legacyforgebridge/render/ConvertedLegacyVisualEntityRenderer.java
+@@ -165,6 +165,8 @@ public final class ConvertedLegacyVisualEntityRenderer extends EntityRenderer<Co
+ 
+     private static ItemStack modernStack(FmlRuntimeCodec.LegacyItemStack legacy){
+         if(legacy==null||legacy.empty())return ItemStack.EMPTY;
++        ItemStack vanilla=LegacyVanillaDisplayStacks.tryVanilla(legacy.legacyItemId(),legacy.count(),legacy.damage());
++        if(vanilla!=null)return vanilla;
+         Identifier id=LegacyModItemRegistryMap.legacyIdentity(legacy.legacyItemId());
+         if(id==null)id=LegacyModBlockRegistryMap.legacyIdentity(legacy.legacyItemId());
+         if(id==null||!BuiltInRegistries.ITEM.containsKey(id))return ItemStack.EMPTY;
+diff --git a/src/main/java/dev/yinghuang/legacyforgebridge/render/LegacyGridPotNetworkBridge.java b/src/main/java/dev/yinghuang/legacyforgebridge/render/LegacyGridPotNetworkBridge.java
+index e6c95cc..f01c980 100644
+--- a/src/main/java/dev/yinghuang/legacyforgebridge/render/LegacyGridPotNetworkBridge.java
++++ b/src/main/java/dev/yinghuang/legacyforgebridge/render/LegacyGridPotNetworkBridge.java
+@@ -6,6 +6,7 @@ import com.viaversion.viaversion.api.minecraft.BlockPosition;
+ import dev.yinghuang.legacyforgebridge.LegacyForgeBridge;
+ import dev.yinghuang.legacyforgebridge.compat.LegacyGridPotBlockRegistry;
+ import dev.yinghuang.legacyforgebridge.compat.LegacyModItemRegistryMap;
++import dev.yinghuang.legacyforgebridge.compat.LegacyVanillaDisplayStacks;
+ import dev.yinghuang.legacyforgebridge.convert.runtime.ConvertedLegacyGridPotBlockEntity;
+ import dev.yinghuang.legacyforgebridge.convert.runtime.ConvertedStackPresentation;
+ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+@@ -81,12 +82,14 @@ public final class LegacyGridPotNetworkBridge {
+     private static ItemStack stack(CompoundTag tag){
+         if(tag==null||!tag.contains("id"))return ItemStack.EMPTY;
+         int legacyId=Short.toUnsignedInt(tag.getShort("id"));
+-        Identifier modern=LegacyModItemRegistryMap.legacyAnyIdentity(legacyId);
+-        if(modern==null||!BuiltInRegistries.ITEM.containsKey(modern))return ItemStack.EMPTY;
+-        Item item=BuiltInRegistries.ITEM.getValue(modern);if(item==null)return ItemStack.EMPTY;
+         int count=tag.contains("Count")?Byte.toUnsignedInt(tag.getByte("Count")):1;
+         if(count<=0)return ItemStack.EMPTY;
+         int metadata=tag.contains("Damage")?Short.toUnsignedInt(tag.getShort("Damage")):0;
++        ItemStack vanilla=LegacyVanillaDisplayStacks.tryVanilla(legacyId,count,metadata);
++        if(vanilla!=null)return vanilla;
++        Identifier modern=LegacyModItemRegistryMap.legacyAnyIdentity(legacyId);
++        if(modern==null||!BuiltInRegistries.ITEM.containsKey(modern))return ItemStack.EMPTY;
++        Item item=BuiltInRegistries.ITEM.getValue(modern);if(item==null)return ItemStack.EMPTY;
+         ItemStack stack=ConvertedStackPresentation.create(item,metadata);
+         if(stack.isEmpty())return ItemStack.EMPTY;
+         stack.setCount(Math.min(count,stack.getMaxStackSize()));
+diff --git a/src/main/resources/fabric.mod.json b/src/main/resources/fabric.mod.json
+index 72c8f58..0667458 100644
+--- a/src/main/resources/fabric.mod.json
++++ b/src/main/resources/fabric.mod.json
+@@ -45,5 +45,8 @@
+   },
+   "suggests": {
+     "modmenu": ">=17.0.0"
++  },
++  "breaks": {
++    "lfb_visual_stack_hotfix": "*"
+   }
+ }
+diff --git a/src/test/java/dev/yinghuang/legacyforgebridge/BuildInfoTest.java b/src/test/java/dev/yinghuang/legacyforgebridge/BuildInfoTest.java
+index 58c1e80..f451eaa 100644
+--- a/src/test/java/dev/yinghuang/legacyforgebridge/BuildInfoTest.java
++++ b/src/test/java/dev/yinghuang/legacyforgebridge/BuildInfoTest.java
+@@ -31,6 +31,6 @@ final class BuildInfoTest {
+             }, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+         }
+         assertEquals(expected, visited);
+-        assertTrue(BuildInfo.CONVERTER_REVISION.matches("\\d{4}-\\d{2}-\\d{2}\\.\\d+-.+"));
++        assertEquals("2026-09-25.193-native-vanilla-display-stacks", BuildInfo.CONVERTER_REVISION);
+     }
+ }
+diff --git a/src/test/java/dev/yinghuang/legacyforgebridge/compat/LegacyDisplayStackCacheTest.java b/src/test/java/dev/yinghuang/legacyforgebridge/compat/LegacyDisplayStackCacheTest.java
+new file mode 100644
+index 0000000..2a84c61
+--- /dev/null
++++ b/src/test/java/dev/yinghuang/legacyforgebridge/compat/LegacyDisplayStackCacheTest.java
+@@ -0,0 +1,82 @@
++package dev.yinghuang.legacyforgebridge.compat;
++
++import java.util.HashMap;
++import java.util.Map;
++
++/** Tests orchestration with an explicit fake backend; does NOT claim Minecraft DFU/render tests. */
++public final class LegacyDisplayStackCacheTest {
++    static int checks;
++    static final class Stack {
++        final String identity; final int metadata; int count; int maximum = 64;
++        Stack(String identity, int metadata) { this.identity = identity; this.metadata = metadata; }
++        Stack copy() { Stack out = new Stack(identity, metadata); out.count = count; out.maximum = maximum; return out; }
++    }
++    static final class Fake implements LegacyDisplayStackCache.Backend<Stack> {
++        final Map<Integer, String> identities = new HashMap<>();
++        Object world = new Object(); int migrations, identityCalls; boolean fail; Stack lastTemplate;
++        public String identity(int id) { identityCalls++; return identities.get(id); }
++        public Object world() { return world; }
++        public Stack migrate(String identity, int metadata, Object world) {
++            migrations++; if (fail) return null;
++            return lastTemplate = new Stack(identity, metadata);
++        }
++        public Stack copy(Stack stack) { return ((Stack) stack).copy(); }
++        public int maxCount(Stack stack) { return ((Stack) stack).maximum; }
++        public void count(Stack stack, int count) { ((Stack) stack).count = count; }
++    }
++    static void check(boolean condition, String message) {
++        checks++; if (!condition) throw new AssertionError(message);
++    }
++    @org.junit.jupiter.api.Test
++    void nativeCacheRegression() throws Exception { main(new String[0]); }
++
++    public static void main(String[] args) throws Exception {
++        checks = 0;
++        Fake api = new Fake(); LegacyDisplayStackCache<Stack> resolver = new LegacyDisplayStackCache<>(3);
++        api.identities.put(357, "minecraft:cookie"); api.identities.put(38, "minecraft:red_flower");
++        api.identities.put(37, "minecraft:yellow_flower"); api.identities.put(4240, "example:food");
++        check(resolver.resolve(-1, 1, 0, api) == null, "negative/null stack id preserved");
++        check(resolver.resolve(357, 0, 0, api) == null, "zero-count sentinel not fabricated");
++        check(resolver.resolve(357, -1, 0, api) == null, "negative count rejected");
++        check(resolver.resolve(357, 256, 0, api) == null, "invalid count rejected");
++        check(resolver.resolve(357, 1, -1, api) == null, "negative metadata rejected");
++        check(resolver.resolve(357, 1, 65536, api) == null, "invalid metadata rejected");
++        check(api.identityCalls == 0, "invalid data does not enter runtime registry");
++        check(resolver.resolve(9999, 1, 0, api) == null, "unknown id stays original");
++        check(resolver.resolve(4240, 1, 7, api) == null, "modded subtype stays original");
++        check(api.migrations == 0, "no DFU on unknown/modded stacks");
++        Stack cookie = (Stack) resolver.resolve(357, 1, 0, api);
++        check(cookie.identity.equals("minecraft:cookie"), "FML identity passed to backend");
++        check(cookie.count == 1, "source count preserved");
++        check(cookie != api.lastTemplate, "template is not returned mutable");
++        cookie.count = 33;
++        Stack cookie2 = (Stack) resolver.resolve(357, 2, 0, api);
++        check(cookie2.count == 2 && cookie2 != cookie, "fresh copy per render");
++        check(api.migrations == 1, "repeated render avoids repeated migration");
++        check(((Stack) resolver.resolve(357, 255, 0, api)).count == 64, "count clamped to item maximum");
++        Stack flower0 = (Stack) resolver.resolve(38, 1, 0, api);
++        Stack flower8 = (Stack) resolver.resolve(38, 1, 8, api);
++        check(flower0.metadata == 0 && flower8.metadata == 8, "flower subtype forwarded, not collapsed");
++        check(api.migrations == 3, "subtype occupies distinct cache entry");
++        check(resolver.size() == 3, "cache contains distinct item/metadata entries");
++        resolver.resolve(37, 1, 0, api);
++        check(resolver.size() == 3, "cache bounded after new item");
++        int before = api.migrations; resolver.resolve(357, 1, 0, api);
++        check(api.migrations == before + 1, "evicted entry recomputed");
++        api.identities.put(357, "minecraft:bread");
++        Stack remapped = (Stack) resolver.resolve(357, 1, 0, api);
++        check(remapped.identity.equals("minecraft:bread"), "numeric registry rebind cannot return stale cookie");
++        api.world = new Object(); before = api.migrations;
++        resolver.resolve(357, 1, 0, api);
++        check(api.migrations == before + 1 && resolver.size() == 1, "world switch invalidates templates");
++        api.world = null;
++        check(resolver.resolve(357, 1, 0, api) == null && resolver.size() == 0, "disconnect returns original and clears cache");
++        api.world = new Object(); api.fail = true; before = api.migrations;
++        check(resolver.resolve(357, 1, 0, api) == null, "failed migration does not fabricate item");
++        check(resolver.resolve(357, 1, 0, api) == null && api.migrations == before + 2, "failure not cached permanently");
++        api.fail = false;
++        check(resolver.resolve(357, 1, 0, api) != null, "late available registry can recover");
++        check(resolver.size() == 1, "successful recovery enters cache");
++        System.out.println("PASS: " + checks + " isolated resolver assertions (fake backend; no game/DFU execution)");
++    }
++}
