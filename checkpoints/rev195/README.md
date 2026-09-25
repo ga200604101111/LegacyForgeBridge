@@ -1,43 +1,51 @@
-# rev195 - repair Property verification and world-clock linkage
+# rev195 - Property verification and world-clock linkage repair
 
 **rev194 is superseded because its GridPot renderer fails JVM verification.**
-Replacement: `legacyforgebridge-0.2.0-alpha.27-rev195.jar`
-SHA-256: `e5e7a60ae49ee1b934badd9e791c82ae13fd4d20c15877619a2caa39d9c2ec78`
 
-## Root causes and actual changes
+Current recovered replacement: `legacyforgebridge-0.2.0-alpha.27-rev195.jar`
 
-The previous local compile-only declarations incorrectly treated `net.minecraft.class_2746` as the generic Property base. In 1.21.11 it is BooleanProperty; IntegerProperty (`class_2758`) and BooleanProperty are siblings under Property (`class_2769`). This emitted an invalid BlockState `method_28498(BooleanProperty)` call at bytecode offset 138, matching the supplied 18:21:48 resource reload error. Correct declarations and an explicit `Property<?>` source variable now produce the correct parameter descriptor. The renderer still submits native world block models; it is not disabled or reverted to flat icons.
+SHA-256: `5187fbbefa1adb73a0ca9b94d96552636619dec98acdbcf2b240e1da849e627e`
 
-The follow-up ABI audit also found an obsolete world-clock reference in the wind-chime renderer. 1.21.11 inherits `getGameTime` / Yarn `getTime` from LevelAccessor / WorldAccess, intermediary `class_1936.method_75260()J`. The local projection had emitted `ClientLevel.method_8510()J`. It is now recompiled with the current inherited default method. This second issue was found by source/binary inspection and a local negative control, not in the user's pasted stack trace.
+Size: 3,702,399 bytes. This checksum supersedes the earlier unavailable local build recorded as `e5e7a60ae49ee1b934badd9e791c82ae13fd4d20c15877619a2caa39d9c2ec78`. The normal-symbol source patch remains unchanged; the current artifact and verification report are the delivery reference.
 
-Only BuildInfo, the GridPot renderer extraction body and the suspended-model extraction body change in the main JAR. The two render methods are recompiled locally and integrated against a pinned rev194 input. All other 1,451 archive entries are byte-identical; no classes are added or removed. Prior tray, plant model, hydration and remote-menu implementation remains. No separate hotfix mod is required.
+## Root causes and changes
 
-## Verification performed
+The previous compile-only declarations incorrectly treated `net.minecraft.class_2746` as the generic Property base. In 1.21.11 it is BooleanProperty. IntegerProperty (`class_2758`) and BooleanProperty are siblings under Property (`class_2769`). The resulting `method_28498(BooleanProperty)` call in the GridPot renderer is invalid, matching the supplied 18:21:48 resource reload failure at bytecode offset 138. Correct declarations and an explicit `Property<?>` source variable produce the correct descriptor. Native world block models are retained; the renderer is not disabled or reverted to flat icons.
 
-- JDK21 `-Xverify:all` with explicitly corrected API fixtures rejects the exact rev194 GridPot class at offset 138 and accepts rev195.
-- Executing the exact old suspended-model extraction against a corrected inherited-default clock fixture throws the expected `NoSuchMethodError`. rev195 resolves the new method; changing the world time and clearing the world are also tested.
-- All 176 existing recording-fixture regression assertions pass with the corrected Property and clock declarations.
-- All 1,439 top-level classes are scanned for the two targeted ABI families: nine Property-presence and three world-clock references, zero invalid references remaining.
-- A second targeted local build in a fresh directory produced identical bytes.
-- The four-file Java source patch applies cleanly to the isolated rev194 source subset and matches the intended files exactly.
+The suspended-model renderer also referenced obsolete `ClientLevel.method_8510()J`. The correct inherited WorldAccess/LevelAccessor clock is `class_1936.method_75260()J`. This second defect was found through inspection and reproduced with an API-fixture negative control, not observed in the user's pasted exception.
 
-These are API-fixture tests, not an actual Minecraft/Fabric/Mixin launch, full Gradle/Loom build, live server test, or certification that every rev194 gameplay feature works. The earlier tests used an incorrect API model and therefore missed the defect; both old-release negative controls are now mandatory. Optional GridPot insertion-predicate conflicts remain unchanged.
+Only the two extraction method bodies and BuildInfo change against the exact delivered rev194 JAR. All other 1,451 archive entries are byte-identical. No entries are added or removed. Existing tray placement, plant models, wind-chime implementation, hydration and remote-menu implementation remain; this does not certify those features in live gameplay.
+
+## Current local verification
+
+- Exact rev194 renderer bytecode is rejected by JDK21 `-Xverify:all` under corrected Property fixtures at offset 138. The rebuilt renderer passes the corresponding JVM check.
+- Exact rev194 wind extraction produces the expected obsolete-clock `NoSuchMethodError` under corrected inherited-default fixtures. The rebuilt method passes time advance and null-world reset checks.
+- All 176 existing recording-fixture assertions pass, including tray, pot, wind, hydration and menu/screen/dispatch cases.
+- The expanded audit scans all 1,439 top-level classes and checks 14 Property-presence calls and three current world-clock calls. No invalid references remain in these two targeted families. The audit does not validate every Minecraft member.
+- ASM BasicVerifier checks the three changed classes and 17 methods.
+- A fresh-directory rebuild produces exactly the same JAR bytes.
+- The unchanged four-file source patch applies cleanly with zero fuzz to the locally restored rev194 source tree.
+- No Minecraft, fixture or dependency classes are added to the mod.
+
+These are corrected API-fixture tests, not a complete Minecraft/Fabric/Mixin launch, full Gradle/Loom build or live server test. The earlier tests used an incorrect API model and missed the defect. Optional GridPot insertion-predicate conflicts are not changed. No Actions build was requested.
 
 ## Install
 
-Close the client, replace the old main LegacyForgeBridge JAR with rev195, and keep other dependencies and original `old-mods` files. Remove the obsolete `lfb-visual-stack-hotfix` add-on if still present. Complete conversion and restart when requested; converter fingerprint is `2026-09-25.195-gridpot-property-abi`. Do not delete settings, resource packs or server data. The failed reload may have deselected resource packs; re-enable desired packs after startup succeeds.
+Close the client, replace the old main LegacyForgeBridge JAR with rev195, and retain dependencies and original `old-mods` files. Remove the obsolete `lfb-visual-stack-hotfix` add-on if present. Complete conversion and restart when requested. Converter fingerprint: `2026-09-25.195-gridpot-property-abi`.
+
+Do not delete settings, resource packs or server data. The failed resource reload may have deselected resource packs; re-enable desired packs after startup succeeds.
 
 ## Source and builder
 
-Root `src/` remains the rev188 checkpoint base. Do not compile it directly and label it rev195.
+Root `src/` remains the rev188 checkpoint base. Restore before a source build:
 
-```
+```sh
 python checkpoints/rev195/restore.py --output ../LegacyForgeBridge-rev195
-python checkpoints/rev195/check_property_abi.py path/to/legacyforgebridge-0.2.0-alpha.27-rev195.jar
 ```
 
-This checkpoint includes the normal-symbol source fix, corrected fixture definitions, two JVM regression sources, targeted ABI guard and method-body integration tool. The downloadable source/build ZIP additionally contains the complete no-network targeted builder, compile-only declarations, projected source, recording fixtures and generated test logs. Its `local-build/build195.py` requires JDK21, the exact rev194 JAR and an ASM/Gson tools classpath. No fixture or dependency binaries are packaged into the delivered mod. Source restoration itself does not run a build or Actions.
+`source.patch` retains the normal-symbol fix. This directory contains the original targeted integration/regression sources and the expanded `AuditDelivery195.java` guard. The delivered source/build ZIP additionally contains the exact recovery builder, its source files, normal-symbol changed sources, the pinned rev194 source/build input archive and current logs. The recovery builder requires Python, JDK21, the exact rev194 main JAR, and a tools classpath containing ASM tree/analysis and Gson. It performs no network request or Actions operation.
 
 API references:
 - https://maven.fabricmc.net/docs/yarn-1.21.11+build.4/net/minecraft/state/State.html
+- https://maven.fabricmc.net/docs/yarn-1.21.11+build.4/net/minecraft/state/property/BooleanProperty.html
 - https://maven.fabricmc.net/docs/yarn-1.21.11+build.4/net/minecraft/world/WorldAccess.html

@@ -4,7 +4,7 @@ LegacyForgeBridge is an experimental Fabric 1.21.11 compatibility and conversion
 
 ## Latest delivered local build: rev195
 
-**Do not use rev194: its GridPot renderer has a confirmed JVM VerifyError.** The replacement is `legacyforgebridge-0.2.0-alpha.27-rev195.jar`, SHA-256 `e5e7a60ae49ee1b934badd9e791c82ae13fd4d20c15877619a2caa39d9c2ec78`.
+**Do not use rev194: its GridPot renderer has a confirmed JVM VerifyError.** The recovered, locally rebuilt replacement is `legacyforgebridge-0.2.0-alpha.27-rev195.jar`, SHA-256 `5187fbbefa1adb73a0ca9b94d96552636619dec98acdbcf2b240e1da849e627e` (3,702,399 bytes). This is the current delivery checksum; it supersedes the previously recorded but unavailable local artifact checksum.
 
 rev195 corrects the Property/BooleanProperty ABI error in the locally compiled GridPot renderer and an obsolete world-clock method in the suspended-model renderer. Only the two extraction bodies and BuildInfo change; 1,451 other archive entries are retained byte-for-byte. No companion hotfix mod is required. Preserve `old-mods`, dependencies and settings; finish conversion and restart when requested.
 
@@ -14,7 +14,7 @@ rev195 corrects the Property/BooleanProperty ABI error in the locally compiled G
 python checkpoints/rev195/restore.py --output ../LegacyForgeBridge-rev195
 ```
 
-See [rev195 source, JVM regressions and validation boundaries](checkpoints/rev195/README.md). Both old-release defects are reproduced with corrected documented API fixtures; rev195 passes the corresponding negative/positive controls and 176 recording-fixture assertions. The local targeted rebuild is NOT a full Gradle/Loom build, Minecraft/Fabric/Mixin launch or live server certification. Optional GridPot insertion conflicts remain unchanged. No Actions build was requested.
+See [rev195 source, JVM regressions and validation boundaries](checkpoints/rev195/README.md). The exact old JAR reproduces both targeted errors under corrected API fixtures, and the rebuilt JAR passes both controls and 176 recording-fixture assertions. The expanded audit checks all 1,439 top-level classes, with 14 Property-presence calls and three current world-clock calls. A fresh-directory rebuild produced identical bytes. This is NOT a full Gradle/Loom build, Minecraft/Fabric/Mixin launch or live server certification. Optional GridPot insertion conflicts remain unchanged. No Actions build was requested.
 
 ## Project goals
 
