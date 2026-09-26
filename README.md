@@ -2,26 +2,30 @@
 
 Experimental Fabric 1.21.11 client compatibility/conversion layer for Forge 1.7.10 mods. The original server owns gameplay state. Keep original JARs in `old-mods`, not modern Fabric `mods`.
 
-## Latest continuation: rev205 — source-held presentation and event-gated hold use
+## Latest source checkpoint: rev206 projectile audit / rejection reporting
 
-This feature branch now saves the previously conversation-only rev202–204 source kits and the rev205 continuation. The new work corrects the vanilla ItemBow full3D inheritance assumption, preserves original sprite models, and supports ArrowNockEvent control flow in the generic use-start compiler. Cross-mod source audits guard the default uncancelled event outcome; unknown listeners and missing audits are not bypassed.
+**No installable rev206 JAR and no new admitted projectile entities.** This checkpoint audits the latest user log and original source corpus, and fixes silent loss of upstream projectile-candidate rejections. It is not a complete generic projectile converter.
 
-The supplied iYAMATO corpus has 99 audited registered items, 95 property records, 99 icon outputs, 12 armor assets, 57 full3D grips, six inherited bow sprite models, 29 use-start programs (previously 15), 35 action programs and six creative-NBT programs. These are separate analysis/output counts, NOT a claim of universal weapon gameplay. Renamed-corpus and rejection tests are included. RPGTool's existing 71 icon tables remain unchanged.
+The delivered rev205 analyzer rejects 54 source entity registrations upstream, then previously reports zero projectile rules and zero exclusions. The reporting patch carries 24 hierarchy/interface-classified candidate failures into the existing production pass: zero admitted rules, 24 exclusions and warnings, and one upstream summary. The candidates include invisible attack carriers and non-weapon throwable content. Nineteen have source-owned tick methods; five bind vanilla RenderSnowball. Numeric IDs from logs and config defaults are not substituted for source identity proof.
 
-A complete local incremental main JAR was produced: `legacyforgebridge-0.2.0-alpha.27-rev205-local-test.1.jar`, 3,990,189 bytes, SHA-256 `3ce19e3a6d9b4788251aae95edd0c179c93bc44f4d5f65fba054be67ce4461de`. Two fresh work directories reproduced identical output; 3,597 assertions passed. rev202–204 were also rebuilt with outputs identical to their previous deliveries.
+The original bullet/shell sprite binding uses an actually all-transparent PNG. Missing sprites must not all be replaced by visible arrows. Mesh/UV, source client movement, typed spawn/metadata, lifecycle and source config-dependent identity remain separate implementation boundaries.
 
-**Not a clean Gradle/Loom build or a real Minecraft/Fabric/Mixin launch.** Runtime tests use explicit recording API hosts; those declarations are not packaged in the main JAR. No original Bamboo corpus test was possible this turn. Custom renderers, special view transforms, all projectile entities and arbitrary weapon effects remain incomplete. Jump stays OBSERVE_ONLY; repeated-weapon disconnect causality remains unresolved.
+See [rev206 scope and reproducible tests](checkpoints/rev206/README.md), [Traditional Chinese audit](checkpoints/rev206/AUDIT.zh-TW.md), and [findings](checkpoints/rev206/audit.json). This turn passed 17 synthetic fixtures / 86 analyzer assertions and 9 actual production-pass assertions, with independent JSON readback. Local dependency provenance is recorded. No full Gradle/Loom, Minecraft/Mixin, original Bamboo or live-server validation was performed.
 
-See [rev205 details and source extraction](checkpoints/rev205/README.md), [verification](checkpoints/rev205/verification.json) and [branch/no-Actions development policy](checkpoints/rev205/DEVELOPMENT_POLICY.md).
+## Preserved local main: rev205
+
+The previously delivered complete main is `legacyforgebridge-0.2.0-alpha.27-rev205-local-test.1.jar`, 3,990,189 bytes, SHA-256 `3ce19e3a6d9b4788251aae95edd0c179c93bc44f4d5f65fba054be67ce4461de`. It preserves rev202-204 source motion observation, item properties/equipment and interaction work; rev205 corrects inherited bow sprite presentation and adds source-event-gated hold-use analysis. These local incremental builds are not clean Gradle/Loom builds. Prior validation counts are historical and were not rerun for this audit.
+
+The branch now retains the previously conversation-only rev202-205 source kits. Their 819-file payload and per-revision source manifests were verified and unpacked locally. This is source preservation, not a fresh build or complete cumulative source restoration. See [rev205 details](checkpoints/rev205/README.md) and [historical verification](checkpoints/rev205/verification.json).
 
 ```sh
 python checkpoints/rev205/unpack.py --output ../LegacyForgeBridge-rev202-205-kits
 ```
 
-This expands 819 checksummed source/test/tool files into revision kits. Use each kit's rebuild.py with its pinned base main. **Root src remains the old base plus cumulative checkpoints; do not compile it alone and label it rev205.** This checkpoint does not include proprietary game/mod binaries or test dependency JARs.
+Use each extracted kit with its pinned base main. **Root `src` is still the old base plus cumulative checkpoints. Do not compile it alone and label it rev205 or rev206.** Source checkpoints contain no proprietary mod/game binaries or dependency JARs.
 
-## Preserved baselines
+## Current boundaries and policy
 
-Only `feature/generic-conversion-iyamato-corpus3` is updated. Main stays at the merged rev197 baseline; the Bamboo branch, original server/mods and workflow definitions remain unchanged. No workflow dispatch, PR, tag or release is requested. Continuation commits use `[skip ci] [skip actions]`.
+Jump remains OBSERVE_ONLY and is not confirmed fixed. The latest full mod set vetoes some hold-use paths due to unproven Bamboo ArrowNockEvent listeners; do not silently bypass event cancellation. Projectile gameplay/presentation, custom renderers and universal GUI conversion are incomplete. Successful handshake or static analysis is not full compatibility.
 
-[Previous complete README at rev201](docs/README-before-rev205-f3f4cf05.md) retains earlier restoration instructions and unresolved GUI/runtime boundaries. All older checkpoints remain. Successful handshake, source analysis or local tests are not proof of full compatibility.
+All work stays on `feature/generic-conversion-iyamato-corpus3`, with `[skip ci] [skip actions]`. No Actions dispatch, new PR/tag/release, workflow change, server change, or main/Bamboo branch push. See [development policy](AGENTS.md). The [previous rev201 README](docs/README-before-rev205-f3f4cf05.md) and all older checkpoints remain preserved.

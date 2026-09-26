@@ -1,0 +1,46 @@
+--- a/src/main/java/dev/yinghuang/legacyforgebridge/convert/LegacyProjectilePresentationAnalyzer.java
++++ b/src/main/java/dev/yinghuang/legacyforgebridge/convert/LegacyProjectilePresentationAnalyzer.java
+@@ -80,10 +80,29 @@
+         for(var rule:watchers.rules())watcherByClass.put(rule.sourceClass(),rule);
+ 
+         List<Rule> rules=new ArrayList<>();List<Skipped> skipped=new ArrayList<>();
++        // A failure in the upstream identity/watcher stage must not erase projectile candidates.
++        // This reports evidence only; an unresolved numeric id is never replaced by an ordinal,
++        // a config default or an id observed in a network log.
++        if(!watchers.skipped().isEmpty()) diagnostics.add("Upstream entity registration/watcher rejections="
++                +watchers.skipped().size()+" (all entities, not a projectile support count)");
++        for(var rejected:watchers.skipped()){
++            String sourceClass=rejected.sourceClass();
++            if(sourceClass!=null&&projectileCandidate(sourceClass)){
++                skipped.add(new Skipped(rejected.registryName(),sourceClass,
++                        "UPSTREAM_REGISTRATION_OR_WATCHER: "+rejected.reason()));
++            }else if(sourceClass==null||!classes.containsKey(sourceClass)){
++                diagnostics.add("Unclassified upstream entity rejection: "+rejected.registryName()
++                        +" class="+sourceClass+" reason="+rejected.reason());
++            }
++        }
+         for(var entity:watchers.rules()){
+             BaseFamily family=inherits(entity.sourceClass(),ENTITY_ARROW)?BaseFamily.ARROW
+                     :inherits(entity.sourceClass(),ENTITY_THROWABLE)?BaseFamily.THROWABLE:null;
+-            if(family==null)continue;
++            if(family==null){
++                if(projectileCandidate(entity.sourceClass())) skipped.add(new Skipped(entity.registryName(),
++                        entity.sourceClass(),"UNSUPPORTED_PROJECTILE_BASE: marker interface alone does not prove arrow/throwable movement or rendering"));
++                continue;
++            }
+             if(implementsInterface(entity.sourceClass(),ADDITIONAL_SPAWN)){
+                 skipped.add(new Skipped(entity.registryName(),entity.sourceClass(),"Projectile implements IEntityAdditionalSpawnData"));continue;
+             }
+@@ -261,6 +280,12 @@
+         try(JarFile jar=new JarFile(sourceJar.toFile(),false)){return jar.getJarEntry(path)!=null;}catch(IOException ignored){return false;}
+     }
+ 
++    private boolean projectileCandidate(String sourceClass){
++        return inherits(sourceClass,ENTITY_ARROW)||inherits(sourceClass,ENTITY_THROWABLE)
++                ||implementsInterface(sourceClass,"net/minecraft/entity/IProjectile")
++                ||implementsInterface(sourceClass,"cpw/mods/fml/common/registry/IThrowableEntity");
++    }
++
+     private boolean implementsInterface(String sourceClass,String target){
+         Set<String> seen=new HashSet<>();ArrayDeque<String> queue=new ArrayDeque<>();queue.add(sourceClass);
+         while(!queue.isEmpty()){

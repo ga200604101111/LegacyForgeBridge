@@ -1,0 +1,52 @@
+{
+  "scope": "PROJECTILE_AUDIT_AND_SOURCE_REPORTING_ONLY",
+  "date": "2026-09-27",
+  "installable_jar_produced": false,
+  "new_runtime_rules": 0,
+  "runtime_baseline": "rev205-local-test.1",
+  "corpus_sha256": "35a79ca5a034fd6cda4fe4ee1f658c4ce058f9b7ec026516e76363ebdf89635e",
+  "source_inventory": {
+    "entity_registration_records": 54,
+    "upstream_rejected": 54,
+    "projectile_like_candidates": 24,
+    "arrow": 10,
+    "throwable": 5,
+    "other_base_with_marker": 9,
+    "source_tick_overrides": 19,
+    "vanilla_billboard_bindings": 5,
+    "non_weapon_candidates_included": true
+  },
+  "latest_log": {
+    "iyamato_spawn_messages": 21,
+    "observed_type_ids": {"4803": 21},
+    "all_unmapped": true,
+    "tested_context": "Damascus dagger, not all projectile types",
+    "bamboo_arrow_nock_policy_allowed": false,
+    "raw_user_log_included": false
+  },
+  "before": {"rules": 0, "skipped": 0, "diagnostics": 0, "sidecar": false},
+  "after": {"rules": 0, "skipped": 24, "diagnostics": 1, "sidecar": true, "warnings": 24},
+  "transparent_source_sprite": {
+    "png": "assets/iymts_mod/textures/items/invisible_entity_projectile.png",
+    "sha256": "556263028e6882e325b07482cc0691d623237e03fd210b5c3e2b2a8dafad6766",
+    "size": [16, 16],
+    "alpha_range": [0, 0],
+    "visible_pixels": 0,
+    "bindings": ["EntityIYBullet", "EntityIYShotShell", "EntityIYExtendedReach"],
+    "evidence": "Renderer constructor argument, item texture setter and decoded PNG, not names alone"
+  },
+  "validation": {
+    "synthetic_fixtures": 17,
+    "analyzer_assertions": 86,
+    "production_pass_assertions": 9,
+    "independent_json_readback": true,
+    "source_payload_roundtrip_files": 21,
+    "minecraft_api_build": false,
+    "minecraft_launch": false,
+    "gradle_loom_build": false,
+    "original_bamboo_corpus_test": false
+  },
+  "dependency_mode": "Local Kotlin-bundled relocated ASM plus InputStream adapter; Gson classes copied unchanged from an installer, not executed. Provenance in source kit.",
+  "full_inventory_and_evidence": "Inside the checksum-pinned source kit",
+  "actions_requested": false
+}
