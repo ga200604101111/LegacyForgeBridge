@@ -1,0 +1,4 @@
+PASS core assertions=862
+PASS recording-double adapter mode=observe assertions=48
+PASS recording-double adapter mode=reconcile assertions=48
+PASS recording-double adapter mode=off assertions=48

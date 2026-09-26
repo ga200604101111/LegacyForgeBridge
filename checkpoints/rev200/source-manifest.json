@@ -1,0 +1,11 @@
+{
+  "apply.py": "93020eece1608c7346aacef834b661a6c782d642e3a78c78a513bcb749eb2f5a",
+  "restore.py": "54ae1705df317fa238ac6a7a6a4f64768a926dad5293c573868ad7dfc62a2a0f",
+  "src/main/java/dev/yinghuang/legacyforgebridge/behavior/LegacyClientJumpMotion.java": "90c9c3d02bf4252cd63397ec9361d4058f0c0917d84c354f137ae31b57aaf51d",
+  "src/main/java/dev/yinghuang/legacyforgebridge/behavior/LegacyJumpEchoWindow.java": "acd98518484a20f8dbc000233f403c4bc5dc9c9254ce18a01e30ce291346bd4d",
+  "src/main/java/dev/yinghuang/legacyforgebridge/mixin/client/LegacyJumpMotionPacketMixin.java": "f12bfd08389ef3339a1cc9b7cf0169753981323eb7470d6e88c6cc8ec4cfd3af",
+  "tests/ClientJumpAdapterTest.java": "6e7630f0dc33c294d866192bdd1a9c25911f77eecf1d4a730c009321998554c5",
+  "tests/JumpEchoWindowTest.java": "d45988fa49dd8d8b6267f398500c30f57e972926a209d69bae1af9ab00bca0fb",
+  "tests/run_validation.py": "5f0d10e9f794fb224432f19900f09f93be1266498133e80cb1cfd7787c4492b2",
+  "tests/test_apply.py": "4ed4b40dfc74cd0c8c5cc487d68b0f7a0491fcab072fea45232acb22e65b62ed"
+}

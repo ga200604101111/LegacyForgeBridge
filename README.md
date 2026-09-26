@@ -2,7 +2,15 @@
 
 LegacyForgeBridge is an experimental Fabric 1.21.11 compatibility and conversion layer for legacy Minecraft Forge 1.7.10 mods.
 
-## Latest source checkpoint: rev199 (not integrated or installable)
+## Latest source checkpoint: rev200 (client-only, not game-verified)
+
+rev200 adds client jump/velocity observation and an opt-in, bounded delayed-echo reconciliation experiment. Its restore delta wires the original jump callback, tick observation and packet hooks; it does not modify the server, original RPGTool, or old-mods. The default is **observe**, which does not change motion. Equal vectors do not prove packet causality, so the experimental reconcile mode is not a guarantee of correct handling of every unrelated force.
+
+862 pure-Java assertions, 144 adapter assertions using explicit recording doubles, and 10 source-application tests passed. No real Minecraft/Fabric/Mixin API build, full Gradle/Loom build, cumulative source restoration run, game launch, server test or installable rev200 JAR is claimed. See [rev200 implementation and limits](checkpoints/rev200/README.md) and [verification](checkpoints/rev200/verification.json). From the full checkout, restore with `python checkpoints/rev200/restore.py --output ../LegacyForgeBridge-rev200-source`; the old root src alone is not this checkpoint.
+
+**Bamboo GUI conversion is still template-based, not a generic GUI translator.** Fixed instruction fingerprints, a constrained 47-slot/two-property family and limited source layouts remain. See the [GUI audit and concrete generalization boundary](checkpoints/rev200/GUI-Audit.zh-TW.md). This checkpoint does not remove those gates or claim a generalized GUI engine. Main and the Bamboo branch remain untouched.
+
+## Previous source checkpoint: rev199 (not integrated or installable)
 
 The iYAMATO feature branch now adds a generic static-field fluent-texture evidence analyzer and standalone tests. The supplied corpus yields 101 literal texture-field records with existing PNGs; an independent direct-registerItem scan matches 99 registered fields. Two extra unregistered fields are not counted as supported items. 101 synthetic assertions passed using an isolated JDK-internal-ASM test copy, not a complete production ASM9/Gradle/Minecraft build.
 
