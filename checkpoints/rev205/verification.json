@@ -1,0 +1,22 @@
+{
+  "scope": "HISTORICAL_REV205_RESULTS_AND_SOURCE_PERSISTENCE",
+  "historical_main": {
+    "filename": "legacyforgebridge-0.2.0-alpha.27-rev205-local-test.1.jar",
+    "bytes": 3990189,
+    "sha256": "3ce19e3a6d9b4788251aae95edd0c179c93bc44f4d5f65fba054be67ce4461de",
+    "build_method": "offline incremental full main, not clean Gradle/Loom",
+    "historical_assertions": 3597,
+    "minecraft_launch_tested": false
+  },
+  "source_preservation": {
+    "revisions": [202, 203, 204, 205],
+    "files": 819,
+    "payload_sha256": "f2dde0cc331085d14319c6c4c0e45d710512a2f9d9092b7e0f976e89a3b24e15",
+    "per_revision_manifests_verified": true,
+    "unpack_executed_in_projectile_audit": true,
+    "historical_builds_rerun_in_projectile_audit": false,
+    "full_cumulative_restore_executed": false
+  },
+  "original_reports_location": "Inside the pinned source payload, under each extracted rev20x kit",
+  "actions_requested": false
+}

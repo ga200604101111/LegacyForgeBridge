@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "parts": [
+    "source-payload.json.xz.b64.part00",
+    "source-payload.json.xz.b64.part01",
+    "source-payload.json.xz.b64.part02",
+    "source-payload.json.xz.b64.part03",
+    "source-payload.json.xz.b64.part04",
+    "source-payload.json.xz.b64.part05",
+    "source-payload.json.xz.b64.part06",
+    "source-payload.json.xz.b64.part07",
+    "source-payload.json.xz.b64.part08",
+    "source-payload.json.xz.b64.part09",
+    "source-payload.json.xz.b64.part10",
+    "source-payload.json.xz.b64.part11",
+    "source-payload.json.xz.b64.part12",
+    "source-payload.json.xz.b64.part13"
+  ],
+  "file_count": 819,
+  "compressed_bytes": 122100,
+  "decoded_bytes": 1241821,
+  "sha256": "f2dde0cc331085d14319c6c4c0e45d710512a2f9d9092b7e0f976e89a3b24e15"
+}
