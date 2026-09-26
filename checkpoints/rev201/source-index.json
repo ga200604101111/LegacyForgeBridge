@@ -1,0 +1,122 @@
+{
+  "README.md": {
+    "sha256": "158853a49730c38671a3f8fbda3d356f5b6d9f867646b98154ef819d245323e7",
+    "bytes": 6698
+  },
+  "apply.py": {
+    "sha256": "cf5a896341ffdce1716d4d001835299e9d8461f5e3817b8edea6df2891af60d0",
+    "bytes": 4221
+  },
+  "base-source-sha256.json": {
+    "sha256": "253b2ef30c6980cc5e944f95ab64f3ccc38ff68d459c60e87d377dc06358b162",
+    "bytes": 762
+  },
+  "restore.py": {
+    "sha256": "bb7b2f9427b691bc21959f814f3537f2c14afe57c90e7b1e95c127a73c8af851",
+    "bytes": 959
+  },
+  "rev200-required-sha256.json": {
+    "sha256": "527cd4a3cf9005ded27626d5d4480b9a66984a02c53f565dd42a543a56216c2a",
+    "bytes": 478
+  },
+  "source-manifest.json": {
+    "sha256": "ce81f4573e5c0a51eb6647c7e0ffe26981b05957d16037f64f3ac84e76f43df0",
+    "bytes": 2233
+  },
+  "src/main/java/dev/yinghuang/legacyforgebridge/convert/LegacyMenuTopologyAnalyzer.java": {
+    "sha256": "6f77ed2cb6bba1663b96c779ef2d1c86eeaeea677dd5335fbba958605a0a0826",
+    "bytes": 24155
+  },
+  "src/main/java/dev/yinghuang/legacyforgebridge/convert/LegacyRemoteMenuAnalyzer.java": {
+    "sha256": "d3344c5bad872351e2192d197f184fb6e78aa6b7d5ab39155650e4491575bbea",
+    "bytes": 14326
+  },
+  "src/main/java/dev/yinghuang/legacyforgebridge/convert/pass/LegacyRemoteMenuPass.java": {
+    "sha256": "81616a5e474a91209157be75231f2e1c06e556c0661e7a3edbae57edc3dd32d7",
+    "bytes": 4011
+  },
+  "src/main/java/dev/yinghuang/legacyforgebridge/menu/LegacyMenuTopology.java": {
+    "sha256": "c3fae706e1ba28f3fad459159d3218f17c69b76f8cd924ea7c8ef107848ecf3a",
+    "bytes": 9568
+  },
+  "src/main/java/dev/yinghuang/legacyforgebridge/menu/LegacyRemoteMenu.java": {
+    "sha256": "481444f07747418fcf02335bb9b215582f836590867fb352a286216b11b0712f",
+    "bytes": 3176
+  },
+  "src/main/java/dev/yinghuang/legacyforgebridge/menu/LegacyRemoteMenuRules.java": {
+    "sha256": "3541068e062cb295c6dda63e61954501acc2d9ac5aee42925c36820a25c647ff",
+    "bytes": 5908
+  },
+  "src/main/java/dev/yinghuang/legacyforgebridge/menu/LegacyRemoteMenus.java": {
+    "sha256": "a3fae4b148c905c4f32c174175f2e4ce9564f3f890f543146892ba1948114eb5",
+    "bytes": 3262
+  },
+  "tests/MenuIntegrationTest.java": {
+    "sha256": "312a2e9b407148abcb08b381e5d5a961d8ea386e640c11154762f11a2d32c8d0",
+    "bytes": 8680
+  },
+  "tests/MenuTopologyTest.java": {
+    "sha256": "887351ef6ede268dd68c00075bdae9ea9b6a9c3d0bcf5e4b2c5466ce2237422b",
+    "bytes": 14542
+  },
+  "tests/rev200-client-base.json": {
+    "sha256": "aef469ab4247afa28739f9151a6be4f1de0a8fdf8ec0e5d1ca1f6bca4e311629",
+    "bytes": 15492
+  },
+  "tests/reviewed-base.json": {
+    "sha256": "7478bfaa8f0047054a915baf888fae7f97cf83d5e70be5bbea85efcfdd408b68",
+    "bytes": 24636
+  },
+  "tests/run_validation.py": {
+    "sha256": "a2ce5311ca2f8ab90f0532a6415eaccead2b4b352b1f9c2d008b63c276ffa2a4",
+    "bytes": 12871
+  },
+  "tests/support/LegacySourceShapeFingerprint.java": {
+    "sha256": "904af48afe874adb5ec11608337edd942b0e090c977d2c4b9ac0f5610551f177",
+    "bytes": 4450
+  },
+  "tests/test_apply.py": {
+    "sha256": "6a5bba8eb00bb399294ca24ecd29e116f80fa5b53b0ae88d10524025c09b6f16",
+    "bytes": 5417
+  },
+  "validation/apply-tests.log": {
+    "sha256": "c95caa3b1119ba1e6b14992efb1f58fbb66bc35b879da0a0a170a69b0c391e31",
+    "bytes": 1232
+  },
+  "validation/compile.log": {
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "bytes": 0
+  },
+  "validation/rev200-apply-regression.log": {
+    "sha256": "8ceed36a079d6d4fdce101d7c646a0ba43480891432e10744637b4bc11bdc22d",
+    "bytes": 949
+  },
+  "validation/rev200-regression.log": {
+    "sha256": "69c2eefda6d01a7039cf405c7bd97e8a401b948ac16687df88e7767f40598bf2",
+    "bytes": 194
+  },
+  "validation/source-contract-0.json": {
+    "sha256": "da55128b9d9e1416dea61e1653add288428b972759cc08b860bdc7acc876e884",
+    "bytes": 7209
+  },
+  "validation/source-contract-3.json": {
+    "sha256": "2ae14209d89f2806c828231baeb52435d1d522584fe78fd4b8df9d4cc8f75de9",
+    "bytes": 7209
+  },
+  "validation/source-contract-8.json": {
+    "sha256": "894e315c1cf47ff8ce5fe1fc153348c2cdce4afa6b678fa33de3866ebff0a793",
+    "bytes": 7209
+  },
+  "validation/tests.log": {
+    "sha256": "ba55170e4d53290e9761b0fd46870e910d4c1ef7e3118ac1f38f00492c058fb8",
+    "bytes": 86
+  },
+  "validation/verification.json": {
+    "sha256": "bb11bf8ffa3f8192f4633c88ed610ca16f9d033fa5da1261dd8b1b67899a2a82",
+    "bytes": 1210
+  },
+  "verification.json": {
+    "sha256": "1f8f8dc2e9a32908654725c314e4750af395d56d600e97055f8e44d0d6dde118",
+    "bytes": 2604
+  }
+}

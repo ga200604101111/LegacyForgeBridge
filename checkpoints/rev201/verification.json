@@ -1,0 +1,60 @@
+{
+  "tests": [
+    "PASS topology cases=44 assertions=1185\n",
+    "PASS recording-host integration assertions=635\n"
+  ],
+  "json_contracts": [
+    {
+      "file": "source-contract-0.json",
+      "sha256": "da55128b9d9e1416dea61e1653add288428b972759cc08b860bdc7acc876e884",
+      "first_slot_x": 17
+    },
+    {
+      "file": "source-contract-3.json",
+      "sha256": "2ae14209d89f2806c828231baeb52435d1d522584fe78fd4b8df9d4cc8f75de9",
+      "first_slot_x": 20
+    },
+    {
+      "file": "source-contract-8.json",
+      "sha256": "894e315c1cf47ff8ce5fe1fc153348c2cdce4afa6b678fa33de3866ebff0a793",
+      "first_slot_x": 25
+    }
+  ],
+  "java_version": "openjdk version \"21.0.11\" 2026-04-21\nOpenJDK Runtime Environment (build 21.0.11+10-1-deb13u2-Debian)\nOpenJDK 64-Bit Server VM (build 21.0.11+10-1-deb13u2-Debian, mixed mode, sharing)",
+  "core": "production source compiled against caller-supplied actual ASM/Gson libraries",
+  "host_integration": "explicit recording doubles; outer Proof supplied; no registry admission, disk JsonParser, resource materialization, rendering or packet/game launch",
+  "minecraft_api_compile": false,
+  "minecraft_launch": false,
+  "original_bamboo_corpus_test": false,
+  "checkpoint": "rev201",
+  "base_commit": "1b266638e25da4986df306a9fa495ae8ffbd55cd",
+  "source_only": true,
+  "installable_jar": false,
+  "topology_cases": 44,
+  "topology_assertions_passed": 1185,
+  "recording_host_assertions_passed": 635,
+  "source_application_tests_passed": 13,
+  "rev200_regression": {
+    "core_assertions_passed": 862,
+    "recording_adapter_assertions_passed": 144,
+    "apply_tests_passed": 10
+  },
+  "full_cumulative_restore_executed": false,
+  "full_gradle_loom_build": false,
+  "actions_requested": false,
+  "conversion_fingerprint_after_apply": "2026-09-26.201-source-menu-topology",
+  "remaining_runtime_family": {
+    "slots": 47,
+    "properties": 2,
+    "three_primary_fingerprints": true,
+    "legacy_five_fingerprint_fallback": true,
+    "arbitrary_gui_admission": false
+  },
+  "dependency_provenance": {
+    "source": "/root/.sdkman/candidates/kotlin/1.9.0/lib/kotlin-compiler.jar",
+    "source_sha256": "037f8e39a8dfddc3203f702aa51322b0c45b17c28b21c774d8ec32ceafcc90df",
+    "mode": "Kotlin-bundled ASM relocated by constant-pool UTF8 and entry-name rewrite; bundled Gson copied unchanged. Local test dependencies only; not official Maven artifact build."
+  },
+  "recovered_base_patch_sha256": "a5aaf12636babfba0fa295071fad06b771015ee7d9fbed46fee9ea110fc116b9",
+  "source_patch_sha256": "ec2fca2e4e2b4d125b14a5be9e02d38e9ea9b84cbc97caa383477a97e9d9a54b"
+}
