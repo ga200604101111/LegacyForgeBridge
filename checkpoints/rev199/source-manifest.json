@@ -1,0 +1,7 @@
+{
+  "restore.py": "461fc15e6a0c289238cc936fbb557f7b99658f62522692d5bd097a6acb35c00c",
+  "src/main/java/dev/yinghuang/legacyforgebridge/convert/LegacyFluentTextureAnalyzer.java": "fcb7adfd75c8f10aa52df8479d87dd1035e13a79130ca73366c473bb04fed0da",
+  "tests/CorpusProbe.java": "3c57539339abc2f80406767e5b2a722f1c84ecd894c8dbe276ec37a159b70d58",
+  "tests/FluentTextureTest.java": "43afd94a46c70b217a8acad7d39d5748a8e82d1204f98ab6f32608760fc92acc",
+  "verify.py": "c459cdfbf509ad8c34b2bc3f5f7507152ea0e741c8341a8f3222fcd66a3c9063"
+}

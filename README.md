@@ -2,7 +2,13 @@
 
 LegacyForgeBridge is an experimental Fabric 1.21.11 compatibility and conversion layer for legacy Minecraft Forge 1.7.10 mods.
 
-## Current branch: iYAMATO experimental corpus trial (rev198)
+## Latest source checkpoint: rev199 (not integrated or installable)
+
+The iYAMATO feature branch now adds a generic static-field fluent-texture evidence analyzer and standalone tests. The supplied corpus yields 101 literal texture-field records with existing PNGs; an independent direct-registerItem scan matches 99 registered fields. Two extra unregistered fields are not counted as supported items. 101 synthetic assertions passed using an isolated JDK-internal-ASM test copy, not a complete production ASM9/Gradle/Minecraft build.
+
+**This is source-only groundwork. It is not wired into model generation or runtime admission, and no rev199 bridge or converted-mod JAR is delivered.** The rev198 unresolved-model/entity boundary below is unchanged. Main and the Bamboo branch remain untouched. See [rev199 scope, reproducible validation and next integration boundary](checkpoints/rev199/README.md) and [actual verification](checkpoints/rev199/verification.json). Restore the optional source utility with `python checkpoints/rev199/restore.py --output ../LegacyForgeBridge-rev199-source` from the complete checkout.
+
+## Previous branch trial: iYAMATO experimental corpus (rev198)
 
 The previous Bamboo/rev197 branch was merged into main through PR #17, merge commit `912cb905ce61e97ccdd6e54e2a5a26b3b6ae8c5f`. This new branch, `feature/generic-conversion-iyamato-corpus3`, starts from that merge and contains only experimental follow-up work. Main remains the rev197 baseline.
 

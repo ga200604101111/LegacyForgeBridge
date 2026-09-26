@@ -1,0 +1,38 @@
+{
+  "status": "SOURCE_EVIDENCE_ONLY",
+  "installable": false,
+  "pipeline_integration": false,
+  "default_icons_admitted": 0,
+  "new_runtime_entity_rules": 0,
+  "synthetic_assertions_passed": 101,
+  "validation_mode": "JDK_INTERNAL_ASM8_TEST_COPY",
+  "java_version": "openjdk version \"21.0.11\" 2026-04-21\nOpenJDK Runtime Environment (build 21.0.11+10-1-deb13u2-Debian)\nOpenJDK 64-Bit Server VM (build 21.0.11+10-1-deb13u2-Debian, mixed mode, sharing)",
+  "production_asm9_build_tested": false,
+  "full_gradle_build_tested": false,
+  "minecraft_launch_tested": false,
+  "live_server_tested": false,
+  "cumulative_restore_tested": false,
+  "actions_requested": false,
+  "source_sha256": {
+    "restore.py": "461fc15e6a0c289238cc936fbb557f7b99658f62522692d5bd097a6acb35c00c",
+    "src/main/java/dev/yinghuang/legacyforgebridge/convert/LegacyFluentTextureAnalyzer.java": "fcb7adfd75c8f10aa52df8479d87dd1035e13a79130ca73366c473bb04fed0da",
+    "tests/CorpusProbe.java": "3c57539339abc2f80406767e5b2a722f1c84ecd894c8dbe276ec37a159b70d58",
+    "tests/FluentTextureTest.java": "43afd94a46c70b217a8acad7d39d5748a8e82d1204f98ab6f32608760fc92acc",
+    "verify.py": "c459cdfbf509ad8c34b2bc3f5f7507152ea0e741c8341a8f3222fcd66a3c9063"
+  },
+  "corpus": {
+    "file": "iYAMATOs-Mod-1.7.10.jar",
+    "bytes": 1029340,
+    "sha256": "35a79ca5a034fd6cda4fe4ee1f658c4ce058f9b7ec026516e76363ebdf89635e",
+    "literal_texture_field_evidence": 101,
+    "direct_registered_item_fields": 99,
+    "direct_registered_field_matches": 99,
+    "resource_missing": 0,
+    "not_directly_registered_fields": [
+      "net/lubriciouskin/iymts_mod/init/ItemRegister.vanadiumOre",
+      "net/lubriciouskin/iymts_mod/init/ItemRegister.trollScale"
+    ],
+    "excluded_fields": 7,
+    "log_sha256": "73ea29ece32899263c9334277a9d31f39bd321c9c4a0bc238bdf609cfe8b614c"
+  }
+}
