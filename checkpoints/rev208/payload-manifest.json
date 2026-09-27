@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "parts": [
+    "source-payload.json.xz.b64.part00",
+    "source-payload.json.xz.b64.part01",
+    "source-payload.json.xz.b64.part02",
+    "source-payload.json.xz.b64.part03",
+    "source-payload.json.xz.b64.part04",
+    "source-payload.json.xz.b64.part05",
+    "source-payload.json.xz.b64.part06"
+  ],
+  "files": 272,
+  "decoded_bytes": 444310,
+  "compressed_bytes": 62988,
+  "sha256": "6c0fe3065cfaf50f6bf1ffd65e4b011c23d950d86d42501b40eefa3a947f3a4d"
+}
