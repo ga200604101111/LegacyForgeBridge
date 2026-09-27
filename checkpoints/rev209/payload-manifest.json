@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "parts": [
+    "source-payload.json.xz.b64.part00",
+    "source-payload.json.xz.b64.part01",
+    "source-payload.json.xz.b64.part02",
+    "source-payload.json.xz.b64.part03",
+    "source-payload.json.xz.b64.part04",
+    "source-payload.json.xz.b64.part05"
+  ],
+  "files": 70,
+  "reused_files": 199,
+  "restored_files": 269,
+  "decoded_bytes": 253843,
+  "compressed_bytes": 51432,
+  "sha256": "4ce478ee4fc86a74fa94ce9d3a2c35a2bed16694fc456b0cc63f268b667c6aed"
+}
