@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "checkpoint": "rev213-diagnostics-complete-main",
+  "base_commit": "08274a4dba80e97153a03090956fc5e650577a7f",
+  "files": 69,
+  "parts": [
+    "source-payload.json.xz.b64.part00",
+    "source-payload.json.xz.b64.part01",
+    "source-payload.json.xz.b64.part02",
+    "source-payload.json.xz.b64.part03",
+    "source-payload.json.xz.b64.part04",
+    "source-payload.json.xz.b64.part05"
+  ],
+  "compressed_bytes": 52264,
+  "decoded_bytes": 379372,
+  "sha256": "e04a4fb5ea026e6dfe7f83adcebc0a39c1accd39ef5e2370779459fd64f9ab9e",
+  "main_sha256": "9ecf5ed9c89ac9d6f2ea6105efb4a60b5e9c830a1b07de0b6ea341c2f6bd4dcd",
+  "main_in_checkpoint": false,
+  "source_payload_installable": false
+}

@@ -1,0 +1,27 @@
+{
+  "restored_files": 69,
+  "all_file_bytes_identical": true,
+  "restored_rebuild_sha256": "9ecf5ed9c89ac9d6f2ea6105efb4a60b5e9c830a1b07de0b6ea341c2f6bd4dcd",
+  "invalid_unpack_cases": [
+    {
+      "case": "wrong-manifest",
+      "rejected_before_output": true
+    },
+    {
+      "case": "corrupt-part",
+      "rejected_before_output": true
+    },
+    {
+      "case": "missing-part",
+      "rejected_before_output": true
+    },
+    {
+      "case": "existing-output",
+      "rejected_before_output": true
+    },
+    {
+      "case": "symlink-parent",
+      "rejected_before_output": true
+    }
+  ]
+}
