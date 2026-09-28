@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "checkpoint": "rev215",
+  "base_commit": "e97b26514a64eba5f849f99b23bb033f0e38335b",
+  "files": 45,
+  "parts": [
+    "source-payload.json.xz.b64.part00",
+    "source-payload.json.xz.b64.part01",
+    "source-payload.json.xz.b64.part02",
+    "source-payload.json.xz.b64.part03",
+    "source-payload.json.xz.b64.part04",
+    "source-payload.json.xz.b64.part05",
+    "source-payload.json.xz.b64.part06"
+  ],
+  "compressed_bytes": 57756,
+  "decoded_bytes": 284849,
+  "sha256": "c3aee0117c66c35a7a3053ff8624e94f76261b5022205e9d61d42985ab04c2a2",
+  "main_sha256": "52b3471a623079f9c1d2d01d1f7d8a970fe2a1b96b4054e241a3dba88d4b5234",
+  "main_in_checkpoint": false,
+  "source_payload_installable": false,
+  "metadata_correction_sha256": "abf715145abc35f15230d440c9ce2e2e6094550f7e20a934959bdb61173163f6"
+}

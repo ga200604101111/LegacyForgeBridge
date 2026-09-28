@@ -1,0 +1,33 @@
+{
+  "schema": 1,
+  "scope": "Documentation provenance only; no executable build inputs or main JAR changes",
+  "basis": "Final GitHub read of e97b26514a64eba5f849f99b23bb033f0e38335b commit and checkpoints/rev214/README.md records alternate main SHA 61bb7ae55df6c6c5821a37760acfef7a55f7256c39585ddad1b77e03d052197c. The delivered local214 base remains ce6e6c82402d8d2359422d2f3e973023a82f720f44353dd57d701b118e107ccc. Earlier unconfirmed alternate metadata is corrected below.",
+  "files": [
+    {
+      "path": "README.zh-TW.md",
+      "before_sha256": "91c6b746456d51a0ee081d004ec6dafe76678b07c30b7955074dfc1d01b9da51",
+      "after_sha256": "c6ed7a42d60145587f08c83382db1d97eea3483a823aab9d03be40649814f66d",
+      "replacements": [
+        {
+          "old": "f558418706da3bd65e8f7a7156f584fbbb7f257a0e2f331a28b56813e183ffe9",
+          "new": "61bb7ae55df6c6c5821a37760acfef7a55f7256c39585ddad1b77e03d052197c"
+        }
+      ]
+    },
+    {
+      "path": "validation/summary.json",
+      "before_sha256": "516618167125e911d5b290d5cd8c968adf70eb9c8231d3e3d929f680fc999549",
+      "after_sha256": "3a8ab5df6448e7fee67bb45edbf2284287262a1eaceb5e8293ba605937a357b9",
+      "replacements": [
+        {
+          "old": "f558418706da3bd65e8f7a7156f584fbbb7f257a0e2f331a28b56813e183ffe9",
+          "new": "61bb7ae55df6c6c5821a37760acfef7a55f7256c39585ddad1b77e03d052197c"
+        },
+        {
+          "old": "repository214_reviewed_changes_adopted",
+          "new": "rev215_explicit_integration_points"
+        }
+      ]
+    }
+  ]
+}

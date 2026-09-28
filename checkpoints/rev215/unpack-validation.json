@@ -1,0 +1,37 @@
+{
+  "restored_files": 45,
+  "roundtrip_bytes_equal": true,
+  "restored_complete_main_sha256": "52b3471a623079f9c1d2d01d1f7d8a970fe2a1b96b4054e241a3dba88d4b5234",
+  "negative_cases": [
+    {
+      "case": "corrupt-payload",
+      "rejected_before_output": true
+    },
+    {
+      "case": "wrong-manifest",
+      "rejected_before_output": true
+    },
+    {
+      "case": "missing-part",
+      "rejected_before_output": true
+    },
+    {
+      "case": "existing-output",
+      "rejected_before_output": true
+    },
+    {
+      "case": "symlink-parent",
+      "rejected_before_output": true
+    },
+    {
+      "case": "corrupt-metadata-correction",
+      "rejected_before_output": true
+    },
+    {
+      "case": "missing-metadata-correction",
+      "rejected_before_output": true
+    }
+  ],
+  "metadata_corrected_roundtrip_files": 45,
+  "corrected_roundtrip_rebuild_sha256": "52b3471a623079f9c1d2d01d1f7d8a970fe2a1b96b4054e241a3dba88d4b5234"
+}
