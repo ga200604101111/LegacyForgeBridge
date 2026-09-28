@@ -1,0 +1,54 @@
+{
+  "version": "0.2.0-alpha.27-rev217-local-test.1",
+  "base_sha256": "74090805b9122516165245620fc947fabf02c2b1211f45aba5a5e11cd40e70b2",
+  "main_sha256": "3891a4ce9a77aac0c22884c07b234b0fad1545dc0b287410ab5f9692e97ed529",
+  "main_bytes": 4233341,
+  "guard_window_millis": 900000,
+  "same_plan_retry_after_window": true,
+  "different_plan_retry_after_window": true,
+  "immediate_loop_still_blocked": true,
+  "user_desktop_evidence": {
+    "latest_session": "ab0d20e3-f35e-4f6a-88e4-1138ad1e80dc",
+    "forceExitAfterConversion": true,
+    "launcherDetected": "PRISM",
+    "launcherUseDefaults": true,
+    "state": "MANUAL",
+    "latest_exit_approved_present": false,
+    "latest_launch_claimed_present": false,
+    "same_plan_key_as_old_guard": true,
+    "rev217_exact_user_guard_allows_now": true
+  },
+  "tests": {
+    "two_independent_builds_byte_identical": true,
+    "restart_guard_main": "8 assertions, 0 failures",
+    "restart_guard_embedded_helper": "8 assertions, 0 failures",
+    "rev216_core_regression_with_rev217_guard_expectations": "22694 assertions, 0 failures",
+    "expired_same_plan_process_flow": {
+      "real_child_runtime_halt": true,
+      "exit_approved": true,
+      "real_managed_swap_helper": true,
+      "swap_verified": true,
+      "c_launcher_recorder": true,
+      "prism_direct_launch_once": true,
+      "show_argument_present": false,
+      "dir_argument_present": false
+    }
+  },
+  "main_audit": {
+    "classes": 1611,
+    "methods": 14525,
+    "errors": 0,
+    "api_preservation_assertions": 13349,
+    "api_problems": 0,
+    "external_inherited_not_real_game_verified": 206,
+    "base_entries": 1641,
+    "unchanged_base_entries": 1634,
+    "removed_entries": 0,
+    "new_minecraft_fabric_member_references": 0
+  },
+  "dependency_sha256": "7801c253033017db3f9ebefdbca1b9ba442ce83c8beccecdc53eab483d5cad49",
+  "real_windows_prism_minecraft_tested": false,
+  "gameplay_semantics_changed": false,
+  "prism_launch_command_changed": false,
+  "force_exit_logic_changed": false
+}
