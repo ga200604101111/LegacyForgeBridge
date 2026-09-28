@@ -1,0 +1,67 @@
+{
+  "version": "0.2.0-alpha.27-rev216-local-test.1",
+  "base_sha256": "52b3471a623079f9c1d2d01d1f7d8a970fe2a1b96b4054e241a3dba88d4b5234",
+  "main_sha256": "74090805b9122516165245620fc947fabf02c2b1211f45aba5a5e11cd40e70b2",
+  "main_bytes": 4232688,
+  "build_method": "JDK 21.0.11 javac --release 21 + exact rev215 ASM full-main assembly",
+  "reproducibility": {"independent_final_builds": 3, "byte_identical": true},
+  "tests": {
+    "Config216Test": {"assertions": 12, "failures": 0},
+    "PrismDirect216Test": {"assertions": 7, "failures": 0, "credentials_read": 0},
+    "ForceExit216Test": {"assertions": 3, "failures": 0, "actual_halt_in_unit_test": false},
+    "DesktopSafety216Test": {"assertions": 45, "failures": 0},
+    "RestartScheduler216Test_total": {"assertions": 121, "failures": 0, "modes": 10},
+    "ConversionOutcomeTest": {"assertions": 56, "failures": 0},
+    "ConversionFailureBoundaryTest": {"assertions": 16, "failures": 0},
+    "FeedbackNumericHelpersTest": {"assertions": 21902, "failures": 0},
+    "FeedbackSafetyTest": {"assertions": 10, "failures": 0},
+    "NockClosureSafetyTest": {"assertions": 20, "failures": 0},
+    "FeedbackSourceTest_iYAMATO": {"assertions": 501, "failures": 0, "callbacks": 19},
+    "CompactSwingWindow": {"assertions": 11, "failures": 0, "actual_swing_xvfb": true},
+    "total_java_assertions": 22704
+  },
+  "process_flows": {
+    "cases": 9,
+    "real_runtime_halt_child_process": true,
+    "real_managed_swap_helper": true,
+    "real_swing": true,
+    "direct_prism_launch_requests": 1,
+    "show_requests": 0,
+    "dir_argument_when_owner_mode": 0,
+    "test_secret_environment_forwarded": false,
+    "real_prism": false,
+    "real_minecraft": false,
+    "windows": false
+  },
+  "main_audit": {
+    "candidate_classes": 1611,
+    "candidate_methods": 14525,
+    "basic_verifier_or_known_internal_errors": 0,
+    "api_preservation_assertions": 13331,
+    "api_problems": 0,
+    "base_entries": 1639,
+    "candidate_entries": 1641,
+    "removed_entries": 0,
+    "energy_jar_unchanged": true,
+    "semantic_converter_revision_changed": false
+  },
+  "configuration": {
+    "single_file": "config/legacyforgebridge-client.json",
+    "legacy_desktop_properties_created": false,
+    "legacy_properties_migration": "read once if present, merge into JSON, then delete",
+    "cloth_config_runtime_editor": true
+  },
+  "converted_jar_update_policy": {
+    "same_target_same_sha": "no write",
+    "same_target_different_sha_not_loaded": "atomic replace",
+    "same_target_different_sha_loaded": "pending copy then post-exit replace",
+    "source_filename_changed": "new source-derived target; prior LFB-managed target retired, post-exit if loaded",
+    "non_lfb_same_fabric_id": "CONFLICT; no overwrite"
+  },
+  "limitations": [
+    "No Windows + real Prism + real Minecraft/Fabric/Mixin/Via/live-server validation.",
+    "The real Prism log/status handoff still requires user-side verification.",
+    "PARTIAL conversion gaps remain PARTIAL; this release is desktop/config/restart coordination, not feature-completeness admission.",
+    "Runtime.halt is restricted to the verified initialization restart boundary but can skip other mods' shutdown hooks."
+  ]
+}
