@@ -1,0 +1,317 @@
+--- a/src/dev/yinghuang/legacyforgebridge/desktop/ConversionOutcomeReport.java
++++ b/src/dev/yinghuang/legacyforgebridge/desktop/ConversionOutcomeReport.java
+@@ -12,7 +12,7 @@
+ /** Final conversion results are distinct from pass completion and loader admission.
+  * Reads only same-source/revision manifests. Does not enable candidates or alter conversion rules. */
+ public final class ConversionOutcomeReport {
+-    public static final String BASENAME = "conversion-diagnostics-rev213";
++    public static final String BASENAME = "conversion-diagnostics-rev214";
+     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+     private static final int LIMIT = 8 * 1024 * 1024;
+     public record Summary(JsonObject document, String text, int unusable, int partial, int loaded, int staged) {
+@@ -51,7 +51,7 @@
+         StringBuilder text = new StringBuilder("LegacyForgeBridge 轉換／載入診斷\n版本：" + BuildInfo.VERSION + "\n\n");
+         text.append("pass 的 success=true 只代表正常返回，不代表完整轉換或遊戲相容。\n");
+         text.append("已載入欄位是管理器回報，不是畫面、技能或連服驗收。\n");
+-        text.append("分享排查檔案：legacy-cache/reports/conversion-diagnostics-rev213.zip\n\n");
++        text.append("分享排查檔案：legacy-cache/reports/conversion-diagnostics-rev214.zip\n\n");
+         int unusable = 0, partial = 0, loaded = 0, staged = 0;
+         for (String name : new TreeSet<>(entries.keySet())) {
+             JsonObject e = entries.getAsJsonObject(name), row = new JsonObject();
+--- a/src/dev/yinghuang/legacyforgebridge/desktop/DesktopConversionSession.java
++++ b/src/dev/yinghuang/legacyforgebridge/desktop/DesktopConversionSession.java
+@@ -24,7 +24,8 @@
+     private String finalReportText;
+     private final long started = System.nanoTime();
+     private Process helper;
+-    private boolean completed, wantsStop, autoClose, autoLaunch;
++    private volatile boolean completed, wantsStop;
++    private boolean autoClose, autoLaunch;
+     private volatile boolean sentStop, healthy = true;
+     private int passCount, passDone, index, total, percent;
+     private long deadline, lastPoll, helperWaitStarted;
+@@ -240,7 +241,7 @@
+         return report;
+     }
+     private void saveTimings() throws IOException {
+-        Path path=game.resolve("legacy-cache/reports/conversion-timings-rev213.json");
++        Path path=game.resolve("legacy-cache/reports/conversion-timings-rev214.json");
+         JsonObject document = new JsonObject(); document.addProperty("session", id);
+         document.addProperty("elapsedNanos", System.nanoTime()-started);
+         document.addProperty("coordinatorState",status.getProperty("state","UNKNOWN"));
+@@ -277,11 +278,20 @@
+             publish(); saveTimings();
+         } catch (Exception ignored) { }
+     }
+-    /** Called only on an existing client end-tick hook. No direct System.exit or process kill. */
++    /** Startup-only session for the native main-thread task pump; null means no automatic exit work. */
++    public static Path automaticStopSession() {
++        DesktopConversionSession s = active;
++        return s != null && s.completed && s.wantsStop && !s.sentStop && s.healthy ? s.sessionDir : null;
++    }
++    /** Called on the client thread by the task pump or the existing end-tick fallback. */
+     public static boolean pollStop(boolean worldOrPlayerPresent) {
+         DesktopConversionSession s=active; if (s==null||!s.completed||!s.wantsStop||s.sentStop||!s.healthy) return false;
+-        long now=System.currentTimeMillis(); if(now-s.lastPoll<200)return false; s.lastPoll=now;
+-        try {
++        long now=TimeUnit.NANOSECONDS.toMillis(System.nanoTime()); if(s.lastPoll!=0 && now-s.lastPoll<200)return false; s.lastPoll=now;
++        try {
++            if (DesktopFiles.signalMatches(s.sessionDir.resolve("pump-failed.properties"),s.id)) {
++                s.wantsStop=false;s.status.setProperty("state","MANUAL");
++                s.status.setProperty("phase","遊戲主執行緒未回應退出排程；已取消自動動作，請切回遊戲並手動重新啟動");s.publish();return false;
++            }
+             if (worldOrPlayerPresent) { s.wantsStop=false; s.status.setProperty("state","MANUAL");s.status.setProperty("phase","已進入遊戲，取消自動退出；請自行關閉並重啟");s.publish();return false; }
+             if (!DesktopFiles.signalMatches(s.desktop.resolve("current.properties"),s.id)
+                 ||DesktopFiles.signalMatches(s.sessionDir.resolve("cancel.properties"),s.id)) {
+@@ -295,12 +305,12 @@
+                 s.wantsStop=false;s.status.setProperty("state","MANUAL");s.status.setProperty("phase","獨立視窗未就緒；為避免無提示退出，請手動重新啟動");s.publish();return false;
+             }
+             Path guard=s.desktop.resolve("restart-guard.properties"); String key=s.status.getProperty("plan.key");
+-            if (!RestartPlan.guardAllows(guard,key,now)) {
++            if (!RestartPlan.guardAllows(guard,key,System.currentTimeMillis())) {
+                 s.wantsStop=false;s.status.setProperty("state","MANUAL");s.status.setProperty("phase","已阻止重複自動重啟；請檢查更新是否成功載入");s.publish();return false;
+             }
+             if(s.deadline==0) s.deadline=now+5000;
+             if(now<s.deadline) {s.status.setProperty("state","COUNTDOWN");s.status.setProperty("phase","將正常關閉遊戲以套用更新（"+((s.deadline-now+999)/1000)+" 秒），可取消");s.publish();return false;}
+-            RestartPlan.guardClaim(guard,s.id,key,now);
++            RestartPlan.guardClaim(guard,s.id,key,System.currentTimeMillis());
+             s.status.setProperty("state","STOPPING");s.status.setProperty("phase","正在正常關閉遊戲；退出後核對換檔結果");s.publish();s.sentStop=true;
+             return true;
+         } catch(Exception failure) { s.fail("自動退出的安全檢查失敗；請手動重新啟動");return false; }
+--- a/src/dev/yinghuang/legacyforgebridge/desktop/DesktopFiles.java
++++ b/src/dev/yinghuang/legacyforgebridge/desktop/DesktopFiles.java
+@@ -77,7 +77,7 @@
+         // Intentionally no inherited JVM flags, INST_JAVA_ARGS, account or token environment.
+         Map<String, String> old = new HashMap<>(builder.environment());
+         builder.environment().clear();
+-        Set<String> allowed = Set.of("SYSTEMROOT", "WINDIR", "PATH", "PATHEXT", "HOME", "USERPROFILE",
++        Set<String> allowed = Set.of("SYSTEMROOT", "SYSTEMDRIVE", "PROGRAMDATA", "WINDIR", "PATH", "PATHEXT", "HOME", "USERPROFILE",
+             "APPDATA", "LOCALAPPDATA", "TEMP", "TMP", "LANG", "LC_ALL", "LC_CTYPE", "DISPLAY",
+             "WAYLAND_DISPLAY", "XAUTHORITY", "XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS",
+             "XDG_CONFIG_HOME", "XDG_DATA_HOME");
+--- a/src/dev/yinghuang/legacyforgebridge/desktop/DesktopHelper.java
++++ b/src/dev/yinghuang/legacyforgebridge/desktop/DesktopHelper.java
+@@ -21,7 +21,8 @@
+     private boolean reportShown;
+     private JProgressBar bar;
+     private JButton cancel;
+-    private String localState="", localMessage="", lastDisplay="";
++    private String localState="", localMessage="", lastDisplay="", lastRecorded="", observedUpdate="";
++    private long quietSince;
+     private long parentGoneAt, verifiedAt, launchAt, terminalAt;
+     private boolean launched, terminal;
+     private String fontFamily="Dialog";
+@@ -128,7 +129,26 @@
+         }
+         if(!DesktopFiles.signalMatches(desktop.resolve("current.properties"),id)){manual("已有新的遊戲工作階段，取消這次自動重啟",false);return;}
+         boolean alive=RestartPlan.parentAlive(p);
+-        if(alive){show(p);return;}
++        if(alive){
++            if (Set.of("READY","COUNTDOWN","STOPPING").contains(state)) {
++                if (canceled || DesktopFiles.signalMatches(session.resolve("cancel.properties"),id)) {
++                    manual("已取消自動退出／重啟；可自行關閉遊戲並重新啟動",false);return;
++                }
++                if (DesktopFiles.signalMatches(session.resolve("pump-failed.properties"),id)) {
++                    cancelAutomatic();manual("遊戲主執行緒未回應退出排程；已取消自動動作，請切回遊戲並手動重新啟動",false);return;
++                }
++                String update=state+"/"+p.getProperty("updated","");
++                long monotonic=System.nanoTime();
++                if(!update.equals(observedUpdate)){observedUpdate=update;quietSince=monotonic;}
++                long limit=state.equals("READY")?120:state.equals("STOPPING")?45:15;
++                if(monotonic-quietSince>=java.util.concurrent.TimeUnit.SECONDS.toNanos(limit)) {
++                    cancelAutomatic();
++                    manual(state.equals("STOPPING")?"關閉請求已送出，但遊戲尚未退出；已取消自動重啟，請手動關閉並檢查紀錄":
++                        "退出進度長時間未更新；已取消自動動作，請切回遊戲並手動重新啟動",false);return;
++                }
++            }
++            show(p);return;
++        }
+         if(parentGoneAt==0)parentGoneAt=now;
+         if(!state.equals("STOPPING")||!DesktopFiles.signalMatches(session.resolve("exit-approved.properties"),id)){
+             manual(state.equals("MANUAL")||state.equals("READY")?"遊戲已關閉，請確認換檔紀錄後重新啟動遊戲":"遊戲提前結束或轉換中斷；未執行自動重啟",!state.equals("MANUAL"));return;
+@@ -171,9 +191,11 @@
+         String pass=p.getProperty("pass","");String count=p.getProperty("passProgress","");
+         boolean top=Set.of("MANUAL","ERROR","WARN","VERIFYING","RELAUNCH_COUNTDOWN").contains(state);
+         boolean changed=!state.equals(lastDisplay);lastDisplay=state;
+-        if(changed)try{Properties view=new Properties();view.setProperty("session",id);view.setProperty("state",state);
++        String recorded=state+"\n"+message;
++        if(!recorded.equals(lastRecorded))try{Properties view=new Properties();view.setProperty("session",id);view.setProperty("state",state);
+             view.setProperty("message",DesktopFiles.text(message,512));view.setProperty("alwaysOnTopRequested",Boolean.toString(top));
+-            DesktopFiles.write(session.resolve("helper-state.properties"),view);
++            view.setProperty("updated",Long.toString(System.currentTimeMillis()));
++            DesktopFiles.write(session.resolve("helper-state.properties"),view);lastRecorded=recorded;
+         }catch(IOException ignored){}
+         String headline=switch(state){case "ERROR"->"轉換／載入未完成，請查看診斷";case "WARN"->"已載入，但仍有未支援項目";case "MANUAL"->"請重新啟動遊戲";
+             case "COUNTDOWN","STOPPING","READY"->"轉換檔案已暫存，需要重新啟動";case "VERIFYING"->"遊戲已退出，正在核對更新";
+--- a/src/dev/yinghuang/legacyforgebridge/desktop/DesktopRestartPump.java
++++ b/src/dev/yinghuang/legacyforgebridge/desktop/DesktopRestartPump.java
+@@ -0,0 +1,121 @@
++package dev.yinghuang.legacyforgebridge.desktop;
++
++import java.io.IOException;
++import java.nio.file.Path;
++import java.util.Objects;
++import java.util.Properties;
++import java.util.concurrent.*;
++import java.util.function.BooleanSupplier;
++
++/** Bounded startup-only control pump. The worker queues tasks; ONLY the captured client thread
++ * may inspect game state or request graceful shutdown. A stalled executor cancels, never kills. */
++public final class DesktopRestartPump implements AutoCloseable {
++    private final Path session, current;
++    private final String id;
++    private final Executor clientExecutor;
++    private final Thread clientThread;
++    private final BooleanSupplier clientStep;
++    private final ScheduledExecutorService timer;
++    private final long initialTimeout, responseTimeout;
++    private volatile boolean closed;
++    private boolean pending;
++    private long queuedAt, queuedEpoch, completedEpoch, submitted, completed;
++    private String state = "STARTING", reason = "";
++
++    private DesktopRestartPump(Path session, Executor executor, Thread owner, BooleanSupplier step,
++            long initialTimeout, long responseTimeout) throws IOException {
++        this.session = session.toRealPath(); DesktopFiles.noLinks(this.session);
++        Properties p = DesktopFiles.read(this.session.resolve("status.properties"));
++        this.id = p.getProperty("session", "");
++        Path game = DesktopFiles.absolute(p.getProperty("game")).toRealPath();
++        if (!id.matches("[0-9a-f-]{36}") || !this.session.equals(game.resolve("legacy-cache/desktop/sessions").resolve(id)))
++            throw new IOException("Restart pump session mismatch");
++        this.current = game.resolve("legacy-cache/desktop/current.properties");
++        clientExecutor = Objects.requireNonNull(executor);
++        clientThread = Objects.requireNonNull(owner);
++        clientStep = Objects.requireNonNull(step);
++        if (initialTimeout <= 0 || responseTimeout <= 0) throw new IllegalArgumentException("Restart pump timeouts");
++        this.initialTimeout = initialTimeout; this.responseTimeout = responseTimeout;
++        timer = Executors.newSingleThreadScheduledExecutor(r -> {
++            Thread t = new Thread(r, "LFB-desktop-restart-pump"); t.setDaemon(true); return t;
++        });
++        publish();
++    }
++    public static DesktopRestartPump start(Path session, Executor executor, Thread owner, BooleanSupplier step) throws IOException {
++        DesktopRestartPump pump = new DesktopRestartPump(session, executor, owner, step,
++            TimeUnit.SECONDS.toNanos(120), TimeUnit.SECONDS.toNanos(15));
++        pump.timer.scheduleWithFixedDelay(pump::pulse, 0, 250, TimeUnit.MILLISECONDS);
++        return pump;
++    }
++    private void pulse() {
++        try {
++            synchronized (this) {
++                if (closed) return;
++                if (!DesktopFiles.signalMatches(current, id) || DesktopFiles.signalMatches(session.resolve("cancel.properties"), id)) {
++                    finish("CANCELED", "session_changed_or_canceled"); return;
++                }
++                if (pending) {
++                    if (System.nanoTime() - queuedAt >= (completed == 0 ? initialTimeout : responseTimeout)) {
++                        abort("TIMED_OUT", "client_executor_not_responding"); return;
++                    }
++                    state = "WAITING_MAIN"; publish(); return;
++                }
++                pending = true; queuedAt = System.nanoTime(); queuedEpoch = System.currentTimeMillis(); submitted++;
++                state = "QUEUED"; publish();
++            }
++            // Do not hold the pump lock while calling an external executor.
++            clientExecutor.execute(this::runOnClient);
++        } catch (Exception | LinkageError failure) {
++            abortQuietly("FAILED", failure.getClass().getName());
++        }
++    }
++    private void runOnClient() {
++        synchronized (this) {
++            if (closed) return; // A late queued callback must not revive a timed-out session.
++            if (Thread.currentThread() != clientThread) {
++                abortQuietly("FAILED", "wrong_client_thread"); return;
++            }
++            if (!DesktopFiles.signalMatches(current, id) || DesktopFiles.signalMatches(session.resolve("cancel.properties"), id)) {
++                try { finish("CANCELED", "session_changed_or_canceled"); }
++                catch (IOException e) { abortQuietly("FAILED", e.getClass().getName()); }
++                return;
++            }
++        }
++        try {
++            boolean again = clientStep.getAsBoolean();
++            synchronized (this) {
++                if (closed) return;
++                completed++; completedEpoch = System.currentTimeMillis(); pending = false;
++                if (!again) finish("CONTROL_FINISHED", "no_further_automatic_exit_work");
++                else { state = "ACTIVE"; publish(); }
++            }
++        } catch (Exception | LinkageError failure) { abortQuietly("FAILED", failure.getClass().getName()); }
++    }
++    private synchronized void abortQuietly(String state, String reason) {
++        try { abort(state, reason); }
++        catch (IOException ignored) { closed = true; timer.shutdown(); }
++    }
++    private synchronized void abort(String state, String reason) throws IOException {
++        if (closed) return;
++        // The normal client poll also checks this marker. No approval/launcher claim is created.
++        try { DesktopFiles.signal(session.resolve("pump-failed.properties"), id); }
++        finally { finish(state, reason); }
++    }
++    private synchronized void finish(String state, String reason) throws IOException {
++        this.state = state; this.reason = reason; closed = true; timer.shutdown(); publish();
++    }
++    private synchronized void publish() throws IOException {
++        Properties p = new Properties(); p.setProperty("session", id); p.setProperty("state", state);
++        p.setProperty("reason", DesktopFiles.text(reason, 160)); p.setProperty("driver", "CLIENT_EXECUTOR");
++        p.setProperty("updated", Long.toString(System.currentTimeMillis()));
++        p.setProperty("submitted", Long.toString(submitted)); p.setProperty("completed", Long.toString(completed));
++        p.setProperty("pending", Boolean.toString(pending)); p.setProperty("queuedEpoch", Long.toString(queuedEpoch));
++        p.setProperty("completedEpoch", Long.toString(completedEpoch));
++        DesktopFiles.write(session.resolve("pump.properties"), p);
++    }
++    public boolean isClosed() { return closed; }
++    @Override public synchronized void close() {
++        if (!closed) try { finish("CLOSED", "coordinator_replaced"); }
++        catch (IOException ignored) { closed = true; timer.shutdown(); }
++    }
++}
+--- a/src/dev/yinghuang/legacyforgebridge/desktop/NativeDesktopTick.java
++++ b/src/dev/yinghuang/legacyforgebridge/desktop/NativeDesktopTick.java
+@@ -1,11 +1,41 @@
+ package dev.yinghuang.legacyforgebridge.desktop;
++
+ import net.minecraft.class_310;
+-/** Yarn 1.21.11+build.1: method_1592=scheduleStop, field_1687=world, field_1724=player. */
++import java.nio.file.Path;
++import java.util.concurrent.Executor;
++
++/** Yarn 1.21.11+build.1: getInstance=method_1551, scheduleStop=method_1592.
++ * Executor is the JDK interface implemented by MinecraftClient. No game-state reads on timer threads. */
+ public final class NativeDesktopTick {
++    private static DesktopRestartPump pump;
++    private static Path attachedSession;
++    private static Thread clientThread;
+     private NativeDesktopTick() {}
+-    public static void onTick(class_310 client) {
++    /** Injected into client initialization: registration no longer depends on a first end-tick. */
++    public static void initialize() {
++        try { attach(class_310.method_1551()); }
++        catch (RuntimeException | LinkageError unavailable) { DesktopConversionSession.stopFailed(); }
++    }
++    private static synchronized void attach(class_310 client) {
++        Path session = DesktopConversionSession.automaticStopSession();
++        if (session == null || session.equals(attachedSession)) return;
++        if (pump != null) pump.close();
++        attachedSession = session; clientThread = Thread.currentThread();
+         try {
+-            if (DesktopConversionSession.pollStop(client.field_1687!=null || client.field_1724!=null)) client.method_1592();
+-        } catch(RuntimeException | LinkageError unavailable) { DesktopConversionSession.stopFailed(); }
++            pump = DesktopRestartPump.start(session, (Executor) client, clientThread, () -> {
++                drive(client);
++                return session.equals(DesktopConversionSession.automaticStopSession());
++            });
++        } catch (Exception | LinkageError unavailable) { DesktopConversionSession.stopFailed(); }
+     }
++    private static void drive(class_310 client) {
++        if (clientThread != null && Thread.currentThread() != clientThread) {
++            DesktopConversionSession.stopFailed(); return;
++        }
++        try {
++            if (DesktopConversionSession.pollStop(client.field_1687 != null || client.field_1724 != null)) client.method_1592();
++        } catch (RuntimeException | LinkageError unavailable) { DesktopConversionSession.stopFailed(); }
++    }
++    /** Existing main-thread end-tick remains as a fallback, but is no longer the sole driver. */
++    public static void onTick(class_310 client) { attach(client); drive(client); }
+ }

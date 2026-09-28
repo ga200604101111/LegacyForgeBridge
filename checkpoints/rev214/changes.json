@@ -1,0 +1,32 @@
+[
+  {
+    "path": "src/dev/yinghuang/legacyforgebridge/desktop/ConversionOutcomeReport.java",
+    "before_sha256": "fd0b4bead57543159f5c55a9f055948e08324990a071468288ff7331496969dd",
+    "after_sha256": "18f4df4b3a32dde5fd8e66f2e1f823d01289ff75dc46b34c90ea23ddf33bbc09"
+  },
+  {
+    "path": "src/dev/yinghuang/legacyforgebridge/desktop/DesktopConversionSession.java",
+    "before_sha256": "1a9f574095494d7fd9bcfd1db0b13c8c7b5e35818065b678dd271616a30731c9",
+    "after_sha256": "7c0b835ce22b570e5945482bc729ca0f2d1a2150923a8f518d3214c511d1a275"
+  },
+  {
+    "path": "src/dev/yinghuang/legacyforgebridge/desktop/DesktopFiles.java",
+    "before_sha256": "97d89e73dc596fa82415d528bc9dee150acc95fdeec06a1a9252330830272395",
+    "after_sha256": "83645ce89c0c9a23ee770bcad16195e57646f2d489baa9a9d5226548903d0cd8"
+  },
+  {
+    "path": "src/dev/yinghuang/legacyforgebridge/desktop/DesktopHelper.java",
+    "before_sha256": "6afbda470a8c64395e81a7006f9e75942aa9f9f99dfb7cbe71f7f01bf411efce",
+    "after_sha256": "cdf1d395ae48bd4f1d3da3694c120e6daff037136edbcc81e71d21cf114983ec"
+  },
+  {
+    "path": "src/dev/yinghuang/legacyforgebridge/desktop/DesktopRestartPump.java",
+    "before_sha256": null,
+    "after_sha256": "13e618236d8649b0f323e9d007c0195b24d2654bc7f3a66b1eeffb17e96aa548"
+  },
+  {
+    "path": "src/dev/yinghuang/legacyforgebridge/desktop/NativeDesktopTick.java",
+    "before_sha256": "a9ef50c46bb274efd3932c61af901f7965dbec3439a5d05d96d1419535a2c993",
+    "after_sha256": "2d6bf92b206f6e7ca7010f9463571a5b73d71d0e4e9149cd8a09a0ede93b9459"
+  }
+]
