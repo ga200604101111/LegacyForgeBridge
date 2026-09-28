@@ -1,0 +1,145 @@
+--- a/src/dev/yinghuang/legacyforgebridge/compat/ClientFeedbackProgram.java
++++ b/src/dev/yinghuang/legacyforgebridge/compat/ClientFeedbackProgram.java
+@@ -7,7 +7,7 @@
+  * mutate inventory/NBT, or assume a result for an unknown source event. A DEFER instruction
+  * ends the proven source prefix; gestures before that boundary remain source ordered. */
+ public final class ClientFeedbackProgram {
+-    private static final Set<String> OPS=Set.of("NOP","NULL","INT","FLOAT","DOUBLE","LOAD","STORE","IINC","POP","DUP","IADD","ISUB","IMUL","IDIV","IREM","FADD","FSUB","FMUL","FDIV","FREM","DADD","DSUB","DMUL","DDIV","DREM","INEG","FNEG","DNEG","I2F","D2F","I2D","F2D","F2I","D2I","FCMPL","FCMPG","DCMPL","DCMPG","GOTO","IFEQ","IFNE","IFLT","IFLE","IFGT","IFGE","IF_ICMPEQ","IF_ICMPNE","IF_ICMPLT","IF_ICMPLE","IF_ICMPGT","IF_ICMPGE","IFNULL","IFNONNULL","WORLD","REMOTE","DURATION","DAMAGE","MAX","EQUIPPED","SWING","SERVER_RESOURCE","CALL","RETURN","IRETURN","FRETURN","DRETURN","ARETURN","DEFER");
++    private static final Set<String> OPS=Set.of("NOP","NULL","INT","FLOAT","DOUBLE","LOAD","STORE","IINC","POP","DUP","IADD","ISUB","IMUL","IDIV","IREM","FADD","FSUB","FMUL","FDIV","FREM","DADD","DSUB","DMUL","DDIV","DREM","INEG","FNEG","DNEG","I2F","D2F","I2D","F2D","F2I","D2I","FCMPL","FCMPG","DCMPL","DCMPG","GOTO","IFEQ","IFNE","IFLT","IFLE","IFGT","IFGE","IF_ICMPEQ","IF_ICMPNE","IF_ICMPLT","IF_ICMPLE","IF_ICMPGT","IF_ICMPGE","IFNULL","IFNONNULL","WORLD","REMOTE","DURATION","DAMAGE","MAX","EQUIPPED","SWING","BASE_USE_TICK","SERVER_RESOURCE","CALL","RETURN","IRETURN","FRETURN","DRETURN","ARETURN","DEFER");
+     public record Step(String op,int arg,String text){}
+     public record Code(int locals,int[] argumentSlots,boolean isStatic,List<Step> steps){
+         public Code { argumentSlots=argumentSlots.clone();steps=List.copyOf(steps);
+@@ -21,7 +21,7 @@
+         @Override public int[] argumentSlots(){return argumentSlots.clone();}
+     }
+     public record Program(String kind,String root,Map<String,Code> methods){
+-        public Program {methods=Map.copyOf(methods);if(!Set.of("release","entity").contains(kind)||methods.size()>64||!methods.containsKey(root))throw new IllegalArgumentException("feedback program contract");}
++        public Program {methods=Map.copyOf(methods);if(!Set.of("release","entity","usingTick").contains(kind)||methods.size()>64||!methods.containsKey(root))throw new IllegalArgumentException("feedback program contract");}
+     }
+     public record Input(int duration,int remaining,int damage,int maxDamage){}
+     public record Result(int swings,boolean completed,String deferredReason){}
+@@ -30,7 +30,12 @@
+     private static final class Machine {final Program p;final Input in;int fuel=8192,swings;boolean serverResourceSeen;Machine(Program p,Input in){this.p=p;this.in=in;}}
+     private ClientFeedbackProgram(){}
+     public static Program parse(JsonObject json){
+-        if(json.get("schema").getAsBigDecimal().intValueExact()!=1)throw new IllegalArgumentException("feedback schema");
++        int schema=json.get("schema").getAsBigDecimal().intValueExact();
++        boolean tick="usingTick".equals(json.get("kind").getAsString());
++        if(schema!=(tick?2:1))throw new IllegalArgumentException("feedback schema");
++        if(tick&&(!"net/minecraftforge/event/entity/player/PlayerUseItemEvent$Tick".equals(text(json,"requiresEvent"))
++                ||!"AFTER_EVENT_BEFORE_DECREMENT".equals(text(json,"eventPhase"))))
++            throw new IllegalArgumentException("using tick event contract");
+         JsonObject all=json.getAsJsonObject("methods");if(all==null||all.size()>64)throw new IllegalArgumentException("feedback method count");Map<String,Code> codes=new LinkedHashMap<>();
+         for(var e:all.entrySet()){
+             var o=e.getValue().getAsJsonObject();var a=o.getAsJsonArray("steps");if(a==null||a.size()>8192)throw new IllegalArgumentException("feedback steps");List<Step> steps=new ArrayList<>();
+@@ -41,10 +46,46 @@
+         Program p=new Program(json.get("kind").getAsString(),json.get("root").getAsString(),codes);
+         for(Code c:codes.values())for(Step s:c.steps())if(s.op().equals("CALL")&&!codes.containsKey(s.text()))throw new IllegalArgumentException("missing feedback helper");return p;
+     }
+-    public static JsonObject encode(Program p){var j=new Gson().toJsonTree(p).getAsJsonObject();j.addProperty("schema",1);return j;}
++    private static String text(JsonObject json,String key){return json.has(key)&&json.get(key).isJsonPrimitive()?json.get(key).getAsString():null;}
++    public static JsonObject encode(Program p){
++        var j=new Gson().toJsonTree(p).getAsJsonObject();boolean tick="usingTick".equals(p.kind());
++        j.addProperty("schema",tick?2:1);
++        if(tick){j.addProperty("requiresEvent","net/minecraftforge/event/entity/player/PlayerUseItemEvent$Tick");j.addProperty("eventPhase","AFTER_EVENT_BEFORE_DECREMENT");}
++        return j;
++    }
+     public static Result evaluate(Program p,Input in){
++        if("usingTick".equals(p.kind()))return new Result(0,false,"upstream PlayerUseItemEvent.Tick result required");
+         if(in.duration()<0||in.duration()>1_000_000||in.remaining()<0||in.remaining()>in.duration())throw new IllegalArgumentException("feedback use time");
+-        Machine m=new Machine(p,in);List<Object> args=p.kind().equals("release")?List.of(Ref.STACK,Ref.WORLD,Ref.PLAYER,in.remaining()):List.of(Ref.STACK,Ref.PLAYER,Ref.TARGET);
++        List<Object> args=p.kind().equals("release")?List.of(Ref.STACK,Ref.WORLD,Ref.PLAYER,in.remaining()):List.of(Ref.STACK,Ref.PLAYER,Ref.TARGET);
++        return evaluateArguments(p,in,args);
++    }
++    /** Pure projection AFTER the caller has obtained the real upstream event result.
++     * The optional count is the effective remaining time, before the 1.7.10 decrement,
++     * NOT elapsed time and NOT a default-event permission. Empty always defers.
++     * This API does not verify an event environment, dispatch events or enable native ticks.
++     * Duration/damage/maxDamage must be a fresh POST-event source snapshot for the
++     * still-active stack and its matching source class; Input.remaining is the earlier
++     * observation and is deliberately not used as the callback count. Cancellation,
++     * stack replacement and player/world changes must be resolved by the caller.
++     * Callers must not substitute the original count when upstream behavior is unresolved.
++     */
++    public static Result evaluateUsingTick(Program p,Input in,OptionalInt remainingAfterEvent){
++        if(!"usingTick".equals(p.kind()))throw new IllegalArgumentException("not a using tick program");
++        Objects.requireNonNull(remainingAfterEvent,"upstream tick result");
++        if(remainingAfterEvent.isEmpty())return new Result(0,false,"upstream PlayerUseItemEvent.Tick result unresolved");
++        Code root=p.methods().get(p.root());
++        if(root.isStatic()||root.argumentSlots.length!=3)throw new IllegalArgumentException("using tick root signature");
++        if(in.duration()<0||in.duration()>1_000_000||in.remaining()<0||in.remaining()>1_000_000)throw new IllegalArgumentException("feedback use time");
++        int remaining=remainingAfterEvent.getAsInt();
++        // Forge calls finish, not onUsingTick, if the event cancels or returns <= 0.
++        if(remaining<=0)return new Result(0,true,null);
++        if(remaining>1_000_000)return new Result(0,false,"post-event tick count outside projection budget");
++        // An event may extend a use beyond its original duration. Never clamp that count.
++        Input effective=new Input(in.duration(),remaining,in.damage(),in.maxDamage());
++        return evaluateArguments(p,effective,List.of(Ref.STACK,Ref.PLAYER,remaining));
++    }
++    private static Result evaluateArguments(Program p,Input in,List<Object> args){
++        Machine m=new Machine(p,in);
+         try{run(m,p.root(),Ref.SELF,args,0);return new Result(m.swings,true,null);}catch(Boundary b){return new Result(m.swings,false,b.getMessage());}
+     }
+     private static Object pop(List<Object>s){if(s.isEmpty())throw new IllegalArgumentException("feedback stack underflow");return s.removeLast();}
+@@ -77,6 +118,7 @@
+                 case "MAX"->{expect(pop(s),Ref.SELF);s.add(m.in.maxDamage());}
+                 case "EQUIPPED"->{number(pop(s));expect(pop(s),Ref.TARGET);s.add(Ref.UNKNOWN);}
+                 case "SWING"->{expect(pop(s),Ref.PLAYER);m.swings++;}
++                case "BASE_USE_TICK"->{number(pop(s));expect(pop(s),Ref.PLAYER);expect(pop(s),Ref.STACK);expect(pop(s),Ref.SELF);}
+                 case "SERVER_RESOURCE"->{for(int n=0;n<i.arg();n++)pop(s);m.serverResourceSeen=true;}
+                 case "CALL"->{Code next=m.p.methods().get(i.text());List<Object> values=new ArrayList<>();for(int n=next.argumentSlots.length-1;n>=0;n--)values.addFirst(pop(s));Object recv=next.isStatic?null:pop(s);if(!next.isStatic&&recv!=Ref.SELF)throw new Boundary("non-self source helper receiver");Object result=run(m,i.text(),recv,values,depth+1);if(i.arg()!=0)s.add(result);}
+                 case "RETURN"->{if(!s.isEmpty())throw new IllegalArgumentException("feedback return stack");return null;}
+--- a/src/dev/yinghuang/legacyforgebridge/convert/ClientFeedbackCompiler.java
++++ b/src/dev/yinghuang/legacyforgebridge/convert/ClientFeedbackCompiler.java
+@@ -43,6 +43,19 @@
+             codes.clear();try{compile(root);output.put(kind,new Program(kind,root.key(),new LinkedHashMap<>(codes)));}catch(IllegalArgumentException bad){/* caller reports missing projection; no guessed gesture */}
+         }return output;
+     }
++    /** Dormant source projection. Admission through PlayerUseItemEvent.Tick is a separate,
++     * currently unavailable runtime boundary; never put this result in active programs.
++     */
++    public Optional<Program> compileUsingTick(String sourceClass){
++        concrete=sourceClass;
++        Source root=resolve(sourceClass,"onUsingTick","("+STACK+PLAYER+"I)V");
++        if(root==null||(root.method.access&ACC_PUBLIC)==0
++                ||(root.method.access&(ACC_STATIC|ACC_ABSTRACT|ACC_NATIVE))!=0
++                ||!hasSwing(root,new HashSet<>(),0))return Optional.empty();
++        codes.clear();
++        try{compile(root);return Optional.of(new Program("usingTick",root.key(),new LinkedHashMap<>(codes)));}
++        catch(IllegalArgumentException unsupported){return Optional.empty();}
++    }
+     private boolean hasSwing(Source source,Set<String> seen,int depth){if(depth>16||!seen.add(source.key()))return false;for(var i:source.method.instructions)if(i instanceof MethodInsnNode m){if(swing(m))return true;var helper=dispatch(m);if(helper!=null&&hasSwing(helper,seen,depth+1))return true;}return false;}
+     private void compile(Source source){
+         if(codes.containsKey(source.key()))return;if(codes.size()>=64)throw new IllegalArgumentException("feedback helper budget");MethodNode m=source.method;
+@@ -68,6 +81,10 @@
+                 Source helper=dispatch(call);
+                 if(helper!=null&&!call.name.equals("<init>")){compile(helper);step=new Step("CALL",Type.getReturnType(call.desc).getSort()==Type.VOID?0:1,helper.key());}
+                 else if(swing(call))step=new Step("SWING",0,null);
++                // The exact Forge 1.7.10 Item implementation is empty. Source-visible
++                // overrides were resolved above; no unknown or virtual parent is bypassed.
++                else if(call.getOpcode()==INVOKESPECIAL&&call.owner.equals("net/minecraft/item/Item")
++                        &&call.name.equals("onUsingTick")&&call.desc.equals("("+STACK+PLAYER+"I)V"))step=new Step("BASE_USE_TICK",0,null);
+                 else if(call.name.equals("func_77626_a")&&call.desc.equals("("+STACK+")I"))step=new Step("DURATION",0,null);
+                 else if(call.owner.equals("net/minecraft/item/ItemStack")&&call.name.equals("func_77952_i")&&call.desc.equals("()I"))step=new Step("DAMAGE",0,null);
+                 else if(call.name.equals("func_77612_l")&&call.desc.equals("()I"))step=new Step("MAX",0,null);
+@@ -90,9 +107,19 @@
+     public static void apply(ConversionContext context)throws IOException{
+         Path interaction=context.stagingDir().resolve("legacyforgebridge/source-interactions.json");if(!Files.isRegularFile(interaction))return;
+         JsonObject root=JsonParser.parseString(Files.readString(interaction)).getAsJsonObject();JsonObject output=new JsonObject(),items=new JsonObject();output.addProperty("schema",1);output.addProperty("sourceSha256",context.sourceHash());output.add("items",items);
++        JsonObject pendingTicks=new JsonObject();output.add("pendingUsingTick",pendingTicks);
+         var compiler=new ClientFeedbackCompiler(context.sourceJar());Map<String,Map<String,Program>> cache=new HashMap<>();
++        Map<String,Optional<Program>> tickCache=new HashMap<>();
+         for(var e:root.getAsJsonObject("items").entrySet()){
+-            String cls=e.getValue().getAsJsonObject().get("sourceClass").getAsString();var programs=cache.computeIfAbsent(cls,compiler::compile);if(programs.isEmpty())continue;
++            String cls=e.getValue().getAsJsonObject().get("sourceClass").getAsString();var programs=cache.computeIfAbsent(cls,compiler::compile);
++            var tick=tickCache.computeIfAbsent(cls,compiler::compileUsingTick);
++            if(tick.isPresent()){
++                JsonObject pending=new JsonObject();pending.addProperty("sourceClass",cls);
++                pending.addProperty("nativeRuntimeEnabled",false);
++                pending.addProperty("status","REQUIRES_UPSTREAM_TICK_EVENT_BRIDGE");
++                pending.add("program",ClientFeedbackProgram.encode(tick.get()));pendingTicks.add(e.getKey(),pending);
++            }
++            if(programs.isEmpty())continue;
+             JsonObject row=new JsonObject();row.addProperty("sourceClass",cls);JsonObject ps=new JsonObject();programs.forEach((kind,p)->ps.add(kind,ClientFeedbackProgram.encode(p)));row.add("programs",ps);row.addProperty("serverAuthorityUnchanged",true);row.addProperty("scope","source gesture projection; DEFER boundaries do not certify whole callback");items.add(e.getKey(),row);
+         }
+         Path out=context.stagingDir().resolve(PATH);Files.writeString(out,new GsonBuilder().setPrettyPrinting().create().toJson(output)+"\n",StandardCharsets.UTF_8);
