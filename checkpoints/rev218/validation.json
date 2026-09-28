@@ -1,0 +1,15 @@
+{
+  "version": "0.2.0-alpha.27-rev218-local-test.1",
+  "base_sha256": "3891a4ce9a77aac0c22884c07b234b0fad1545dc0b287410ab5f9692e97ed529",
+  "main_sha256": "bc1dc9c89c90de2d486441b11e961b556d80360f241c40fc5448a0925788134e",
+  "main_bytes": 4234802,
+  "user_latest_session": "85bfdabf-b461-44bd-b6fc-da8a9cf93291",
+  "user_evidence": {"launcherDetected":"PRISM","forceExitAfterConversion":true,"partialCount":3,"unusableCount":0,"restartPending":3,"finalState":"ERROR","exitApproved":false,"launchClaimed":false,"samePidGameReady":true},
+  "fixes": {"preLaunch":true,"passFailureNoCoordinatorPoison":true,"gameReadyOnlyDoneWarn":true,"dynamicSameLaunchGeneratedModLoading":false},
+  "tests": {"Coordinator218":8,"PreLaunch218":2,"ConversionOutcome":56,"Config216":12,"DesktopSafety216":46,"RestartGuard217":8,"ConversionFailureBoundary":16,"FeedbackNumeric":21902,"FeedbackSafety":10,"Nock":20,"FeedbackSource_iYAMATO":501},
+  "process_flow": {"realChildRuntimeHalt":true,"exitApprovalBeforeHalt":true,"realManagedSwapHelper":true,"realSwingHelper":true,"launcherRecorder":"C test double","directLaunchCount":1,"showArgument":false,"dirArgumentOwnerDefault":false},
+  "audit": {"classes":1612,"methods":14528,"errors":0,"apiAssertions":13349,"apiProblems":0,"externalInheritedUnverified":206,"baseEntries":1642,"candidateEntries":1644,"removedEntries":0,"newMinecraftFabricMemberRefs":0},
+  "energy_nested_sha256": "072cd9fad2ec00c3b11b5862f34bb12f0554f727958ad685ac7b81b4fd79eac3",
+  "twoIndependentAssembliesByteIdentical": true,
+  "windowsRealPrismMinecraftTested": false
+}

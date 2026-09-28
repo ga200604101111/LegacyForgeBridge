@@ -1,0 +1,69 @@
+--- a/DesktopConversionSession.java
++++ b/DesktopConversionSession.java
+@@ -26,7 +26,7 @@
+     private Process helper;
+     private volatile boolean completed, wantsStop;
+     private boolean autoLaunch, forceExit, prismDetected;
+-    private final Thread initializationThread = Thread.currentThread();
++    private volatile Thread managerThread;
+     private volatile boolean gameReady;
+@@ -147,9 +147,17 @@
+-    public static void runManager(LegacyConversionManager manager) throws IOException {
++    /** Fabric preLaunch may create the session/window several seconds before normal mod init.
++     * This method is idempotent and never touches Minecraft client classes. */
++    public static synchronized void preLaunch() {
++        if (active != null) return;
+         try { active = new DesktopConversionSession(LegacyPaths.resolve().gameDir()); }
+         catch (Exception | LinkageError unavailable) { active = null; }
++    }
++    public static void runManager(LegacyConversionManager manager) throws IOException {
++        preLaunch();
++        DesktopConversionSession prepared = active;
++        if (prepared != null) prepared.managerThread = Thread.currentThread();
+@@ -244,7 +252,9 @@
+-        if (success) passDone++; else healthy=false;
++        // Pass failure is already represented by the engine's final source outcome. Do not
++        // poison desktop restart coordination when a loader-safe staged candidate still exists.
++        if (success) passDone++;
+@@ -430,7 +440,7 @@
+-        if(s==null||Thread.currentThread()!=s.initializationThread
++        if(s==null||Thread.currentThread()!=s.managerThread
+                 ||!NativeDesktopTick.initialConstruction())return;
+@@ -455,6 +465,8 @@
+             if(s.gameReady||!s.completed||s.sentStop||s.wantsStop)return;
++            String terminalState=s.status.getProperty("state","");
++            if(!Set.of("DONE","WARN").contains(terminalState))return;
+@@ -467,7 +479,8 @@
+-        return s!=null&&s.id.equals(session)&&!s.gameReady&&!s.sentStop;
++        if(s==null||!s.id.equals(session)||s.gameReady||s.sentStop)return false;
++        return Set.of("DONE","WARN").contains(s.status.getProperty("state",""));
+--- a/DesktopHelper.java
++++ b/DesktopHelper.java
+@@ -250,11 +250,15 @@
+     private boolean checkGameReady(Properties own) throws IOException {
+         Properties target=own;Path dir=session;
+         boolean successorSession=!DesktopFiles.signalMatches(desktop.resolve("current.properties"),id);
+-        if(!successorSession && Boolean.parseBoolean(own.getProperty("manualRestartRequired","false"))) return false;
+         if(successorSession) {
+             Properties next=readSuccessor();if(next==null)return false;
+             target=next;dir=desktop.resolve("sessions").resolve(successor);
+         }
++        String terminalState=target.getProperty("state","");
++        if(!Set.of("DONE","WARN").contains(terminalState))return false;
++        if(Boolean.parseBoolean(target.getProperty("manualRestartRequired","false")))return false;
+         if(!StartupReady.matches(dir,target))return false;
+--- /dev/null
++++ b/LegacyForgeBridgePreLaunch.java
+@@ -0,0 +1,16 @@
++package dev.yinghuang.legacyforgebridge;
++
++import dev.yinghuang.legacyforgebridge.desktop.DesktopConversionSession;
++import net.fabricmc.loader.api.entrypoint.PreLaunchEntrypoint;
++
++/** Earliest Fabric Loader bootstrap for local conversion coordination/status only. */
++public final class LegacyForgeBridgePreLaunch implements PreLaunchEntrypoint {
++    @Override
++    public void onPreLaunch() {
++        DesktopConversionSession.preLaunch();
++    }
++}
