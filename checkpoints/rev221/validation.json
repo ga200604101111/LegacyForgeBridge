@@ -1,0 +1,15 @@
+{
+  "version":"0.2.0-alpha.27-rev221-local-test.1",
+  "binary_base":{"version":"0.2.0-alpha.27-rev219-local-test.1","sha256":"76f5a9fa3a77ac814d2abb66027463e035d37b0a9f0a09ebb18d0aaceba79126"},
+  "main":{"bytes":4241511,"sha256":"fc7cc8d6c97e0314eadedf0175dd75f85cff06a4540694a36aa8349815b81149","entries":1650,"uniqueEntries":1650,"zipIntegrity":true},
+  "buildKitSha256":"a8f41d612eb5d85161e89e1315a4035ecd32807321eec94cb19bfcf05152ae2e",
+  "externalValidationSha256":"7392d0e4d01b84ab2b0266b83c3b06be8937afc404c31e52092bc4415c4aa1f2",
+  "build":{"jdk":21,"method":"exact rev219 hash-pinned javac/ASM overlay; identity constants replaced without StackMap recompute; not Gradle/Loom clean","independentAssemblies":2,"byteIdentical":true},
+  "jumpEvidence":{"localBeforeY":0.41999998688697815,"localAfterY":0.5699999868869782,"boostedWithoutServerReboostPeakApprox":2.1658,"matchingServerY":[0.5698590001831167,0.4801318439846183],"serverReboostPeakRange":[3.0378,3.6073]},
+  "jumpPolicy":{"rev220SuppressionWithdrawn":true,"retainLocalPrediction":true,"echoWindowTicks":[1,4],"minimumClientBoost":0.02,"matchEpsilon":0.004,"minimumReboost":0.02,"preserveServerXZ":true,"barriers":["position-correction-or-respawn","damage-or-entity-status","explosion"]},
+  "jvmVerify":{"rev220NegativeControl":"reproduces VerifyError LegacyFileLogger.initializeForLaunch @188","rev221LegacyFileLogger":"passes verifier; isolated invocation reaches expected missing FabricLoader instead of VerifyError","jumpClassesPass":true},
+  "tests":{"coreAssertions":22593,"coreFailures":0,"jumpEchoAssertions":11,"jumpEchoFailures":0,"process":{"realRuntimeHalt":true,"swapVerified":true,"prismDirectLaunchOnce":true,"oldHelperClosedAfterLaunch":true,"persistentAlwaysOnTop":false,"realPrism":false}},
+  "audit":{"classes":1616,"methods":14552,"errors":0,"apiRetentionAssertions":13354,"apiProblems":0,"externalInheritedNotRealGameVerified":206,"baseEntries":1645,"candidateEntries":1650,"byteIdenticalBaseEntries":1635,"removedEntries":0,"newMinecraftFabricMemberRefs":0},
+  "energyNestedSha256":"072cd9fad2ec00c3b11b5862f34bb12f0554f727958ad685ac7b81b4fd79eac3",
+  "realWindowsPrismMinecraftLiveServerTested":false
+}

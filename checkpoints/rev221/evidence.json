@@ -1,0 +1,12 @@
+{
+  "rev220LiveGameplayTestValid":false,
+  "rev220Crash":"LegacyFileLogger.initializeForLaunch VerifyError before gameplay",
+  "traceDerivedJumpEvidence":{
+    "localBeforeY":0.41999998688697815,
+    "localAfterY":0.5699999868869782,
+    "boostedWithoutServerReboostPeakApprox":2.1658,
+    "matchingServerVelocityY":[0.5698590001831167,0.4801318439846183],
+    "serverReboostPeakRange":[3.0378,3.6073]
+  },
+  "decision":"Withdraw rev220 client-upward suppression. Keep local source-proven prediction and dedupe only a matching short-window local-player server velocity echo."
+}
