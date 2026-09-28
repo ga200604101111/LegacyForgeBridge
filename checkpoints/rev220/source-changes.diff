@@ -1,0 +1,45 @@
+--- rev219/DesktopHelper.java
++++ rev220/DesktopHelper.java
+@@
+- frame.setAlwaysOnTop(true);
++ frame.setAlwaysOnTop(false);
+  frame.setVisible(true);
+  frame.setState(Frame.NORMAL);
+  frame.toFront();
+  frame.requestFocus();
+@@
+- // Keep helper alive until successor game-ready.
++ // Prism accepted the single launch request. The successor JVM preLaunch will create
++ // its own helper, so this old helper must not remain on screen.
++ closed=true;
++ SwingUtilities.invokeLater(()->{if(frame!=null)frame.dispose();});
++ return;
+
+--- /dev/null
++++ rev220/ViaLegacyDroppedItemYMixin.java
+@@
++@Mixin(targets="net.raphimc.vialegacy.protocol.release.r1_7_6_10tor1_8.Protocolr1_7_6_10Tor1_8", remap=false)
++public abstract class ViaLegacyDroppedItemYMixin {
++  @Inject(method="realignEntityY(...;I)I",at=@At("HEAD"),cancellable=true,remap=false)
++  private void lfb$preserveDroppedItemY(EntityTypes1_8.EntityType type,int y,CallbackInfoReturnable<Integer> cir){
++    if(!ViaFabricPlusBackend.INSTANCE.isMinecraft1710Target()||type==null)return;
++    if(type.isOrHasParent(EntityTypes1_8.ObjectType.ITEM.getType()))cir.setReturnValue(y);
++  }
++}
+
+--- rev219/LegacyClientJumpMotion.class
++++ rev220/LegacyClientJumpMotion.class
+@@ sourceJump(local converted callback)
++ capture pre-callback Y velocity
+  LegacyBehaviorRuntime.jump(player)
++ if callback changed Y upward, restore pre-callback Y only
++ preserve callback X/Z changes
++ leave all subsequent server velocity packets untouched
+
+--- rev219/LegacySourceItemRuntime.class
++++ rev220/LegacySourceItemRuntime.class
+@@ configure source attribute modifiers
+- add proven modifier to MAIN_HAND
+- if armorSlot != null add to armor group
++ if armorSlot == null add proven modifier to MAIN_HAND
++ if armorSlot != null add proven modifier only to armor group

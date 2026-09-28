@@ -1,0 +1,15 @@
+{
+  "source":"user rev219 legacyforgebridge.log",
+  "jump":{
+    "before_y":0.41999998688697815,
+    "after_converted_rpgtool_callback_y":0.5699999868869782,
+    "later_server_authoritative_y":0.5698590001831167,
+    "observed_peak_rise_blocks":3.607284192116553,
+    "interpretation":"same jump boost was predicted locally by converted LivingJumpEvent and later authoritatively supplied by server; rev220 suppresses only the local upward Y prediction"
+  },
+  "via_legacy_upstream":{
+    "method":"Protocolr1_7_6_10Tor1_8.realignEntityY",
+    "item_y_offset":"0.24F / 2F",
+    "rev220_scope":"target 1.7.10 + ITEM only"
+  }
+}

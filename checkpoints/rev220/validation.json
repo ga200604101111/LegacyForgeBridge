@@ -1,0 +1,21 @@
+{
+  "version":"0.2.0-alpha.27-rev220-local-test.1",
+  "base_sha256":"76f5a9fa3a77ac814d2abb66027463e035d37b0a9f0a09ebb18d0aaceba79126",
+  "main_sha256":"bc52ed22e9dbc9a6a8ede4eab7cfc425a0feae6c63dde71cb9253ef0cdcfeff6",
+  "main_bytes":4237478,
+  "build_kit_sha256":"fbcdaa1ba6b3476da11b5c795eb52607f02b7dbdcff32b75be3c9c9a3c47a7f8",
+  "delivery_validation_sha256":"862caff2dcd4b04353863b06a86f649cd1d781b29746ffac0f6c37d094e57033",
+  "changes":{
+    "desktop":{"initial_focus_once":true,"persistent_always_on_top":false,"old_helper_closes_after_launch_submission":true},
+    "dropped_item_y":{"target":"1.7.10 only","entity":"ITEM only","preserve_source_fixed_point_y":true},
+    "jump":{"suppress_only_converted_client_callback_upward_y":true,"preserve_xz":true,"server_velocity_packets_unchanged":true},
+    "attributes":{"armor_main_hand_modifier_removed":true,"proven_armor_slot_retained":true,"non_armor_main_hand_retained":true}
+  },
+  "tests":{"core_assertions":22593,"core_failures":0,"rev220_structural_assertions":34,"rev220_structural_failures":0},
+  "process":{"real_child_runtime_halt":true,"real_managed_swap_helper":true,"real_swing_helper":true,"launcher":"C argv recorder","swap_verified":true,"direct_launch_count":1,"old_helper_closed_after_launch":true,"persistent_always_on_top":false},
+  "audit":{"classes":1613,"methods":14531,"errors":0,"api_assertions":13354,"api_problems":0,"new_minecraft_fabric_member_refs":0,"external_inherited_unverified":206,"base_entries":1645,"candidate_entries":1647,"unchanged_base_entries":1636,"removed_entries":0},
+  "reproducible_builds":2,
+  "byte_identical":true,
+  "energy_nested_sha256":"072cd9fad2ec00c3b11b5862f34bb12f0554f727958ad685ac7b81b4fd79eac3",
+  "real_windows_prism_minecraft_live_server_tested":false
+}
