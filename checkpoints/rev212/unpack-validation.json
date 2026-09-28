@@ -1,0 +1,32 @@
+{
+  "restored_files": 59,
+  "all_file_bytes_identical": true,
+  "negative_unpack_cases": [
+    {
+      "case": "corrupt-payload",
+      "rejected_before_output": true,
+      "message": "Payload checksum mismatch"
+    },
+    {
+      "case": "wrong-manifest",
+      "rejected_before_output": true,
+      "message": "Manifest mismatch"
+    },
+    {
+      "case": "missing-part",
+      "rejected_before_output": true,
+      "message": "[Errno 2] No such file or directory: '<test-temp>/missing-part/source-payload.json.xz.b64.part01'"
+    },
+    {
+      "case": "existing-output",
+      "rejected_before_output": true,
+      "message": "Output must be a new non-symlink directory"
+    },
+    {
+      "case": "symlink-parent",
+      "rejected_before_output": true,
+      "message": "Output must be a new non-symlink directory"
+    }
+  ],
+  "main_build_implied_by_unpack": false
+}

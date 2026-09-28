@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "checkpoint": "rev212-desktop-complete-main",
+  "base_commit": "5b0016d3090173e82fc56e9e3319abffd0f8942f",
+  "files": 59,
+  "parts": [
+    "source-payload.json.xz.b64.part00",
+    "source-payload.json.xz.b64.part01",
+    "source-payload.json.xz.b64.part02",
+    "source-payload.json.xz.b64.part03",
+    "source-payload.json.xz.b64.part04",
+    "source-payload.json.xz.b64.part05"
+  ],
+  "compressed_bytes": 48324,
+  "decoded_bytes": 256465,
+  "sha256": "a0e930e441921a9aab7608df7ebc35a1a04a93bd1cc05221dc5e5cbabdb0595f",
+  "main_sha256": "2e18fdb7c1ec4d97e83c892ac2e13ebba5e5f7c9428b13fd94df8e4f1b9fd4e9",
+  "main_in_checkpoint": false,
+  "source_payload_installable": false
+}
