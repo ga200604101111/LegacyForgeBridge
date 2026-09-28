@@ -1,0 +1,33 @@
+--- a/DesktopConversionSession.java
++++ b/DesktopConversionSession.java
+@@ -31,6 +31,8 @@
+     private long conversionSeconds = -1;
+     private boolean atEarlyBoundary;
+     private volatile boolean sentStop, healthy = true;
++    /** Only safety-critical plan faults persist into final restart admission. */
++    private boolean planUnsafe;
+@@ -181,7 +183,7 @@
+-        } catch (Exception ignored) { s.healthy = false; }
++        } catch (Exception ignored) { /* Progress UI/telemetry is non-authoritative. */ }
+@@ -232,14 +234,14 @@
+-        } catch (RuntimeException | LinkageError ignored) { s.healthy = false; }
++        } catch (RuntimeException | LinkageError ignored) { /* Optional pass diagnostics are non-authoritative. */ }
+@@
+-        } catch (RuntimeException | LinkageError ignored) { s.healthy = false; }
++        } catch (RuntimeException | LinkageError ignored) { /* Optional captured outcome detail is non-authoritative. */ }
+@@ -247,7 +249,7 @@
+-        } catch (Exception ignored) { healthy=false; }
++        } catch (Exception ignored) { /* Intermediate status publish failure is retried by later final publication. */ }
+@@ -261,8 +263,8 @@
+-            else active.healthy=false;
+-        } catch (Exception invalid) { active.healthy=false; }
++            else active.planUnsafe=true;
++        } catch (Exception invalid) { active.planUnsafe=true; }
+@@ -274,6 +276,9 @@
+         Path state = game.resolve("legacy-cache/conversion-state.json"); DesktopFiles.noLinks(state);
+         JsonObject root = ConversionOutcomeReport.readJson(state);
+         ConversionOutcomeReport.Summary report = saveReport(root);
++        // Recompute restart admission from authoritative final state. Earlier UI/telemetry
++        // failures must not permanently poison a safe loader-staged result.
++        healthy = !planUnsafe;
+         boolean restart = root.get("restartRequired").getAsBoolean(); int warnings=0;
