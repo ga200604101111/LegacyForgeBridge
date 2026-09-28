@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "checkpoint": "rev210-source-only",
+  "base_commit": "76939f9f2ac51b972a487e611eccfb43718d4b18",
+  "files": 35,
+  "parts": [
+    "source-payload.json.xz.b64.part00",
+    "source-payload.json.xz.b64.part01",
+    "source-payload.json.xz.b64.part02"
+  ],
+  "compressed_bytes": 21208,
+  "decoded_bytes": 112167,
+  "sha256": "adcaecd1b2f2368bbb66faa5a717cf723a52b7581aebed89a25993d3d4b56828",
+  "installable": false
+}
