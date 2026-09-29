@@ -19,17 +19,21 @@ public final class LegacyCreativeTabPresentationPass implements ConversionPass {
         Path manifest=context.stagingDir().resolve(LegacyClientContentBaselinePass.CONTENT);
         if(!Files.isRegularFile(manifest))return;
         JsonObject root=JsonParser.parseString(Files.readString(manifest,StandardCharsets.UTF_8)).getAsJsonObject();
-        JsonArray items=root.getAsJsonArray("items");
-        if(items==null||items.isEmpty())return;
+        JsonArray items=root.getAsJsonArray("items"),blocks=root.getAsJsonArray("blocks");
+        boolean noItems=items==null||items.isEmpty(),noBlocks=blocks==null||blocks.isEmpty();
+        if(noItems&&noBlocks)return;
         JsonArray existing=root.getAsJsonArray("creativeTabs");
         if(existing!=null&&!existing.isEmpty())return;
 
         Map<String,List<JsonObject>> byName=new LinkedHashMap<>();
-        for(JsonElement element:items){
-            if(!element.isJsonObject())continue;
-            JsonObject item=element.getAsJsonObject();
-            add(byName,path(string(item,"id")),item);
-            add(byName,normalize(string(item,"legacyRegistryName")),item);
+        for(JsonArray content:new JsonArray[]{items,blocks}){
+            if(content==null)continue;
+            for(JsonElement element:content){
+                if(!element.isJsonObject())continue;
+                JsonObject entry=element.getAsJsonObject();
+                add(byName,path(string(entry,"id")),entry);
+                add(byName,normalize(string(entry,"legacyRegistryName")),entry);
+            }
         }
 
         var analysis=new LegacyCreativeTabAnalyzer().analyze(context.sourceJar());
@@ -64,7 +68,7 @@ public final class LegacyCreativeTabPresentationPass implements ConversionPass {
         root.add("creativeTabs",tabs);
         Files.writeString(manifest,GSON.toJson(root)+"\n",StandardCharsets.UTF_8);
         context.diagnostics().info("LFB-CONVERT-CREATIVE-0001",SupportLevel.ADAPTED,
-                "Recovered source-defined custom creative tabs="+tabs.size()+", assignedItems="+assigned+".");
+                "Recovered source-defined custom creative tabs="+tabs.size()+", assignedContent="+assigned+".");
     }
 
     private static String resolveIcon(String source,Map<String,List<JsonObject>> byName,String fallback){
@@ -94,7 +98,7 @@ public final class LegacyCreativeTabPresentationPass implements ConversionPass {
     private static String path(String id){if(id==null)return null;int split=id.indexOf(':');return normalize(split>=0?id.substring(split+1):id);}
     private static String normalize(String raw){
         if(raw==null)return null;String value=raw;
-        if(value.startsWith("item."))value=value.substring(5);
+        if(value.startsWith("item.")||value.startsWith("tile."))value=value.substring(5);
         int split=value.indexOf(':');if(split>=0)value=value.substring(split+1);
         return value.toLowerCase(Locale.ROOT);
     }

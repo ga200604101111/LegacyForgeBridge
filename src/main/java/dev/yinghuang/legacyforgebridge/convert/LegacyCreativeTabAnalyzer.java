@@ -32,7 +32,9 @@ import java.util.jar.JarFile;
 public final class LegacyCreativeTabAnalyzer {
     private static final String CREATIVE_TABS = "net/minecraft/creativetab/CreativeTabs";
     private static final String ITEM = "net/minecraft/item/Item";
+    private static final String BLOCK = "net/minecraft/block/Block";
     private static final String MINECRAFT_ITEM_PREFIX = "net/minecraft/item/Item";
+    private static final String MINECRAFT_BLOCK_PREFIX = "net/minecraft/block/Block";
 
     public Analysis analyze(Path jarPath) throws IOException {
         Map<String, String> superByClass = readHierarchy(jarPath);
@@ -40,7 +42,8 @@ public final class LegacyCreativeTabAnalyzer {
         Map<FieldRef,String> registryNamesByField = new LinkedHashMap<>();
         var registry = new LegacyRegistryAnalyzer().analyze(jarPath);
         for (var binding : registry.fieldBindings()) {
-            if (binding.kind() != LegacyRegistryAnalyzer.Kind.ITEM) continue;
+            if (binding.kind() != LegacyRegistryAnalyzer.Kind.ITEM
+                    && binding.kind() != LegacyRegistryAnalyzer.Kind.BLOCK) continue;
             registryNamesByField.put(
                     new FieldRef(binding.owner(), binding.name(), binding.descriptor()),
                     binding.registryName()
@@ -159,7 +162,7 @@ public final class LegacyCreativeTabAnalyzer {
 
                         @Override
                         public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
-                            if (!"<init>".equals(name) || !isItemType(className, superByClass)) {
+                            if (!"<init>".equals(name) || !isCreativeContentType(className, superByClass)) {
                                 return null;
                             }
                             return new MethodVisitor(Opcodes.ASM9) {
@@ -384,7 +387,8 @@ public final class LegacyCreativeTabAnalyzer {
     }
 
     private static boolean isSetUnlocalizedName(String methodName, String descriptor) {
-        return (methodName.equals("setUnlocalizedName") || methodName.equals("func_77655_b"))
+        return (methodName.equals("setUnlocalizedName") || methodName.equals("func_77655_b")
+                || methodName.equals("setBlockName") || methodName.equals("func_149663_c"))
                 && descriptor.startsWith("(Ljava/lang/String;)");
     }
 
@@ -404,8 +408,8 @@ public final class LegacyCreativeTabAnalyzer {
 
     private static String stripLegacyItemPrefix(String value) {
         String result = value;
-        if (result.startsWith("item.")) {
-            result = result.substring("item.".length());
+        if (result.startsWith("item.") || result.startsWith("tile.")) {
+            result = result.substring(5);
         }
         int namespace = result.indexOf(':');
         return namespace >= 0 ? result.substring(namespace + 1) : result;
@@ -418,6 +422,24 @@ public final class LegacyCreativeTabAnalyzer {
     private static boolean isItemType(String type, Map<String, String> superByClass) {
         return isTypeOrSubclass(type, ITEM, superByClass, true);
     }
+
+    private static boolean isCreativeContentType(String type, Map<String, String> superByClass) {
+        return isItemType(type, superByClass) || isBlockType(type, superByClass);
+    }
+
+    private static boolean isBlockType(String type, Map<String, String> superByClass) {
+        if (type == null) return false;
+        String current = type;
+        Set<String> visited = new LinkedHashSet<>();
+        while (current != null && visited.add(current)) {
+            if (current.equals(BLOCK)) return true;
+            if (current.startsWith(MINECRAFT_BLOCK_PREFIX) && !current.contains("$")) return true;
+            current = superByClass.get(current);
+        }
+        return false;
+    }
+
+
 
     private static boolean isTypeOrSubclass(
             String type,
