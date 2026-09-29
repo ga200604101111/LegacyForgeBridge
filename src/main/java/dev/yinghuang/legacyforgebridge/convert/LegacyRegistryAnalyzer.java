@@ -160,12 +160,12 @@ public final class LegacyRegistryAnalyzer {
             }
         }
 
-        // Some legacy mods construct all Items up-front, have each Item constructor add itself to
-        // one source-owned static List<Item>, then register that list from a lifecycle helper using
-        // item.getUnlocalizedName().substring(5). Ordinary source-frame propagation intentionally
-        // keeps reference locals fail-closed, so prove this collection loop as a separate bounded
+        // Some legacy mods construct content up-front, have each Item/Block constructor add itself
+        // to one source-owned static List, then register that list from a lifecycle helper using
+        // getUnlocalizedName().substring(5). Ordinary source-frame propagation intentionally keeps
+        // iterator reference locals fail-closed, so prove this collection loop as a separate bounded
         // family and expand only concrete static allocations whose exact constructor self-enrols.
-        output.addAll(recoverIterableDerivedNameItemRegistrations());
+        output.addAll(recoverIterableDerivedNameRegistrations());
 
         LinkedHashSet<FieldBinding> fieldBindings = recoverFieldBindings(output);
         if (output.isEmpty()) diagnostics.add("No concrete GameRegistry item/block registrations were proven from reachable lifecycle roots.");
@@ -221,9 +221,12 @@ public final class LegacyRegistryAnalyzer {
                 if(frame==null||frame.getStackSize()<1)continue;
                 Symbol assigned=resolve(context,frame.getStack(frame.getStackSize()-1),i,0,new LinkedHashSet<>());
                 if(!(assigned instanceof ObjectSymbol object)||object.unlocalizedName()==null)continue;
-                String itemName=normalizeLegacyItemName(object.unlocalizedName());
+                Kind kind=isSubclass(object.internalName(),"net/minecraft/item/Item")?Kind.ITEM
+                        :isSubclass(object.internalName(),"net/minecraft/block/Block")?Kind.BLOCK:null;
+                if(kind==null)continue;
+                String registryName=normalizeLegacyRegistryName(object.unlocalizedName());
                 List<Registration> candidates=provenRegistrations.stream()
-                        .filter(registration->registration.kind()==Kind.ITEM&&registration.registryName().equals(itemName))
+                        .filter(registration->registration.kind()==kind&&registration.registryName().equals(registryName))
                         .filter(registration->registration.implementationClass()==null
                                 ||registration.implementationClass().equals(object.internalName()))
                         .toList();
@@ -236,25 +239,29 @@ public final class LegacyRegistryAnalyzer {
         return output;
     }
 
-    private LinkedHashSet<Registration> recoverIterableDerivedNameItemRegistrations() {
+    private record IterableRegistration(Kind kind,StaticFieldReference list,MethodKey source) { }
+
+    private LinkedHashSet<Registration> recoverIterableDerivedNameRegistrations() {
         LinkedHashSet<Registration> output = new LinkedHashSet<>();
         Set<MethodKey> reachable = reachableSourceMethods();
-        LinkedHashMap<StaticFieldReference,MethodKey> registrationLoops = new LinkedHashMap<>();
+        LinkedHashMap<String,IterableRegistration> registrationLoops = new LinkedHashMap<>();
 
         for (MethodKey key : reachable) {
             MethodContext context = methods.get(key);
             if (context == null) continue;
-            StaticFieldReference list = iterableDerivedNameRegistrationList(context.method());
-            if (list == null) continue;
-            MethodKey previous = registrationLoops.putIfAbsent(list, key);
-            if (previous != null && !previous.equals(key)) {
-                diagnostics.add("Multiple reachable iterable item-registration loops use " + list.owner() + "." + list.name());
+            for(IterableRegistration loop:iterableDerivedNameRegistrationLists(context.method(),key)){
+                String identity=loop.kind()+"\u0000"+loop.list().owner()+"\u0000"+loop.list().name()+"\u0000"+loop.list().descriptor();
+                IterableRegistration previous=registrationLoops.putIfAbsent(identity,loop);
+                if(previous!=null&&!previous.source().equals(key))
+                    diagnostics.add("Multiple reachable iterable "+loop.kind().name().toLowerCase()
+                            +"-registration loops use "+loop.list().owner()+"."+loop.list().name());
             }
         }
 
-        for (var loop : registrationLoops.entrySet()) {
-            StaticFieldReference list = loop.getKey();
-            MethodKey source = loop.getValue();
+        for (IterableRegistration loop : registrationLoops.values()) {
+            StaticFieldReference list = loop.list();
+            Kind kind=loop.kind();
+            String base=kind==Kind.ITEM?"net/minecraft/item/Item":"net/minecraft/block/Block";
             for (var entry : methods.entrySet()) {
                 if (!entry.getKey().name().equals("<clinit>")) continue;
                 MethodContext context = entry.getValue();
@@ -265,13 +272,13 @@ public final class LegacyRegistryAnalyzer {
                     if (frame == null || frame.getStackSize() < 1) continue;
                     Symbol assigned = resolve(context, frame.getStack(frame.getStackSize() - 1), i, 0, new LinkedHashSet<>());
                     if (!(assigned instanceof ObjectSymbol object) || object.constructorDescriptor() == null
-                            || object.unlocalizedName() == null || !isSubclass(object.internalName(), "net/minecraft/item/Item")) continue;
+                            || object.unlocalizedName() == null || !isSubclass(object.internalName(), base)) continue;
                     if (!constructorAddsSelfToList(object.internalName(), object.constructorDescriptor(), list, 0, new LinkedHashSet<>())) continue;
 
-                    String registryName = normalizeLegacyItemName(object.unlocalizedName());
+                    String registryName = normalizeLegacyRegistryName(object.unlocalizedName());
                     if (registryName.isBlank()) continue;
                     Registration registration = materialize(new Template(
-                            Kind.ITEM, object, new TextSymbol(registryName), NullSymbol.INSTANCE, NullSymbol.INSTANCE, source));
+                            kind, object, new TextSymbol(registryName), NullSymbol.INSTANCE, NullSymbol.INSTANCE, loop.source()));
                     if (registration != null) output.add(registration);
                 }
             }
@@ -297,20 +304,29 @@ public final class LegacyRegistryAnalyzer {
         return reachable;
     }
 
-    private static StaticFieldReference iterableDerivedNameRegistrationList(MethodNode method) {
+    private static List<IterableRegistration> iterableDerivedNameRegistrationLists(MethodNode method,MethodKey source) {
         List<AbstractInsnNode> code = realInstructions(method);
-        LinkedHashSet<StaticFieldReference> lists = new LinkedHashSet<>();
+        LinkedHashMap<String,IterableRegistration> found = new LinkedHashMap<>();
         for (int i = 5; i < code.size(); i++) {
             if (!(code.get(i) instanceof MethodInsnNode register)
                     || register.getOpcode() != Opcodes.INVOKESTATIC
-                    || !GAME_REGISTRY.equals(register.owner)
-                    || !"registerItem".equals(register.name)
-                    || !"(Lnet/minecraft/item/Item;Ljava/lang/String;)V".equals(register.desc)) continue;
+                    || !GAME_REGISTRY.equals(register.owner)) continue;
+            Kind kind;String objectDesc;String castType;Set<String> getters;
+            if("registerItem".equals(register.name)
+                    &&"(Lnet/minecraft/item/Item;Ljava/lang/String;)V".equals(register.desc)){
+                kind=Kind.ITEM;objectDesc="Lnet/minecraft/item/Item;";castType="net/minecraft/item/Item";
+                getters=Set.of("getUnlocalizedName","func_77658_a");
+            }else if("registerBlock".equals(register.name)
+                    &&"(Lnet/minecraft/block/Block;Ljava/lang/String;)V".equals(register.desc)){
+                kind=Kind.BLOCK;objectDesc="Lnet/minecraft/block/Block;";castType="net/minecraft/block/Block";
+                getters=Set.of("getUnlocalizedName","func_149739_a");
+            }else continue;
+
             if (!(code.get(i - 5) instanceof VarInsnNode objectLoad) || objectLoad.getOpcode() != Opcodes.ALOAD
                     || !(code.get(i - 4) instanceof VarInsnNode nameLoad) || nameLoad.getOpcode() != Opcodes.ALOAD
                     || objectLoad.var != nameLoad.var
                     || !(code.get(i - 3) instanceof MethodInsnNode nameCall)
-                    || !Set.of("getUnlocalizedName","func_77658_a","func_149739_a").contains(nameCall.name)
+                    || !getters.contains(nameCall.name)
                     || !"()Ljava/lang/String;".equals(nameCall.desc)
                     || !Integer.valueOf(5).equals(integerConstant(code.get(i - 2)))
                     || !(code.get(i - 1) instanceof MethodInsnNode substring)
@@ -323,7 +339,7 @@ public final class LegacyRegistryAnalyzer {
             for (int j = i - 6; j >= 2; j--) {
                 if (!(code.get(j) instanceof VarInsnNode store) || store.getOpcode() != Opcodes.ASTORE || store.var != local) continue;
                 if (!(code.get(j - 1) instanceof TypeInsnNode cast) || cast.getOpcode() != Opcodes.CHECKCAST
-                        || !"net/minecraft/item/Item".equals(cast.desc)
+                        || !castType.equals(cast.desc)
                         || !(code.get(j - 2) instanceof MethodInsnNode next)
                         || !"java/util/Iterator".equals(next.owner) || !"next".equals(next.name)
                         || !"()Ljava/lang/Object;".equals(next.desc)) continue;
@@ -332,6 +348,7 @@ public final class LegacyRegistryAnalyzer {
             }
             if (!iteratorValue) continue;
 
+            LinkedHashSet<StaticFieldReference> lists=new LinkedHashSet<>();
             for (int j = 0; j + 1 < i; j++) {
                 if (!(code.get(j) instanceof FieldInsnNode field) || field.getOpcode() != Opcodes.GETSTATIC
                         || !"Ljava/util/List;".equals(field.desc)) continue;
@@ -340,8 +357,12 @@ public final class LegacyRegistryAnalyzer {
                         || !"()Ljava/util/Iterator;".equals(iterator.desc)) continue;
                 lists.add(new StaticFieldReference(field.owner, field.name, field.desc));
             }
+            if(lists.size()!=1)continue;
+            StaticFieldReference list=lists.getFirst();
+            String identity=kind+"\u0000"+list.owner()+"\u0000"+list.name()+"\u0000"+objectDesc;
+            found.putIfAbsent(identity,new IterableRegistration(kind,list,source));
         }
-        return lists.size() == 1 ? lists.getFirst() : null;
+        return List.copyOf(found.values());
     }
 
     private boolean constructorAddsSelfToList(String owner,String descriptor,StaticFieldReference list,
@@ -359,8 +380,8 @@ public final class LegacyRegistryAnalyzer {
                 if (!(code.get(i + 1) instanceof VarInsnNode self) || self.getOpcode() != Opcodes.ALOAD || self.var != 0) continue;
                 if (code.get(i + 2) instanceof MethodInsnNode add
                         && (add.getOpcode() == Opcodes.INVOKEINTERFACE || add.getOpcode() == Opcodes.INVOKEVIRTUAL)
-                        && "java/util/List".equals(add.owner) && "add".equals(add.name)
-                        && "(Ljava/lang/Object;)Z".equals(add.desc)) return true;
+                        && Set.of("java/util/List","java/util/Collection","java/util/ArrayList","java/util/LinkedList").contains(add.owner)
+                        && "add".equals(add.name) && "(Ljava/lang/Object;)Z".equals(add.desc)) return true;
             }
             for (AbstractInsnNode instruction : code) {
                 if (!(instruction instanceof MethodInsnNode call) || call.getOpcode() != Opcodes.INVOKESPECIAL

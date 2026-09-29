@@ -91,6 +91,93 @@ class LegacyRegistryAnalyzerTest {
                         &&binding.registryName().equals("derived_blade")&&binding.kind()==LegacyRegistryAnalyzer.Kind.ITEM));
     }
 
+    @Test
+    void iterableDerivedBlockNamesExpandConcreteSelfEnrolledBlocks() throws Exception {
+        Path jar=tempDir.resolve("IterableBlocks.jar");
+        try(JarOutputStream out=new JarOutputStream(Files.newOutputStream(jar))){
+            put(out,"other/blocks/BaseBlock.class",iterableBaseBlock());
+            put(out,"other/blocks/ChildBlock.class",iterableChildBlock());
+            put(out,"other/blocks/Content.class",iterableBlockContent());
+            put(out,"other/blocks/Bootstrap.class",iterableBlockBootstrap());
+        }
+
+        var analysis=new LegacyRegistryAnalyzer().analyze(jar);
+        assertTrue(analysis.diagnostics().stream().noneMatch(d->d.contains("No concrete GameRegistry")),
+                String.join("\n",analysis.diagnostics()));
+        assertEquals(Set.of("slate","lantern"),analysis.blocks().stream()
+                .map(LegacyRegistryAnalyzer.Registration::registryName).collect(java.util.stream.Collectors.toSet()));
+        assertEquals(2,analysis.fieldBindings().stream()
+                .filter(binding->binding.kind()==LegacyRegistryAnalyzer.Kind.BLOCK)
+                .filter(binding->binding.owner().equals("other/blocks/Content")).count());
+    }
+
+    private static byte[] iterableBaseBlock(){
+        String name="other/blocks/BaseBlock";
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,name,null,"net/minecraft/block/Block",null);
+        MethodVisitor m=w.visitMethod(Opcodes.ACC_PUBLIC,"<init>","(Ljava/lang/String;)V",null,null);m.visitCode();
+        m.visitVarInsn(Opcodes.ALOAD,0);m.visitMethodInsn(Opcodes.INVOKESPECIAL,"net/minecraft/block/Block","<init>","()V",false);
+        m.visitVarInsn(Opcodes.ALOAD,0);m.visitVarInsn(Opcodes.ALOAD,1);
+        m.visitMethodInsn(Opcodes.INVOKEVIRTUAL,name,"setBlockName","(Ljava/lang/String;)Lnet/minecraft/block/Block;",false);m.visitInsn(Opcodes.POP);
+        m.visitFieldInsn(Opcodes.GETSTATIC,"other/blocks/Content","ALL","Ljava/util/List;");
+        m.visitVarInsn(Opcodes.ALOAD,0);
+        m.visitMethodInsn(Opcodes.INVOKEINTERFACE,"java/util/List","add","(Ljava/lang/Object;)Z",true);m.visitInsn(Opcodes.POP);
+        m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
+    }
+
+    private static byte[] iterableChildBlock(){
+        String name="other/blocks/ChildBlock";
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,name,null,"other/blocks/BaseBlock",null);
+        MethodVisitor m=w.visitMethod(Opcodes.ACC_PUBLIC,"<init>","(Ljava/lang/String;)V",null,null);m.visitCode();
+        m.visitVarInsn(Opcodes.ALOAD,0);m.visitVarInsn(Opcodes.ALOAD,1);
+        m.visitMethodInsn(Opcodes.INVOKESPECIAL,"other/blocks/BaseBlock","<init>","(Ljava/lang/String;)V",false);
+        m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
+    }
+
+    private static byte[] iterableBlockContent(){
+        String name="other/blocks/Content";
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,name,null,"java/lang/Object",null);
+        w.visitField(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"ALL","Ljava/util/List;",null,null).visitEnd();
+        w.visitField(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"SLATE","Lother/blocks/ChildBlock;",null,null).visitEnd();
+        w.visitField(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"LANTERN","Lother/blocks/ChildBlock;",null,null).visitEnd();
+        MethodVisitor m=w.visitMethod(Opcodes.ACC_STATIC,"<clinit>","()V",null,null);m.visitCode();
+        m.visitTypeInsn(Opcodes.NEW,"java/util/ArrayList");m.visitInsn(Opcodes.DUP);
+        m.visitMethodInsn(Opcodes.INVOKESPECIAL,"java/util/ArrayList","<init>","()V",false);
+        m.visitFieldInsn(Opcodes.PUTSTATIC,name,"ALL","Ljava/util/List;");
+        m.visitTypeInsn(Opcodes.NEW,"other/blocks/ChildBlock");m.visitInsn(Opcodes.DUP);m.visitLdcInsn("slate");
+        m.visitMethodInsn(Opcodes.INVOKESPECIAL,"other/blocks/ChildBlock","<init>","(Ljava/lang/String;)V",false);
+        m.visitFieldInsn(Opcodes.PUTSTATIC,name,"SLATE","Lother/blocks/ChildBlock;");
+        m.visitTypeInsn(Opcodes.NEW,"other/blocks/ChildBlock");m.visitInsn(Opcodes.DUP);m.visitLdcInsn("lantern");
+        m.visitMethodInsn(Opcodes.INVOKESPECIAL,"other/blocks/ChildBlock","<init>","(Ljava/lang/String;)V",false);
+        m.visitFieldInsn(Opcodes.PUTSTATIC,name,"LANTERN","Lother/blocks/ChildBlock;");
+        m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
+    }
+
+    private static byte[] iterableBlockBootstrap(){
+        String name="other/blocks/Bootstrap";
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,name,null,"java/lang/Object",null);
+        MethodVisitor h=w.visitMethod(Opcodes.ACC_PRIVATE|Opcodes.ACC_STATIC,"registerAll","()V",null,null);h.visitCode();
+        h.visitFieldInsn(Opcodes.GETSTATIC,"other/blocks/Content","ALL","Ljava/util/List;");
+        h.visitMethodInsn(Opcodes.INVOKEINTERFACE,"java/util/List","iterator","()Ljava/util/Iterator;",true);h.visitVarInsn(Opcodes.ASTORE,0);
+        org.objectweb.asm.Label loop=new org.objectweb.asm.Label(),end=new org.objectweb.asm.Label();h.visitLabel(loop);
+        h.visitVarInsn(Opcodes.ALOAD,0);h.visitMethodInsn(Opcodes.INVOKEINTERFACE,"java/util/Iterator","hasNext","()Z",true);h.visitJumpInsn(Opcodes.IFEQ,end);
+        h.visitVarInsn(Opcodes.ALOAD,0);h.visitMethodInsn(Opcodes.INVOKEINTERFACE,"java/util/Iterator","next","()Ljava/lang/Object;",true);
+        h.visitTypeInsn(Opcodes.CHECKCAST,"net/minecraft/block/Block");h.visitVarInsn(Opcodes.ASTORE,1);
+        h.visitVarInsn(Opcodes.ALOAD,1);h.visitVarInsn(Opcodes.ALOAD,1);
+        h.visitMethodInsn(Opcodes.INVOKEVIRTUAL,"net/minecraft/block/Block","getUnlocalizedName","()Ljava/lang/String;",false);
+        h.visitInsn(Opcodes.ICONST_5);h.visitMethodInsn(Opcodes.INVOKEVIRTUAL,"java/lang/String","substring","(I)Ljava/lang/String;",false);
+        h.visitMethodInsn(Opcodes.INVOKESTATIC,"cpw/mods/fml/common/registry/GameRegistry","registerBlock",
+                "(Lnet/minecraft/block/Block;Ljava/lang/String;)V",false);
+        h.visitJumpInsn(Opcodes.GOTO,loop);h.visitLabel(end);h.visitInsn(Opcodes.RETURN);h.visitMaxs(0,0);h.visitEnd();
+        MethodVisitor m=w.visitMethod(Opcodes.ACC_PUBLIC,"preInit","(Lcpw/mods/fml/common/event/FMLPreInitializationEvent;)V",null,null);
+        AnnotationVisitor av=m.visitAnnotation("Lcpw/mods/fml/common/Mod$EventHandler;",true);av.visitEnd();m.visitCode();
+        m.visitMethodInsn(Opcodes.INVOKESTATIC,name,"registerAll","()V",false);m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();
+        w.visitEnd();return w.toByteArray();
+    }
+
     private static byte[] iterableBaseItem(){
         String name="other/iterable/BaseItem";
         ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
