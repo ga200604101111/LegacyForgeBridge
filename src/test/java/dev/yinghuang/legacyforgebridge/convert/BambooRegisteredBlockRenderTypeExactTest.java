@@ -40,6 +40,7 @@ class BambooRegisteredBlockRenderTypeExactTest {
         Map<String,LegacySimpleBlockRendererAnalyzer.Rule> byName=analysis.rules().stream()
                 .collect(Collectors.toMap(LegacySimpleBlockRendererAnalyzer.Rule::registryName,Function.identity(),(a,b)->a));
         var shoot=byName.get("blockbambooshoot");assertEquals(LegacySimpleBlockRendererAnalyzer.Mode.CROSS,shoot.mode());
+        assertTrue(shoot.flatInventory(),"Bamboo shoot render-id handler explicitly disables 3D inventory rendering");
         assertEquals(LegacySimpleBlockRendererAnalyzer.RenderOffset.XYZ,shoot.renderOffset());
         assertNotNull(shoot.bounds());assertEquals(.3F,shoot.bounds().minX(),0.0001F);assertEquals(.5F,shoot.bounds().maxY(),0.0001F);
         assertEquals(.7F,shoot.bounds().maxZ(),0.0001F);assertTrue(shoot.emptyCollision());

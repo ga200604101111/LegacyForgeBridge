@@ -24,7 +24,7 @@ public final class LegacySimpleBlockPresentationPass implements ConversionPass {
     private enum FinalMode { CROSS, CROP, META_ZERO_CROP_ELSE_STANDARD }
     private record Candidate(String registryName,String sourceBlockClass,String sourceRendererClass,FinalMode mode,String proof,
                              LegacySimpleBlockRendererAnalyzer.Bounds bounds,boolean emptyCollision,
-                             LegacySimpleBlockRendererAnalyzer.RenderOffset renderOffset) { }
+                             LegacySimpleBlockRendererAnalyzer.RenderOffset renderOffset,boolean flatInventory) { }
 
     @Override public String id(){return "legacy-simple-block-presentation";}
 
@@ -51,7 +51,7 @@ public final class LegacySimpleBlockPresentationPass implements ConversionPass {
                 default->null;
             };
             if(mode!=null)candidates.add(new Candidate(rule.registryName(),rule.sourceBlockClass(),rule.sourceRendererClass(),mode,
-                    "source-bound custom renderer",rule.bounds(),rule.emptyCollision(),rule.renderOffset()));
+                    "source-bound custom renderer",rule.bounds(),rule.emptyCollision(),rule.renderOffset(),rule.flatInventory()));
         }
 
         var renderTypes=new LegacyRegisteredBlockRenderTypeAnalyzer().analyze(context.sourceJar());
@@ -60,7 +60,7 @@ public final class LegacySimpleBlockPresentationPass implements ConversionPass {
             int type=rule.renderIdentity().constant();
             FinalMode mode=type==1?FinalMode.CROSS:type==6?FinalMode.CROP:null;
             if(mode!=null)candidates.add(new Candidate(rule.registryName(),rule.sourceBlockClass(),null,mode,
-                    "direct legacy vanilla renderType="+type,null,false,LegacySimpleBlockRendererAnalyzer.RenderOffset.NONE));
+                    "direct legacy vanilla renderType="+type,null,false,LegacySimpleBlockRendererAnalyzer.RenderOffset.NONE,false));
         }
         candidates.sort(Comparator.comparing(Candidate::registryName));
 
@@ -97,12 +97,20 @@ public final class LegacySimpleBlockPresentationPass implements ConversionPass {
                 write(staging.resolve("assets/"+ns+"/blockstates/"+path+".json"),blockstate);success=true;
             }
             if(!success)continue;
+            if(rule.flatInventory()){
+                JsonObject projected=read(modelPath);String itemTexture=singleTexture(projected);
+                if(itemTexture==null)continue;
+                Path itemModel=staging.resolve("assets/"+ns+"/models/item/"+path+".json");
+                write(itemModel,simpleModel("minecraft:item/generated","layer0",itemTexture));
+                LegacyPresentationOwnership.revoke(staging,itemModel);
+            }
 
             JsonObject evidence=new JsonObject();evidence.addProperty("id",id);evidence.addProperty("legacyRegistryName",rule.registryName());
             evidence.addProperty("sourceBlockClass",rule.sourceBlockClass());
             if(rule.sourceRendererClass()!=null)evidence.addProperty("sourceRendererClass",rule.sourceRendererClass());
             evidence.addProperty("mode",rule.mode().name());evidence.addProperty("proof",rule.proof());
             evidence.addProperty("renderOffset",rule.renderOffset().name());
+            evidence.addProperty("flatInventory",rule.flatInventory());
             if(texture!=null)evidence.addProperty("texture",texture);
             if(rule.bounds()!=null){
                 evidence.add("sourceBounds",boundsArray(rule.bounds()));

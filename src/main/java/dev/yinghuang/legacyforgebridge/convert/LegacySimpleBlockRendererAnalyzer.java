@@ -22,7 +22,7 @@ public final class LegacySimpleBlockRendererAnalyzer {
         }
     }
     public record Rule(String registryName,String sourceBlockClass,String sourceRendererClass,Mode mode,
-                       Bounds bounds,boolean emptyCollision,RenderOffset renderOffset) { }
+                       Bounds bounds,boolean emptyCollision,RenderOffset renderOffset,boolean flatInventory) { }
     public record Analysis(List<Rule> rules,List<String> diagnostics) {
         public Analysis { rules=List.copyOf(rules);diagnostics=List.copyOf(diagnostics); }
     }
@@ -44,10 +44,63 @@ public final class LegacySimpleBlockRendererAnalyzer {
             Mode mode=classify(classes,renderer,block.sourceBlockClass(),registrations.get(block.registryName()),heldItemVisibleClasses.contains(block.sourceBlockClass()));
             if(mode!=null)rules.add(new Rule(block.registryName(),block.sourceBlockClass(),renderer,mode,
                     uniqueSourceBounds(classes,block.sourceBlockClass()),provesEmptyCollision(classes,block.sourceBlockClass()),
-                    provesVanillaXyzOffset(renderMethod(classes,renderer))?RenderOffset.XYZ:RenderOffset.NONE));
+                    provesVanillaXyzOffset(renderMethod(classes,renderer))?RenderOffset.XYZ:RenderOffset.NONE,
+                    provesFlatInventoryForRenderField(classes,id.fieldOwner(),id.fieldName())));
             else diagnostics.add("Custom block renderer is outside the simple native cross/crop family: "+block.registryName()+" renderer="+renderer);
         }
         return new Analysis(rules,List.copyOf(diagnostics));
+    }
+
+    /**
+     * Proves that the exact render-id field was produced by a helper which registered an
+     * ISimpleBlockRenderingHandler whose inventory callback is a no-op and whose 3D flag is false.
+     * This is the legacy signal that BlockItem presentation is flat rather than the world model.
+     */
+    static boolean provesFlatInventoryForRenderField(Map<String,ClassNode> classes,String fieldOwner,String fieldName){
+        ClassNode owner=classes.get(fieldOwner);if(owner==null)return false;LinkedHashSet<String> handlers=new LinkedHashSet<>();
+        for(MethodNode method:owner.methods)for(AbstractInsnNode instruction:method.instructions){
+            if(!(instruction instanceof FieldInsnNode field)||field.getOpcode()!=Opcodes.PUTSTATIC
+                    ||!field.owner.equals(fieldOwner)||!field.name.equals(fieldName)||!"I".equals(field.desc))continue;
+            AbstractInsnNode source=previousReal(instruction.getPrevious());
+            if(!(source instanceof MethodInsnNode call)||call.getOpcode()!=Opcodes.INVOKESTATIC
+                    ||!call.desc.equals("()I")||!classes.containsKey(call.owner))return false;
+            String handler=flatHandlerRegisteredBy(classes,call.owner,call.name,call.desc);
+            if(handler==null)return false;handlers.add(handler);
+        }
+        return handlers.size()==1;
+    }
+
+    private static String flatHandlerRegisteredBy(Map<String,ClassNode> classes,String owner,String name,String desc){
+        ClassNode node=classes.get(owner);if(node==null)return null;MethodNode target=null;
+        for(MethodNode method:node.methods)if(method.name.equals(name)&&method.desc.equals(desc)){if(target!=null)return null;target=method;}
+        if(target==null)return null;List<AbstractInsnNode> code=real(target);LinkedHashSet<String> candidates=new LinkedHashSet<>();
+        for(int i=0;i<code.size();i++){
+            if(!(code.get(i) instanceof MethodInsnNode call)||call.getOpcode()!=Opcodes.INVOKESTATIC
+                    ||!call.owner.equals("cpw/mods/fml/client/registry/RenderingRegistry")
+                    ||!call.name.equals("registerBlockHandler")
+                    ||!call.desc.contains("Lcpw/mods/fml/client/registry/ISimpleBlockRenderingHandler;"))continue;
+            int start=Math.max(0,i-10);
+            for(int j=start;j<i;j++){
+                AbstractInsnNode source=code.get(j);String type=null;
+                if(source instanceof TypeInsnNode allocation&&allocation.getOpcode()==Opcodes.NEW)type=allocation.desc;
+                else if(source instanceof FieldInsnNode field&&(field.getOpcode()==Opcodes.GETFIELD||field.getOpcode()==Opcodes.GETSTATIC)
+                        &&field.desc.startsWith("L")&&field.desc.endsWith(";"))type=Type.getType(field.desc).getInternalName();
+                if(type!=null&&classes.containsKey(type)&&isFlatInventoryHandler(classes.get(type)))candidates.add(type);
+            }
+        }
+        return candidates.size()==1?candidates.getFirst():null;
+    }
+
+    private static boolean isFlatInventoryHandler(ClassNode node){
+        MethodNode inventory=null,threeD=null;
+        for(MethodNode method:node.methods){
+            if(method.name.equals("renderInventoryBlock")
+                    &&method.desc.equals("(Lnet/minecraft/block/Block;IILnet/minecraft/client/renderer/RenderBlocks;)V"))inventory=method;
+            if(method.name.equals("shouldRender3DInInventory")&&method.desc.equals("(I)Z"))threeD=method;
+        }
+        if(inventory==null||threeD==null)return false;List<AbstractInsnNode> inv=real(inventory),flag=real(threeD);
+        return inv.size()==1&&inv.getFirst().getOpcode()==Opcodes.RETURN
+                &&flag.size()==2&&flag.get(0).getOpcode()==Opcodes.ICONST_0&&flag.get(1).getOpcode()==Opcodes.IRETURN;
     }
 
     private static MethodNode renderMethod(Map<String,ClassNode> classes,String renderer){
