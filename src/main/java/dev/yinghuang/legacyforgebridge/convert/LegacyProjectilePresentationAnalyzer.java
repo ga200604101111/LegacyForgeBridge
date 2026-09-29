@@ -29,6 +29,8 @@ public final class LegacyProjectilePresentationAnalyzer {
     private static final String WORLD="net/minecraft/world/World";
     private static final String ITEM="net/minecraft/item/Item";
     private static final String DATA_WATCHER="net/minecraft/entity/DataWatcher";
+    private static final String RENDER_SNOWBALL="net/minecraft/client/renderer/entity/RenderSnowball";
+    private static final String RENDERING_REGISTRY="cpw/mods/fml/client/registry/RenderingRegistry";
     private static final Set<String> RIGHT_CLICK=Set.of("onItemRightClick","func_77659_a");
     private static final Set<String> SPAWN=Set.of("spawnEntityInWorld","func_72838_d");
     private static final Set<String> WATCH_BYTE=Set.of("getWatchableObjectByte","func_75683_a");
@@ -92,7 +94,8 @@ public final class LegacyProjectilePresentationAnalyzer {
                 skipped.add(new Skipped(entity.registryName(),entity.sourceClass(),"Projectile renderer binding is missing or ambiguous"));continue;
             }
             String renderer=bindings.getFirst().rendererClass();
-            if(!classes.containsKey(renderer)){
+            boolean vanillaSnowball=family==BaseFamily.THROWABLE&&RENDER_SNOWBALL.equals(renderer);
+            if(!vanillaSnowball&&!classes.containsKey(renderer)){
                 skipped.add(new Skipped(entity.registryName(),entity.sourceClass(),"Projectile renderer class is not source-owned"));continue;
             }
             ItemBinding item=directUseItem(registry,entity.sourceClass());
@@ -106,12 +109,23 @@ public final class LegacyProjectilePresentationAnalyzer {
 
             Adapter adapter;Selector selector;String texture=null;String proof;
             if(family==BaseFamily.THROWABLE){
-                selector=throwableItemSelector(renderer,entity.sourceClass(),item,registry,watcherByClass.get(entity.sourceClass()));
-                if(selector==null){
-                    skipped.add(new Skipped(entity.registryName(),entity.sourceClass(),"Throwable renderer does not source its icon from the direct-spawn registered item"));continue;
+                if(vanillaSnowball){
+                    ItemBinding rendered=vanillaSnowballItem(bindings.getFirst(),registry);
+                    if(rendered==null||!rendered.equals(item)){
+                        skipped.add(new Skipped(entity.registryName(),entity.sourceClass(),
+                                "Vanilla RenderSnowball item is not the same registered item that directly spawns this projectile"));continue;
+                    }
+                    selector=new Selector(-1,-1,0,0);
+                    adapter=Adapter.THROWN_ITEM;
+                    proof="Source EntityThrowable family + direct right-click item spawn + exact RenderSnowball(registered item) binding";
+                }else{
+                    selector=throwableItemSelector(renderer,entity.sourceClass(),item,registry,watcherByClass.get(entity.sourceClass()));
+                    if(selector==null){
+                        skipped.add(new Skipped(entity.registryName(),entity.sourceClass(),"Throwable renderer does not source its icon from the direct-spawn registered item"));continue;
+                    }
+                    adapter=Adapter.THROWN_ITEM;
+                    proof="Source EntityThrowable family + direct right-click item spawn + renderer item-icon selector";
                 }
-                adapter=Adapter.THROWN_ITEM;
-                proof="Source EntityThrowable family + direct right-click item spawn + renderer item-icon selector";
             }else{
                 texture=singleFixedTexture(renderer);
                 if(texture==null||!resourceExists(texture)||!provesOrientedProjectileRenderer(renderer)){
@@ -126,6 +140,39 @@ public final class LegacyProjectilePresentationAnalyzer {
         }
         rules.sort(Comparator.comparing(Rule::registryName));
         return new Analysis(rules,skipped,List.copyOf(new LinkedHashSet<>(diagnostics)));
+    }
+
+    private ItemBinding vanillaSnowballItem(LegacyEntityPresentationAnalyzer.Registration registration,
+                                                  LegacyRegistryAnalyzer.Analysis registry){
+        ClassNode owner=classes.get(registration.sourceOwner());if(owner==null)return null;
+        MethodNode method=null;
+        for(MethodNode candidate:owner.methods)if(candidate.name.equals(registration.sourceMethod())
+                &&candidate.desc.equals(registration.sourceDescriptor())){method=candidate;break;}
+        if(method==null)return null;
+        List<AbstractInsnNode> code=real(method);LinkedHashSet<ItemBinding> matches=new LinkedHashSet<>();
+        for(int i=0;i<code.size();i++){
+            if(!(code.get(i) instanceof MethodInsnNode register)||register.getOpcode()!=Opcodes.INVOKESTATIC
+                    ||!register.owner.equals(RENDERING_REGISTRY)||!register.name.equals("registerEntityRenderingHandler")
+                    ||!register.desc.equals("(Ljava/lang/Class;Lnet/minecraft/client/renderer/entity/Render;)V"))continue;
+            int start=Math.max(0,i-10);boolean entity=false,newRenderer=false;MethodInsnNode constructor=null;
+            for(int j=start;j<i;j++){
+                AbstractInsnNode insn=code.get(j);
+                if(insn instanceof LdcInsnNode ldc&&ldc.cst instanceof Type type&&type.getSort()==Type.OBJECT
+                        &&type.getInternalName().equals(registration.entityClass()))entity=true;
+                if(insn instanceof TypeInsnNode type&&type.getOpcode()==Opcodes.NEW&&type.desc.equals(RENDER_SNOWBALL))newRenderer=true;
+                if(insn instanceof MethodInsnNode call&&call.getOpcode()==Opcodes.INVOKESPECIAL
+                        &&call.owner.equals(RENDER_SNOWBALL)&&call.name.equals("<init>")
+                        &&call.desc.equals("(Lnet/minecraft/item/Item;)V"))constructor=call;
+            }
+            if(!entity||!newRenderer||constructor==null)continue;
+            AbstractInsnNode source=previousReal(constructor.getPrevious());
+            if(!(source instanceof FieldInsnNode field)||field.getOpcode()!=Opcodes.GETSTATIC
+                    ||!field.desc.equals("Lnet/minecraft/item/Item;"))continue;
+            for(var binding:registry.fieldBindings())if(binding.kind()==LegacyRegistryAnalyzer.Kind.ITEM
+                    &&binding.owner().equals(field.owner)&&binding.name().equals(field.name)&&binding.descriptor().equals(field.desc))
+                matches.add(new ItemBinding(binding.registryName(),binding.implementationClass()));
+        }
+        return matches.size()==1?matches.getFirst():null;
     }
 
     private ItemBinding directUseItem(LegacyRegistryAnalyzer.Analysis registry,String entityClass){

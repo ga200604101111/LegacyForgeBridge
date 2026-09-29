@@ -308,6 +308,9 @@ public final class LegacyCreativeTabAnalyzer {
                                 && recentNewType.equals(owner)
                                 && isItemType(owner, superByClass)) {
                             pendingItemImplementationClass = owner;
+                            // A fresh allocation owns the following fluent calls. Do not let a
+                            // GETSTATIC left over from an earlier registration steal its tab.
+                            recentItemField = null;
                             if (methodDescriptor.startsWith("(Ljava/lang/String;") && recentString != null) {
                                 pendingItemName = recentString;
                             }

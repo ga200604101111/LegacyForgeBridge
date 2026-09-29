@@ -310,7 +310,7 @@ public final class LegacyRegistryAnalyzer {
                     || !(code.get(i - 4) instanceof VarInsnNode nameLoad) || nameLoad.getOpcode() != Opcodes.ALOAD
                     || objectLoad.var != nameLoad.var
                     || !(code.get(i - 3) instanceof MethodInsnNode nameCall)
-                    || !Set.of("getUnlocalizedName","func_77658_a").contains(nameCall.name)
+                    || !Set.of("getUnlocalizedName","func_77658_a","func_149739_a").contains(nameCall.name)
                     || !"()Ljava/lang/String;".equals(nameCall.desc)
                     || !Integer.valueOf(5).equals(integerConstant(code.get(i - 2)))
                     || !(code.get(i - 1) instanceof MethodInsnNode substring)
@@ -617,12 +617,14 @@ public final class LegacyRegistryAnalyzer {
                 constructorDescriptor, constructor, source.owner(), source.name(), source.descriptor());
     }
 
-    private static String materializeText(Symbol symbol){
+    private String materializeText(Symbol symbol){
         if(symbol instanceof TextSymbol text)return text.value();
         if(symbol instanceof UnlocalizedNameSymbol name){
             Symbol receiver=name.receiver();
-            if(receiver instanceof ObjectSymbol object&&object.unlocalizedName()!=null)
-                return "item."+object.unlocalizedName();
+            if(receiver instanceof ObjectSymbol object&&object.unlocalizedName()!=null){
+                String prefix=isSubclass(object.internalName(),"net/minecraft/block/Block")?"tile.":"item.";
+                return prefix+object.unlocalizedName();
+            }
             return null;
         }
         if(symbol instanceof SubstringSymbol substring){
@@ -766,7 +768,7 @@ public final class LegacyRegistryAnalyzer {
             int argCount = Type.getArgumentTypes(call.desc).length;
             boolean isStatic = call.getOpcode() == Opcodes.INVOKESTATIC;
 
-            if(!isStatic&&Set.of("getUnlocalizedName","func_77658_a").contains(call.name)
+            if(!isStatic&&Set.of("getUnlocalizedName","func_77658_a","func_149739_a").contains(call.name)
                     &&"()Ljava/lang/String;".equals(call.desc)&&frame.getStackSize()>=1){
                 Symbol receiver=resolve(context,frame.getStack(frame.getStackSize()-1),producerIndex,depth+1,guard);
                 if(receiver!=UnknownSymbol.INSTANCE)return new UnlocalizedNameSymbol(receiver);
@@ -779,8 +781,9 @@ public final class LegacyRegistryAnalyzer {
                     return new SubstringSymbol(values.getFirst(),start.value().intValue(),end);
                 }
             }
-            if(!isStatic&&Set.of("setUnlocalizedName","func_77655_b").contains(call.name)
-                    &&call.desc.equals("(Ljava/lang/String;)Lnet/minecraft/item/Item;")){
+            if(!isStatic&&Set.of("setUnlocalizedName","func_77655_b","setBlockName","func_149663_c").contains(call.name)
+                    &&(call.desc.equals("(Ljava/lang/String;)Lnet/minecraft/item/Item;")
+                    ||call.desc.equals("(Ljava/lang/String;)Lnet/minecraft/block/Block;"))){
                 List<Symbol> values=invocationValuesIncludingReceiver(context,producerIndex,call,frame);
                 if(values!=null&&values.size()==2&&values.getFirst() instanceof ObjectSymbol object
                         &&values.get(1) instanceof TextSymbol name)return object.withUnlocalizedName(name.value());
@@ -864,7 +867,7 @@ public final class LegacyRegistryAnalyzer {
                 if(!(instruction instanceof MethodInsnNode call))continue;
                 Frame<SourceValue> frame=constructor.frames()[i];
                 if(frame==null)continue;
-                if(Set.of("setUnlocalizedName","func_77655_b").contains(call.name)
+                if(Set.of("setUnlocalizedName","func_77655_b","setBlockName","func_149663_c").contains(call.name)
                         &&call.desc.startsWith("(Ljava/lang/String;)")){
                     int argCount=Type.getArgumentTypes(call.desc).length;
                     if(frame.getStackSize()<argCount+1)continue;

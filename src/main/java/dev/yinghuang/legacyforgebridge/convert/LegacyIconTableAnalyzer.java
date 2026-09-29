@@ -454,7 +454,7 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
         if(name.equals("piston")){
             return "minecraft:block/"+(side==0?"piston_bottom":side==1?"piston_top":"piston_side");
         }
-        if(Set.of("glass","stone","cobblestone","dirt","sand","gravel","bricks","obsidian").contains(name))return "minecraft:block/"+name;
+        if(Set.of("glass","stone","cobblestone","dirt","sand","gravel","bricks","obsidian","soul_sand").contains(name))return "minecraft:block/"+name;
         throw fail("vanilla block texture semantics not reconstructed: "+name);
     }
 
@@ -797,6 +797,9 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
                 if(Set.of("colorMultiplier","func_149720_d").contains(name))return 0xFFFFFF;
                 throw fail("unsupported neighbour operation "+name);
             }
+            if(receiver instanceof Symbol symbol && symbol.owner().equals("net/minecraft/init/Blocks")
+                    && Set.of("getIcon","func_149733_h").contains(name) && args.size()==1)
+                return new Icon(vanillaBlockIcon(symbol,num(args.get(0)).intValue(),0));
             if(receiver instanceof Symbol symbol && symbol.owner().equals("net/minecraft/init/Blocks")
                     && Set.of("getIcon","func_149691_a").contains(name) && args.size()==2)
                 return new Icon(vanillaBlockIcon(symbol,num(args.get(0)).intValue(),num(args.get(1)).intValue()));
