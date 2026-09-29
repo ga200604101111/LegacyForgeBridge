@@ -19,11 +19,20 @@ public final class LegacyProjectilePresentationPass implements ConversionPass {
         Path contentPath=context.stagingDir().resolve(LegacyClientContentBaselinePass.CONTENT);
         if(!Files.isRegularFile(contentPath))return;
         JsonObject content=JsonParser.parseString(Files.readString(contentPath,StandardCharsets.UTF_8)).getAsJsonObject();
-        Map<String,String> itemIds=new LinkedHashMap<>();
+        Map<String,String> itemIds=new LinkedHashMap<>(),uniqueClassIds=new LinkedHashMap<>();
+        Set<String> ambiguousKeys=new HashSet<>(),ambiguousClasses=new HashSet<>();
         JsonArray items=content.getAsJsonArray("items");
         if(items!=null)for(JsonElement element:items){
             if(!element.isJsonObject())continue;JsonObject item=element.getAsJsonObject();
-            if(item.has("sourceClass")&&item.has("id"))itemIds.put(item.get("sourceClass").getAsString(),item.get("id").getAsString());
+            if(!item.has("sourceClass")||!item.has("id"))continue;
+            String sourceClass=item.get("sourceClass").getAsString(),id=item.get("id").getAsString();
+            String previousClass=uniqueClassIds.putIfAbsent(sourceClass,id);
+            if(previousClass!=null&&!previousClass.equals(id)){uniqueClassIds.remove(sourceClass);ambiguousClasses.add(sourceClass);}
+            if(item.has("legacyRegistryName")){
+                String key=itemKey(sourceClass,item.get("legacyRegistryName").getAsString());
+                String previous=itemIds.putIfAbsent(key,id);
+                if(previous!=null&&!previous.equals(id)){itemIds.remove(key);ambiguousKeys.add(key);}
+            }
         }
 
         var analysis=new LegacyProjectilePresentationAnalyzer().analyze(context.sourceJar());
@@ -35,7 +44,11 @@ public final class LegacyProjectilePresentationPass implements ConversionPass {
 
         JsonArray rules=new JsonArray();
         for(var rule:analysis.rules()){
-            String itemId=itemIds.get(rule.sourceItemClass());if(itemId==null)continue;
+            String key=itemKey(rule.sourceItemClass(),rule.sourceItemRegistryName());
+            String itemId=ambiguousKeys.contains(key)?null:itemIds.get(key);
+            if(itemId==null&&!ambiguousClasses.contains(rule.sourceItemClass()))
+                itemId=uniqueClassIds.get(rule.sourceItemClass());
+            if(itemId==null)continue;
             JsonObject value=new JsonObject();
             value.addProperty("id",context.metadata().fabricId()+":"+modernPath(rule.registryName()));
             value.addProperty("legacyRegistryName",rule.registryName());value.addProperty("sourceClass",rule.sourceClass());
@@ -65,6 +78,10 @@ public final class LegacyProjectilePresentationPass implements ConversionPass {
                 "Source-proven remote projectile presentation rules="+rules.size()+"; FML throwable velocity and item-bound rendering are candidate-owned.");
         for(var skip:analysis.skipped())context.diagnostics().warning("LFB-CONVERT-PROJECTILE-0002",SupportLevel.RUNTIME_BRIDGE,
                 "Projectile presentation not admitted for "+skip.registryName()+": "+skip.reason());
+    }
+
+    private static String itemKey(String sourceClass,String registryName){
+        return sourceClass+"\u0000"+registryName;
     }
 
     private static String modernPath(String raw){
