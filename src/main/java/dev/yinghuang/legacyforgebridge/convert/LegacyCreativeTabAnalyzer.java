@@ -262,7 +262,7 @@ public final class LegacyCreativeTabAnalyzer {
                             if (isCreativeTabType(type, superByClass)) {
                                 recentCreativeTabField = field;
                             }
-                            if (isItemType(type, superByClass)) {
+                            if (isCreativeContentType(type, superByClass)) {
                                 recentItemField = field;
                             }
                             return;
@@ -281,7 +281,7 @@ public final class LegacyCreativeTabAnalyzer {
                             pendingTabImplementationClass = null;
                         }
 
-                        if (isItemType(type, superByClass)) {
+                        if (isCreativeContentType(type, superByClass)) {
                             MutableItem item = items.computeIfAbsent(field, ignored -> new MutableItem());
                             if (pendingItemName != null && !pendingItemName.isBlank()) {
                                 item.unlocalizedName = pendingItemName;
@@ -318,7 +318,7 @@ public final class LegacyCreativeTabAnalyzer {
                         if (methodName.equals("<init>")
                                 && recentNewType != null
                                 && recentNewType.equals(owner)
-                                && isItemType(owner, superByClass)) {
+                                && isCreativeContentType(owner, superByClass)) {
                             pendingItemImplementationClass = owner;
                             // A fresh allocation owns the following fluent calls. Do not let a
                             // GETSTATIC left over from an earlier registration steal its tab.
