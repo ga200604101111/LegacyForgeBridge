@@ -182,17 +182,21 @@ public final class LegacyProjectilePresentationAnalyzer {
         List<ItemBinding> matches=new ArrayList<>();
         for(var item:registry.items()){
             if(item.implementationClass()==null)continue;
-            ClassNode node=classes.get(item.implementationClass());if(node==null)continue;
             boolean matched=false;
-            for(MethodNode method:node.methods){
-                if(!ITEM_SPAWN_CALLBACKS.contains(method.name)||!method.desc.contains("Lnet/minecraft/world/World;"))continue;
-                boolean creates=false,spawns=false;
-                for(AbstractInsnNode insn:method.instructions){
-                    if(insn instanceof TypeInsnNode type&&type.getOpcode()==Opcodes.NEW&&type.desc.equals(entityClass))creates=true;
-                    if(insn instanceof MethodInsnNode call&&call.owner.equals(WORLD)&&SPAWN.contains(call.name)
-                            &&call.desc.equals("(Lnet/minecraft/entity/Entity;)Z"))spawns=true;
+            Set<String> seen=new HashSet<>();
+            for(String current=item.implementationClass();current!=null&&seen.add(current)&&!matched;){
+                ClassNode node=classes.get(current);if(node==null)break;
+                for(MethodNode method:node.methods){
+                    if(!ITEM_SPAWN_CALLBACKS.contains(method.name)||!method.desc.contains("Lnet/minecraft/world/World;"))continue;
+                    boolean creates=false,spawns=false;
+                    for(AbstractInsnNode insn:method.instructions){
+                        if(insn instanceof TypeInsnNode type&&type.getOpcode()==Opcodes.NEW&&type.desc.equals(entityClass))creates=true;
+                        if(insn instanceof MethodInsnNode call&&call.owner.equals(WORLD)&&SPAWN.contains(call.name)
+                                &&call.desc.equals("(Lnet/minecraft/entity/Entity;)Z"))spawns=true;
+                    }
+                    if(creates&&spawns){matched=true;break;}
                 }
-                if(creates&&spawns){matched=true;break;}
+                current=node.superName;
             }
             if(matched)matches.add(new ItemBinding(item.registryName(),item.implementationClass()));
         }

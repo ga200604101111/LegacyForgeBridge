@@ -47,6 +47,7 @@ class LegacyProjectilePresentationAnalyzerTest {
         try(JarOutputStream out=new JarOutputStream(Files.newOutputStream(jar))){
             put(out,"mcmod.info","[{\"modid\":\"foreign\",\"name\":\"Foreign\",\"version\":\"1\",\"mcversion\":\"1.7.10\"}]".getBytes(StandardCharsets.UTF_8));
             put(out,"foreign/snow/Pellet.class",pellet());
+            put(out,"foreign/snow/BaseLauncher.class",baseLauncher());
             put(out,"foreign/snow/Launcher.class",launcher());
             put(out,"foreign/snow/Carrier.class",carrier());
             put(out,"foreign/snow/Bootstrap.class",snowballBootstrap());
@@ -74,14 +75,12 @@ class LegacyProjectilePresentationAnalyzerTest {
         c.visitInsn(Opcodes.RETURN);c.visitMaxs(0,0);c.visitEnd();w.visitEnd();return w.toByteArray();
     }
 
-    private static byte[] launcher(){
-        String n="foreign/snow/Launcher",entity="foreign/snow/Pellet";
+    private static byte[] baseLauncher(){
+        String n="foreign/snow/BaseLauncher",entity="foreign/snow/Pellet";
         ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
         w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,n,null,"net/minecraft/item/Item",null);
         MethodVisitor c=w.visitMethod(Opcodes.ACC_PUBLIC,"<init>","()V",null,null);c.visitCode();
         c.visitVarInsn(Opcodes.ALOAD,0);c.visitMethodInsn(Opcodes.INVOKESPECIAL,"net/minecraft/item/Item","<init>","()V",false);
-        c.visitVarInsn(Opcodes.ALOAD,0);c.visitLdcInsn("launcher");
-        c.visitMethodInsn(Opcodes.INVOKEVIRTUAL,n,"setUnlocalizedName","(Ljava/lang/String;)Lnet/minecraft/item/Item;",false);c.visitInsn(Opcodes.POP);
         c.visitInsn(Opcodes.RETURN);c.visitMaxs(0,0);c.visitEnd();
         MethodVisitor m=w.visitMethod(Opcodes.ACC_PUBLIC,"func_77615_a",
                 "(Lnet/minecraft/item/ItemStack;Lnet/minecraft/world/World;Lnet/minecraft/entity/player/EntityPlayer;I)V",null,null);
@@ -90,6 +89,17 @@ class LegacyProjectilePresentationAnalyzerTest {
         m.visitVarInsn(Opcodes.ALOAD,2);m.visitVarInsn(Opcodes.ALOAD,5);
         m.visitMethodInsn(Opcodes.INVOKEVIRTUAL,"net/minecraft/world/World","func_72838_d","(Lnet/minecraft/entity/Entity;)Z",false);m.visitInsn(Opcodes.POP);
         m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
+    }
+
+    private static byte[] launcher(){
+        String n="foreign/snow/Launcher";
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,n,null,"foreign/snow/BaseLauncher",null);
+        MethodVisitor c=w.visitMethod(Opcodes.ACC_PUBLIC,"<init>","()V",null,null);c.visitCode();
+        c.visitVarInsn(Opcodes.ALOAD,0);c.visitMethodInsn(Opcodes.INVOKESPECIAL,"foreign/snow/BaseLauncher","<init>","()V",false);
+        c.visitVarInsn(Opcodes.ALOAD,0);c.visitLdcInsn("launcher");
+        c.visitMethodInsn(Opcodes.INVOKEVIRTUAL,n,"setUnlocalizedName","(Ljava/lang/String;)Lnet/minecraft/item/Item;",false);c.visitInsn(Opcodes.POP);
+        c.visitInsn(Opcodes.RETURN);c.visitMaxs(0,0);c.visitEnd();w.visitEnd();return w.toByteArray();
     }
 
     private static byte[] carrier(){
