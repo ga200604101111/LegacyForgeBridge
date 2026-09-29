@@ -36,6 +36,12 @@ class LegacyCombatItemAnalyzerTest {
         assertEquals(3,bow.pullStages());
         assertEquals("foreign:bow_pull_",bow.pullTexturePrefix());
         assertEquals(java.util.List.of(1,26,40),bow.pullStageMinTicks());
+
+        var first=analysis.rules().stream().filter(rule->rule.registryName().equals("parameter_sword_a")).findFirst().orElseThrow();
+        var second=analysis.rules().stream().filter(rule->rule.registryName().equals("parameter_sword_b")).findFirst().orElseThrow();
+        assertEquals(21F,first.attackDamage(),0.0001F);assertEquals(3000,first.durability());
+        assertEquals(40F,second.attackDamage(),0.0001F);assertEquals(2888,second.durability());
+        assertEquals(first.sourceClass(),second.sourceClass(),"One implementation class may have per-registration constructor constants");
     }
 
 
@@ -45,6 +51,7 @@ class LegacyCombatItemAnalyzerTest {
             put(out,"foreign/weapons/Blade.class",weapon("foreign/weapons/Blade",false));
             put(out,"foreign/weapons/AmbiguousBlade.class",weapon("foreign/weapons/AmbiguousBlade",true));
             put(out,"foreign/weapons/BowLike.class",bow());
+            put(out,"foreign/weapons/ParameterSword.class",parameterSword());
             put(out,"foreign/weapons/Bootstrap.class",bootstrap());
         }
 
@@ -112,12 +119,48 @@ class LegacyCombatItemAnalyzerTest {
         get.visitMaxs(0,0);get.visitEnd();w.visitEnd();return w.toByteArray();
     }
 
+    private static byte[] parameterSword(){
+        String name="foreign/weapons/ParameterSword";
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,name,null,"net/minecraft/item/ItemSword",null);
+        w.visitField(Opcodes.ACC_PRIVATE,"value","I",null,null).visitEnd();
+        MethodVisitor init=w.visitMethod(Opcodes.ACC_PUBLIC,"<init>","(II)V",null,null);
+        init.visitCode();init.visitVarInsn(Opcodes.ALOAD,0);init.visitInsn(Opcodes.ACONST_NULL);
+        init.visitMethodInsn(Opcodes.INVOKESPECIAL,"net/minecraft/item/ItemSword","<init>","(Lnet/minecraft/item/Item$ToolMaterial;)V",false);
+        init.visitVarInsn(Opcodes.ALOAD,0);init.visitVarInsn(Opcodes.ILOAD,1);
+        init.visitMethodInsn(Opcodes.INVOKEVIRTUAL,name,"func_77656_e","(I)Lnet/minecraft/item/Item;",false);init.visitInsn(Opcodes.POP);
+        init.visitVarInsn(Opcodes.ALOAD,0);init.visitVarInsn(Opcodes.ILOAD,2);init.visitFieldInsn(Opcodes.PUTFIELD,name,"value","I");
+        init.visitInsn(Opcodes.RETURN);init.visitMaxs(0,0);init.visitEnd();
+        MethodVisitor attributes=w.visitMethod(Opcodes.ACC_PUBLIC,"getAttributeModifiers",
+                "(Lnet/minecraft/item/ItemStack;)Lcom/google/common/collect/Multimap;",null,null);
+        attributes.visitCode();
+        attributes.visitFieldInsn(Opcodes.GETSTATIC,"net/minecraft/entity/SharedMonsterAttributes","field_111264_e",
+                "Lnet/minecraft/entity/ai/attributes/IAttribute;");attributes.visitInsn(Opcodes.POP);
+        attributes.visitTypeInsn(Opcodes.NEW,"net/minecraft/entity/ai/attributes/AttributeModifier");attributes.visitInsn(Opcodes.DUP);
+        attributes.visitInsn(Opcodes.ACONST_NULL);attributes.visitLdcInsn("Weapon modifier");
+        attributes.visitVarInsn(Opcodes.ALOAD,0);attributes.visitFieldInsn(Opcodes.GETFIELD,name,"value","I");attributes.visitInsn(Opcodes.I2D);
+        attributes.visitInsn(Opcodes.ICONST_0);
+        attributes.visitMethodInsn(Opcodes.INVOKESPECIAL,"net/minecraft/entity/ai/attributes/AttributeModifier","<init>",
+                "(Ljava/util/UUID;Ljava/lang/String;DI)V",false);attributes.visitInsn(Opcodes.POP);
+        attributes.visitInsn(Opcodes.ACONST_NULL);attributes.visitInsn(Opcodes.ARETURN);attributes.visitMaxs(0,0);attributes.visitEnd();
+        w.visitEnd();return w.toByteArray();
+    }
+
     private static byte[] bootstrap(){
         ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
         w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,"foreign/weapons/Bootstrap",null,"java/lang/Object",null);
         MethodVisitor m=w.visitMethod(Opcodes.ACC_STATIC,"<clinit>","()V",null,null);
         m.visitCode();register(m,"foreign/weapons/Blade","foreign_blade");register(m,"foreign/weapons/AmbiguousBlade","ambiguous_blade");register(m,"foreign/weapons/BowLike","foreign_bow");
+        registerParameter(m,3000,21,"parameter_sword_a");registerParameter(m,2888,40,"parameter_sword_b");
         m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
+    }
+
+    private static void registerParameter(MethodVisitor m,int durability,int damage,String id){
+        String type="foreign/weapons/ParameterSword";
+        m.visitTypeInsn(Opcodes.NEW,type);m.visitInsn(Opcodes.DUP);m.visitIntInsn(Opcodes.SIPUSH,durability);
+        m.visitIntInsn(Opcodes.BIPUSH,damage);m.visitMethodInsn(Opcodes.INVOKESPECIAL,type,"<init>","(II)V",false);
+        m.visitLdcInsn(id);m.visitMethodInsn(Opcodes.INVOKESTATIC,"cpw/mods/fml/common/registry/GameRegistry","registerItem",
+                "(Lnet/minecraft/item/Item;Ljava/lang/String;)V",false);
     }
 
     private static void register(MethodVisitor m,String type,String id){

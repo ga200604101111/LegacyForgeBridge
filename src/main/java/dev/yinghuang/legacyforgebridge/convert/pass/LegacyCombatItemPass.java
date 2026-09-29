@@ -36,11 +36,15 @@ public final class LegacyCombatItemPass implements ConversionPass {
         JsonArray items = content.getAsJsonArray("items");
         if (items == null) return;
 
-        Map<String, JsonObject> bySourceClass = new LinkedHashMap<>();
+        Map<String, JsonObject> byRegistration = new LinkedHashMap<>();
         for (JsonElement element : items) {
             if (!element.isJsonObject()) continue;
             JsonObject item = element.getAsJsonObject();
-            if (item.has("sourceClass")) bySourceClass.put(item.get("sourceClass").getAsString(), item);
+            if (item.has("sourceClass") && item.has("legacyRegistryName")) {
+                byRegistration.put(registrationKey(
+                        item.get("sourceClass").getAsString(),
+                        item.get("legacyRegistryName").getAsString()), item);
+            }
         }
 
         var analysis = new LegacyCombatItemAnalyzer().analyze(context.sourceJar());
@@ -51,14 +55,9 @@ public final class LegacyCombatItemPass implements ConversionPass {
         int swords = 0, bows = 0;
 
         for (var rule : analysis.rules()) {
-            JsonObject item = bySourceClass.get(rule.sourceClass());
+            JsonObject item = byRegistration.get(registrationKey(rule.sourceClass(), rule.registryName()));
             if (item == null || !item.has("id")) continue;
             String id = item.get("id").getAsString();
-            if (!id.equals(rule.registryName()) && !item.get("legacyRegistryName").getAsString().equals(rule.registryName())) {
-                // Registry analyzers may expose the legacy name while converted content owns a namespaced id.
-                String legacy = item.has("legacyRegistryName") ? item.get("legacyRegistryName").getAsString() : "";
-                if (!legacy.equals(rule.registryName())) continue;
-            }
             item.addProperty("kind", rule.kind().name().toLowerCase());
             if (rule.durability() > 0) item.addProperty("durability", rule.durability());
             JsonObject value = new JsonObject();
@@ -203,6 +202,10 @@ public final class LegacyCombatItemPass implements ConversionPass {
         // the source prefix is directory-less so generated bow pulling models do not reference a
         // modernized textures/item location that was never emitted by the resource-copy passes.
         return namespace + ":" + (path.contains("/") ? path : "items/" + itemPath);
+    }
+
+    private static String registrationKey(String sourceClass, String registryName) {
+        return sourceClass + "\n" + registryName;
     }
 
     private static JsonObject read(Path path) throws IOException {
