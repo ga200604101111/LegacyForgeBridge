@@ -1,5 +1,7 @@
 package dev.yinghuang.legacyforgebridge.behavior;
 
+import dev.yinghuang.legacyforgebridge.compat.LegacyDurabilityPresentationRegistry;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.LivingEntity;
@@ -12,6 +14,21 @@ import net.minecraft.world.level.Level;
 /** Ordinary modern Item, with source-compiled callbacks supplied by the converted mod itself. */
 public class ConvertedBehaviorItem extends Item {
     public ConvertedBehaviorItem(Properties properties){super(properties);}
+    private LegacyDurabilityPresentationRegistry.Rule durabilityRule(){
+        return LegacyDurabilityPresentationRegistry.rule(BuiltInRegistries.ITEM.getKey(this));
+    }
+    @Override public boolean isBarVisible(ItemStack stack){
+        var rule=durabilityRule();
+        return rule!=null&&rule.alwaysShowBar()||super.isBarVisible(stack);
+    }
+    @Override public int getBarWidth(ItemStack stack){
+        var rule=durabilityRule();
+        if(rule!=null&&rule.inverseProgressBar()&&stack.getMaxDamage()>0){
+            int width=Math.round(13.0F*stack.getDamageValue()/stack.getMaxDamage());
+            return Math.max(0,Math.min(13,width));
+        }
+        return super.getBarWidth(stack);
+    }
     @Override public InteractionResult use(Level level,Player player,InteractionHand hand){
         ItemStack stack=player.getItemInHand(hand);var d=LegacyBehaviorRuntime.definition(stack);
         if(d==null||!d.hooks().contains("use"))return super.use(level,player,hand);
