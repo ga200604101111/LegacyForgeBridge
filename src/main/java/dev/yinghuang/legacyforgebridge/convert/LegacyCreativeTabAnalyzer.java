@@ -37,6 +37,15 @@ public final class LegacyCreativeTabAnalyzer {
     public Analysis analyze(Path jarPath) throws IOException {
         Map<String, String> superByClass = readHierarchy(jarPath);
         Map<String, FieldRef> defaultTabByItemClass = readConstructorDefaultTabs(jarPath, superByClass);
+        Map<FieldRef,String> registryNamesByField = new LinkedHashMap<>();
+        var registry = new LegacyRegistryAnalyzer().analyze(jarPath);
+        for (var binding : registry.fieldBindings()) {
+            if (binding.kind() != LegacyRegistryAnalyzer.Kind.ITEM) continue;
+            registryNamesByField.put(
+                    new FieldRef(binding.owner(), binding.name(), binding.descriptor()),
+                    binding.registryName()
+            );
+        }
 
         Map<FieldRef, MutableTab> tabs = new LinkedHashMap<>();
         Map<FieldRef, MutableItem> items = new LinkedHashMap<>();
@@ -75,13 +84,13 @@ public final class LegacyCreativeTabAnalyzer {
                 if (!tabField.equals(item.creativeTab)) {
                     continue;
                 }
-                tabItems.add(itemName(itemEntry.getKey(), item));
+                tabItems.add(itemName(itemEntry.getKey(), item, registryNamesByField));
             }
 
             String icon = null;
             FieldRef iconField = tabIconFields.get(source.implementationClass);
             if (iconField != null) {
-                icon = itemName(iconField, items.get(iconField));
+                icon = itemName(iconField, items.get(iconField), registryNamesByField);
             }
             if (icon == null && !tabItems.isEmpty()) {
                 icon = tabItems.getFirst();
@@ -384,7 +393,9 @@ public final class LegacyCreativeTabAnalyzer {
                 && descriptor.startsWith("(L" + CREATIVE_TABS + ";)");
     }
 
-    private static String itemName(FieldRef field, MutableItem item) {
+    private static String itemName(FieldRef field, MutableItem item, Map<FieldRef,String> registryNamesByField) {
+        String registered=registryNamesByField.get(field);
+        if(registered!=null&&!registered.isBlank())return stripLegacyItemPrefix(registered);
         if (item != null && item.unlocalizedName != null && !item.unlocalizedName.isBlank()) {
             return stripLegacyItemPrefix(item.unlocalizedName);
         }
