@@ -97,8 +97,13 @@ public final class LegacySimpleBlockPresentationPass implements ConversionPass {
                 write(staging.resolve("assets/"+ns+"/blockstates/"+path+".json"),blockstate);success=true;
             }
             if(!success)continue;
+            String flatInventoryTexture=null;
             if(rule.flatInventory()){
-                JsonObject projected=read(modelPath);String itemTexture=singleTexture(projected);
+                flatInventoryTexture=sourceFlatInventoryTexture(staging,rule.registryName(),rule.sourceBlockClass());
+                String itemTexture=flatInventoryTexture;
+                if(itemTexture==null){
+                    JsonObject projected=read(modelPath);itemTexture=singleTexture(projected);
+                }
                 if(itemTexture==null)continue;
                 Path itemModel=staging.resolve("assets/"+ns+"/models/item/"+path+".json");
                 write(itemModel,simpleModel("minecraft:item/generated","layer0",itemTexture));
@@ -111,6 +116,10 @@ public final class LegacySimpleBlockPresentationPass implements ConversionPass {
             evidence.addProperty("mode",rule.mode().name());evidence.addProperty("proof",rule.proof());
             evidence.addProperty("renderOffset",rule.renderOffset().name());
             evidence.addProperty("flatInventory",rule.flatInventory());
+            if(flatInventoryTexture!=null){
+                evidence.addProperty("flatInventoryTexture",flatInventoryTexture);
+                evidence.addProperty("flatInventoryTextureProof","unique source item texture exact-normalized against registry/source identity");
+            }
             if(texture!=null)evidence.addProperty("texture",texture);
             if(rule.bounds()!=null){
                 evidence.add("sourceBounds",boundsArray(rule.bounds()));
@@ -194,6 +203,56 @@ public final class LegacySimpleBlockPresentationPass implements ConversionPass {
         }
         return concrete.size()==1?concrete.getFirst():null;
     }
+    /**
+     * A flat Forge inventory renderer proves that the BlockItem is a 2D sprite, but it does not
+     * prove that the world block texture is that sprite. Prefer one uniquely matching source item
+     * texture; ambiguity stays fail-closed and the caller falls back to the proven world material.
+     */
+    static String sourceFlatInventoryTexture(Path staging,String registryName,String sourceClass)throws Exception{
+        LinkedHashSet<String> seeds=new LinkedHashSet<>();
+        addFlatTextureSeed(seeds,registryName);
+        if(sourceClass!=null){
+            int slash=sourceClass.lastIndexOf('/');
+            addFlatTextureSeed(seeds,slash<0?sourceClass:sourceClass.substring(slash+1));
+        }
+        if(seeds.isEmpty())return null;
+        Path assets=staging.resolve("assets");if(!Files.isDirectory(assets))return null;
+        LinkedHashSet<String> matches=new LinkedHashSet<>();
+        try(var walk=Files.walk(assets)){
+            for(Path file:walk.filter(Files::isRegularFile).sorted().toList()){
+                Path relative=assets.relativize(file);
+                if(relative.getNameCount()<4||!"textures".equalsIgnoreCase(relative.getName(1).toString()))continue;
+                String directory=relative.getName(2).toString().toLowerCase(Locale.ROOT);
+                if(!Set.of("item","items").contains(directory))continue;
+                String filename=file.getFileName().toString();
+                if(!filename.toLowerCase(Locale.ROOT).endsWith(".png"))continue;
+                String stem=filename.substring(0,filename.length()-4);
+                if(!seeds.contains(normalizeFlatTextureName(stem)))continue;
+                String namespace=relative.getName(0).toString().toLowerCase(Locale.ROOT);
+                String resourcePath=relative.subpath(2,relative.getNameCount()).toString().replace('\\','/');
+                resourcePath=resourcePath.substring(0,resourcePath.length()-4);
+                String resource=namespace+":"+resourcePath;
+                if(resource.matches("[a-z0-9_.-]+:[a-z0-9/._-]+"))matches.add(resource);
+            }
+        }
+        return matches.size()==1?matches.getFirst():null;
+    }
+    private static void addFlatTextureSeed(Set<String> output,String raw){
+        String value=normalizeFlatTextureName(raw);if(value.isBlank())return;output.add(value);
+        boolean changed;
+        do{
+            changed=false;
+            for(String prefix:List.of("tileentity","block","item","entity","render","model")){
+                if(value.startsWith(prefix)&&value.length()>prefix.length()){
+                    value=value.substring(prefix.length());output.add(value);changed=true;break;
+                }
+            }
+        }while(changed);
+    }
+    private static String normalizeFlatTextureName(String raw){
+        return raw==null?"":raw.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]","");
+    }
+
     private static JsonObject simpleModel(String parent,String key,String texture){
         JsonObject model=new JsonObject(),textures=new JsonObject();model.addProperty("parent",parent);textures.addProperty(key,texture);model.add("textures",textures);return model;
     }
