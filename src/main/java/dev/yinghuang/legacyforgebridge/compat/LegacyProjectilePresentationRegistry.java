@@ -35,8 +35,8 @@ public final class LegacyProjectilePresentationRegistry {
                     ||!velocityUpdates||!(width>0F)||!(height>0F)||!finite(width,height)||baseFamily==null||adapter==null||itemId==null
                     ||metadataWatcherIndex<-1||metadataWatcherWireType<-1||metadataWatcherWireType>6||defaultItemMetadata<0)
                 throw new IllegalArgumentException("Invalid remote projectile rule");
-            if(metadataWatcherIndex<0&&(metadataWatcherWireType!=-1||metadataOffset!=0||defaultItemMetadata!=0))
-                throw new IllegalArgumentException("Invalid unselected projectile metadata rule");
+            if(metadataWatcherIndex<0&&(metadataWatcherWireType!=-1||metadataOffset!=0))
+                throw new IllegalArgumentException("Invalid unselected projectile dynamic metadata rule");
         }
         public int trackingChunks(){return trackingRange/16+(trackingRange%16==0?0:1);}
         public int itemMetadata(Object watcherValue){
