@@ -55,8 +55,10 @@ public final class LegacyProjectilePresentationAnalyzer {
                     ||baseFamily==null||adapter==null||sourceItemClass==null||sourceItemRegistryName==null
                     ||metadataWatcherIndex<-1||metadataWatcherWireType<-1||metadataWatcherWireType>6)
                 throw new IllegalArgumentException("Invalid projectile presentation proof");
-            if(metadataWatcherIndex<0 && (metadataWatcherWireType!=-1||metadataOffset!=0||defaultItemMetadata!=0))
-                throw new IllegalArgumentException("Unselected projectile metadata cannot carry selector state");
+            if(defaultItemMetadata<0)
+                throw new IllegalArgumentException("Negative projectile presentation metadata");
+            if(metadataWatcherIndex<0 && (metadataWatcherWireType!=-1||metadataOffset!=0))
+                throw new IllegalArgumentException("Unselected projectile metadata cannot carry dynamic selector state");
         }
     }
     public record Skipped(String registryName,String sourceClass,String reason){}
