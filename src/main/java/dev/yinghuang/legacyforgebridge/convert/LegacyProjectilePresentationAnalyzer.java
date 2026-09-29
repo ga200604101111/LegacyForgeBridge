@@ -169,8 +169,9 @@ public final class LegacyProjectilePresentationAnalyzer {
             }
             if(!entity||!newRenderer||constructor==null)continue;
             AbstractInsnNode source=previousReal(constructor.getPrevious());
-            if(!(source instanceof FieldInsnNode field)||field.getOpcode()!=Opcodes.GETSTATIC
-                    ||!field.desc.equals("Lnet/minecraft/item/Item;"))continue;
+            if(!(source instanceof FieldInsnNode field)||field.getOpcode()!=Opcodes.GETSTATIC)continue;
+            String fieldType=objectType(field.desc);
+            if(fieldType==null||!inherits(fieldType,ITEM))continue;
             for(var binding:registry.fieldBindings())if(binding.kind()==LegacyRegistryAnalyzer.Kind.ITEM
                     &&binding.owner().equals(field.owner)&&binding.name().equals(field.name)&&binding.descriptor().equals(field.desc))
                 matches.add(new ItemBinding(binding.registryName(),binding.implementationClass()));
@@ -208,8 +209,8 @@ public final class LegacyProjectilePresentationAnalyzer {
         MethodNode icon=effective(renderer,Set.of("getIcon"),"(Lnet/minecraft/entity/Entity;)Lnet/minecraft/util/IIcon;");
         if(icon==null)return null;
         LegacyRegistryAnalyzer.FieldBinding itemField=null;
-        for(AbstractInsnNode insn:icon.instructions)if(insn instanceof FieldInsnNode field&&field.getOpcode()==Opcodes.GETSTATIC
-                &&field.desc.equals("Lnet/minecraft/item/Item;")){
+        for(AbstractInsnNode insn:icon.instructions)if(insn instanceof FieldInsnNode field&&field.getOpcode()==Opcodes.GETSTATIC){
+            String fieldType=objectType(field.desc);if(fieldType==null||!inherits(fieldType,ITEM))continue;
             for(var binding:registry.fieldBindings())if(binding.kind()==LegacyRegistryAnalyzer.Kind.ITEM
                     &&binding.owner().equals(field.owner)&&binding.name().equals(field.name)&&binding.descriptor().equals(field.desc)){
                 if(itemField!=null&&!itemField.equals(binding))return null;itemField=binding;
@@ -340,6 +341,13 @@ public final class LegacyProjectilePresentationAnalyzer {
             for(MethodNode method:node.methods)if(names.contains(method.name)&&method.desc.equals(desc))return method;
             current=node.superName;
         }return null;
+    }
+
+    private static String objectType(String descriptor){
+        try{
+            Type type=Type.getType(descriptor);
+            return type.getSort()==Type.OBJECT?type.getInternalName():null;
+        }catch(IllegalArgumentException invalid){return null;}
     }
 
     private static int wireType(String kind){return switch(kind){case "byte"->0;case "short"->1;case "int"->2;case "float"->3;case "string"->4;case "itemstack"->5;case "coordinates"->6;default->-1;};}

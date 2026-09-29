@@ -117,15 +117,15 @@ class LegacyProjectilePresentationAnalyzerTest {
         String n="foreign/snow/Bootstrap";
         ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
         w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,n,null,"java/lang/Object",null);
-        w.visitField(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"LAUNCHER","Lnet/minecraft/item/Item;",null,null).visitEnd();
-        w.visitField(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"CARRIER","Lnet/minecraft/item/Item;",null,null).visitEnd();
+        w.visitField(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"LAUNCHER","Lforeign/snow/Launcher;",null,null).visitEnd();
+        w.visitField(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"CARRIER","Lforeign/snow/Carrier;",null,null).visitEnd();
         MethodVisitor s=w.visitMethod(Opcodes.ACC_STATIC,"<clinit>","()V",null,null);s.visitCode();
         s.visitTypeInsn(Opcodes.NEW,"foreign/snow/Launcher");s.visitInsn(Opcodes.DUP);
         s.visitMethodInsn(Opcodes.INVOKESPECIAL,"foreign/snow/Launcher","<init>","()V",false);
-        s.visitFieldInsn(Opcodes.PUTSTATIC,n,"LAUNCHER","Lnet/minecraft/item/Item;");
+        s.visitFieldInsn(Opcodes.PUTSTATIC,n,"LAUNCHER","Lforeign/snow/Launcher;");
         s.visitTypeInsn(Opcodes.NEW,"foreign/snow/Carrier");s.visitInsn(Opcodes.DUP);
         s.visitMethodInsn(Opcodes.INVOKESPECIAL,"foreign/snow/Carrier","<init>","()V",false);
-        s.visitFieldInsn(Opcodes.PUTSTATIC,n,"CARRIER","Lnet/minecraft/item/Item;");
+        s.visitFieldInsn(Opcodes.PUTSTATIC,n,"CARRIER","Lforeign/snow/Carrier;");
         s.visitInsn(Opcodes.RETURN);s.visitMaxs(0,0);s.visitEnd();
 
         MethodVisitor m=w.visitMethod(Opcodes.ACC_PUBLIC,"preInit","(Lcpw/mods/fml/common/event/FMLPreInitializationEvent;)V",null,null);
@@ -134,10 +134,10 @@ class LegacyProjectilePresentationAnalyzerTest {
         m.visitIntInsn(Opcodes.BIPUSH,64);m.visitInsn(Opcodes.ICONST_2);m.visitInsn(Opcodes.ICONST_1);
         m.visitMethodInsn(Opcodes.INVOKESTATIC,"cpw/mods/fml/common/registry/EntityRegistry","registerModEntity",
                 "(Ljava/lang/Class;Ljava/lang/String;ILjava/lang/Object;IIZ)V",false);
-        m.visitFieldInsn(Opcodes.GETSTATIC,n,"LAUNCHER","Lnet/minecraft/item/Item;");m.visitLdcInsn("launcher");
+        m.visitFieldInsn(Opcodes.GETSTATIC,n,"LAUNCHER","Lforeign/snow/Launcher;");m.visitLdcInsn("launcher");
         m.visitMethodInsn(Opcodes.INVOKESTATIC,"cpw/mods/fml/common/registry/GameRegistry","registerItem",
                 "(Lnet/minecraft/item/Item;Ljava/lang/String;)V",false);
-        m.visitFieldInsn(Opcodes.GETSTATIC,n,"CARRIER","Lnet/minecraft/item/Item;");m.visitLdcInsn("carrier");
+        m.visitFieldInsn(Opcodes.GETSTATIC,n,"CARRIER","Lforeign/snow/Carrier;");m.visitLdcInsn("carrier");
         m.visitMethodInsn(Opcodes.INVOKESTATIC,"cpw/mods/fml/common/registry/GameRegistry","registerItem",
                 "(Lnet/minecraft/item/Item;Ljava/lang/String;)V",false);
         m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
@@ -149,7 +149,7 @@ class LegacyProjectilePresentationAnalyzerTest {
         MethodVisitor m=w.visitMethod(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"register","()V",null,null);m.visitCode();
         m.visitLdcInsn(Type.getObjectType("foreign/snow/Pellet"));
         m.visitTypeInsn(Opcodes.NEW,"net/minecraft/client/renderer/entity/RenderSnowball");m.visitInsn(Opcodes.DUP);
-        m.visitFieldInsn(Opcodes.GETSTATIC,"foreign/snow/Bootstrap","CARRIER","Lnet/minecraft/item/Item;");
+        m.visitFieldInsn(Opcodes.GETSTATIC,"foreign/snow/Bootstrap","CARRIER","Lforeign/snow/Carrier;");
         m.visitMethodInsn(Opcodes.INVOKESPECIAL,"net/minecraft/client/renderer/entity/RenderSnowball","<init>",
                 "(Lnet/minecraft/item/Item;)V",false);
         m.visitMethodInsn(Opcodes.INVOKESTATIC,"cpw/mods/fml/client/registry/RenderingRegistry","registerEntityRenderingHandler",
