@@ -54,6 +54,43 @@ class LegacyCreativeTabAnalyzerTest {
         assertEquals("dark_sword", tab.itemNames().getFirst());
     }
 
+    @Test
+    void staleStaticItemReadCannotStealFreshAllocationCreativeTab() throws Exception {
+        Path jarPath=tempDir.resolve("stale-static-read.jar");
+        try(JarOutputStream jar=new JarOutputStream(Files.newOutputStream(jarPath))){
+            write(jar,"example/WeaponTab",tabClass());
+            write(jar,"example/RpgSword",bareCustomSwordClass());
+            write(jar,"example/Content",staleReadContentClass());
+        }
+
+        LegacyCreativeTabAnalyzer.Analysis analysis=new LegacyCreativeTabAnalyzer().analyze(jarPath);
+        assertEquals(1,analysis.tabs().size());
+        LegacyCreativeTabAnalyzer.Tab tab=analysis.tabs().getFirst();
+        assertEquals(java.util.List.of("musket"),tab.itemNames(),
+                "A previous GETSTATIC item read must not receive the new allocation's setCreativeTab call");
+    }
+
+    private static byte[] staleReadContentClass(){
+        ClassWriter writer=contentSkeleton();
+        writer.visitField(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"old_item","Lexample/RpgSword;",null,null).visitEnd();
+        writer.visitField(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"musket","Lexample/RpgSword;",null,null).visitEnd();
+        MethodVisitor method=writer.visitMethod(Opcodes.ACC_STATIC,"<clinit>","()V",null,null);
+        method.visitCode();createTab(method);
+        method.visitFieldInsn(Opcodes.GETSTATIC,"example/Content","old_item","Lexample/RpgSword;");
+        method.visitInsn(Opcodes.POP);
+        method.visitTypeInsn(Opcodes.NEW,"example/RpgSword");method.visitInsn(Opcodes.DUP);
+        method.visitMethodInsn(Opcodes.INVOKESPECIAL,"example/RpgSword","<init>","()V",false);
+        method.visitLdcInsn("musket");
+        method.visitMethodInsn(Opcodes.INVOKEVIRTUAL,"example/RpgSword","func_77655_b",
+                "(Ljava/lang/String;)L"+ITEM+";",false);
+        method.visitFieldInsn(Opcodes.GETSTATIC,"example/Content","weaponTab","L"+TABS+";");
+        method.visitMethodInsn(Opcodes.INVOKEVIRTUAL,"example/RpgSword","func_77637_a",
+                "(L"+TABS+";)L"+ITEM+";",false);
+        method.visitFieldInsn(Opcodes.PUTSTATIC,"example/Content","musket","Lexample/RpgSword;");
+        method.visitInsn(Opcodes.RETURN);method.visitMaxs(4,0);method.visitEnd();
+        writer.visitEnd();return writer.toByteArray();
+    }
+
     private static byte[] tabClass() {
         ClassWriter writer = new ClassWriter(0);
         writer.visit(Opcodes.V1_7, Opcodes.ACC_PUBLIC, "example/WeaponTab", null, TABS, null);
