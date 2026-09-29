@@ -27,17 +27,17 @@ import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
 /**
- * Non-executing proof for bounded legacy sword/bow constants and their native item presentation.
+ * Non-executing proof for bounded legacy melee/bow constants and their native item presentation.
  *
- * <p>Only constants assigned by source bytecode are exported. 1.7 did not expose attack speed;
- * admitted swords receive the ordinary modern sword cadence separately in the conversion pass.</p>
+ * <p>Only source-proven values or exact vanilla 1.7 tool-family semantics are exported. 1.7 did
+ * not expose attack speed; modern cadence remains a presentation/runtime adaptation in the pass.</p>
  */
 public final class LegacyCombatItemAnalyzer {
     private static final Set<String> MAX_DAMAGE = Set.of("setMaxDamage", "func_77656_e");
     private static final Set<String> ATTRIBUTE_METHODS = Set.of("getItemAttributeModifiers", "func_111205_h", "getAttributeModifiers");
     private static final String ATTRIBUTE_MODIFIER = "net/minecraft/entity/ai/attributes/AttributeModifier";
 
-    public enum Kind { SWORD, BOW }
+    public enum Kind { SWORD, TOOL, BOW }
 
     public record Rule(String registryName, String sourceClass, Kind kind, int durability,
                        float attackDamage, int useDuration, String pullTexturePrefix, int pullStages,
@@ -49,7 +49,8 @@ public final class LegacyCombatItemAnalyzer {
                     || useDuration < 0 || pullStages < 0) {
                 throw new IllegalArgumentException("Invalid combat-item proof");
             }
-            if (kind == Kind.SWORD && attackDamage <= 0F) throw new IllegalArgumentException("Sword damage was not proven");
+            if ((kind == Kind.SWORD || kind == Kind.TOOL) && attackDamage <= 0F)
+                throw new IllegalArgumentException("Melee damage was not proven");
             if (kind == Kind.BOW && (useDuration <= 0 || pullTexturePrefix == null || pullTexturePrefix.isBlank()
                     || pullStages <= 0 || pullStageMinTicks.size() != pullStages))
                 throw new IllegalArgumentException("Bow use/pull presentation was not proven");
@@ -82,15 +83,19 @@ public final class LegacyCombatItemAnalyzer {
             String classified = registryAnalyzer.classifyItem(source);
             Float attributeDamage = uniqueAttackDamage(item);
             Float directDamage = uniqueDirectEntityDamage(source);
+            Float inheritedToolDamage = inheritedVanillaToolDamage(item, classified);
+            boolean toolFamily = Set.of("pickaxe","axe","shovel","tool").contains(classified);
             Kind kind = "bow".equals(classified) ? Kind.BOW
+                    : toolFamily && (attributeDamage != null || directDamage != null || inheritedToolDamage != null) ? Kind.TOOL
                     : ("sword".equals(classified) || attributeDamage != null || directDamage != null ? Kind.SWORD : null);
             if (kind == null) continue;
             int durability = uniqueDurability(item);
-            if (kind == Kind.SWORD) {
-                Float damage = attributeDamage != null ? attributeDamage : directDamage;
+            if (kind == Kind.SWORD || kind == Kind.TOOL) {
+                Float damage = attributeDamage != null ? attributeDamage
+                        : directDamage != null ? directDamage : inheritedToolDamage;
                 if (damage == null || damage <= 0F) {
                     skipped.add(new Skipped(item.registryName(), source,
-                            "No unique source attack-damage AttributeModifier was proven."));
+                            "No unique source or exact vanilla-family attack-damage proof was recovered."));
                     continue;
                 }
                 rules.add(new Rule(item.registryName(), source, kind, Math.max(0, durability), damage,
@@ -109,6 +114,59 @@ public final class LegacyCombatItemAnalyzer {
             }
         }
         return new Analysis(rules, skipped, List.copyOf(new LinkedHashSet<>(diagnostics)));
+    }
+
+    /**
+     * Recover the inherited 1.7 ItemTool attack modifier only when the source constructor uniquely
+     * proves a vanilla tool family and ToolMaterial. These are Minecraft 1.7.10 constants, not
+     * guesses from registry names or textures.
+     */
+    private Float inheritedVanillaToolDamage(LegacyRegistryAnalyzer.Registration registration,String classified) {
+        String vanillaBase=switch(classified){
+            case "pickaxe"->"net/minecraft/item/ItemPickaxe";
+            case "axe"->"net/minecraft/item/ItemAxe";
+            case "shovel"->"net/minecraft/item/ItemSpade";
+            default->null;
+        };
+        float base=switch(classified){case "pickaxe"->2F;case "axe"->3F;case "shovel"->1F;default->Float.NaN;};
+        if(vanillaBase==null||!Float.isFinite(base))return null;
+        String material=uniqueVanillaToolMaterial(registration,vanillaBase);
+        if(material==null)return null;
+        Float bonus=switch(material){case "WOOD","GOLD"->0F;case "STONE"->1F;case "IRON"->2F;case "EMERALD"->3F;default->null;};
+        return bonus==null?null:base+bonus;
+    }
+
+    private String uniqueVanillaToolMaterial(LegacyRegistryAnalyzer.Registration registration,String vanillaBase) {
+        LinkedHashSet<String> materials=new LinkedHashSet<>();
+        for(ClassNode node:sourceLineage(registration.implementationClass()))for(MethodNode method:node.methods){
+            if(!"<init>".equals(method.name))continue;
+            for(AbstractInsnNode instruction:method.instructions){
+                if(!(instruction instanceof MethodInsnNode call)||call.getOpcode()!=Opcodes.INVOKESPECIAL
+                        ||!"<init>".equals(call.name)||!vanillaBase.equals(call.owner)
+                        ||!"(Lnet/minecraft/item/Item$ToolMaterial;)V".equals(call.desc))continue;
+                String material=toolMaterialSource(registration,node,method,previousReal(instruction.getPrevious()));
+                if(material!=null)materials.add(material);
+            }
+        }
+        return materials.size()==1?materials.getFirst():null;
+    }
+
+    private String toolMaterialSource(LegacyRegistryAnalyzer.Registration registration,ClassNode owner,
+                                      MethodNode constructor,AbstractInsnNode source) {
+        if(source instanceof FieldInsnNode field&&field.getOpcode()==Opcodes.GETSTATIC
+                &&"net/minecraft/item/Item$ToolMaterial".equals(field.owner)
+                &&"Lnet/minecraft/item/Item$ToolMaterial;".equals(field.desc))return field.name;
+        if(!(source instanceof VarInsnNode load)||load.getOpcode()!=Opcodes.ALOAD
+                ||!owner.name.equals(registration.implementationClass())
+                ||registration.constructorDescriptor()==null
+                ||!registration.constructorDescriptor().equals(constructor.desc))return null;
+        int argument=constructorArgumentIndex(constructor.desc,load.var);
+        if(argument<0||argument>=registration.constructorArguments().size())return null;
+        Object value=registration.constructorArguments().get(argument).value();
+        if(value instanceof LegacyRegistryAnalyzer.StaticFieldReference field
+                &&"net/minecraft/item/Item$ToolMaterial".equals(field.owner())
+                &&"Lnet/minecraft/item/Item$ToolMaterial;".equals(field.descriptor()))return field.name();
+        return null;
     }
 
     private int uniqueDurability(LegacyRegistryAnalyzer.Registration registration) {

@@ -28,6 +28,21 @@ class BambooCombatItemExactTest {
     }
 
     @Test
+    void exactBambooPickaxeKeepsVanillaToolDamageAndCustomDurability()throws Exception{
+        String input=System.getProperty("lfb.exactCorpus.jar");assertNotNull(input);
+        Path source=Path.of(input);assertTrue(Files.isRegularFile(source));assertEquals(SHA,Hashing.sha256(source));
+
+        var analysis=new LegacyCombatItemAnalyzer().analyze(source);
+        var rule=analysis.rules().stream()
+                .filter(value->"ruby/bamboo/item/ItemBambooPickaxe".equals(value.sourceClass()))
+                .findFirst().orElseThrow(()->new AssertionError("Bamboo pickaxe tool attribute proof missing; skipped="+analysis.skipped()));
+
+        assertEquals(LegacyCombatItemAnalyzer.Kind.TOOL,rule.kind());
+        assertEquals(10000,rule.durability());
+        assertEquals(5.0F,rule.attackDamage(),0.0001F);
+    }
+
+    @Test
     void exactBambooBowPreservesSourcePullStageTiming()throws Exception{
         String input=System.getProperty("lfb.exactCorpus.jar");assertNotNull(input);
         Path source=Path.of(input);assertTrue(Files.isRegularFile(source));assertEquals(SHA,Hashing.sha256(source));

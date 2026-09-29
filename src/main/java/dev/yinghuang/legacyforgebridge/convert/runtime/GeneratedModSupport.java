@@ -170,6 +170,10 @@ public final class GeneratedModSupport {
         if("sword".equals(kind)){
             properties.sword(ToolMaterial.DIAMOND,attackDamage-ToolMaterial.DIAMOND.attackDamageBonus(),attackSpeed);
             properties.attributes(legacyWeaponAttributes(attackDamage,attackSpeed));
+        }else if(Set.of("pickaxe","axe","shovel","tool").contains(kind)&&attackDamage>0F){
+            // Preserve source-proven 1.7 melee attributes without inventing modern mining,
+            // repairability or tool-component semantics that have not been independently proven.
+            properties.attributes(legacyWeaponAttributes(attackDamage,attackSpeed));
         }
         if(source!=null&&source.hooks().contains("hit"))properties.component(DataComponents.WEAPON,new Weapon(0));
         int sourceSlot=source==null?-1:source.item().armorSlot;

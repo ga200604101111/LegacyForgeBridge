@@ -42,6 +42,11 @@ class LegacyCombatItemAnalyzerTest {
         assertEquals(21F,first.attackDamage(),0.0001F);assertEquals(3000,first.durability());
         assertEquals(40F,second.attackDamage(),0.0001F);assertEquals(2888,second.durability());
         assertEquals(first.sourceClass(),second.sourceClass(),"One implementation class may have per-registration constructor constants");
+
+        var pickaxe=analysis.rules().stream().filter(rule->rule.registryName().equals("emerald_pickaxe")).findFirst().orElseThrow();
+        assertEquals(LegacyCombatItemAnalyzer.Kind.TOOL,pickaxe.kind());
+        assertEquals(5.0F,pickaxe.attackDamage(),0.0001F,
+                "1.7 ItemPickaxe base 2 + EMERALD ToolMaterial damage bonus 3");
     }
 
 
@@ -52,6 +57,7 @@ class LegacyCombatItemAnalyzerTest {
             put(out,"foreign/weapons/AmbiguousBlade.class",weapon("foreign/weapons/AmbiguousBlade",true));
             put(out,"foreign/weapons/BowLike.class",bow());
             put(out,"foreign/weapons/ParameterSword.class",parameterSword());
+            put(out,"foreign/weapons/EmeraldPickaxe.class",emeraldPickaxe());
             put(out,"foreign/weapons/Bootstrap.class",bootstrap());
         }
 
@@ -119,6 +125,19 @@ class LegacyCombatItemAnalyzerTest {
         get.visitMaxs(0,0);get.visitEnd();w.visitEnd();return w.toByteArray();
     }
 
+    private static byte[] emeraldPickaxe(){
+        String name="foreign/weapons/EmeraldPickaxe";
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,name,null,"net/minecraft/item/ItemPickaxe",null);
+        MethodVisitor init=w.visitMethod(Opcodes.ACC_PUBLIC,"<init>","()V",null,null);
+        init.visitCode();init.visitVarInsn(Opcodes.ALOAD,0);
+        init.visitFieldInsn(Opcodes.GETSTATIC,"net/minecraft/item/Item$ToolMaterial","EMERALD",
+                "Lnet/minecraft/item/Item$ToolMaterial;");
+        init.visitMethodInsn(Opcodes.INVOKESPECIAL,"net/minecraft/item/ItemPickaxe","<init>",
+                "(Lnet/minecraft/item/Item$ToolMaterial;)V",false);
+        init.visitInsn(Opcodes.RETURN);init.visitMaxs(0,0);init.visitEnd();w.visitEnd();return w.toByteArray();
+    }
+
     private static byte[] parameterSword(){
         String name="foreign/weapons/ParameterSword";
         ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
@@ -152,6 +171,7 @@ class LegacyCombatItemAnalyzerTest {
         MethodVisitor m=w.visitMethod(Opcodes.ACC_STATIC,"<clinit>","()V",null,null);
         m.visitCode();register(m,"foreign/weapons/Blade","foreign_blade");register(m,"foreign/weapons/AmbiguousBlade","ambiguous_blade");register(m,"foreign/weapons/BowLike","foreign_bow");
         registerParameter(m,3000,21,"parameter_sword_a");registerParameter(m,2888,40,"parameter_sword_b");
+        register(m,"foreign/weapons/EmeraldPickaxe","emerald_pickaxe");
         m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
     }
 

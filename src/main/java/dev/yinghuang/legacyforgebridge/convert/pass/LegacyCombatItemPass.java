@@ -52,18 +52,20 @@ public final class LegacyCombatItemPass implements ConversionPass {
         evidence.addProperty("schemaVersion", 1);
         evidence.addProperty("sourceSha256", context.sourceHash());
         JsonArray rules = new JsonArray();
-        int swords = 0, bows = 0;
+        int swords = 0, tools = 0, bows = 0;
 
         for (var rule : analysis.rules()) {
             JsonObject item = byRegistration.get(registrationKey(rule.sourceClass(), rule.registryName()));
             if (item == null || !item.has("id")) continue;
             String id = item.get("id").getAsString();
-            item.addProperty("kind", rule.kind().name().toLowerCase());
+            String manifestKind = item.has("kind") ? item.get("kind").getAsString() : "item";
+            if (rule.kind() != LegacyCombatItemAnalyzer.Kind.TOOL)
+                item.addProperty("kind", rule.kind().name().toLowerCase());
             if (rule.durability() > 0) item.addProperty("durability", rule.durability());
             JsonObject value = new JsonObject();
             value.addProperty("id", id);
             value.addProperty("sourceClass", rule.sourceClass());
-            value.addProperty("kind", rule.kind().name().toLowerCase());
+            value.addProperty("kind", rule.kind() == LegacyCombatItemAnalyzer.Kind.TOOL ? manifestKind : rule.kind().name().toLowerCase());
             value.addProperty("durability", rule.durability());
 
             String[] split = id.split(":", 2);
@@ -76,6 +78,15 @@ public final class LegacyCombatItemPass implements ConversionPass {
                 value.addProperty("attackDamage", rule.attackDamage());
                 value.addProperty("attackSpeed", MODERN_SWORD_ATTACK_SPEED);
                 swords++;
+            } else if (rule.kind() == LegacyCombatItemAnalyzer.Kind.TOOL) {
+                float attackSpeed=modernToolAttackSpeed(manifestKind);
+                item.addProperty("attackDamage",rule.attackDamage());
+                item.addProperty("attackSpeed",attackSpeed);
+                rewriteItemModels(context.stagingDir(),namespace,path,"minecraft:item/handheld");
+                value.addProperty("attackDamage",rule.attackDamage());
+                value.addProperty("attackSpeed",attackSpeed);
+                value.addProperty("attackSpeedSource","modern presentation cadence; 1.7 source has no attack-speed attribute");
+                tools++;
             } else {
                 item.addProperty("useDuration", rule.useDuration());
                 item.addProperty("pullTexturePrefix", rule.pullTexturePrefix());
@@ -106,8 +117,17 @@ public final class LegacyCombatItemPass implements ConversionPass {
         write(contentPath, content);
         write(context.stagingDir().resolve(OUTPUT), evidence);
         context.diagnostics().info("LFB-CONVERT-COMBAT-0001", SupportLevel.ADAPTED,
-                "Source-proven combat item semantics: swords=" + swords + ", bows=" + bows
+                "Source-proven combat item semantics: swords=" + swords + ", tools=" + tools + ", bows=" + bows
                         + "; bow projectile behavior remains a separate runtime adapter.");
+    }
+
+    private static float modernToolAttackSpeed(String kind) {
+        return switch(kind){
+            case "pickaxe" -> -2.8F;
+            case "axe" -> -3.2F;
+            case "shovel" -> -3.0F;
+            default -> MODERN_SWORD_ATTACK_SPEED;
+        };
     }
 
     private static void rewriteItemModels(Path staging, String namespace, String path, String parent) throws IOException {
