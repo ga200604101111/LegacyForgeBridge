@@ -168,7 +168,7 @@ public final class ConvertedGeometryClient implements ClientModInitializer {
         // BEFORE reading, including the terminal. Unknown views get only a local allowance.
         var window=world instanceof RenderSectionRegion
                 ?LegacyMimicReadWindow.sectionSnapshot(position.getX(),position.getY(),position.getZ())
-                :LegacyMimicReadWindow.immediateNeighbors(position.getX(),position.getY(),position.getZ());
+                :LegacyMimicReadWindow.localTwoHopChain(position.getX(),position.getY(),position.getZ());
         BlockPos target=LegacyMimicResolver.resolve(position.immutable(),pos->{
             BlockState current=pos.equals(position)?state:world.getBlockState(pos);
             var rule=LegacyBlockGeometryRegistry.rule(current);

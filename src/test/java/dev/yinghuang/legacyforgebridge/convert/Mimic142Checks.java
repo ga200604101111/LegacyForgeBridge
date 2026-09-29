@@ -90,17 +90,28 @@ public final class Mimic142Checks {
         check(Section.ofBlock(-1, -17, -33).equals(new Section(-1, -2, -3)), "Queue and guard use same floor");
     }
     public static void unknownViewsStayLocal() {
-        var window = LegacyMimicReadWindow.immediateNeighbors(15, -1, 0);
+        var window = LegacyMimicReadWindow.localTwoHopChain(15, -1, 0);
         check(window.contains(16, 0, -1), "Immediate neighbor including diagonal");
-        check(!window.contains(17, -1, 0), "Unknown view cannot inherit section-sized padding");
-        check(!window.contains(15, -3, 0), "Unknown vertical bound");
+        check(window.contains(17, -1, 0), "One intermediate mimic may reach a two-hop terminal");
+        check(!window.contains(18, -1, 0), "Unknown view cannot read a three-hop terminal");
+        check(!window.contains(15, -4, 0), "Unknown vertical bound remains local");
+    }
+    public static void unknownViewTwoHopTerminal() {
+        var window = LegacyMimicReadWindow.localTwoHopChain(0, 0, 0);
+        Predicate<Integer> readable = x -> window.contains(x, 0, 0);
+        check(Integer.valueOf(2).equals(LegacyMimicResolver.resolve(0,
+                p -> p == 2 ? -1 : 5, (p, d) -> p + 1, 256, readable)),
+                "mimic -> mimic -> terminal must preserve the terminal material");
+        check(LegacyMimicResolver.resolve(0, p -> p == 3 ? -1 : 5,
+                (p, d) -> p + 1, 256, readable) == null,
+                "three-hop unknown-view reads remain fail-closed");
     }
     public static void coordinateOverflow() {
         var low = LegacyMimicReadWindow.sectionSnapshot(Integer.MIN_VALUE, 0, 0);
         var high = LegacyMimicReadWindow.sectionSnapshot(Integer.MAX_VALUE, 0, 0);
         check(low.contains(Integer.MIN_VALUE, 0, 0) && !low.contains(Integer.MAX_VALUE, 0, 0), "No low wrap");
         check(high.contains(Integer.MAX_VALUE, 0, 0) && !high.contains(Integer.MIN_VALUE, 0, 0), "No high wrap");
-        check(LegacyMimicReadWindow.immediateNeighbors(Integer.MAX_VALUE, 0, 0).maxX() == 2147483648L, "Long addition");
+        check(LegacyMimicReadWindow.localTwoHopChain(Integer.MAX_VALUE, 0, 0).maxX() == 2147483649L, "Long addition");
         invalid(() -> new LegacyMimicReadWindow(1, 0, 0, 0, 0, 0));
     }
     public static void boundedChainKeepsSafeTerminal() {

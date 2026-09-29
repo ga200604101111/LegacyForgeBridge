@@ -17,10 +17,15 @@ public record LegacyMimicReadWindow(long minX, long minY, long minZ,
         return new LegacyMimicReadWindow(bx - 16, by - 16, bz - 16, bx + 31, by + 31, bz + 31);
     }
 
-    /** Unknown renderer views never inherit vanilla's wider section-snapshot allowance. */
-    public static LegacyMimicReadWindow immediateNeighbors(int x, int y, int z) {
-        return new LegacyMimicReadWindow((long) x - 1, (long) y - 1, (long) z - 1,
-                (long) x + 1, (long) y + 1, (long) z + 1);
+    /**
+     * Unknown renderer views never inherit vanilla's section-snapshot allowance, but a material
+     * source may legitimately be reached through one intermediate mimic block. Two hops is the
+     * smallest bounded window that can represent source -> mimic -> terminal without allowing
+     * arbitrary renderer reads.
+     */
+    public static LegacyMimicReadWindow localTwoHopChain(int x, int y, int z) {
+        return new LegacyMimicReadWindow((long) x - 2, (long) y - 2, (long) z - 2,
+                (long) x + 2, (long) y + 2, (long) z + 2);
     }
 
     public boolean contains(int x, int y, int z) {

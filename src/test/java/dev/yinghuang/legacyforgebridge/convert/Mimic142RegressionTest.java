@@ -14,6 +14,7 @@ class Mimic142RegressionTest {
     @Test void snapshotWindowEveryAxis() throws Exception { Mimic142Checks.snapshotWindowEveryAxis(); }
     @Test void negativeCoordinates() throws Exception { Mimic142Checks.negativeCoordinates(); }
     @Test void unknownViewsStayLocal() throws Exception { Mimic142Checks.unknownViewsStayLocal(); }
+    @Test void unknownViewTwoHopTerminal() throws Exception { Mimic142Checks.unknownViewTwoHopTerminal(); }
     @Test void coordinateOverflow() throws Exception { Mimic142Checks.coordinateOverflow(); }
     @Test void boundedChainKeepsSafeTerminal() throws Exception { Mimic142Checks.boundedChainKeepsSafeTerminal(); }
     @Test void inverseWindowCoversAllOwners() throws Exception { Mimic142Checks.inverseWindowCoversAllOwners(); }
