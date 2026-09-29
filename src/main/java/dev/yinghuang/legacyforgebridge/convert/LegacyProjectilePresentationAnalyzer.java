@@ -65,6 +65,7 @@ public final class LegacyProjectilePresentationAnalyzer {
     }
 
     private record ItemBinding(String registryName,String sourceClass){}
+    private record RenderSnowballBinding(ItemBinding item,int metadata){}
     private record Selector(int watcherIndex,int wireType,int offset,int defaultMetadata){}
     private final Map<String,ClassNode> classes=new LinkedHashMap<>();
     private final List<String> diagnostics=new ArrayList<>();
@@ -113,15 +114,15 @@ public final class LegacyProjectilePresentationAnalyzer {
 
             Adapter adapter;Selector selector;String texture=null;String proof;ItemBinding presentationItem=launcher;
             if(vanillaSnowball){
-                ItemBinding rendered=vanillaSnowballItem(bindings.getFirst(),registry);
+                RenderSnowballBinding rendered=vanillaSnowballBinding(bindings.getFirst(),registry);
                 if(rendered==null){
                     skipped.add(new Skipped(entity.registryName(),entity.sourceClass(),
-                            "Vanilla RenderSnowball presentation item is not one uniquely registered source item"));continue;
+                            "Vanilla RenderSnowball presentation item/metadata is not one uniquely source-proven registration"));continue;
                 }
-                presentationItem=rendered;
-                selector=new Selector(-1,-1,0,0);
+                presentationItem=rendered.item();
+                selector=new Selector(-1,-1,0,rendered.metadata());
                 adapter=Adapter.THROWN_ITEM;
-                proof="Source "+family+" family + unique registered launcher callback + exact RenderSnowball(registered presentation item) binding";
+                proof="Source "+family+" family + unique registered launcher callback + exact RenderSnowball(registered presentation item, constant metadata) binding";
             }else if(family==BaseFamily.THROWABLE){
                 selector=throwableItemSelector(renderer,entity.sourceClass(),launcher,registry,watcherByClass.get(entity.sourceClass()));
                 if(selector==null){
@@ -145,19 +146,19 @@ public final class LegacyProjectilePresentationAnalyzer {
         return new Analysis(rules,skipped,List.copyOf(new LinkedHashSet<>(diagnostics)));
     }
 
-    private ItemBinding vanillaSnowballItem(LegacyEntityPresentationAnalyzer.Registration registration,
-                                                  LegacyRegistryAnalyzer.Analysis registry){
+    private RenderSnowballBinding vanillaSnowballBinding(LegacyEntityPresentationAnalyzer.Registration registration,
+                                                            LegacyRegistryAnalyzer.Analysis registry){
         ClassNode owner=classes.get(registration.sourceOwner());if(owner==null)return null;
         MethodNode method=null;
         for(MethodNode candidate:owner.methods)if(candidate.name.equals(registration.sourceMethod())
                 &&candidate.desc.equals(registration.sourceDescriptor())){method=candidate;break;}
         if(method==null)return null;
-        List<AbstractInsnNode> code=real(method);LinkedHashSet<ItemBinding> matches=new LinkedHashSet<>();
+        List<AbstractInsnNode> code=real(method);LinkedHashSet<RenderSnowballBinding> matches=new LinkedHashSet<>();
         for(int i=0;i<code.size();i++){
             if(!(code.get(i) instanceof MethodInsnNode register)||register.getOpcode()!=Opcodes.INVOKESTATIC
                     ||!register.owner.equals(RENDERING_REGISTRY)||!register.name.equals("registerEntityRenderingHandler")
                     ||!register.desc.equals("(Ljava/lang/Class;Lnet/minecraft/client/renderer/entity/Render;)V"))continue;
-            int start=Math.max(0,i-10);boolean entity=false,newRenderer=false;MethodInsnNode constructor=null;
+            int start=Math.max(0,i-12);boolean entity=false,newRenderer=false;MethodInsnNode constructor=null;
             for(int j=start;j<i;j++){
                 AbstractInsnNode insn=code.get(j);
                 if(insn instanceof LdcInsnNode ldc&&ldc.cst instanceof Type type&&type.getSort()==Type.OBJECT
@@ -165,16 +166,21 @@ public final class LegacyProjectilePresentationAnalyzer {
                 if(insn instanceof TypeInsnNode type&&type.getOpcode()==Opcodes.NEW&&type.desc.equals(RENDER_SNOWBALL))newRenderer=true;
                 if(insn instanceof MethodInsnNode call&&call.getOpcode()==Opcodes.INVOKESPECIAL
                         &&call.owner.equals(RENDER_SNOWBALL)&&call.name.equals("<init>")
-                        &&call.desc.equals("(Lnet/minecraft/item/Item;)V"))constructor=call;
+                        &&Set.of("(Lnet/minecraft/item/Item;)V","(Lnet/minecraft/item/Item;I)V").contains(call.desc))constructor=call;
             }
             if(!entity||!newRenderer||constructor==null)continue;
-            AbstractInsnNode source=previousReal(constructor.getPrevious());
-            if(!(source instanceof FieldInsnNode field)||field.getOpcode()!=Opcodes.GETSTATIC)continue;
+            int metadata=0;
+            AbstractInsnNode itemSource=previousReal(constructor.getPrevious());
+            if(constructor.desc.equals("(Lnet/minecraft/item/Item;I)V")){
+                Integer fixed=intConstant(itemSource);if(fixed==null||fixed<0)continue;
+                metadata=fixed;itemSource=previousReal(itemSource.getPrevious());
+            }
+            if(!(itemSource instanceof FieldInsnNode field)||field.getOpcode()!=Opcodes.GETSTATIC)continue;
             String fieldType=objectType(field.desc);
             if(fieldType==null||!inherits(fieldType,ITEM))continue;
             for(var binding:registry.fieldBindings())if(binding.kind()==LegacyRegistryAnalyzer.Kind.ITEM
                     &&binding.owner().equals(field.owner)&&binding.name().equals(field.name)&&binding.descriptor().equals(field.desc))
-                matches.add(new ItemBinding(binding.registryName(),binding.implementationClass()));
+                matches.add(new RenderSnowballBinding(new ItemBinding(binding.registryName(),binding.implementationClass()),metadata));
         }
         return matches.size()==1?matches.getFirst():null;
     }

@@ -62,6 +62,8 @@ class LegacyProjectilePresentationAnalyzerTest {
         assertEquals("foreign/snow/Carrier",rule.sourceItemClass());
         assertEquals("carrier",rule.sourceItemRegistryName(),
                 "Presentation must follow the renderer carrier, not the launcher item");
+        assertEquals(3,rule.defaultItemMetadata(),
+                "RenderSnowball(Item, metadata) must preserve the constant presentation metadata");
         assertNull(rule.fixedTexture());
     }
 
@@ -150,8 +152,9 @@ class LegacyProjectilePresentationAnalyzerTest {
         m.visitLdcInsn(Type.getObjectType("foreign/snow/Pellet"));
         m.visitTypeInsn(Opcodes.NEW,"net/minecraft/client/renderer/entity/RenderSnowball");m.visitInsn(Opcodes.DUP);
         m.visitFieldInsn(Opcodes.GETSTATIC,"foreign/snow/Bootstrap","CARRIER","Lforeign/snow/Carrier;");
+        m.visitInsn(Opcodes.ICONST_3);
         m.visitMethodInsn(Opcodes.INVOKESPECIAL,"net/minecraft/client/renderer/entity/RenderSnowball","<init>",
-                "(Lnet/minecraft/item/Item;)V",false);
+                "(Lnet/minecraft/item/Item;I)V",false);
         m.visitMethodInsn(Opcodes.INVOKESTATIC,"cpw/mods/fml/client/registry/RenderingRegistry","registerEntityRenderingHandler",
                 "(Ljava/lang/Class;Lnet/minecraft/client/renderer/entity/Render;)V",false);
         m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
