@@ -3,6 +3,7 @@ package dev.yinghuang.legacyforgebridge.behavior;
 import dev.yinghuang.legacyforgebridge.compat.LegacyDurabilityPresentationRegistry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
@@ -28,6 +29,14 @@ public class ConvertedBehaviorItem extends Item {
             return Math.max(0,Math.min(13,width));
         }
         return super.getBarWidth(stack);
+    }
+    @Override public int getBarColor(ItemStack stack){
+        var rule=durabilityRule();
+        if(rule!=null&&rule.inverseProgressBar()&&stack.getMaxDamage()>0){
+            float progress=Math.max(0.0F,Math.min(1.0F,(float)stack.getDamageValue()/(float)stack.getMaxDamage()));
+            return Mth.hsvToRgb(progress/3.0F,1.0F,1.0F);
+        }
+        return super.getBarColor(stack);
     }
     @Override public InteractionResult use(Level level,Player player,InteractionHand hand){
         ItemStack stack=player.getItemInHand(hand);var d=LegacyBehaviorRuntime.definition(stack);
