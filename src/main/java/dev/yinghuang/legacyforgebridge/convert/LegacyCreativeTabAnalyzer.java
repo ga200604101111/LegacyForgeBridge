@@ -393,7 +393,8 @@ public final class LegacyCreativeTabAnalyzer {
     }
 
     private static boolean isSetCreativeTab(String methodName, String descriptor) {
-        return (methodName.equals("setCreativeTab") || methodName.equals("func_77637_a"))
+        return (methodName.equals("setCreativeTab") || methodName.equals("func_77637_a")
+                || methodName.equals("func_149647_a"))
                 && descriptor.startsWith("(L" + CREATIVE_TABS + ";)");
     }
 

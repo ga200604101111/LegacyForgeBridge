@@ -77,7 +77,7 @@ class LegacyCreativeTabPresentationPassTest {
         m.visitVarInsn(Opcodes.ALOAD,0);m.visitLdcInsn("crate");
         m.visitMethodInsn(Opcodes.INVOKEVIRTUAL,n,"setBlockName","(Ljava/lang/String;)Lnet/minecraft/block/Block;",false);m.visitInsn(Opcodes.POP);
         m.visitVarInsn(Opcodes.ALOAD,0);m.visitFieldInsn(Opcodes.GETSTATIC,"other/tab/Content","TAB","Lnet/minecraft/creativetab/CreativeTabs;");
-        m.visitMethodInsn(Opcodes.INVOKEVIRTUAL,n,"setCreativeTab","(Lnet/minecraft/creativetab/CreativeTabs;)Lnet/minecraft/block/Block;",false);m.visitInsn(Opcodes.POP);
+        m.visitMethodInsn(Opcodes.INVOKEVIRTUAL,n,"func_149647_a","(Lnet/minecraft/creativetab/CreativeTabs;)Lnet/minecraft/block/Block;",false);m.visitInsn(Opcodes.POP);
         m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
     }
 
