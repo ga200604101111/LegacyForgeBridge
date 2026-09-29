@@ -418,9 +418,9 @@ public final class LegacyRegistryAnalyzer {
         };
     }
 
-    private static String normalizeLegacyItemName(String raw){
+    private static String normalizeLegacyRegistryName(String raw){
         String value=raw==null?"":raw.trim();
-        if(value.startsWith("item."))value=value.substring(5);
+        if(value.startsWith("item.")||value.startsWith("tile."))value=value.substring(5);
         int namespace=value.indexOf(':');if(namespace>=0)value=value.substring(namespace+1);
         return value;
     }
