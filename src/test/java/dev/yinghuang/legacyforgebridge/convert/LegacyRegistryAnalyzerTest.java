@@ -93,6 +93,78 @@ class LegacyRegistryAnalyzerTest {
     }
 
     @Test
+    void registrationNameDerivedFromStaticBlockUnlocalizedNameIsRecovered() throws Exception {
+        Path jar=tempDir.resolve("DerivedBlockNameContent.jar");
+        try(JarOutputStream out=new JarOutputStream(Files.newOutputStream(jar))){
+            put(out,"other/derivedblock/NamedBlock.class",namedBlockSubclass());
+            put(out,"other/derivedblock/Content.class",derivedBlockContent());
+            put(out,"other/derivedblock/Bootstrap.class",derivedBlockBootstrap());
+        }
+
+        var analysis=new LegacyRegistryAnalyzer().analyze(jar);
+        assertTrue(analysis.diagnostics().stream().noneMatch(d->d.contains("No concrete GameRegistry")),
+                String.join("\n",analysis.diagnostics()));
+        assertEquals(1,analysis.blocks().size());
+        var block=analysis.blocks().getFirst();
+        assertEquals("damascus",block.registryName());
+        assertEquals("other/derivedblock/NamedBlock",block.implementationClass());
+        assertTrue(analysis.fieldBindings().stream().anyMatch(binding->
+                binding.owner().equals("other/derivedblock/Content")
+                        &&binding.name().equals("BLOCK")
+                        &&binding.registryName().equals("damascus")
+                        &&binding.kind()==LegacyRegistryAnalyzer.Kind.BLOCK));
+    }
+
+    private static byte[] namedBlockSubclass(){
+        String name="other/derivedblock/NamedBlock";
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,name,null,"net/minecraft/block/Block",null);
+        MethodVisitor m=w.visitMethod(Opcodes.ACC_PUBLIC,"<init>","(Ljava/lang/String;)V",null,null);m.visitCode();
+        m.visitVarInsn(Opcodes.ALOAD,0);
+        m.visitMethodInsn(Opcodes.INVOKESPECIAL,"net/minecraft/block/Block","<init>","()V",false);
+        m.visitVarInsn(Opcodes.ALOAD,0);m.visitVarInsn(Opcodes.ALOAD,1);
+        m.visitMethodInsn(Opcodes.INVOKEVIRTUAL,name,"setBlockName",
+                "(Ljava/lang/String;)Lnet/minecraft/block/Block;",false);m.visitInsn(Opcodes.POP);
+        m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
+    }
+
+    private static byte[] derivedBlockContent(){
+        String name="other/derivedblock/Content";
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,name,null,"java/lang/Object",null);
+        w.visitField(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"BLOCK","Lnet/minecraft/block/Block;",null,null).visitEnd();
+        MethodVisitor m=w.visitMethod(Opcodes.ACC_STATIC,"<clinit>","()V",null,null);m.visitCode();
+        m.visitTypeInsn(Opcodes.NEW,"other/derivedblock/NamedBlock");m.visitInsn(Opcodes.DUP);m.visitLdcInsn("damascus");
+        m.visitMethodInsn(Opcodes.INVOKESPECIAL,"other/derivedblock/NamedBlock","<init>","(Ljava/lang/String;)V",false);
+        m.visitFieldInsn(Opcodes.PUTSTATIC,name,"BLOCK","Lnet/minecraft/block/Block;");
+        m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
+    }
+
+    private static byte[] derivedBlockBootstrap(){
+        String name="other/derivedblock/Bootstrap";
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,name,null,"java/lang/Object",null);
+        MethodVisitor h=w.visitMethod(Opcodes.ACC_PRIVATE|Opcodes.ACC_STATIC,"register",
+                "(Lnet/minecraft/block/Block;)V",null,null);h.visitCode();
+        h.visitVarInsn(Opcodes.ALOAD,0);h.visitVarInsn(Opcodes.ALOAD,0);
+        h.visitMethodInsn(Opcodes.INVOKEVIRTUAL,"net/minecraft/block/Block","getUnlocalizedName",
+                "()Ljava/lang/String;",false);
+        h.visitInsn(Opcodes.ICONST_5);
+        h.visitMethodInsn(Opcodes.INVOKEVIRTUAL,"java/lang/String","substring",
+                "(I)Ljava/lang/String;",false);
+        h.visitMethodInsn(Opcodes.INVOKESTATIC,"cpw/mods/fml/common/registry/GameRegistry","registerBlock",
+                "(Lnet/minecraft/block/Block;Ljava/lang/String;)V",false);
+        h.visitInsn(Opcodes.RETURN);h.visitMaxs(0,1);h.visitEnd();
+
+        MethodVisitor m=w.visitMethod(Opcodes.ACC_PUBLIC,"preInit",
+                "(Lcpw/mods/fml/common/event/FMLPreInitializationEvent;)V",null,null);
+        AnnotationVisitor av=m.visitAnnotation("Lcpw/mods/fml/common/Mod$EventHandler;",true);av.visitEnd();m.visitCode();
+        m.visitFieldInsn(Opcodes.GETSTATIC,"other/derivedblock/Content","BLOCK","Lnet/minecraft/block/Block;");
+        m.visitMethodInsn(Opcodes.INVOKESTATIC,name,"register","(Lnet/minecraft/block/Block;)V",false);
+        m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
+    }
+
+    @Test
     void iterableDerivedBlockNamesExpandConcreteSelfEnrolledBlocks() throws Exception {
         Path jar=tempDir.resolve("IterableBlocks.jar");
         try(JarOutputStream out=new JarOutputStream(Files.newOutputStream(jar))){
