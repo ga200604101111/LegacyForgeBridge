@@ -41,6 +41,112 @@ class LegacyProjectilePresentationAnalyzerTest {
         assertEquals("foreign:textures/entity/dart.png",rule.fixedTexture());
     }
 
+    @Test
+    void arrowRenderSnowballMayUseDistinctRegisteredCarrierAndReleaseUseLauncher()throws Exception{
+        Path jar=tempDir.resolve("foreign-snowball-arrow.jar");
+        try(JarOutputStream out=new JarOutputStream(Files.newOutputStream(jar))){
+            put(out,"mcmod.info","[{\"modid\":\"foreign\",\"name\":\"Foreign\",\"version\":\"1\",\"mcversion\":\"1.7.10\"}]".getBytes(StandardCharsets.UTF_8));
+            put(out,"foreign/snow/Pellet.class",pellet());
+            put(out,"foreign/snow/Launcher.class",launcher());
+            put(out,"foreign/snow/Carrier.class",carrier());
+            put(out,"foreign/snow/Bootstrap.class",snowballBootstrap());
+            put(out,"foreign/snow/Client.class",snowballClient());
+        }
+
+        var analysis=new LegacyProjectilePresentationAnalyzer().analyze(jar);
+        var rule=analysis.rules().stream().filter(value->value.registryName().equals("pellet_entity")).findFirst()
+                .orElseThrow(()->new AssertionError("RenderSnowball arrow proof missing; skipped="+analysis.skipped()+" diagnostics="+analysis.diagnostics()));
+        assertEquals(LegacyProjectilePresentationAnalyzer.BaseFamily.ARROW,rule.baseFamily());
+        assertEquals(LegacyProjectilePresentationAnalyzer.Adapter.THROWN_ITEM,rule.adapter());
+        assertEquals("foreign/snow/Carrier",rule.sourceItemClass());
+        assertEquals("carrier",rule.sourceItemRegistryName(),
+                "Presentation must follow the renderer carrier, not the launcher item");
+        assertNull(rule.fixedTexture());
+    }
+
+    private static byte[] pellet(){
+        String n="foreign/snow/Pellet";
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,n,null,"net/minecraft/entity/projectile/EntityArrow",null);
+        MethodVisitor c=w.visitMethod(Opcodes.ACC_PUBLIC,"<init>","(Lnet/minecraft/world/World;)V",null,null);
+        c.visitCode();c.visitVarInsn(Opcodes.ALOAD,0);c.visitVarInsn(Opcodes.ALOAD,1);
+        c.visitMethodInsn(Opcodes.INVOKESPECIAL,"net/minecraft/entity/projectile/EntityArrow","<init>","(Lnet/minecraft/world/World;)V",false);
+        c.visitInsn(Opcodes.RETURN);c.visitMaxs(0,0);c.visitEnd();w.visitEnd();return w.toByteArray();
+    }
+
+    private static byte[] launcher(){
+        String n="foreign/snow/Launcher",entity="foreign/snow/Pellet";
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,n,null,"net/minecraft/item/Item",null);
+        MethodVisitor c=w.visitMethod(Opcodes.ACC_PUBLIC,"<init>","()V",null,null);c.visitCode();
+        c.visitVarInsn(Opcodes.ALOAD,0);c.visitMethodInsn(Opcodes.INVOKESPECIAL,"net/minecraft/item/Item","<init>","()V",false);
+        c.visitVarInsn(Opcodes.ALOAD,0);c.visitLdcInsn("launcher");
+        c.visitMethodInsn(Opcodes.INVOKEVIRTUAL,n,"setUnlocalizedName","(Ljava/lang/String;)Lnet/minecraft/item/Item;",false);c.visitInsn(Opcodes.POP);
+        c.visitInsn(Opcodes.RETURN);c.visitMaxs(0,0);c.visitEnd();
+        MethodVisitor m=w.visitMethod(Opcodes.ACC_PUBLIC,"func_77615_a",
+                "(Lnet/minecraft/item/ItemStack;Lnet/minecraft/world/World;Lnet/minecraft/entity/player/EntityPlayer;I)V",null,null);
+        m.visitCode();m.visitTypeInsn(Opcodes.NEW,entity);m.visitInsn(Opcodes.DUP);m.visitVarInsn(Opcodes.ALOAD,2);
+        m.visitMethodInsn(Opcodes.INVOKESPECIAL,entity,"<init>","(Lnet/minecraft/world/World;)V",false);m.visitVarInsn(Opcodes.ASTORE,5);
+        m.visitVarInsn(Opcodes.ALOAD,2);m.visitVarInsn(Opcodes.ALOAD,5);
+        m.visitMethodInsn(Opcodes.INVOKEVIRTUAL,"net/minecraft/world/World","func_72838_d","(Lnet/minecraft/entity/Entity;)Z",false);m.visitInsn(Opcodes.POP);
+        m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
+    }
+
+    private static byte[] carrier(){
+        String n="foreign/snow/Carrier";
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,n,null,"net/minecraft/item/Item",null);
+        MethodVisitor c=w.visitMethod(Opcodes.ACC_PUBLIC,"<init>","()V",null,null);c.visitCode();
+        c.visitVarInsn(Opcodes.ALOAD,0);c.visitMethodInsn(Opcodes.INVOKESPECIAL,"net/minecraft/item/Item","<init>","()V",false);
+        c.visitVarInsn(Opcodes.ALOAD,0);c.visitLdcInsn("carrier");
+        c.visitMethodInsn(Opcodes.INVOKEVIRTUAL,n,"setUnlocalizedName","(Ljava/lang/String;)Lnet/minecraft/item/Item;",false);c.visitInsn(Opcodes.POP);
+        c.visitInsn(Opcodes.RETURN);c.visitMaxs(0,0);c.visitEnd();w.visitEnd();return w.toByteArray();
+    }
+
+    private static byte[] snowballBootstrap(){
+        String n="foreign/snow/Bootstrap";
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,n,null,"java/lang/Object",null);
+        w.visitField(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"LAUNCHER","Lnet/minecraft/item/Item;",null,null).visitEnd();
+        w.visitField(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"CARRIER","Lnet/minecraft/item/Item;",null,null).visitEnd();
+        MethodVisitor s=w.visitMethod(Opcodes.ACC_STATIC,"<clinit>","()V",null,null);s.visitCode();
+        s.visitTypeInsn(Opcodes.NEW,"foreign/snow/Launcher");s.visitInsn(Opcodes.DUP);
+        s.visitMethodInsn(Opcodes.INVOKESPECIAL,"foreign/snow/Launcher","<init>","()V",false);
+        s.visitFieldInsn(Opcodes.PUTSTATIC,n,"LAUNCHER","Lnet/minecraft/item/Item;");
+        s.visitTypeInsn(Opcodes.NEW,"foreign/snow/Carrier");s.visitInsn(Opcodes.DUP);
+        s.visitMethodInsn(Opcodes.INVOKESPECIAL,"foreign/snow/Carrier","<init>","()V",false);
+        s.visitFieldInsn(Opcodes.PUTSTATIC,n,"CARRIER","Lnet/minecraft/item/Item;");
+        s.visitInsn(Opcodes.RETURN);s.visitMaxs(0,0);s.visitEnd();
+
+        MethodVisitor m=w.visitMethod(Opcodes.ACC_PUBLIC,"preInit","(Lcpw/mods/fml/common/event/FMLPreInitializationEvent;)V",null,null);
+        AnnotationVisitor a=m.visitAnnotation("Lcpw/mods/fml/common/Mod$EventHandler;",true);a.visitEnd();m.visitCode();
+        m.visitLdcInsn(Type.getObjectType("foreign/snow/Pellet"));m.visitLdcInsn("pellet_entity");m.visitIntInsn(Opcodes.BIPUSH,45);m.visitVarInsn(Opcodes.ALOAD,0);
+        m.visitIntInsn(Opcodes.BIPUSH,64);m.visitInsn(Opcodes.ICONST_2);m.visitInsn(Opcodes.ICONST_1);
+        m.visitMethodInsn(Opcodes.INVOKESTATIC,"cpw/mods/fml/common/registry/EntityRegistry","registerModEntity",
+                "(Ljava/lang/Class;Ljava/lang/String;ILjava/lang/Object;IIZ)V",false);
+        m.visitFieldInsn(Opcodes.GETSTATIC,n,"LAUNCHER","Lnet/minecraft/item/Item;");m.visitLdcInsn("launcher");
+        m.visitMethodInsn(Opcodes.INVOKESTATIC,"cpw/mods/fml/common/registry/GameRegistry","registerItem",
+                "(Lnet/minecraft/item/Item;Ljava/lang/String;)V",false);
+        m.visitFieldInsn(Opcodes.GETSTATIC,n,"CARRIER","Lnet/minecraft/item/Item;");m.visitLdcInsn("carrier");
+        m.visitMethodInsn(Opcodes.INVOKESTATIC,"cpw/mods/fml/common/registry/GameRegistry","registerItem",
+                "(Lnet/minecraft/item/Item;Ljava/lang/String;)V",false);
+        m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
+    }
+
+    private static byte[] snowballClient(){
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,"foreign/snow/Client",null,"java/lang/Object",null);
+        MethodVisitor m=w.visitMethod(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"register","()V",null,null);m.visitCode();
+        m.visitLdcInsn(Type.getObjectType("foreign/snow/Pellet"));
+        m.visitTypeInsn(Opcodes.NEW,"net/minecraft/client/renderer/entity/RenderSnowball");m.visitInsn(Opcodes.DUP);
+        m.visitFieldInsn(Opcodes.GETSTATIC,"foreign/snow/Bootstrap","CARRIER","Lnet/minecraft/item/Item;");
+        m.visitMethodInsn(Opcodes.INVOKESPECIAL,"net/minecraft/client/renderer/entity/RenderSnowball","<init>",
+                "(Lnet/minecraft/item/Item;)V",false);
+        m.visitMethodInsn(Opcodes.INVOKESTATIC,"cpw/mods/fml/client/registry/RenderingRegistry","registerEntityRenderingHandler",
+                "(Ljava/lang/Class;Lnet/minecraft/client/renderer/entity/Render;)V",false);
+        m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
+    }
+
     private static byte[] dart(){
         String n="foreign/proj/Dart";
         ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);

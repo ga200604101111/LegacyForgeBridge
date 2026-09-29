@@ -16,11 +16,12 @@ import java.util.jar.JarFile;
  *
  * <p>Admission is intentionally semantic rather than name-based: a registered entity must inherit
  * a supported 1.7 projectile base, have one renderer binding, have no source additional-spawn-data
- * interface, and be spawned directly by one registered item from the ordinary right-click item
- * callback. Throwable billboard renderers additionally prove that their icon is selected from that
- * same registered item. Arrow-family custom renderers may use the bound source item as a modern
- * presentation carrier only when the renderer proves source yaw/pitch projectile orientation and a
- * fixed source texture.</p>
+ * interface, and be spawned directly by one registered item from a supported item-use callback.
+ * Vanilla RenderSnowball bindings prove their presentation carrier independently from the launcher,
+ * matching legacy mods that deliberately render an arrow-family projectile as another registered
+ * item (including an intentionally transparent carrier). Custom throwable renderers remain stricter:
+ * their icon selector must still bind to the spawning item. Arrow-family custom mesh renderers are
+ * admitted only when source yaw/pitch orientation and one fixed source texture are proven.</p>
  */
 public final class LegacyProjectilePresentationAnalyzer {
     private static final String ENTITY_ARROW="net/minecraft/entity/projectile/EntityArrow";
@@ -31,7 +32,8 @@ public final class LegacyProjectilePresentationAnalyzer {
     private static final String DATA_WATCHER="net/minecraft/entity/DataWatcher";
     private static final String RENDER_SNOWBALL="net/minecraft/client/renderer/entity/RenderSnowball";
     private static final String RENDERING_REGISTRY="cpw/mods/fml/client/registry/RenderingRegistry";
-    private static final Set<String> RIGHT_CLICK=Set.of("onItemRightClick","func_77659_a");
+    private static final Set<String> ITEM_SPAWN_CALLBACKS=Set.of(
+            "onItemRightClick","func_77659_a","onPlayerStoppedUsing","func_77615_a");
     private static final Set<String> SPAWN=Set.of("spawnEntityInWorld","func_72838_d");
     private static final Set<String> WATCH_BYTE=Set.of("getWatchableObjectByte","func_75683_a");
     private static final Set<String> WATCH_SHORT=Set.of("getWatchableObjectShort","func_75693_b");
@@ -94,48 +96,48 @@ public final class LegacyProjectilePresentationAnalyzer {
                 skipped.add(new Skipped(entity.registryName(),entity.sourceClass(),"Projectile renderer binding is missing or ambiguous"));continue;
             }
             String renderer=bindings.getFirst().rendererClass();
-            boolean vanillaSnowball=family==BaseFamily.THROWABLE&&RENDER_SNOWBALL.equals(renderer);
+            boolean vanillaSnowball=RENDER_SNOWBALL.equals(renderer);
             if(!vanillaSnowball&&!classes.containsKey(renderer)){
                 skipped.add(new Skipped(entity.registryName(),entity.sourceClass(),"Projectile renderer class is not source-owned"));continue;
             }
-            ItemBinding item=directUseItem(registry,entity.sourceClass());
-            if(item==null){
-                skipped.add(new Skipped(entity.registryName(),entity.sourceClass(),"No unique registered right-click item directly spawns this projectile"));continue;
+            ItemBinding launcher=directUseItem(registry,entity.sourceClass());
+            if(launcher==null){
+                skipped.add(new Skipped(entity.registryName(),entity.sourceClass(),
+                        "No unique registered item directly spawns this projectile from a supported use/release callback"));continue;
             }
             float[] size=sourceSize(entity.sourceClass(),family);
             if(size==null){
                 skipped.add(new Skipped(entity.registryName(),entity.sourceClass(),"Projectile dimensions are ambiguous"));continue;
             }
 
-            Adapter adapter;Selector selector;String texture=null;String proof;
-            if(family==BaseFamily.THROWABLE){
-                if(vanillaSnowball){
-                    ItemBinding rendered=vanillaSnowballItem(bindings.getFirst(),registry);
-                    if(rendered==null||!rendered.equals(item)){
-                        skipped.add(new Skipped(entity.registryName(),entity.sourceClass(),
-                                "Vanilla RenderSnowball item is not the same registered item that directly spawns this projectile"));continue;
-                    }
-                    selector=new Selector(-1,-1,0,0);
-                    adapter=Adapter.THROWN_ITEM;
-                    proof="Source EntityThrowable family + direct right-click item spawn + exact RenderSnowball(registered item) binding";
-                }else{
-                    selector=throwableItemSelector(renderer,entity.sourceClass(),item,registry,watcherByClass.get(entity.sourceClass()));
-                    if(selector==null){
-                        skipped.add(new Skipped(entity.registryName(),entity.sourceClass(),"Throwable renderer does not source its icon from the direct-spawn registered item"));continue;
-                    }
-                    adapter=Adapter.THROWN_ITEM;
-                    proof="Source EntityThrowable family + direct right-click item spawn + renderer item-icon selector";
+            Adapter adapter;Selector selector;String texture=null;String proof;ItemBinding presentationItem=launcher;
+            if(vanillaSnowball){
+                ItemBinding rendered=vanillaSnowballItem(bindings.getFirst(),registry);
+                if(rendered==null){
+                    skipped.add(new Skipped(entity.registryName(),entity.sourceClass(),
+                            "Vanilla RenderSnowball presentation item is not one uniquely registered source item"));continue;
                 }
+                presentationItem=rendered;
+                selector=new Selector(-1,-1,0,0);
+                adapter=Adapter.THROWN_ITEM;
+                proof="Source "+family+" family + unique registered launcher callback + exact RenderSnowball(registered presentation item) binding";
+            }else if(family==BaseFamily.THROWABLE){
+                selector=throwableItemSelector(renderer,entity.sourceClass(),launcher,registry,watcherByClass.get(entity.sourceClass()));
+                if(selector==null){
+                    skipped.add(new Skipped(entity.registryName(),entity.sourceClass(),"Throwable renderer does not source its icon from the direct-spawn registered item"));continue;
+                }
+                adapter=Adapter.THROWN_ITEM;
+                proof="Source EntityThrowable family + registered launcher callback + renderer item-icon selector";
             }else{
                 texture=singleFixedTexture(renderer);
                 if(texture==null||!resourceExists(texture)||!provesOrientedProjectileRenderer(renderer)){
                     skipped.add(new Skipped(entity.registryName(),entity.sourceClass(),"Arrow renderer fixed-texture yaw/pitch orientation proof is incomplete"));continue;
                 }
                 selector=new Selector(-1,-1,0,0);adapter=Adapter.ORIENTED_ITEM;
-                proof="Source EntityArrow family + direct right-click item spawn + fixed-texture yaw/pitch projectile renderer; modern carrier uses the same source item identity";
+                proof="Source EntityArrow family + registered launcher callback + fixed-texture yaw/pitch projectile renderer; modern carrier uses the launcher item identity";
             }
             rules.add(new Rule(entity.registryName(),entity.sourceClass(),renderer,entity.numericId(),entity.trackingRange(),
-                    entity.updateFrequency(),entity.velocityUpdates(),size[0],size[1],family,adapter,item.sourceClass(),item.registryName(),
+                    entity.updateFrequency(),entity.velocityUpdates(),size[0],size[1],family,adapter,presentationItem.sourceClass(),presentationItem.registryName(),
                     selector.watcherIndex(),selector.wireType(),selector.offset(),selector.defaultMetadata(),texture,proof));
         }
         rules.sort(Comparator.comparing(Rule::registryName));
@@ -182,7 +184,7 @@ public final class LegacyProjectilePresentationAnalyzer {
             ClassNode node=classes.get(item.implementationClass());if(node==null)continue;
             boolean matched=false;
             for(MethodNode method:node.methods){
-                if(!RIGHT_CLICK.contains(method.name)||!method.desc.contains("Lnet/minecraft/world/World;"))continue;
+                if(!ITEM_SPAWN_CALLBACKS.contains(method.name)||!method.desc.contains("Lnet/minecraft/world/World;"))continue;
                 boolean creates=false,spawns=false;
                 for(AbstractInsnNode insn:method.instructions){
                     if(insn instanceof TypeInsnNode type&&type.getOpcode()==Opcodes.NEW&&type.desc.equals(entityClass))creates=true;
