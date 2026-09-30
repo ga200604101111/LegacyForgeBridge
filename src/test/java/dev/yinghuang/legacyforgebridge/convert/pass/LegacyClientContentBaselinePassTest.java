@@ -57,6 +57,30 @@ class LegacyClientContentBaselinePassTest {
     }
 
     @Test
+    void uniquelyDropsOnlyAShortLegacyRegistryPrefixForBlockTextures() throws Exception {
+        Path staging = tempDir.resolve("staging-short-prefix");
+        Files.createDirectories(staging);
+        JsonObject root = new JsonObject();
+        root.addProperty("namespace", "example");
+        JsonObject block = new JsonObject();
+        block.addProperty("id", "example:iyvanadium_ore");
+        block.addProperty("legacyRegistryName", "iyvanadium_ore");
+        block.addProperty("sourceClass", "legacy/OreIYVanadium");
+        JsonArray blocks = new JsonArray(); blocks.add(block);
+        root.add("blocks", blocks); root.add("items", new JsonArray()); root.add("creativeTabs", new JsonArray());
+        Path content = staging.resolve(LegacyClientContentBaselinePass.CONTENT);
+        Files.createDirectories(content.getParent());
+        Files.writeString(content, root.toString(), StandardCharsets.UTF_8);
+        texture(staging, "legacy", "blocks/vanadium_ore.png");
+
+        new LegacyClientContentBaselinePass().apply(context(staging));
+
+        JsonObject model = read(staging.resolve("assets/example/models/block/iyvanadium_ore.json"));
+        assertEquals("legacy:blocks/vanadium_ore",
+                model.getAsJsonObject("textures").get("all").getAsString());
+    }
+
+    @Test
     void expandsAnExistingDefaultVariantWithoutChangingItsModel() throws Exception {
         Path staging = tempDir.resolve("staging-existing");
         Files.createDirectories(staging);
