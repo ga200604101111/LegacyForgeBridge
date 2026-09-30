@@ -847,6 +847,12 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
         }
         if(opcode==INVOKESTATIC && owner.equals("cpw/mods/fml/common/registry/GameRegistry") && Set.of("registerItem","registerBlock").contains(name))return args.getFirst();
         if(receiver instanceof Obj object) {
+            // readStatic() may prove a fixed external enum constant without loading that enum
+            // class (ForgeDirection is the acceptance case). Such values carry their exact
+            // ordinal in the synthetic object; consume it before hierarchy lookup, which cannot
+            // discover java/lang/Enum for classes absent from the source JAR.
+            if(name.equals("ordinal")&&desc.equals("()I")&&object.fields.get("$ordinal") instanceof Number ordinal)
+                return ordinal.intValue();
             if(owner.equals("java/lang/Enum")||externalBase(owner).equals("java/lang/Enum")) {
                 if(owner.equals("java/lang/Enum")&&name.equals("<init>")){object.fields.put("$enumName",args.get(0));object.fields.put("$ordinal",args.get(1));return null;}
                 if(name.equals("ordinal"))return object.fields.getOrDefault("$ordinal",U);
