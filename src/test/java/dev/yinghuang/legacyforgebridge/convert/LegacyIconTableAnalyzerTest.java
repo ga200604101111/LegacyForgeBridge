@@ -12,6 +12,12 @@ class LegacyIconTableAnalyzerTest {
   return new LegacyIconTableAnalyzer().analyze(jar,new LegacyRegistryAnalyzer().analyze(jar).registrations());
  }
  private static LegacyIconTableAnalyzer.Result named(List<LegacyIconTableAnalyzer.Result> list,String name){return list.stream().filter(r->r.registryName().equals(name)).findFirst().orElseThrow();}
+ @Test void forge1710DirectionOrdinalsAreAvailableToStaticIconSelectors(){
+  assertEquals(0,LegacyIconTableAnalyzer.knownExternalEnumOrdinal("net/minecraftforge/common/util/ForgeDirection","DOWN"));
+  assertEquals(1,LegacyIconTableAnalyzer.knownExternalEnumOrdinal("net/minecraftforge/common/util/ForgeDirection","UP"));
+  assertEquals(5,LegacyIconTableAnalyzer.knownExternalEnumOrdinal("net/minecraftforge/common/util/ForgeDirection","EAST"));
+  assertNull(LegacyIconTableAnalyzer.knownExternalEnumOrdinal("other/Direction","UP"));
+ }
  @Test void usesSourceStringsNotRegistryNamesAndPreservesMetadata()throws Exception {
   var result=named(analyze(Map.of()),"unknownFoodName");
   assertEquals(256,result.variants().size());assertEquals("source:food0",result.variants().get(0).faceIcons().getFirst());
