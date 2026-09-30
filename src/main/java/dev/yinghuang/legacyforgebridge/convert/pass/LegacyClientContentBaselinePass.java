@@ -434,6 +434,12 @@ public final class LegacyClientContentBaselinePass implements ConversionPass {
             for (String seed : seeds) {
                 if (seed.isBlank()) continue;
                 if (texture.equals(seed)) best = Math.max(best, 100);
+                else if (texture.length() >= 8 && seed.length() > texture.length()
+                        && seed.length() - texture.length() <= 3 && seed.endsWith(texture))
+                    // Some legacy mods prefix every registry identity with a short mod acronym
+                    // while their source texture names omit it. Accept only one short leading
+                    // difference and still require the global best match to be unique.
+                    best = Math.max(best, 92);
                 else if (texture.equals(seed + "0") || texture.equals(seed + "stage0"))
                     best = Math.max(best, 90);
                 else if (texture.startsWith(seed + "stage0") || texture.startsWith(seed + "0"))
