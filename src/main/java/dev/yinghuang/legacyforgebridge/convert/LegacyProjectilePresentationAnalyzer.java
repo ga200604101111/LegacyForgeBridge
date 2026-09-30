@@ -27,6 +27,7 @@ import java.util.jar.JarFile;
 public final class LegacyProjectilePresentationAnalyzer {
     private static final String ENTITY_ARROW="net/minecraft/entity/projectile/EntityArrow";
     private static final String ENTITY_THROWABLE="net/minecraft/entity/projectile/EntityThrowable";
+    private static final String I_PROJECTILE="net/minecraft/entity/IProjectile";
     private static final String ADDITIONAL_SPAWN="cpw/mods/fml/common/registry/IEntityAdditionalSpawnData";
     private static final String WORLD="net/minecraft/world/World";
     private static final String ITEM="net/minecraft/item/Item";
@@ -89,8 +90,10 @@ public final class LegacyProjectilePresentationAnalyzer {
 
         List<Rule> rules=new ArrayList<>();List<Skipped> skipped=new ArrayList<>();
         for(var entity:watchers.rules()){
+            boolean copiedArrowWire=copiedArrowWireFamily(entity);
             BaseFamily family=inherits(entity.sourceClass(),ENTITY_ARROW)?BaseFamily.ARROW
-                    :inherits(entity.sourceClass(),ENTITY_THROWABLE)?BaseFamily.THROWABLE:null;
+                    :inherits(entity.sourceClass(),ENTITY_THROWABLE)?BaseFamily.THROWABLE
+                    :copiedArrowWire?BaseFamily.ARROW:null;
             if(family==null)continue;
             if(implementsInterface(entity.sourceClass(),ADDITIONAL_SPAWN)){
                 skipped.add(new Skipped(entity.registryName(),entity.sourceClass(),"Projectile implements IEntityAdditionalSpawnData"));continue;
@@ -105,7 +108,7 @@ public final class LegacyProjectilePresentationAnalyzer {
                 skipped.add(new Skipped(entity.registryName(),entity.sourceClass(),"Projectile renderer class is not source-owned"));continue;
             }
             ItemBinding launcher=directUseItem(registry,entity.sourceClass());
-            if(launcher==null){
+            if(!vanillaSnowball&&launcher==null){
                 skipped.add(new Skipped(entity.registryName(),entity.sourceClass(),
                         "No unique registered item directly spawns this projectile from a supported use/release callback"));continue;
             }
@@ -124,7 +127,9 @@ public final class LegacyProjectilePresentationAnalyzer {
                 presentationItem=rendered.item();
                 selector=new Selector(-1,-1,0,rendered.metadata());
                 adapter=Adapter.THROWN_ITEM;
-                proof="Source "+family+" family + unique registered launcher callback + exact RenderSnowball(registered presentation item, constant metadata) binding";
+                proof="Source "+family+" family"
+                        +(copiedArrowWire?" via IProjectile + DataWatcher16 byte wire proof":"")
+                        +" + exact RenderSnowball(registered presentation item, constant metadata) binding";
             }else if(family==BaseFamily.THROWABLE){
                 selector=throwableItemSelector(renderer,entity.sourceClass(),launcher,registry,watcherByClass.get(entity.sourceClass()));
                 if(selector==null){
@@ -146,6 +151,20 @@ public final class LegacyProjectilePresentationAnalyzer {
         }
         rules.sort(Comparator.comparing(Rule::registryName));
         return new Analysis(rules,skipped,List.copyOf(new LinkedHashSet<>(diagnostics)));
+    }
+
+    /**
+     * Some 1.7.10 mods copy EntityArrow's network/watch layout into a direct Entity subclass
+     * instead of inheriting EntityArrow. Admit that presentation family only when the source
+     * explicitly implements IProjectile and defines the canonical watcher-16 flags byte at zero.
+     * Remote gameplay remains server-owned; this proof is used only to select the client carrier.
+     */
+    private boolean copiedArrowWireFamily(LegacyEntityDataWatcherAnalyzer.Rule entity){
+        if(entity==null||!implementsInterface(entity.sourceClass(),I_PROJECTILE))return false;
+        int matches=0;
+        for(var entry:entity.entries())if(entry.index()==16&&"byte".equals(entry.valueKind())
+                &&entry.defaultValue() instanceof Number number&&number.byteValue()==0)matches++;
+        return matches==1;
     }
 
     private RenderSnowballBinding vanillaSnowballBinding(LegacyEntityPresentationAnalyzer.Registration registration,
