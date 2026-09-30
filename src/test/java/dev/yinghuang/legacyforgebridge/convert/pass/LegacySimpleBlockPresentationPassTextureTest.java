@@ -25,6 +25,20 @@ class LegacySimpleBlockPresentationPassTextureTest {
     }
 
     @Test
+    void provenFlatSpriteIsMaterializedIntoModernItemTexturePath()throws Exception{
+        Path staging=temp.resolve("materialized");
+        Path source=staging.resolve("assets/bamboo/textures/items/bambooshoot.png");
+        Files.createDirectories(source.getParent());Files.write(source,new byte[]{1,2,3});
+
+        String sprite=LegacySimpleBlockPresentationPass.materializeFlatInventoryTexture(
+                staging,"bamboomod","blockbambooshoot","bamboo:items/bambooshoot");
+
+        assertEquals("bamboomod:item/lfb_flat/blockbambooshoot",sprite);
+        assertArrayEquals(new byte[]{1,2,3},Files.readAllBytes(
+                staging.resolve("assets/bamboomod/textures/item/lfb_flat/blockbambooshoot.png")));
+    }
+
+    @Test
     void ambiguousExactItemSpritesStayFailClosed()throws Exception{
         Path staging=temp.resolve("staging");
         Path first=staging.resolve("assets/foreign/textures/items/bambooshoot.png");
