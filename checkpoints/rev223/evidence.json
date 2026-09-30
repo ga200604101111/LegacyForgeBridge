@@ -1,0 +1,43 @@
+{
+  "schema": 1,
+  "checkpoint": "rev223-source-fix",
+  "branch": "feature/generic-conversion-iyamato-corpus3",
+  "userLive": {
+    "version": "0.2.0-alpha.27-corpus4-local.6-rev220-local-test.1",
+    "converterRevision": "2026-09-29.222-corpus4-presentation-projectile-blockstate"
+  },
+  "exactCorpus": {
+    "iyamato": {
+      "bytes": 1029340,
+      "sha256": "35a79ca5a034fd6cda4fe4ee1f658c4ce058f9b7ec026516e76363ebdf89635e"
+    },
+    "bamboo": {
+      "bytes": 1319593,
+      "sha256": "bcceb588950f911398cfc94856a45527b4aa17b6e130927b2e0516fdf059b402"
+    }
+  },
+  "fixes": {
+    "bambooFlatItem": {
+      "sourceWorldTexture": "assets/bamboo/textures/blocks/bambooshoot.png",
+      "sourceItemTexture": "assets/bamboo/textures/items/bambooshoot.png",
+      "finalGeometryMetadataOwnershipRetired": true
+    },
+    "projectiles": {
+      "registeredWeaponHelperEntities": 24,
+      "extendedReachDefaultId": 4804,
+      "javelinDefaultId": 4815,
+      "watcher16ByteAccepted": true,
+      "extendedReachInvisibleCarrier": "iymts_mod:iyinvisible_entity_projectile",
+      "extendedReachAdmission": "IProjectile + DataWatcher16 byte zero + exact RenderSnowball registered carrier"
+    },
+    "blocks": {
+      "iytamahagane_block": "iymts_mod:tamahagane_block",
+      "iyvanadium_block": "iymts_mod:vanadium_block",
+      "iyvanadium_ore": "unique short-prefix registry-to-texture recovery -> iymts_mod:vanadium_ore",
+      "iydamascus_steel_block": "top/base damascus_steel_block_top + side damascus_steel_block_side via ForgeDirection UP/DOWN ordinal"
+    },
+    "converterRevision": "2026-09-30.223-flat-item-projectile-blocktexture"
+  },
+  "installableMainJarBuilt": false,
+  "reasonNoMainJar": "Exact cumulative corpus4-local.6 main binary/base is absent; container has no Gradle/Loom dependency cache and no network. Root src is not an equivalent cumulative binary base."
+}
