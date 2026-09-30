@@ -9,7 +9,7 @@ public final class BuildInfo {
      */
     public static final String VERSION = text("0.2.0-alpha.27");
     public static final int CONVERSION_SCHEMA = number(2);
-    public static final String CONVERTER_REVISION = text("2026-09-24.188-resource-case-fingerprint");
+    public static final String CONVERTER_REVISION = text("2026-09-30.223-flat-item-projectile-blocktexture");
 
     private BuildInfo() { }
 
