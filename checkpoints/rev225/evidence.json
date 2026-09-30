@@ -1,0 +1,65 @@
+{
+  "schema": 1,
+  "checkpoint": "rev225-via-auto-own-item-picking",
+  "branch": "feature/generic-conversion-iyamato-corpus3",
+  "fixes": {
+    "viaAutoSelect": {
+      "existingMethod": "ViaFabricPlusBackend.selectMinecraft1710ForNextConnection",
+      "previouslyCalled": false,
+      "nowCalledFrom": "ViaFabricPlusEntrypoint.onPlatformLoad",
+      "protocolConstant": "ProtocolVersion.v1_7_6",
+      "protocolFamily": "1.7.6-1.7.10",
+      "protocolId": 5
+    },
+    "bambooFoxfire": {
+      "sourceClass": "ruby/bamboo/block/BlockKitunebi",
+      "sourceRenderer": "ruby/bamboo/render/block/RenderKitunebi",
+      "ownBlockItemRequired": true,
+      "heldBounds": [
+        0,
+        0,
+        0,
+        1,
+        1,
+        1
+      ],
+      "unheldBounds": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "emptyCollision": true,
+      "otherItemsEquivalentToUnheld": true,
+      "runtimeSelection": "actual client player's main hand compared with self.asItem()",
+      "removedPickingAssumptions": [
+        "CollisionContext.empty()",
+        "BlockGetter identity equals Minecraft.level"
+      ]
+    }
+  },
+  "base": {
+    "file": "legacyforgebridge-0.2.0-alpha.27-rev224-corpus4-local.8.jar",
+    "sha256": "36a9bdd89103f83d4f02e61d1d627ab51254c62a1b423dc20fa98a5868c74a51"
+  },
+  "output": {
+    "file": "legacyforgebridge-0.2.0-alpha.27-rev225-corpus4-local.9.jar",
+    "bytes": 4436552,
+    "sha256": "180d0a215c4099757717f6c697db388e17f39237403c82644d86b73faa94aa12",
+    "internalVersion": "0.2.0-alpha.27-corpus4-local.9-rev225-local-test.1",
+    "converterRevision": "2026-09-30.224-flat-item-projectile-blocktexture-blockcarry",
+    "cacheCompatibilityVersion": "0.2.0-alpha.27-corpus3-local.3-rev220-local-test.1"
+  },
+  "binaryAudit": {
+    "entriesUnchangedCount": true,
+    "addedEntries": 0,
+    "removedEntries": 0,
+    "changedEntries": 4,
+    "nestedEnergyJarUnchanged": true,
+    "zipIntegrity": "pass",
+    "asmBasicVerifier": "pass"
+  },
+  "liveLaunchValidated": false
+}
