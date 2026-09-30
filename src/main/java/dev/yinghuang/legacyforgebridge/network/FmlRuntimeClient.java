@@ -177,8 +177,7 @@ public final class FmlRuntimeClient {
             catch(RuntimeException invalid){trace.event("Converted remote projectile spawn rejected while applying watcher; entity="+message.entityId()
                     +" watcher="+watcher.id()+" type="+watcher.type()+" reason="+invalid.getClass().getSimpleName());return;}
             if(mapped){customWatchers++;continue;}
-            if(isLegacyEntityBaseWatcher(watcher)
-                    ||(rule.baseFamily()==LegacyProjectilePresentationRegistry.BaseFamily.ARROW&&watcher.id()==16&&watcher.type()==0&&watcher.value() instanceof Byte)){
+            if(isLegacyProjectileBaseWatcher(watcher)){
                 baseWatchers++;continue;
             }
             trace.event("Converted remote projectile spawn rejected: unmapped watcher; entity="+message.entityId()
@@ -258,6 +257,18 @@ public final class FmlRuntimeClient {
         if(watcher.id()==0&&watcher.type()==0)return watcher.value() instanceof Byte;
         if(watcher.id()==1&&watcher.type()==1)return watcher.value() instanceof Short;
         return false;
+    }
+
+    static boolean isLegacyProjectileBaseWatcher(FmlRuntimeCodec.LegacyDataWatcherEntry watcher){
+        if(isLegacyEntityBaseWatcher(watcher))return true;
+        /*
+         * EntityArrow reserves DataWatcher 16 for its critical/projectile flags byte. A number of
+         * 1.7.10 mods copied that wire layout into source-owned projectile classes which implement
+         * IThrowableEntity directly instead of inheriting EntityArrow. The FML spawn envelope still
+         * carries exactly the same watcher, so presentation admission must follow the proven wire
+         * shape rather than the Java superclass selected by the renderer adapter.
+         */
+        return watcher.id()==16&&watcher.type()==0&&watcher.value() instanceof Byte;
     }
 
     private void handleEntityAdjust(byte[] payload,Phase phase,FmlConnectionTrace trace){
