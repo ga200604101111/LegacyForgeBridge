@@ -112,6 +112,7 @@ public final class LegacySimpleBlockPresentationPass implements ConversionPass {
                 Path itemModel=staging.resolve("assets/"+ns+"/models/item/"+path+".json");
                 write(itemModel,simpleModel("minecraft:item/generated","layer0",itemTexture));
                 LegacyPresentationOwnership.revoke(staging,itemModel);
+                restoreFlatInventoryOwnership(staging,id,ns,path);
             }
 
             JsonObject evidence=new JsonObject();evidence.addProperty("id",id);evidence.addProperty("legacyRegistryName",rule.registryName());
@@ -263,6 +264,49 @@ public final class LegacySimpleBlockPresentationPass implements ConversionPass {
             Files.copy(sourceMeta,targetMeta,StandardCopyOption.REPLACE_EXISTING);
         }
         return targetNamespace+":item/lfb_flat/"+targetPath;
+    }
+
+    /**
+     * Final ownership handoff for a source-proven flat BlockItem.
+     *
+     * <p>The geometry pass runs earlier and can install metadata-specific ITEM_MODEL definitions
+     * under lfb_geometry. Those are valid provisional held models for ordinary blocks, but they
+     * must not survive after the later simple-renderer proof establishes that the source inventory
+     * renderer is flat. Repoint only geometry-owned entries for this exact block identity; any
+     * independently proven metadata presentation is preserved.</p>
+     */
+    static void restoreFlatInventoryOwnership(Path staging,String id,String namespace,String path)throws Exception{
+        if(id==null||namespace==null||path==null
+                ||!id.equals(namespace+":"+path)
+                ||!namespace.matches("[a-z0-9_.-]+")||!path.matches("[a-z0-9/._-]+"))return;
+        Path itemDefinition=staging.resolve("assets/"+namespace+"/items/"+path+".json");
+        write(itemDefinition,itemDefinition(namespace+":item/"+path));
+
+        Path iconPath=staging.resolve(LegacyIconPresentationPass.OUTPUT);
+        if(!Files.isRegularFile(iconPath))return;
+        JsonObject root=read(iconPath);
+        if(!root.has("items")||!root.get("items").isJsonObject())return;
+        JsonObject items=root.getAsJsonObject("items");
+        if(!items.has(id)||!items.get(id).isJsonObject())return;
+        JsonObject variants=items.getAsJsonObject(id);
+        String geometryPrefix=namespace+":lfb_geometry/"+path+"/";
+        String flatDefinition=namespace+":"+path;
+        boolean changed=false;
+        for(var entry:new ArrayList<>(variants.entrySet())){
+            JsonElement value=entry.getValue();
+            if(value.isJsonPrimitive()&&value.getAsJsonPrimitive().isString()
+                    &&value.getAsString().startsWith(geometryPrefix)){
+                variants.addProperty(entry.getKey(),flatDefinition);
+                changed=true;
+            }
+        }
+        if(changed)write(iconPath,root);
+    }
+
+    private static JsonObject itemDefinition(String model){
+        JsonObject root=new JsonObject(),node=new JsonObject();
+        node.addProperty("type","minecraft:model");node.addProperty("model",model);root.add("model",node);
+        return root;
     }
 
     private static void addFlatTextureSeed(Set<String> output,String raw){
