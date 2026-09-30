@@ -21,13 +21,18 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 /** Replays source-proven client randomDisplayTick held-item visibility metadata toggles. */
 @Mixin(ConvertedLegacyBlock.class)
 public abstract class LegacyHeldItemVisibilityMixin {
-    /** Vanilla outline queries omit the entity context. Match the same current-hand pick
-     * only for the active client level, never for a server/world-shape query. */
+    /**
+     * Source BlockKitunebi-style visibility mutates Block#setBlockBounds itself: the held-own-item
+     * branch supplies a real ray-selection box while every other hand state can supply an empty
+     * box. Modern shape queries are not guaranteed to pass the active ClientLevel instance or an
+     * EntityCollisionContext, so resolve the source condition directly from the actual main hand.
+     * The comparison is deliberately against this block's own BlockItem; holding any other item
+     * remains equivalent to an empty hand.
+     */
     @Inject(method="getShape",at=@At("HEAD"),cancellable=true)
     private void lfb$currentHandSelection(BlockState state,BlockGetter level,BlockPos pos,
             CollisionContext context,CallbackInfoReturnable<VoxelShape> ci){
-        if(context!=CollisionContext.empty())return;
-        var client=Minecraft.getInstance();if(level!=client.level)return;
+        var client=Minecraft.getInstance();
         Block self=(Block)(Object)this;
         var rule=LegacyHeldItemVisibilityRegistry.rule(BuiltInRegistries.BLOCK.getKey(self));
         if(rule==null||rule.selection()==null)return;
