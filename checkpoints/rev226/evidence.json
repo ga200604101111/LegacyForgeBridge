@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "checkpoint": "rev226-iy-projectile-motion-damascus",
+  "checkpoint": "rev226-iy-projectile-damascus-armor-ui-final",
   "branch": "feature/generic-conversion-iyamato-corpus3",
   "liveEvidence": {
     "sourceProjectileRuntimeRules": 19,
@@ -11,54 +11,20 @@
       4818,
       4819,
       4823
-    ],
-    "contractSpawn": {
-      "legacyId": 4823,
-      "throwerId": 0,
-      "velocity": [
-        0,
-        0,
-        0
-      ]
-    },
-    "damascusDaggerSpawn": {
-      "legacyId": 4803,
-      "throwerId": 0,
-      "velocity": [
-        0,
-        0,
-        0
-      ]
-    },
-    "extendedReachSpawn": {
-      "legacyId": 4804,
-      "throwerId": 0,
-      "velocity": [
-        0,
-        0,
-        0
-      ]
-    },
-    "magicBulletSpawn": {
-      "legacyId": 4805,
-      "throwerId": "nonzero",
-      "velocity": "exact FML envelope"
-    }
+    ]
   },
   "projectileFix": {
-    "reconstructAbsentEnvelope": {
-      "ids": [
-        4800,
-        4801,
-        4802,
-        4803,
-        4823,
-        4804
-      ],
-      "speedByFamily": {
-        "daggersAndContract": 1.5,
-        "extendedReach": 1
-      }
+    "reconstructAbsentEnvelopeIds": [
+      4800,
+      4801,
+      4802,
+      4803,
+      4804,
+      4823
+    ],
+    "speedByFamily": {
+      "daggersAndContract": 1.5,
+      "extendedReach": 1
     },
     "missingRuntimeTickProfiles": {
       "4804": {
@@ -87,42 +53,91 @@
         "waterDrag": 0.8
       }
     },
-    "serverDamageImpactAuthorityPreserved": true,
-    "existing19SourceRuntimeRulesDoubleTicked": false
+    "collisionStopIds": [
+      4800,
+      4801,
+      4802,
+      4803,
+      4820,
+      4823
+    ],
+    "serverGameplayAuthorityPreserved": true,
+    "existing19SourceProgramsDoubleTicked": false
   },
   "damascus": {
-    "sourceClass": "net/lubriciouskin/iymts_mod/blocks/BlockIYDamascusSteel",
+    "exactCorpusSha256": "35a79ca5a034fd6cda4fe4ee1f658c4ce058f9b7ec026516e76363ebdf89635e",
     "upDownTexture": "iymts_mod:damascus_steel_block_top",
     "sideTexture": "iymts_mod:damascus_steel_block_side",
-    "genericExternalEnumOrdinalSourceCommit": "89a80a583b71bd36ce11916bdb96c2ffb30376ef",
-    "exactCorpusFinalizerSha": "35a79ca5a034fd6cda4fe4ee1f658c4ce058f9b7ec026516e76363ebdf89635e",
-    "postGeometryFinalModel": true
+    "all16MetadataStates": true,
+    "laterAtlasRewriteExpected": true
+  },
+  "armor": {
+    "tamahagane": [
+      4,
+      8,
+      6,
+      4
+    ],
+    "damascus": [
+      4,
+      9,
+      7,
+      4
+    ],
+    "heavyDamascus": [
+      5,
+      10,
+      8,
+      5
+    ],
+    "syntheticArmorToughness": false,
+    "heavyDamascusMovementSpeed": {
+      "amount": -0.01,
+      "operation": 0
+    },
+    "heavyDamascusKnockbackResistance": {
+      "amount": 0.25,
+      "operation": 1
+    },
+    "sourceItemRuntimeUnchangedFromRev224": true
+  },
+  "config": {
+    "oneCombinedToggle": "hideModernAttributes",
+    "hides": [
+      "Armor",
+      "Movement Speed",
+      "Knockback Resistance"
+    ],
+    "modifiersRemainActive": true,
+    "restartRequired": false
+  },
+  "base": {
+    "file": "legacyforgebridge-0.2.0-alpha.27-rev224-corpus4-local.8.jar",
+    "sha256": "36a9bdd89103f83d4f02e61d1d627ab51254c62a1b423dc20fa98a5868c74a51"
   },
   "output": {
     "file": "legacyforgebridge-0.2.0-alpha.27-rev226-corpus4-local.10.jar",
-    "bytes": 4414745,
-    "sha256": "f7828045f5b7598e822fd91166c74c1c7d849e35583e086f74e6f14a4b37f3be",
-    "internalVersion": "0.2.0-alpha.27-corpus4-local.10-rev226-local-test.1",
-    "converterRevision": "2026-09-30.226-projectile-motion-damascus-face",
+    "bytes": 4413224,
+    "sha256": "16df8e965bc429f9b66c14211e121fceed14c29fd3d1f2655e115916a6f12605",
+    "internalVersion": "0.2.0-alpha.27-corpus4-local.10-rev226-local-test.2",
+    "converterRevision": "2026-09-30.226-projectile-motion-damascus-armor-ui",
     "cacheCompatibilityVersion": "0.2.0-alpha.27-corpus3-local.3-rev220-local-test.1"
   },
   "binaryAudit": {
     "baseEntries": 1664,
-    "outputEntries": 1665,
-    "removedEntries": 0,
+    "outputEntries": 1666,
     "duplicateEntries": 0,
+    "removedEntries": 0,
     "addedEntries": [
-      "dev/yinghuang/legacyforgebridge/convert/Rev226Compat.class"
+      "dev/yinghuang/legacyforgebridge/convert/Rev226Compat.class",
+      "legacyforgebridge/rev226-build.json"
     ],
-    "changedExistingEntries": [
-      "dev/yinghuang/legacyforgebridge/BuildInfo.class",
-      "dev/yinghuang/legacyforgebridge/compat/SourceProjectileRuntime.class",
-      "dev/yinghuang/legacyforgebridge/network/FmlRuntimeClient.class",
-      "dev/yinghuang/legacyforgebridge/convert/pass/LegacySimpleBlockPresentationPass.class",
-      "fabric.mod.json"
-    ],
+    "changedExistingEntries": 12,
     "nestedEnergyJarUnchanged": true,
+    "legacySourceItemRuntimeUnchanged": true,
     "zipIntegrity": "pass",
+    "pureCompatTests": "pass",
+    "combinedPreferenceTest": "pass",
     "asmBasicVerifier": "pass"
   },
   "liveLaunchValidated": false
