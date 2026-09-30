@@ -931,7 +931,28 @@ public final class LegacyIconTableAnalyzer implements Opcodes {
         }
         throw fail("unsupported call "+owner+"."+name+desc);
     }
+    static Integer knownExternalEnumOrdinal(String owner,String name){
+        if(!"net/minecraftforge/common/util/ForgeDirection".equals(owner))return null;
+        return switch(name){
+            case "DOWN"->0;
+            case "UP"->1;
+            case "NORTH"->2;
+            case "SOUTH"->3;
+            case "WEST"->4;
+            case "EAST"->5;
+            case "UNKNOWN"->6;
+            default->null;
+        };
+    }
+
     private Object readStatic(String owner,String name,int depth) {
+        Integer knownOrdinal=knownExternalEnumOrdinal(owner,name);
+        if(knownOrdinal!=null){
+            Obj value=new Obj(owner);
+            value.fields.put("$enumName",name);
+            value.fields.put("$ordinal",knownOrdinal);
+            return value;
+        }
         String key=owner+"."+name;
         if(provenRegistryFields.containsKey(key))return provenRegistryFields.get(key);
         if(geometryMode && geometryFields.containsKey(key))return geometryObject(geometryFields.get(key));
