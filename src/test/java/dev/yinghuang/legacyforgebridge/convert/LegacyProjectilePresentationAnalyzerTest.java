@@ -67,6 +67,29 @@ class LegacyProjectilePresentationAnalyzerTest {
         assertNull(rule.fixedTexture());
     }
 
+    @Test
+    void copiedArrowWireRenderSnowballDoesNotRequireUniqueLauncher()throws Exception{
+        Path jar=tempDir.resolve("foreign-copied-arrow.jar");
+        try(JarOutputStream out=new JarOutputStream(Files.newOutputStream(jar))){
+            put(out,"mcmod.info","[{\"modid\":\"foreign\",\"name\":\"Foreign\",\"version\":\"1\",\"mcversion\":\"1.7.10\"}]".getBytes(StandardCharsets.UTF_8));
+            put(out,"foreign/reach/Reach.class",copiedReach());
+            put(out,"foreign/reach/ReachLauncher.class",copiedReachLauncher());
+            put(out,"foreign/reach/Carrier.class",copiedReachCarrier());
+            put(out,"foreign/reach/Bootstrap.class",copiedReachBootstrap());
+            put(out,"foreign/reach/Client.class",copiedReachClient());
+        }
+
+        var analysis=new LegacyProjectilePresentationAnalyzer().analyze(jar);
+        var rule=analysis.rules().stream().filter(value->value.registryName().equals("reach_entity")).findFirst()
+                .orElseThrow(()->new AssertionError("Copied-arrow RenderSnowball proof missing; skipped="+analysis.skipped()+" diagnostics="+analysis.diagnostics()));
+        assertEquals(LegacyProjectilePresentationAnalyzer.BaseFamily.ARROW,rule.baseFamily());
+        assertEquals(LegacyProjectilePresentationAnalyzer.Adapter.THROWN_ITEM,rule.adapter());
+        assertEquals("foreign/reach/Carrier",rule.sourceItemClass());
+        assertEquals("reach_carrier",rule.sourceItemRegistryName());
+        assertTrue(rule.proof().contains("IProjectile + DataWatcher16 byte wire proof"));
+        assertEquals(.5F,rule.width(),0.0001F);assertEquals(.5F,rule.height(),0.0001F);
+    }
+
     private static byte[] pellet(){
         String n="foreign/snow/Pellet";
         ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
@@ -218,6 +241,103 @@ class LegacyProjectilePresentationAnalyzerTest {
         r.visitInsn(Opcodes.RETURN);r.visitMaxs(0,0);r.visitEnd();
         MethodVisitor s=w.visitMethod(Opcodes.ACC_STATIC,"<clinit>","()V",null,null);s.visitCode();s.visitLdcInsn("foreign:textures/entity/dart.png");s.visitInsn(Opcodes.POP);s.visitInsn(Opcodes.RETURN);s.visitMaxs(0,0);s.visitEnd();
         w.visitEnd();return w.toByteArray();
+    }
+
+    private static byte[] copiedReach(){
+        String n="foreign/reach/Reach";
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,n,null,"net/minecraft/entity/Entity",new String[]{"net/minecraft/entity/IProjectile"});
+        MethodVisitor c=w.visitMethod(Opcodes.ACC_PUBLIC,"<init>","(Lnet/minecraft/world/World;)V",null,null);c.visitCode();
+        c.visitVarInsn(Opcodes.ALOAD,0);c.visitVarInsn(Opcodes.ALOAD,1);
+        c.visitMethodInsn(Opcodes.INVOKESPECIAL,"net/minecraft/entity/Entity","<init>","(Lnet/minecraft/world/World;)V",false);
+        c.visitVarInsn(Opcodes.ALOAD,0);c.visitLdcInsn(.5F);c.visitLdcInsn(.5F);
+        c.visitMethodInsn(Opcodes.INVOKEVIRTUAL,n,"func_70105_a","(FF)V",false);
+        c.visitInsn(Opcodes.RETURN);c.visitMaxs(0,0);c.visitEnd();
+        MethodVisitor init=w.visitMethod(Opcodes.ACC_PROTECTED,"func_70088_a","()V",null,null);init.visitCode();
+        init.visitVarInsn(Opcodes.ALOAD,0);
+        init.visitFieldInsn(Opcodes.GETFIELD,"net/minecraft/entity/Entity","field_70180_af","Lnet/minecraft/entity/DataWatcher;");
+        init.visitIntInsn(Opcodes.BIPUSH,16);init.visitInsn(Opcodes.ICONST_0);
+        init.visitMethodInsn(Opcodes.INVOKESTATIC,"java/lang/Byte","valueOf","(B)Ljava/lang/Byte;",false);
+        init.visitMethodInsn(Opcodes.INVOKEVIRTUAL,"net/minecraft/entity/DataWatcher","func_75682_a","(ILjava/lang/Object;)V",false);
+        init.visitInsn(Opcodes.RETURN);init.visitMaxs(0,0);init.visitEnd();
+        MethodVisitor projectile=w.visitMethod(Opcodes.ACC_PUBLIC,"func_70186_c","(DDDFF)V",null,null);
+        projectile.visitCode();projectile.visitInsn(Opcodes.RETURN);projectile.visitMaxs(0,0);projectile.visitEnd();
+        w.visitEnd();return w.toByteArray();
+    }
+
+    private static byte[] copiedReachLauncher(){
+        String n="foreign/reach/ReachLauncher",entity="foreign/reach/Reach";
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,n,null,"net/minecraft/item/Item",null);
+        MethodVisitor c=w.visitMethod(Opcodes.ACC_PUBLIC,"<init>","()V",null,null);c.visitCode();
+        c.visitVarInsn(Opcodes.ALOAD,0);c.visitMethodInsn(Opcodes.INVOKESPECIAL,"net/minecraft/item/Item","<init>","()V",false);
+        c.visitInsn(Opcodes.RETURN);c.visitMaxs(0,0);c.visitEnd();
+        MethodVisitor m=w.visitMethod(Opcodes.ACC_PUBLIC,"func_77659_a",
+                "(Lnet/minecraft/item/ItemStack;Lnet/minecraft/world/World;Lnet/minecraft/entity/player/EntityPlayer;)Lnet/minecraft/item/ItemStack;",null,null);
+        m.visitCode();m.visitTypeInsn(Opcodes.NEW,entity);m.visitInsn(Opcodes.DUP);m.visitVarInsn(Opcodes.ALOAD,2);
+        m.visitMethodInsn(Opcodes.INVOKESPECIAL,entity,"<init>","(Lnet/minecraft/world/World;)V",false);m.visitVarInsn(Opcodes.ASTORE,4);
+        m.visitVarInsn(Opcodes.ALOAD,2);m.visitVarInsn(Opcodes.ALOAD,4);
+        m.visitMethodInsn(Opcodes.INVOKEVIRTUAL,"net/minecraft/world/World","func_72838_d","(Lnet/minecraft/entity/Entity;)Z",false);m.visitInsn(Opcodes.POP);
+        m.visitVarInsn(Opcodes.ALOAD,1);m.visitInsn(Opcodes.ARETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
+    }
+
+    private static byte[] copiedReachCarrier(){
+        String n="foreign/reach/Carrier";
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,n,null,"net/minecraft/item/Item",null);
+        MethodVisitor c=w.visitMethod(Opcodes.ACC_PUBLIC,"<init>","()V",null,null);c.visitCode();
+        c.visitVarInsn(Opcodes.ALOAD,0);c.visitMethodInsn(Opcodes.INVOKESPECIAL,"net/minecraft/item/Item","<init>","()V",false);
+        c.visitInsn(Opcodes.RETURN);c.visitMaxs(0,0);c.visitEnd();w.visitEnd();return w.toByteArray();
+    }
+
+    private static byte[] copiedReachBootstrap(){
+        String n="foreign/reach/Bootstrap";
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,n,null,"java/lang/Object",null);
+        w.visitField(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"A","Lforeign/reach/ReachLauncher;",null,null).visitEnd();
+        w.visitField(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"B","Lforeign/reach/ReachLauncher;",null,null).visitEnd();
+        w.visitField(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"CARRIER","Lforeign/reach/Carrier;",null,null).visitEnd();
+        MethodVisitor cl=w.visitMethod(Opcodes.ACC_STATIC,"<clinit>","()V",null,null);cl.visitCode();
+        for(String field:new String[]{"A","B"}){
+            cl.visitTypeInsn(Opcodes.NEW,"foreign/reach/ReachLauncher");cl.visitInsn(Opcodes.DUP);
+            cl.visitMethodInsn(Opcodes.INVOKESPECIAL,"foreign/reach/ReachLauncher","<init>","()V",false);
+            cl.visitFieldInsn(Opcodes.PUTSTATIC,n,field,"Lforeign/reach/ReachLauncher;");
+        }
+        cl.visitTypeInsn(Opcodes.NEW,"foreign/reach/Carrier");cl.visitInsn(Opcodes.DUP);
+        cl.visitMethodInsn(Opcodes.INVOKESPECIAL,"foreign/reach/Carrier","<init>","()V",false);
+        cl.visitFieldInsn(Opcodes.PUTSTATIC,n,"CARRIER","Lforeign/reach/Carrier;");
+        cl.visitInsn(Opcodes.RETURN);cl.visitMaxs(0,0);cl.visitEnd();
+
+        MethodVisitor m=w.visitMethod(Opcodes.ACC_PUBLIC,"preInit","(Lcpw/mods/fml/common/event/FMLPreInitializationEvent;)V",null,null);
+        AnnotationVisitor a=m.visitAnnotation("Lcpw/mods/fml/common/Mod$EventHandler;",true);a.visitEnd();m.visitCode();
+        m.visitLdcInsn(Type.getObjectType("foreign/reach/Reach"));m.visitLdcInsn("reach_entity");m.visitIntInsn(Opcodes.BIPUSH,46);m.visitVarInsn(Opcodes.ALOAD,0);
+        m.visitIntInsn(Opcodes.BIPUSH,64);m.visitInsn(Opcodes.ICONST_2);m.visitInsn(Opcodes.ICONST_1);
+        m.visitMethodInsn(Opcodes.INVOKESTATIC,"cpw/mods/fml/common/registry/EntityRegistry","registerModEntity",
+                "(Ljava/lang/Class;Ljava/lang/String;ILjava/lang/Object;IIZ)V",false);
+        m.visitFieldInsn(Opcodes.GETSTATIC,n,"A","Lforeign/reach/ReachLauncher;");m.visitLdcInsn("reach_a");
+        m.visitMethodInsn(Opcodes.INVOKESTATIC,"cpw/mods/fml/common/registry/GameRegistry","registerItem",
+                "(Lnet/minecraft/item/Item;Ljava/lang/String;)V",false);
+        m.visitFieldInsn(Opcodes.GETSTATIC,n,"B","Lforeign/reach/ReachLauncher;");m.visitLdcInsn("reach_b");
+        m.visitMethodInsn(Opcodes.INVOKESTATIC,"cpw/mods/fml/common/registry/GameRegistry","registerItem",
+                "(Lnet/minecraft/item/Item;Ljava/lang/String;)V",false);
+        m.visitFieldInsn(Opcodes.GETSTATIC,n,"CARRIER","Lforeign/reach/Carrier;");m.visitLdcInsn("reach_carrier");
+        m.visitMethodInsn(Opcodes.INVOKESTATIC,"cpw/mods/fml/common/registry/GameRegistry","registerItem",
+                "(Lnet/minecraft/item/Item;Ljava/lang/String;)V",false);
+        m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
+    }
+
+    private static byte[] copiedReachClient(){
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,"foreign/reach/Client",null,"java/lang/Object",null);
+        MethodVisitor m=w.visitMethod(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"register","()V",null,null);m.visitCode();
+        m.visitLdcInsn(Type.getObjectType("foreign/reach/Reach"));
+        m.visitTypeInsn(Opcodes.NEW,"net/minecraft/client/renderer/entity/RenderSnowball");m.visitInsn(Opcodes.DUP);
+        m.visitFieldInsn(Opcodes.GETSTATIC,"foreign/reach/Bootstrap","CARRIER","Lforeign/reach/Carrier;");
+        m.visitMethodInsn(Opcodes.INVOKESPECIAL,"net/minecraft/client/renderer/entity/RenderSnowball","<init>",
+                "(Lnet/minecraft/item/Item;)V",false);
+        m.visitMethodInsn(Opcodes.INVOKESTATIC,"cpw/mods/fml/client/registry/RenderingRegistry","registerEntityRenderingHandler",
+                "(Ljava/lang/Class;Lnet/minecraft/client/renderer/entity/Render;)V",false);
+        m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
     }
 
     private static void put(JarOutputStream out,String name,byte[] bytes)throws Exception{
