@@ -97,10 +97,14 @@ public final class LegacySimpleBlockPresentationPass implements ConversionPass {
                 write(staging.resolve("assets/"+ns+"/blockstates/"+path+".json"),blockstate);success=true;
             }
             if(!success)continue;
-            String flatInventoryTexture=null;
+            String flatInventoryTexture=null,flatInventoryMaterializedTexture=null;
             if(rule.flatInventory()){
                 flatInventoryTexture=sourceFlatInventoryTexture(staging,rule.registryName(),rule.sourceBlockClass());
-                String itemTexture=flatInventoryTexture;
+                String itemTexture=null;
+                if(flatInventoryTexture!=null){
+                    flatInventoryMaterializedTexture=materializeFlatInventoryTexture(staging,ns,path,flatInventoryTexture);
+                    itemTexture=flatInventoryMaterializedTexture;
+                }
                 if(itemTexture==null){
                     JsonObject projected=read(modelPath);itemTexture=singleTexture(projected);
                 }
@@ -120,6 +124,7 @@ public final class LegacySimpleBlockPresentationPass implements ConversionPass {
                 evidence.addProperty("flatInventoryTexture",flatInventoryTexture);
                 evidence.addProperty("flatInventoryTextureProof","unique source item texture exact-normalized against registry/source identity");
             }
+            if(flatInventoryMaterializedTexture!=null)evidence.addProperty("flatInventoryMaterializedTexture",flatInventoryMaterializedTexture);
             if(texture!=null)evidence.addProperty("texture",texture);
             if(rule.bounds()!=null){
                 evidence.add("sourceBounds",boundsArray(rule.bounds()));
@@ -237,6 +242,29 @@ public final class LegacySimpleBlockPresentationPass implements ConversionPass {
         }
         return matches.size()==1?matches.getFirst():null;
     }
+    /**
+     * Materialize a proven legacy flat BlockItem sprite into the generated modern item texture
+     * namespace immediately. Minecraft 1.21.11 separates item and block atlases, so keeping an
+     * old textures/items reference until a later pass leaves this source-owned special case too
+     * easy to orphan. A modern textures/item path is discovered by the vanilla items atlas.
+     */
+    static String materializeFlatInventoryTexture(Path staging,String targetNamespace,String targetPath,String sourceResource)throws Exception{
+        String[] source=sourceResource==null?new String[0]:sourceResource.split(":",2);
+        if(source.length!=2||!targetNamespace.matches("[a-z0-9_.-]+")||!targetPath.matches("[a-z0-9/._-]+"))return null;
+        Path sourceFile=staging.resolve("assets/"+source[0]+"/textures/"+source[1]+".png").normalize();
+        if(!sourceFile.startsWith(staging)||!Files.isRegularFile(sourceFile))return null;
+        Path target=staging.resolve("assets/"+targetNamespace+"/textures/item/lfb_flat/"+targetPath+".png").normalize();
+        if(!target.startsWith(staging))return null;
+        Files.createDirectories(target.getParent());
+        Files.copy(sourceFile,target,StandardCopyOption.REPLACE_EXISTING);
+        Path sourceMeta=sourceFile.resolveSibling(sourceFile.getFileName()+".mcmeta");
+        if(Files.isRegularFile(sourceMeta)){
+            Path targetMeta=target.resolveSibling(target.getFileName()+".mcmeta");
+            Files.copy(sourceMeta,targetMeta,StandardCopyOption.REPLACE_EXISTING);
+        }
+        return targetNamespace+":item/lfb_flat/"+targetPath;
+    }
+
     private static void addFlatTextureSeed(Set<String> output,String raw){
         String value=normalizeFlatTextureName(raw);if(value.isBlank())return;output.add(value);
         boolean changed;
