@@ -1,0 +1,45 @@
+{
+  "schema": 1,
+  "checkpoint": "rev224-corpus4-abi-blockcarry",
+  "branch": "feature/generic-conversion-iyamato-corpus3",
+  "userFailure": {
+    "exception": "java.lang.NoSuchFieldError",
+    "missingField": "dev.yinghuang.legacyforgebridge.BuildInfo.CACHE_COMPATIBILITY_VERSION",
+    "caller": "dev.yinghuang.legacyforgebridge.convert.ConversionCacheIdentity.current"
+  },
+  "bambooKitunebi": {
+    "legacyRegistryName": "BambooMod:kitunebi",
+    "legacyBlockId": 176,
+    "symptom": "renders correctly briefly, then becomes a white banner",
+    "cumulativeBinaryBug": "MappingData1_13.getBlockStateMappings() returns null at 1.12.2->1.13 carrier entry",
+    "repair": "use MappingData1_13.getBlockMappings() before LegacyModBlockStateBridge.enterLegacyState"
+  },
+  "exactBaseMainJar": {
+    "file": "legacyforgebridge-0.2.0-alpha.27-rev220-corpus4-local.6.jar",
+    "bytes": 4395764,
+    "sha256": "38a880d97f4e24d0dcadfab5b29a481bf91776195fca966f9bb3e8fbc3d878b7",
+    "internalVersion": "0.2.0-alpha.27-corpus4-local.6-rev220-local-test.1"
+  },
+  "output": {
+    "file": "legacyforgebridge-0.2.0-alpha.27-rev224-corpus4-local.8.jar",
+    "bytes": 4436528,
+    "sha256": "36a9bdd89103f83d4f02e61d1d627ab51254c62a1b423dc20fa98a5868c74a51",
+    "internalVersion": "0.2.0-alpha.27-corpus4-local.8-rev224-local-test.1",
+    "converterRevision": "2026-09-30.224-flat-item-projectile-blocktexture-blockcarry",
+    "cacheCompatibilityVersion": "0.2.0-alpha.27-corpus3-local.3-rev220-local-test.1"
+  },
+  "binaryAudit": {
+    "baseEntries": 1663,
+    "outputEntries": 1664,
+    "removedEntries": 0,
+    "addedEntries": [
+      "dev/yinghuang/legacyforgebridge/convert/Rev223Compat.class"
+    ],
+    "changedExistingEntries": 8,
+    "duplicateEntries": 0,
+    "nestedEnergyJarUnchanged": true,
+    "zipIntegrity": "pass",
+    "asmBasicVerifier": "pass"
+  },
+  "liveLaunchValidated": false
+}
