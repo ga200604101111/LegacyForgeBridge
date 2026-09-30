@@ -39,6 +39,37 @@ class LegacySimpleBlockPresentationPassTextureTest {
     }
 
     @Test
+    void flatInventoryRetiresOnlyGeometryOwnedMetadataItemModels()throws Exception{
+        Path staging=temp.resolve("ownership");
+        Path itemDefinition=staging.resolve("assets/foreign/items/blockbambooshoot.json");
+        Path presentation=staging.resolve(LegacyIconPresentationPass.OUTPUT);
+        Files.createDirectories(itemDefinition.getParent());
+        Files.createDirectories(presentation.getParent());
+        Files.writeString(itemDefinition,"""
+                {"model":{"type":"minecraft:model","model":"foreign:item/lfb_geometry/blockbambooshoot/0"}}
+                """);
+        Files.writeString(presentation,"""
+                {"items":{"foreign:blockbambooshoot":{
+                  "0":"foreign:lfb_geometry/blockbambooshoot/0",
+                  "1":"foreign:lfb_geometry/blockbambooshoot/1",
+                  "7":"foreign:special/source_owned"
+                }}}
+                """);
+
+        LegacySimpleBlockPresentationPass.restoreFlatInventoryOwnership(
+                staging,"foreign:blockbambooshoot","foreign","blockbambooshoot");
+
+        var definition=com.google.gson.JsonParser.parseString(Files.readString(itemDefinition)).getAsJsonObject();
+        assertEquals("foreign:item/blockbambooshoot",
+                definition.getAsJsonObject("model").get("model").getAsString());
+        var variants=com.google.gson.JsonParser.parseString(Files.readString(presentation)).getAsJsonObject()
+                .getAsJsonObject("items").getAsJsonObject("foreign:blockbambooshoot");
+        assertEquals("foreign:blockbambooshoot",variants.get("0").getAsString());
+        assertEquals("foreign:blockbambooshoot",variants.get("1").getAsString());
+        assertEquals("foreign:special/source_owned",variants.get("7").getAsString());
+    }
+
+    @Test
     void ambiguousExactItemSpritesStayFailClosed()throws Exception{
         Path staging=temp.resolve("staging");
         Path first=staging.resolve("assets/foreign/textures/items/bambooshoot.png");
