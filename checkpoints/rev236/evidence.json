@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "checkpoint": "rev236-preserve-legacy-client-jump-prediction",
+  "branch": "feature/generic-conversion-iyamato-corpus3",
+  "sourceEvidence": {
+    "rpgtool": {
+      "sourceSha256": "b82cd54d2d2db576e82ba02ea4e55b4db92174c5814b45aa3ebbe1b44d98961d",
+      "handler": "mhzd.net.rpgtool1.util.RPGEvent#onJump",
+      "wingPredicate": "equipped legacy slot 3 item instanceof WingBase",
+      "deltaY": 0.15,
+      "setsIsAirBorne": true
+    },
+    "forge1710": {
+      "livingJumpEventOrder": "ForgeHooks.onLivingJump is posted after vanilla jump motion is assigned",
+      "serverJumpDetection": "NetHandlerPlayServer.processPlayer calls playerEntity.jump() on ground->air positive-Y transition",
+      "clientVelocityHandling": "S12 handler applies received X/Y/Z velocity"
+    }
+  },
+  "rootCause": {
+    "class": "dev.yinghuang.legacyforgebridge.behavior.LegacyClientJumpMotion",
+    "method": "sourceJump",
+    "rev235TraceLabel": "SOURCE_UPWARD_CLIENT_PREDICTION_SUPPRESSED",
+    "defect": "converted jump event upward delta was executed and then immediately reverted on the local client"
+  },
+  "repair": {
+    "fixedJumpHeight": false,
+    "preserveSourceClientVelocity": true,
+    "cancelIncomingVelocityPackets": false,
+    "rewriteIncomingVelocityPackets": false,
+    "positionCorrectionsAuthoritative": true,
+    "traceRetained": true,
+    "binaryControlFlowShapeChanged": false
+  },
+  "output": {
+    "file": "legacyforgebridge-0.2.0-alpha.27-rev236-corpus4-local.20.jar",
+    "bytes": 4456800,
+    "sha256": "abddbcee9af6743fe9ac1f8a1b7a8074377f1c25c78bc7b7d7feaeb086003a4c",
+    "internalVersion": "0.2.0-alpha.27-corpus4-local.20-rev236-local-test.1",
+    "converterRevision": "2026-10-01.236-preserve-legacy-client-jump-prediction",
+    "cacheCompatibilityVersion": "0.2.0-alpha.27-corpus4-local.17-rev233-cache.1"
+  },
+  "validation": {
+    "zipIntegrity": "pass",
+    "javapPatchedClasses": "pass",
+    "packetMixinCancelCall": false,
+    "stackMapControlFlowShape": "unchanged",
+    "liveMinecraftLaunch": false
+  }
+}
