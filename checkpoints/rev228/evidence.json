@@ -1,0 +1,81 @@
+{
+  "schema": 1,
+  "checkpoint": "rev228-armor-hud-intrinsic-vs-nbt-visibility",
+  "branch": "feature/generic-conversion-iyamato-corpus3",
+  "base": {
+    "file": "legacyforgebridge-0.2.0-alpha.27-rev227-corpus4-local.11.jar",
+    "bytes": 4426210,
+    "sha256": "b0695d57a67e2512e03f36ce776bcf0386f82b5e74b08b4177bf4272073b8912"
+  },
+  "armor": {
+    "hudAttribute": "minecraft:generic.armor",
+    "syntheticArmorToughness": false,
+    "iyValues": {
+      "tamahagane": [
+        4,
+        8,
+        6,
+        4
+      ],
+      "damascus": [
+        4,
+        9,
+        7,
+        4
+      ],
+      "heavyDamascus": [
+        5,
+        10,
+        8,
+        5
+      ]
+    },
+    "baseArmorDisplay": "hidden",
+    "baseArmorRemainsActive": true
+  },
+  "attributeVisibility": {
+    "oldGenericTextFilterRemoved": true,
+    "intrinsicEquipmentModifiersHiddenAtEntry": true,
+    "armorEquipmentMovementSpeedClientDefaultRemoved": true,
+    "nbtOrStackAddedModifiersFiltered": false,
+    "obsoleteGlobalVisibilityToggleRemoved": true
+  },
+  "authority": {
+    "remoteForge1710ServerUnchanged": true,
+    "serverGameplayAuthorityPreserved": true
+  },
+  "output": {
+    "file": "legacyforgebridge-0.2.0-alpha.27-rev228-corpus4-local.12.jar",
+    "bytes": 4427376,
+    "sha256": "18267cdbfa0cb54440fec940fdf9e4fccf4760fb16311595db694940996795ad",
+    "internalVersion": "0.2.0-alpha.27-corpus4-local.12-rev228-local-test.1",
+    "converterRevision": "2026-10-01.228-iy-armor-hud-base-attribute-visibility",
+    "cacheCompatibilityVersion": "0.2.0-alpha.27-corpus4-local.11-rev227-cache.1"
+  },
+  "binaryAudit": {
+    "baseEntries": 1668,
+    "outputEntries": 1669,
+    "duplicateEntries": 0,
+    "removedEntries": 0,
+    "addedEntries": [
+      "legacyforgebridge/rev228-build.json"
+    ],
+    "changedExistingEntries": [
+      "dev/yinghuang/legacyforgebridge/BuildInfo.class",
+      "dev/yinghuang/legacyforgebridge/behavior/LegacyBehaviorClient.class",
+      "dev/yinghuang/legacyforgebridge/compat/LegacySourceItemRuntime.class",
+      "dev/yinghuang/legacyforgebridge/config/LegacyBlockingPoseConfigScreen.class",
+      "dev/yinghuang/legacyforgebridge/convert/runtime/GeneratedModSupport.class",
+      "fabric.mod.json"
+    ],
+    "manifestUnchanged": true,
+    "nestedEnergyJarUnchanged": true,
+    "nestedEnergyJarSha256": "072cd9fad2ec00c3b11b5862f34bb12f0554f727958ad685ac7b81b4fd79eac3"
+  },
+  "validation": {
+    "zipIntegrity": "pass",
+    "bytecodeAudit": "pass",
+    "asmBasicVerifier": "pass",
+    "liveMinecraftLaunch": false
+  }
+}

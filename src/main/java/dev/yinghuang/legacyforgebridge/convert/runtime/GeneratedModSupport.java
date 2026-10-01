@@ -183,7 +183,7 @@ public final class GeneratedModSupport {
             EquipmentSlotGroup group=switch(slot){case HEAD->EquipmentSlotGroup.HEAD;case CHEST->EquipmentSlotGroup.CHEST;case LEGS->EquipmentSlotGroup.LEGS;default->EquipmentSlotGroup.FEET;};
             Identifier modifier=Identifier.fromNamespaceAndPath(id.getNamespace(),"converted/"+id.getPath()+"_armor");
             properties.equippable(slot).attributes(ItemAttributeModifiers.builder()
-                    .add(Attributes.ARMOR,new AttributeModifier(modifier,armor,AttributeModifier.Operation.ADD_VALUE),group).build());
+                    .add(Attributes.ARMOR,new AttributeModifier(modifier,armor,AttributeModifier.Operation.ADD_VALUE),group,ItemAttributeModifiers.Display.hidden()).build());
         }
         if(durability>0)properties.durability(durability);
         boolean planting=LegacyPlantPlacementRegistry.hasRuntimeRule(id);
