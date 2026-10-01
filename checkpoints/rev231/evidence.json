@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "checkpoint": "rev231-stackmap-verifier-fix",
+  "branch": "feature/generic-conversion-iyamato-corpus3",
+  "liveFailure": {
+    "version": "rev230",
+    "exception": "java.lang.VerifyError: Expecting a stackmap frame at branch target 210",
+    "class": "dev/yinghuang/legacyforgebridge/compat/LegacySourceItemRuntime",
+    "method": "configure(Ljava/lang/String;Lnet/minecraft/class_1792$class_1793;)V",
+    "bytecodeOffset": 210
+  },
+  "repair": {
+    "type": "StackMapTable metadata only",
+    "insertedFrame": "F_FULL",
+    "executableInstructionsChanged": false,
+    "rev230NbtArmorSemanticsRetained": true
+  },
+  "output": {
+    "file": "legacyforgebridge-0.2.0-alpha.27-rev231-corpus4-local.15.jar",
+    "bytes": 4436658,
+    "sha256": "7c4011556aaf0376fdb3b99c0694adfac1592a831e13c420f189e3eda2704189",
+    "internalVersion": "0.2.0-alpha.27-corpus4-local.15-rev231-local-test.1",
+    "converterRevision": "2026-10-01.231-stackmap-verifier-fix",
+    "cacheCompatibilityVersion": "0.2.0-alpha.27-corpus4-local.11-rev227-cache.1"
+  },
+  "binaryAudit": {
+    "baseEntries": 1673,
+    "outputEntries": 1674,
+    "duplicates": 0,
+    "removed": 0,
+    "added": [
+      "legacyforgebridge/rev231-build.json"
+    ],
+    "changed": [
+      "dev/yinghuang/legacyforgebridge/BuildInfo.class",
+      "dev/yinghuang/legacyforgebridge/compat/LegacySourceItemRuntime.class",
+      "fabric.mod.json"
+    ],
+    "manifestUnchanged": true,
+    "nestedEnergyJarUnchanged": true,
+    "nestedEnergyJarSha256": "072cd9fad2ec00c3b11b5862f34bb12f0554f727958ad685ac7b81b4fd79eac3"
+  },
+  "validation": {
+    "zipIntegrity": "pass",
+    "javapStackMapJoinFrame": "pass",
+    "java21XverifyAllClassLoad": "pass",
+    "liveMinecraftLaunch": false
+  }
+}
