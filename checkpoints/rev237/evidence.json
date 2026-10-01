@@ -1,0 +1,73 @@
+{
+  "schema": 1,
+  "checkpoint": "rev237-liquid-alpha-desktop-progress",
+  "branch": "feature/generic-conversion-iyamato-corpus3",
+  "cumulativeFrom": "rev236 semantics; exact local binary base rev235 plus re-applied rev236 patch",
+  "liquid": {
+    "generic": true,
+    "family": "source-proven Legacy BlockLiquid WATER",
+    "bambooSpecialCase": false,
+    "tintAlphaHex": "A0",
+    "preservesBiomeWaterRgb": true,
+    "lavaChanged": false
+  },
+  "desktopProgress": {
+    "sourceFields": [
+      "percent",
+      "index",
+      "total",
+      "pass",
+      "passProgress",
+      "conversionFinished"
+    ],
+    "realProgress": true,
+    "autoHideMillis": 3000,
+    "killsHelperProcess": false,
+    "problemStatesNotHidden": [
+      "ERROR",
+      "WARN",
+      "MANUAL"
+    ],
+    "problemAfterHideReopens": true
+  },
+  "output": {
+    "file": "legacyforgebridge-0.2.0-alpha.27-rev237-corpus4-local.21.jar",
+    "bytes": 4465395,
+    "sha256": "61b82a38e3abd1df7b666dee604821410de395b010c4e47122c2b6bb8bdc1268",
+    "internalVersion": "0.2.0-alpha.27-corpus4-local.21-rev237-local-test.1",
+    "converterRevision": "2026-10-01.237-liquid-alpha-desktop-progress",
+    "cacheCompatibilityVersion": "0.2.0-alpha.27-corpus4-local.17-rev233-cache.1"
+  },
+  "binaryAudit": {
+    "baseEntries": 1683,
+    "outputEntries": 1688,
+    "changedExisting": [
+      "META-INF/lfb/desktop-helper.jar",
+      "dev/yinghuang/legacyforgebridge/BuildInfo.class",
+      "dev/yinghuang/legacyforgebridge/behavior/LegacyClientJumpMotion.class",
+      "dev/yinghuang/legacyforgebridge/behavior/Rev233LiquidCompat.class",
+      "dev/yinghuang/legacyforgebridge/desktop/DesktopHelper.class",
+      "fabric.mod.json"
+    ],
+    "added": [
+      "dev/yinghuang/legacyforgebridge/behavior/Rev237LiquidAlpha.class",
+      "dev/yinghuang/legacyforgebridge/desktop/DesktopProgressUi.class",
+      "dev/yinghuang/legacyforgebridge/desktop/DesktopProgressUi$State.class",
+      "legacyforgebridge/rev236-build.json",
+      "legacyforgebridge/rev237-build.json"
+    ],
+    "removed": [],
+    "duplicates": 0,
+    "manifestSha256": "94d8453b26f8bec507256e1e2692df004dd95bd1a1faab769b18e35bf302aea4",
+    "energySha256": "072cd9fad2ec00c3b11b5862f34bb12f0554f727958ad685ac7b81b4fd79eac3"
+  },
+  "validation": {
+    "swingXvfbProgress": "pass",
+    "autoHide3Seconds": "pass",
+    "errorReopen": "pass",
+    "nestedHelperJava21Verify": "pass",
+    "liquidAlphaUnit": "pass",
+    "zipIntegrity": "pass",
+    "liveMinecraftLaunch": false
+  }
+}

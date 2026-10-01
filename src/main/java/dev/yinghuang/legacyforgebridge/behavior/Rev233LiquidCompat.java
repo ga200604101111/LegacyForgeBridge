@@ -38,7 +38,9 @@ public final class Rev233LiquidCompat {
         Object provider=Proxy.newProxyInstance(providerType.getClassLoader(),new Class[]{providerType},(proxy,method,args)->{
             if(method.getDeclaringClass()==Object.class)return switch(method.getName()){case "toString"->"LFBWaterTint";case "hashCode"->System.identityHashCode(proxy);case "equals"->proxy==args[0];default->null;};
             if(args==null||args.length<4||args[1]==null||args[2]==null)return -1;
-            Class<?> biome=Class.forName("net.minecraft.class_1163");Method water=biome.getMethod("method_4961",Class.forName("net.minecraft.class_1920"),Class.forName("net.minecraft.class_2338"));return water.invoke(null,args[1],args[2]);
+            Class<?> biome=Class.forName("net.minecraft.class_1163");
+            Method water=biome.getMethod("method_4961",Class.forName("net.minecraft.class_1920"),Class.forName("net.minecraft.class_2338"));
+            return Rev237LiquidAlpha.apply(water.invoke(null,args[1],args[2]));
         });
         Class<?> registryClass=Class.forName("net.fabricmc.fabric.api.client.rendering.v1.ColorProviderRegistry");Object registry=registryClass.getField("BLOCK").get(null);
         Class<?> blockClass=Class.forName("net.minecraft.class_2248");Object array=Array.newInstance(blockClass,1);Array.set(array,0,block);
