@@ -1,0 +1,96 @@
+{
+  "schema": 1,
+  "checkpoint": "rev229-armor-display-hud-carrier-source-attributes",
+  "branch": "feature/generic-conversion-iyamato-corpus3",
+  "base": {
+    "file": "legacyforgebridge-0.2.0-alpha.27-rev228-corpus4-local.12.jar",
+    "bytes": 4427376,
+    "sha256": "18267cdbfa0cb54440fec940fdf9e4fccf4760fb16311595db694940996795ad"
+  },
+  "armorSplit": {
+    "visibleLegacyArmor": {
+      "source": "LegacySourceItemContract.Rule.armorPoints",
+      "gameplayModifier": false,
+      "tooltip": true
+    },
+    "hudCarrier": {
+      "modernAttribute": "minecraft:generic.armor",
+      "source": "same armorPoints",
+      "display": "hidden",
+      "active": true,
+      "count": 1
+    },
+    "doubleCount": false,
+    "iyValues": {
+      "tamahagane": [
+        4,
+        8,
+        6,
+        4
+      ],
+      "damascus": [
+        4,
+        9,
+        7,
+        4
+      ],
+      "heavyDamascus": [
+        5,
+        10,
+        8,
+        5
+      ]
+    }
+  },
+  "sourceAttributes": {
+    "movementSpeed": {
+      "active": true,
+      "intrinsicTooltip": "hidden"
+    },
+    "knockbackResistance": {
+      "active": true,
+      "intrinsicTooltip": "visible"
+    },
+    "otherSourceModifiers": {
+      "active": true,
+      "intrinsicTooltip": "visible"
+    },
+    "stackOrNbtAddedModifiers": {
+      "filtered": false,
+      "tooltip": "visible"
+    }
+  },
+  "cacheCompatibilityVersion": "0.2.0-alpha.27-corpus4-local.11-rev227-cache.1",
+  "output": {
+    "file": "legacyforgebridge-0.2.0-alpha.27-rev229-corpus4-local.13.jar",
+    "bytes": 4430919,
+    "sha256": "fdc42e33da55687a088e50b6e59e773ec374d0ee4c85890e003d1d436397494f",
+    "internalVersion": "0.2.0-alpha.27-corpus4-local.13-rev229-local-test.1",
+    "converterRevision": "2026-10-01.229-armor-display-hud-carrier-source-attributes"
+  },
+  "binaryAudit": {
+    "baseZipEntries": 1669,
+    "outputZipEntries": 1671,
+    "duplicateEntries": 0,
+    "removedEntries": 0,
+    "addedEntries": [
+      "dev/yinghuang/legacyforgebridge/behavior/Rev229ArmorCompat.class",
+      "legacyforgebridge/rev229-build.json"
+    ],
+    "changedExistingEntries": [
+      "dev/yinghuang/legacyforgebridge/BuildInfo.class",
+      "dev/yinghuang/legacyforgebridge/behavior/LegacyBehaviorClient.class",
+      "dev/yinghuang/legacyforgebridge/compat/LegacySourceItemRuntime.class",
+      "fabric.mod.json"
+    ],
+    "manifestUnchanged": true,
+    "nestedEnergyJarUnchanged": true,
+    "nestedDesktopHelperJarUnchanged": true
+  },
+  "validation": {
+    "zipIntegrity": "pass",
+    "selectiveSourceAttributeVisibilityHarness": "pass",
+    "asmBasicVerifier": "pass",
+    "liveMinecraftLaunch": false
+  }
+}
