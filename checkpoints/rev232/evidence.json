@@ -1,0 +1,66 @@
+{
+  "schema": 1,
+  "checkpoint": "rev232-recomputed-stackmap-frames",
+  "branch": "feature/generic-conversion-iyamato-corpus3",
+  "liveFailure": {
+    "version": "rev231",
+    "exception": "java.lang.ArrayIndexOutOfBoundsException: Index 11 out of bounds for length 11",
+    "path": [
+      "org.objectweb.asm.ClassReader.readVerificationTypeInfo",
+      "org.objectweb.asm.ClassReader.readStackMapFrame",
+      "org.objectweb.asm.ClassReader.readCode",
+      "org.spongepowered.asm.transformers.TreeTransformer.readClass"
+    ],
+    "class": "dev/yinghuang/legacyforgebridge/compat/LegacySourceItemRuntime"
+  },
+  "repair": {
+    "executableSourceClass": "rev230 LegacySourceItemRuntime.class",
+    "readerFlags": [
+      "SKIP_FRAMES"
+    ],
+    "writerFlags": [
+      "COMPUTE_FRAMES",
+      "COMPUTE_MAXS"
+    ],
+    "configureInstructionFingerprintBefore": "51271d5c0be42349113cfb6fe939bd9f2ccbb8cefc324a21134899076826d00b",
+    "configureInstructionFingerprintAfter": "51271d5c0be42349113cfb6fe939bd9f2ccbb8cefc324a21134899076826d00b",
+    "executableInstructionsChanged": false,
+    "stackMapEntries": 19,
+    "offset210JoinFrameGenerated": true,
+    "rev230NbtArmorSemanticsRetained": true
+  },
+  "output": {
+    "file": "legacyforgebridge-0.2.0-alpha.27-rev232-corpus4-local.16.jar",
+    "bytes": 4435350,
+    "sha256": "d07ebbacf1556c1e0945f29e9ecde7d245c1bcc1c27acc5343b6249e7b346528",
+    "internalVersion": "0.2.0-alpha.27-corpus4-local.16-rev232-local-test.1",
+    "converterRevision": "2026-10-01.232-recomputed-stackmap-frames",
+    "cacheCompatibilityVersion": "0.2.0-alpha.27-corpus4-local.11-rev227-cache.1"
+  },
+  "binaryAudit": {
+    "baseEntries": 1674,
+    "outputEntries": 1675,
+    "duplicateEntries": 0,
+    "removedEntries": 0,
+    "addedEntries": [
+      "legacyforgebridge/rev232-build.json"
+    ],
+    "changedExistingEntries": [
+      "dev/yinghuang/legacyforgebridge/BuildInfo.class",
+      "dev/yinghuang/legacyforgebridge/compat/LegacySourceItemRuntime.class",
+      "fabric.mod.json"
+    ],
+    "manifestUnchanged": true,
+    "nestedEnergyJarUnchanged": true,
+    "nestedEnergyJarSha256": "072cd9fad2ec00c3b11b5862f34bb12f0554f727958ad685ac7b81b4fd79eac3"
+  },
+  "validation": {
+    "zipIntegrity": "pass",
+    "jdkAsmTreeParse": "pass",
+    "asmBasicVerifier": "pass",
+    "javapStackMapTable": "pass",
+    "java21XverifyAll": "pass",
+    "exactExternalAsm9101LiveParser": "not-available-in-build-environment",
+    "liveMinecraftLaunch": false
+  }
+}
