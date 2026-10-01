@@ -7,6 +7,7 @@ import dev.yinghuang.legacyforgebridge.compat.LegacyBlockPlacementRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyStackComponents;
 import dev.yinghuang.legacyforgebridge.compat.LegacyBlockGeometryRegistry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyHeldItemVisibilityRegistry;
+import dev.yinghuang.legacyforgebridge.behavior.Rev239VanillaLiquidCompat;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.RandomSource;
@@ -19,9 +20,11 @@ import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Explosion;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.IntegerProperty;
 import net.minecraft.world.level.storage.loot.LootParams;
@@ -133,6 +136,17 @@ public class ConvertedLegacyBlock extends Block {
 
     /** Client mixins may attach source-proven random-display presentation without affecting server behavior. */
     @Override public void animateTick(BlockState state, Level level, BlockPos pos, RandomSource random){super.animateTick(state,level,pos,random);}
+
+    @Override
+    protected FluidState getFluidState(BlockState state) {
+        FluidState liquid = Rev239VanillaLiquidCompat.fluidState(this, state);
+        return liquid == null ? super.getFluidState(state) : liquid;
+    }
+
+    @Override
+    protected RenderShape getRenderShape(BlockState state) {
+        return Rev239VanillaLiquidCompat.isLiquid(this) ? RenderShape.INVISIBLE : super.getRenderShape(state);
+    }
 
     @Override
     protected VoxelShape getShape(BlockState state, BlockGetter world, BlockPos pos, CollisionContext context) {
