@@ -6,6 +6,7 @@ import com.viaversion.viaversion.api.protocol.Protocol;
 import com.viaversion.viaversion.api.rewriter.Rewriter;
 import dev.yinghuang.legacyforgebridge.compat.LegacyModItemIdentityBridge;
 import dev.yinghuang.legacyforgebridge.compat.LegacyViaUseComponents;
+import dev.yinghuang.legacyforgebridge.behavior.Rev230ArmorNbtMerge;
 import dev.yinghuang.legacyforgebridge.protocol.ViaFabricPlusBackend;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -30,7 +31,9 @@ public abstract class ViaModernModItemBoundaryMixin {
     ) {
         if (activeFinalRewriter()) {
             if (LegacyModItemIdentityBridge.restoreModernItemFromVia(cir.getReturnValue())) {
-                LegacyViaUseComponents.restore(cir.getReturnValue(),((Rewriter<?>)(Object)this).protocol());
+                Protocol<?, ?, ?, ?> protocol = ((Rewriter<?>)(Object)this).protocol();
+                Rev230ArmorNbtMerge.toClient(cir.getReturnValue(), protocol);
+                LegacyViaUseComponents.restore(cir.getReturnValue(), protocol);
             }
         }
     }
@@ -49,6 +52,7 @@ public abstract class ViaModernModItemBoundaryMixin {
             return;
         }
         Protocol<?, ?, ?, ?> protocol = ((Rewriter<?>)(Object) this).protocol();
+        Rev230ArmorNbtMerge.toServer(item);
         LegacyModItemIdentityBridge.prepareModernItemForVia(item, protocol);
     }
 

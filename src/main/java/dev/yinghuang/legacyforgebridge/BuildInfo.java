@@ -7,10 +7,10 @@ public final class BuildInfo {
      * copied into every caller's bytecode and could leave cache fingerprints on an older revision.
      * A clean build therefore always observes the active converter fingerprint through the field.
      */
-    public static final String VERSION = text("0.2.0-alpha.27-corpus4-local.13-rev229-local-test.1");
+    public static final String VERSION = text("0.2.0-alpha.27-corpus4-local.14-rev230-local-test.1");
     public static final int CONVERSION_SCHEMA = number(2);
     public static final String CONVERTER_REVISION =
-            text("2026-10-01.229-armor-display-hud-carrier-source-attributes");
+            text("2026-10-01.230-legacy-nbt-armor-merge");
     public static final String CACHE_COMPATIBILITY_VERSION =
             text("0.2.0-alpha.27-corpus4-local.11-rev227-cache.1");
 
