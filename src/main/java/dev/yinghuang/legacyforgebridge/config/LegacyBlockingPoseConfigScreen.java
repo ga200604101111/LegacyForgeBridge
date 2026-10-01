@@ -1,5 +1,6 @@
 package dev.yinghuang.legacyforgebridge.config;
 
+import dev.yinghuang.legacyforgebridge.convert.Rev227Compat;
 import me.shedaniel.clothconfig2.api.ConfigBuilder;
 import me.shedaniel.clothconfig2.api.ConfigCategory;
 import me.shedaniel.clothconfig2.api.ConfigEntryBuilder;
@@ -55,8 +56,8 @@ public final class LegacyBlockingPoseConfigScreen {
         SliderSet thirdSliders = addTransformSliders(entries, third, "third_person", value.thirdPerson(), defaults.thirdPerson());
 
         builder.setSavingRunnable(() -> LegacyBlockingPoseConfig.save(new LegacyBlockingPoseConfig.Settings(
-                enabled.getValue(),
-                mirror.getValue(),
+                Rev227Compat.booleanEntryValue(enabled),
+                Rev227Compat.booleanEntryValue(mirror),
                 firstSliders.transform(),
                 thirdSliders.transform()
         )));
@@ -120,10 +121,13 @@ public final class LegacyBlockingPoseConfigScreen {
         LegacyBlockingPoseConfig.Transform transform() {
             return new LegacyBlockingPoseConfig.Transform(
                     new LegacyBlockingPoseConfig.Vec3(
-                            tx.getValue() / (float) TRANSLATION_SCALE,
-                            ty.getValue() / (float) TRANSLATION_SCALE,
-                            tz.getValue() / (float) TRANSLATION_SCALE),
-                    new LegacyBlockingPoseConfig.Vec3(rx.getValue(), ry.getValue(), rz.getValue())
+                            Rev227Compat.intEntryValue(tx) / (float) TRANSLATION_SCALE,
+                            Rev227Compat.intEntryValue(ty) / (float) TRANSLATION_SCALE,
+                            Rev227Compat.intEntryValue(tz) / (float) TRANSLATION_SCALE),
+                    new LegacyBlockingPoseConfig.Vec3(
+                            Rev227Compat.intEntryValue(rx),
+                            Rev227Compat.intEntryValue(ry),
+                            Rev227Compat.intEntryValue(rz))
             );
         }
     }
