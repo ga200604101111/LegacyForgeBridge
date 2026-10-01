@@ -1,0 +1,113 @@
+{
+  "schema": 1,
+  "checkpoint": "rev227-iy-projectile-particles-armor-cache-cloth",
+  "branch": "feature/generic-conversion-iyamato-corpus3",
+  "base": {
+    "file": "legacyforgebridge-0.2.0-alpha.27-rev226-corpus4-local.10.jar",
+    "bytes": 4413224,
+    "sha256": "16df8e965bc429f9b66c14211e121fceed14c29fd3d1f2655e115916a6f12605"
+  },
+  "sourceCorpora": {
+    "iyamato": {
+      "file": "iYAMATOs-Mod-1.7.10.jar",
+      "sha256": "35a79ca5a034fd6cda4fe4ee1f658c4ce058f9b7ec026516e76363ebdf89635e"
+    },
+    "bamboo": {
+      "file": "Bamboo-2.6.8.5.jar",
+      "sha256": "bcceb588950f911398cfc94856a45527b4aa17b6e130927b2e0516fdf059b402"
+    },
+    "rpgtool1": {
+      "file": "RPGTool1-1.1-1.7.10.jar",
+      "sha256": "b82cd54d2d2db576e82ba02ea4e55b4db92174c5814b45aa3ebbe1b44d98961d"
+    }
+  },
+  "projectileParticles": {
+    "krisKnifeSpawns": "net/lubriciouskin/iymts_mod/entity/weapons/EntityIYMagicBullet",
+    "magicBullet": {
+      "tick": "spell",
+      "water": "bubble x4"
+    },
+    "daggerImpact": {
+      "legacyIds": [
+        4800,
+        4801,
+        4802,
+        4803
+      ],
+      "classes": [
+        "EntityIYIronDagger",
+        "EntityIYGoldenDagger",
+        "EntityIYDiamondDagger",
+        "EntityIYDamascusSteelDagger"
+      ],
+      "particle": "crit",
+      "count": 8,
+      "velocity": [
+        0,
+        0.3,
+        0
+      ]
+    },
+    "clientPresentationOnly": true,
+    "serverGameplayAuthorityPreserved": true
+  },
+  "armor": {
+    "tamahagane": [
+      4,
+      8,
+      6,
+      4
+    ],
+    "damascus": [
+      4,
+      9,
+      7,
+      4
+    ],
+    "heavyDamascus": [
+      5,
+      10,
+      8,
+      5
+    ],
+    "previousCacheCompatibilityVersion": "0.2.0-alpha.27-corpus3-local.3-rev220-local-test.1",
+    "newCacheCompatibilityVersion": "0.2.0-alpha.27-corpus4-local.11-rev227-cache.1",
+    "forcesReconversion": true,
+    "syntheticArmorToughness": false
+  },
+  "clothConfig": {
+    "liveFailure": "NoSuchMethodError BooleanListEntry.getValue()Z",
+    "runtimeVersion": "21.11.153",
+    "bridgedValueKinds": [
+      "BooleanListEntry",
+      "StringListEntry",
+      "IntegerSliderEntry"
+    ]
+  },
+  "output": {
+    "file": "legacyforgebridge-0.2.0-alpha.27-rev227-corpus4-local.11.jar",
+    "bytes": 4426210,
+    "sha256": "b0695d57a67e2512e03f36ce776bcf0386f82b5e74b08b4177bf4272073b8912",
+    "internalVersion": "0.2.0-alpha.27-corpus4-local.11-rev227-local-test.1",
+    "converterRevision": "2026-10-01.227-iy-projectile-particles-armor-cache-cloth"
+  },
+  "binaryAudit": {
+    "baseEntries": 1666,
+    "outputEntries": 1668,
+    "duplicateEntries": 0,
+    "removedEntries": 0,
+    "addedEntries": [
+      "dev/yinghuang/legacyforgebridge/convert/Rev227Compat.class",
+      "legacyforgebridge/rev227-build.json"
+    ],
+    "changedExistingEntries": 6,
+    "nestedEnergyJarUnchanged": true,
+    "zipIntegrity": "pass"
+  },
+  "validation": {
+    "offlineParticleHarness": "pass",
+    "offlineClothValueHarness": "pass",
+    "asmBasicVerifier": "pass",
+    "liveMinecraftLaunch": false
+  }
+}
