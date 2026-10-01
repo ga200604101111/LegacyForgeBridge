@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "checkpoint": "rev235-generic-converted-stack-armor-mirror",
+  "branch": "feature/generic-conversion-iyamato-corpus3",
+  "rpgtoolEvidence": {
+    "sourceFile": "RPGTool1-1.1-1.7.10.jar",
+    "sourceSha256": "b82cd54d2d2db576e82ba02ea4e55b4db92174c5814b45aa3ebbe1b44d98961d",
+    "armorMaterial": "rpgtool1:spec",
+    "defense": [
+      3,
+      10,
+      5,
+      4
+    ],
+    "wingArmorSlot": 1,
+    "wingArmorPoints": 10,
+    "circleArmorSlot": 3,
+    "circleArmorPoints": 4,
+    "overridesGetItemAttributeModifiers": false,
+    "sourceMovementSpeedModifier": false
+  },
+  "behavior": {
+    "eligibility": "live LegacyModItemRegistryMap identity",
+    "primaryArmorSource": "actual equipped converted ItemStack ARMOR modifiers",
+    "sourceArmorPoints": "fallback only",
+    "vanillaModernItemsMirrored": false,
+    "existingModifierIdsDuplicated": false,
+    "movementSpeedVisibility": "source-proven modifiers visible; player base speed is not an equipment modifier",
+    "serverAuthorityPreserved": true
+  },
+  "output": {
+    "file": "legacyforgebridge-0.2.0-alpha.27-rev235-corpus4-local.19.jar",
+    "bytes": 4455730,
+    "sha256": "98cf7a8c0ce39fe018d7ce0d7929d11079b87abb29577e1273da57e0c0d7b3c2",
+    "internalVersion": "0.2.0-alpha.27-corpus4-local.19-rev235-local-test.1",
+    "converterRevision": "2026-10-01.235-generic-converted-stack-armor-mirror",
+    "cacheCompatibilityVersion": "0.2.0-alpha.27-corpus4-local.17-rev233-cache.1"
+  },
+  "validation": {
+    "rpgWingExpectedArmor": 10,
+    "rpgCircleExpectedArmor": 4,
+    "mixedModernPlusLegacyArmor": "pass",
+    "explicitNbtPlusFallbackArmor": "pass",
+    "vanillaNotMirrored": "pass",
+    "java21XverifyAllClassLoad": "pass",
+    "zipIntegrity": "pass",
+    "liveMinecraftLaunch": false
+  }
+}

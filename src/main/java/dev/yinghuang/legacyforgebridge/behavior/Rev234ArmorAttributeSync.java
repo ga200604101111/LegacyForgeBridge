@@ -6,8 +6,10 @@ import java.util.*;
 import java.util.function.BiConsumer;
 
 /**
- * Client-side bridge from 1.7.10 ItemArmor/source stack armor into the real 1.21.11 ARMOR
- * attribute. It never replaces getArmorValue; vanilla HUD reads the normal entity attribute.
+ * Generic client-side bridge from converted 1.7.10 equipment into the real 1.21.11 ARMOR
+ * attribute. Vanilla/high-version equipment is never mirrored: only identities present in the
+ * live Forge 1.7.10 item-registry map are eligible. Source armorPoints are fallback evidence,
+ * while the equipped stack's actual high-version ARMOR modifiers are the primary source.
  */
 public final class Rev234ArmorAttributeSync {
     private static final String RUNTIME_PREFIX = "legacyforgebridge:runtime_armor/";
@@ -36,26 +38,17 @@ public final class Rev234ArmorAttributeSync {
                 if (stack == null || isEmptyStack(stack)) continue;
 
                 String itemId = itemId(stack);
-                Object rule = itemId == null ? null : sourceRule(itemId);
-                if (rule == null) continue;
+                if (itemId == null || !isConvertedLegacyItem(itemId)) continue;
 
-                Object armorSlot = invokeNoArgs(rule, "armorSlot");
-                Object points = invokeNoArgs(rule, "armorPoints");
-                if (!(armorSlot instanceof Number) || !(points instanceof Number number) || number.doubleValue() <= 0D) continue;
-
-                int legacyArmorSlot = ((Number) armorSlot).intValue();
-                double armorPoints = number.doubleValue();
-                String baseId = RUNTIME_PREFIX + "base/" + slotName;
-                if (!baseArmorAlreadyApplied(alreadyApplied, itemId, legacyArmorSlot)) {
-                    wanted.put(baseId, new Wanted(baseId, armorPoints, 0));
-                }
-
+                final boolean[] sawBaseCarrier = {false};
                 final int[] ordinal = {0};
                 BiConsumer<Object, Object> consumer = (attribute, modifier) -> {
                     try {
                         if (!sameHolder(attribute, armorHolder) || modifier == null) return;
                         String originalId = modifierId(modifier);
-                        if (isBridgeArmorCarrier(originalId) || (originalId != null && alreadyApplied.contains(originalId))) return;
+                        if (originalId != null && originalId.startsWith(RUNTIME_PREFIX)) return;
+                        if (isBridgeArmorCarrier(originalId)) sawBaseCarrier[0] = true;
+                        if (originalId != null && alreadyApplied.contains(originalId)) return;
                         double amount = modifierAmount(modifier);
                         int operation = modifierOperation(modifier);
                         String runtimeId = RUNTIME_PREFIX + "stack/" + slotName + "/"
@@ -68,10 +61,40 @@ public final class Rev234ArmorAttributeSync {
                     apply.setAccessible(true);
                     apply.invoke(stack, slot, consumer);
                 }
+
+                // ItemArmor protection is separate from legacy AttributeModifiers. If an explicit
+                // stack component replaced the converted default ARMOR carrier, recover the source
+                // ItemArmor value from the generic source contract. This is a fallback only.
+                if (!sawBaseCarrier[0]) {
+                    Object rule = sourceRule(itemId);
+                    if (rule != null) {
+                        Object armorSlot = invokeNoArgs(rule, "armorSlot");
+                        Object points = invokeNoArgs(rule, "armorPoints");
+                        if (armorSlot instanceof Number slotNumber && points instanceof Number number
+                                && number.doubleValue() > 0D) {
+                            int legacyArmorSlot = slotNumber.intValue();
+                            if (!baseArmorAlreadyApplied(alreadyApplied, itemId, legacyArmorSlot)) {
+                                String baseId = RUNTIME_PREFIX + "base/" + slotName;
+                                wanted.put(baseId, new Wanted(baseId, number.doubleValue(), 0));
+                            }
+                        }
+                    }
+                }
             }
 
             reconcile(attributeInstance, wanted);
         } catch (Throwable ignored) { }
+    }
+
+    /** Pure policy probe used by the rev235 regression harness. */
+    public static double supplementForTest(boolean convertedLegacyItem, double existingModernArmor,
+                                           double[] stackArmorAmounts, boolean stackHasBaseCarrier,
+                                           Double sourceArmorFallback) {
+        if (!convertedLegacyItem) return existingModernArmor;
+        double extra = 0D;
+        if (stackArmorAmounts != null) for (double value : stackArmorAmounts) extra += value;
+        if (!stackHasBaseCarrier && sourceArmorFallback != null && sourceArmorFallback > 0D) extra += sourceArmorFallback;
+        return existingModernArmor + extra;
     }
 
     private static Set<String> existingNonRuntimeModifierIds(Object instance) throws Exception {
@@ -98,6 +121,20 @@ public final class Rev234ArmorAttributeSync {
         return false;
     }
 
+    private static boolean isConvertedLegacyItem(String itemId) {
+        try {
+            Object identifier = identifier(itemId);
+            Class<?> map = Class.forName("dev.yinghuang.legacyforgebridge.compat.LegacyModItemRegistryMap");
+            Method method = null;
+            for (Method candidate : map.getDeclaredMethods()) {
+                if (candidate.getName().equals("legacyNumericId") && candidate.getParameterCount() == 1) { method = candidate; break; }
+            }
+            if (method == null) return false;
+            method.setAccessible(true);
+            return method.invoke(null, identifier) instanceof Number;
+        } catch (Throwable ignored) { return false; }
+    }
+
     private static void reconcile(Object instance, Map<String, Wanted> wanted) throws Exception {
         Object currentObject = invokeNoArgs(instance, "method_6195");
         Collection<?> current = currentObject instanceof Collection<?> c ? new ArrayList<>(c) : List.of();
@@ -106,14 +143,10 @@ public final class Rev234ArmorAttributeSync {
             String id = modifierId(modifier);
             if (id != null && id.startsWith(RUNTIME_PREFIX)) runtimeCurrent.put(id, modifier);
         }
-
         for (Map.Entry<String, Object> entry : runtimeCurrent.entrySet()) {
             Wanted target = wanted.get(entry.getKey());
-            if (target == null || !matches(entry.getValue(), target)) {
-                invokeCompatible(instance, "method_6200", identifier(entry.getKey()));
-            }
+            if (target == null || !matches(entry.getValue(), target)) invokeCompatible(instance, "method_6200", identifier(entry.getKey()));
         }
-
         for (Wanted target : wanted.values()) {
             Object existing = runtimeCurrent.get(target.id());
             if (existing != null && matches(existing, target)) continue;
@@ -131,8 +164,7 @@ public final class Rev234ArmorAttributeSync {
     }
 
     private static boolean matches(Object modifier, Wanted wanted) throws Exception {
-        return Double.compare(modifierAmount(modifier), wanted.amount()) == 0
-                && modifierOperation(modifier) == wanted.operation();
+        return Double.compare(modifierAmount(modifier), wanted.amount()) == 0 && modifierOperation(modifier) == wanted.operation();
     }
 
     private static Object newModifier(Wanted wanted) throws Exception {
@@ -189,9 +221,11 @@ public final class Rev234ArmorAttributeSync {
         return id == null ? null : String.valueOf(id);
     }
 
-    private static Object sourceRule(String id) throws Exception {
-        Class<?> runtime = Class.forName("dev.yinghuang.legacyforgebridge.compat.LegacySourceItemRuntime");
-        return runtime.getMethod("rule", String.class).invoke(null, id);
+    private static Object sourceRule(String id) {
+        try {
+            Class<?> runtime = Class.forName("dev.yinghuang.legacyforgebridge.compat.LegacySourceItemRuntime");
+            return runtime.getMethod("rule", String.class).invoke(null, id);
+        } catch (Throwable ignored) { return null; }
     }
 
     private static boolean sameHolder(Object a, Object b) { return a == b || (a != null && a.equals(b)); }
@@ -200,8 +234,7 @@ public final class Rev234ArmorAttributeSync {
         if (id == null) return false;
         return id.startsWith("legacyforgebridge:source_armor/")
                 || id.startsWith("legacyforgebridge:compat_armor/")
-                || (id.contains(":converted/") && id.endsWith("_armor"))
-                || id.startsWith(RUNTIME_PREFIX);
+                || (id.contains(":converted/") && id.endsWith("_armor"));
     }
 
     private static String stableToken(String originalId, int ordinal, double amount, int operation) {
@@ -211,102 +244,34 @@ public final class Rev234ArmorAttributeSync {
 
     private static String modifierId(Object modifier) throws Exception {
         for (Field field : modifier.getClass().getDeclaredFields()) {
-            if (field.getType().getName().equals("net.minecraft.class_2960")) {
-                field.setAccessible(true);
-                Object value = field.get(modifier);
-                return value == null ? null : String.valueOf(value);
-            }
+            if (field.getType().getName().equals("net.minecraft.class_2960")) { field.setAccessible(true); Object value = field.get(modifier); return value == null ? null : String.valueOf(value); }
         }
         for (Method method : modifier.getClass().getDeclaredMethods()) {
-            if (method.getParameterCount() == 0 && method.getReturnType().getName().equals("net.minecraft.class_2960")) {
-                method.setAccessible(true);
-                Object value = method.invoke(modifier);
-                return value == null ? null : String.valueOf(value);
-            }
+            if (method.getParameterCount() == 0 && method.getReturnType().getName().equals("net.minecraft.class_2960")) { method.setAccessible(true); Object value = method.invoke(modifier); return value == null ? null : String.valueOf(value); }
         }
         return null;
     }
 
     private static double modifierAmount(Object modifier) throws Exception {
-        try {
-            Method method = modifier.getClass().getDeclaredMethod("comp_2449");
-            method.setAccessible(true);
-            return ((Number) method.invoke(modifier)).doubleValue();
-        } catch (NoSuchMethodException ignored) { }
-        for (Field field : modifier.getClass().getDeclaredFields()) {
-            if (field.getType() == double.class) { field.setAccessible(true); return field.getDouble(modifier); }
-        }
+        try { Method method = modifier.getClass().getDeclaredMethod("comp_2449"); method.setAccessible(true); return ((Number) method.invoke(modifier)).doubleValue(); }
+        catch (NoSuchMethodException ignored) { }
+        for (Field field : modifier.getClass().getDeclaredFields()) if (field.getType() == double.class) { field.setAccessible(true); return field.getDouble(modifier); }
         return 0D;
     }
 
     private static int modifierOperation(Object modifier) throws Exception {
         Object operation = null;
-        for (Field field : modifier.getClass().getDeclaredFields()) {
-            if (field.getType().getName().equals("net.minecraft.class_1322$class_1323")) {
-                field.setAccessible(true); operation = field.get(modifier); break;
-            }
-        }
-        if (operation == null) {
-            for (Method method : modifier.getClass().getDeclaredMethods()) {
-                if (method.getParameterCount() == 0 && method.getReturnType().getName().equals("net.minecraft.class_1322$class_1323")) {
-                    method.setAccessible(true); operation = method.invoke(modifier); break;
-                }
-            }
-        }
+        for (Field field : modifier.getClass().getDeclaredFields()) if (field.getType().getName().equals("net.minecraft.class_1322$class_1323")) { field.setAccessible(true); operation = field.get(modifier); break; }
+        if (operation == null) for (Method method : modifier.getClass().getDeclaredMethods()) if (method.getParameterCount() == 0 && method.getReturnType().getName().equals("net.minecraft.class_1322$class_1323")) { method.setAccessible(true); operation = method.invoke(modifier); break; }
         if (operation == null) return 0;
-        Method id = findMethod(operation.getClass(), "method_56082", 0);
-        if (id == null) return 0;
-        id.setAccessible(true);
-        Object value = id.invoke(operation);
-        return value instanceof Number number ? number.intValue() : 0;
+        Method id = findMethod(operation.getClass(), "method_56082", 0); if (id == null) return 0; id.setAccessible(true); Object value = id.invoke(operation); return value instanceof Number number ? number.intValue() : 0;
     }
 
-    private static Object invokeNoArgs(Object target, String name) throws Exception {
-        Method method = findMethod(target.getClass(), name, 0);
-        if (method == null) throw new NoSuchMethodException(target.getClass().getName() + "." + name + "()");
-        method.setAccessible(true);
-        return method.invoke(target);
-    }
-
-    private static Object invokeCompatible(Object target, String name, Object... args) throws Exception {
-        Method method = findCompatibleMethod(target.getClass(), name, args);
-        if (method == null) throw new NoSuchMethodException(target.getClass().getName() + "." + name);
-        method.setAccessible(true);
-        return method.invoke(target, args);
-    }
-
-    private static Method findMethod(Class<?> type, String name, int count) {
-        for (Class<?> current = type; current != null; current = current.getSuperclass()) {
-            for (Method method : current.getDeclaredMethods()) if (method.getName().equals(name) && method.getParameterCount() == count) return method;
-        }
-        for (Method method : type.getMethods()) if (method.getName().equals(name) && method.getParameterCount() == count) return method;
-        return null;
-    }
-
-    private static Method findCompatibleMethod(Class<?> type, String name, Object... args) {
-        for (Class<?> current = type; current != null; current = current.getSuperclass()) {
-            for (Method method : current.getDeclaredMethods()) {
-                if (!method.getName().equals(name) || method.getParameterCount() != args.length) continue;
-                Class<?>[] p = method.getParameterTypes(); boolean ok = true;
-                for (int i = 0; i < p.length; i++) if (args[i] != null && !p[i].isAssignableFrom(args[i].getClass())) { ok = false; break; }
-                if (ok) return method;
-            }
-        }
-        for (Method method : type.getMethods()) {
-            if (!method.getName().equals(name) || method.getParameterCount() != args.length) continue;
-            Class<?>[] p = method.getParameterTypes(); boolean ok = true;
-            for (int i = 0; i < p.length; i++) if (args[i] != null && !p[i].isAssignableFrom(args[i].getClass())) { ok = false; break; }
-            if (ok) return method;
-        }
-        return null;
-    }
-
-    private static Field findField(Class<?> type, String name) {
-        for (Class<?> current = type; current != null; current = current.getSuperclass()) {
-            try { return current.getDeclaredField(name); } catch (NoSuchFieldException ignored) { }
-        }
-        return null;
-    }
+    private static Object invokeNoArgs(Object target, String name) throws Exception { Method method = findMethod(target.getClass(), name, 0); if (method == null) throw new NoSuchMethodException(target.getClass().getName() + "." + name + "()"); method.setAccessible(true); return method.invoke(target); }
+    private static Object invokeCompatible(Object target, String name, Object... args) throws Exception { Method method = findCompatibleMethod(target.getClass(), name, args); if (method == null) throw new NoSuchMethodException(target.getClass().getName() + "." + name); method.setAccessible(true); return method.invoke(target, args); }
+    private static Method findMethod(Class<?> type, String name, int count) { for (Class<?> current = type; current != null; current = current.getSuperclass()) for (Method method : current.getDeclaredMethods()) if (method.getName().equals(name) && method.getParameterCount() == count) return method; for (Method method : type.getMethods()) if (method.getName().equals(name) && method.getParameterCount() == count) return method; return null; }
+    private static Method findCompatibleMethod(Class<?> type, String name, Object... args) { for (Class<?> current = type; current != null; current = current.getSuperclass()) for (Method method : current.getDeclaredMethods()) { if (!method.getName().equals(name) || method.getParameterCount() != args.length) continue; Class<?>[] p = method.getParameterTypes(); boolean ok = true; for (int i = 0; i < p.length; i++) if (args[i] != null && !p[i].isAssignableFrom(args[i].getClass())) { ok = false; break; } if (ok) return method; } for (Method method : type.getMethods()) { if (!method.getName().equals(name) || method.getParameterCount() != args.length) continue; Class<?>[] p = method.getParameterTypes(); boolean ok = true; for (int i = 0; i < p.length; i++) if (args[i] != null && !p[i].isAssignableFrom(args[i].getClass())) { ok = false; break; } if (ok) return method; } return null; }
+    private static Field findField(Class<?> type, String name) { for (Class<?> current = type; current != null; current = current.getSuperclass()) try { return current.getDeclaredField(name); } catch (NoSuchFieldException ignored) { } return null; }
 
     private record Wanted(String id, double amount, int operation) { }
 }
