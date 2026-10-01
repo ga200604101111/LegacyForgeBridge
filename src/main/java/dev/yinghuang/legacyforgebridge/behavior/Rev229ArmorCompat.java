@@ -8,14 +8,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.List;
 
-/**
- * rev229 armor compatibility split.
- *
- * <p>The original 1.7.10 armor points are presented as their own tooltip row. A separate hidden
- * modern ARMOR modifier remains the only carrier that contributes to the 1.21.11 armor HUD.
- * Source movement-speed remains active but hidden; source knockback resistance and other source
- * modifiers remain visible. Stack/NBT-added modern modifiers are never filtered here.</p>
- */
+/** Legacy armor/source attribute bridge. Source-proven modifiers remain visible. */
 public final class Rev229ArmorCompat {
     private Rev229ArmorCompat() { }
 
@@ -27,35 +20,26 @@ public final class Rev229ArmorCompat {
             if (itemId == null) return;
             LegacySourceItemContract.Rule rule = LegacySourceItemRuntime.rule(itemId);
             if (rule == null || rule.armorSlot() == null || rule.armorPoints() == null || rule.armorPoints() <= 0) return;
-
             String armorName = translate("attribute.name.generic.armor");
             Object component = formatted("§9+" + rule.armorPoints() + " " + armorName);
             if (component != null) lines.add(component);
-        } catch (Throwable ignored) {
-            // Presentation compatibility must never be allowed to crash the client.
-        }
+        } catch (Throwable ignored) { }
     }
 
+    /**
+     * Every source-proven 1.7.10 AttributeModifier uses the normal visible modern display.
+     * Visibility is not decided by mod id or by the fact that an item is armor. If the source
+     * analyzer did not prove a modifier, it never reaches this method. Later stack/NBT modifiers
+     * are independent and remain untouched.
+     */
     public static void addArmorSourceModifier(Object builder, Object attribute, Object modifier,
                                               Object slotGroup, String legacyAttribute) {
         if (builder == null || attribute == null || modifier == null || slotGroup == null) return;
         try {
-            if ("generic.movementSpeed".equals(legacyAttribute)) {
-                Class<?> displayType = Class.forName("net.minecraft.class_9285$class_11193");
-                Method hidden = findStaticMethod(displayType, "method_70733", 0);
-                if (hidden == null) throw new NoSuchMethodException("ItemAttributeModifiers.Display.hidden");
-                hidden.setAccessible(true);
-                Object display = hidden.invoke(null);
-                Method add = findMethod(builder.getClass(), "method_70728", 4);
-                if (add == null) throw new NoSuchMethodException("ItemAttributeModifiers.Builder.add(display)");
-                add.setAccessible(true);
-                add.invoke(builder, attribute, modifier, slotGroup, display);
-            } else {
-                Method add = findMethod(builder.getClass(), "method_57487", 3);
-                if (add == null) throw new NoSuchMethodException("ItemAttributeModifiers.Builder.add");
-                add.setAccessible(true);
-                add.invoke(builder, attribute, modifier, slotGroup);
-            }
+            Method add = findMethod(builder.getClass(), "method_57487", 3);
+            if (add == null) throw new NoSuchMethodException("ItemAttributeModifiers.Builder.add");
+            add.setAccessible(true);
+            add.invoke(builder, attribute, modifier, slotGroup);
         } catch (ReflectiveOperationException exception) {
             throw new IllegalStateException("Unable to add legacy armor source modifier", exception);
         }
@@ -67,7 +51,6 @@ public final class Rev229ArmorCompat {
         getItem.setAccessible(true);
         Object item = getItem.invoke(stack);
         if (item == null) return null;
-
         Class<?> registries = Class.forName("net.minecraft.class_7923");
         Field itemRegistryField = registries.getField("field_41178");
         Object itemRegistry = itemRegistryField.get(null);
@@ -92,9 +75,7 @@ public final class Rev229ArmorCompat {
             method.setAccessible(true);
             Object value = method.invoke(null, key, new Object[0]);
             return value instanceof String s && !s.isBlank() ? s : key;
-        } catch (Throwable ignored) {
-            return key;
-        }
+        } catch (Throwable ignored) { return key; }
     }
 
     private static Object formatted(String text) {
@@ -104,9 +85,7 @@ public final class Rev229ArmorCompat {
             if (method == null) return null;
             method.setAccessible(true);
             return method.invoke(null, text);
-        } catch (Throwable ignored) {
-            return null;
-        }
+        } catch (Throwable ignored) { return null; }
     }
 
     private static Method findMethod(Class<?> type, String name, int parameterCount) {
@@ -117,18 +96,6 @@ public final class Rev229ArmorCompat {
         }
         for (Method method : type.getMethods()) {
             if (method.getName().equals(name) && method.getParameterCount() == parameterCount) return method;
-        }
-        return null;
-    }
-
-    private static Method findStaticMethod(Class<?> type, String name, int parameterCount) {
-        for (Method method : type.getDeclaredMethods()) {
-            if (Modifier.isStatic(method.getModifiers()) && method.getName().equals(name)
-                    && method.getParameterCount() == parameterCount) return method;
-        }
-        for (Method method : type.getMethods()) {
-            if (Modifier.isStatic(method.getModifiers()) && method.getName().equals(name)
-                    && method.getParameterCount() == parameterCount) return method;
         }
         return null;
     }

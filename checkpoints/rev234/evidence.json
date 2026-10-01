@@ -1,0 +1,75 @@
+{
+  "schema": 1,
+  "checkpoint": "rev234-native-armor-attribute-source-modifier-visibility",
+  "branch": "feature/generic-conversion-iyamato-corpus3",
+  "armor": {
+    "rev233Problem": "getArmorValue return replacement hid existing modern/vanilla armor in mixed sets",
+    "rev234Strategy": "temporary modifiers on the real local-player Attributes.ARMOR instance",
+    "preservesExistingModernArmor": true,
+    "mirrorsConvertedLegacyBaseArmor": true,
+    "mirrorsConvertedStackNbtArmor": true,
+    "avoidsExistingIdDuplicates": true,
+    "serverAuthorityPreserved": true,
+    "harness": {
+      "existingModern": 8,
+      "legacyBase": 3,
+      "nbtArmor": 2,
+      "expectedMixed": 13,
+      "removalExpected": 8,
+      "pass": true
+    }
+  },
+  "sourceAttributeVisibility": {
+    "generic": true,
+    "policy": "all attributesProven source modifiers use normal visible display",
+    "perModSpecialCases": false,
+    "iYHeavyDamascus": {
+      "method": "ItemIYHeavyDamascusSteelArmor#func_111205_h",
+      "sourceProvesKnockbackResistance": true,
+      "sourceProvesMovementSpeed": true
+    },
+    "rpgTool": {
+      "classes": [
+        "mhzd.net.rpgtool1.armor.CircleBase",
+        "mhzd.net.rpgtool1.armor.WingBase"
+      ],
+      "overridesGetItemAttributeModifiers": false
+    },
+    "nbtModifiersUntouched": true
+  },
+  "cacheCompatibilityVersion": "0.2.0-alpha.27-corpus4-local.17-rev233-cache.1",
+  "output": {
+    "file": "legacyforgebridge-0.2.0-alpha.27-rev234-corpus4-local.18.jar",
+    "bytes": 4454229,
+    "sha256": "cc79a54f2360978c66135bcdfd07df3220439b07863ca73ec0c7d1415c8e2d97",
+    "internalVersion": "0.2.0-alpha.27-corpus4-local.18-rev234-local-test.1",
+    "converterRevision": "2026-10-01.234-native-armor-attribute-source-modifier-visibility"
+  },
+  "binaryAudit": {
+    "baseEntries": 1679,
+    "outputEntries": 1682,
+    "duplicateEntries": 0,
+    "removedEntries": 0,
+    "addedEntries": [
+      "dev/yinghuang/legacyforgebridge/behavior/Rev234ArmorAttributeSync.class",
+      "dev/yinghuang/legacyforgebridge/behavior/Rev234ArmorAttributeSync$Wanted.class",
+      "legacyforgebridge/rev234-build.json"
+    ],
+    "changedExistingEntries": [
+      "dev/yinghuang/legacyforgebridge/BuildInfo.class",
+      "dev/yinghuang/legacyforgebridge/behavior/Rev229ArmorCompat.class",
+      "dev/yinghuang/legacyforgebridge/mixin/client/LegacyLivingBehaviorMixin.class",
+      "fabric.mod.json"
+    ],
+    "manifestUnchanged": true,
+    "nestedEnergyJarUnchanged": true,
+    "rev233LiquidRuntimeUnchanged": true
+  },
+  "validation": {
+    "mixedArmorHarness": "pass",
+    "duplicateSuppressionHarness": "pass",
+    "zipIntegrity": "pass",
+    "javapChangedClasses": "pass",
+    "liveMinecraftLaunch": false
+  }
+}

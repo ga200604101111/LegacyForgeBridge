@@ -1,7 +1,7 @@
 package dev.yinghuang.legacyforgebridge.mixin.client;
 
 import dev.yinghuang.legacyforgebridge.behavior.LegacyBehaviorRuntime;
-import dev.yinghuang.legacyforgebridge.behavior.Rev233ArmorHudCompat;
+import dev.yinghuang.legacyforgebridge.behavior.Rev234ArmorAttributeSync;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.LivingEntity;
 import org.spongepowered.asm.mixin.Mixin;
@@ -18,8 +18,8 @@ public abstract class LegacyLivingBehaviorMixin {
     private void legacyforgebridge$sourceFall(double distance,float multiplier,DamageSource source,CallbackInfoReturnable<Boolean> cir){
         if(LegacyBehaviorRuntime.fall((LivingEntity)(Object)this,distance,multiplier,source))cir.setReturnValue(false);
     }
-    @Inject(method="getArmorValue",at=@At("RETURN"),cancellable=true)
+    @Inject(method="getArmorValue",at=@At("HEAD"))
     private void legacyforgebridge$armorHud1710(CallbackInfoReturnable<Integer> cir){
-        cir.setReturnValue(Rev233ArmorHudCompat.correctedArmor((LivingEntity)(Object)this,cir.getReturnValue()));
+        Rev234ArmorAttributeSync.sync((LivingEntity)(Object)this);
     }
 }
