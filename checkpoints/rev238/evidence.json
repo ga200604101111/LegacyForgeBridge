@@ -1,0 +1,62 @@
+{
+  "schema": 1,
+  "checkpoint": "rev238-compact-progress-window-layout",
+  "branch": "feature/generic-conversion-iyamato-corpus3",
+  "ui": {
+    "unsupportedDetailsGlyphRemoved": true,
+    "detailsText": "詳細資訊",
+    "detailsToggleBorderPainted": false,
+    "detailsToggleContentFilled": false,
+    "row": [
+      "模組 index / total",
+      "轉換時長: seconds 秒"
+    ],
+    "progressSource": "real percent from conversion status",
+    "diagnosticButton": "轉換診斷",
+    "cancelButton": "取消自動退出/重啟",
+    "autoHideMillis": 3000,
+    "errorReopen": true
+  },
+  "water": {
+    "genericSourceProvenWater": true,
+    "alphaHex": "A0",
+    "retainedFromRev237": true
+  },
+  "output": {
+    "file": "legacyforgebridge-0.2.0-alpha.27-rev238-corpus4-local.22.jar",
+    "bytes": 4474088,
+    "sha256": "74ad65eb609b97317d507a313ff1dffc36e79843c3bdb43becd165a0e5eaedb8",
+    "internalVersion": "0.2.0-alpha.27-corpus4-local.22-rev238-local-test.1",
+    "converterRevision": "2026-10-01.238-compact-progress-window-layout",
+    "cacheCompatibilityVersion": "0.2.0-alpha.27-corpus4-local.17-rev233-cache.1"
+  },
+  "binaryAudit": {
+    "baseEntries": 1688,
+    "outputEntries": 1689,
+    "duplicates": 0,
+    "removed": [],
+    "added": [
+      "legacyforgebridge/rev238-build.json"
+    ],
+    "changed": [
+      "META-INF/lfb/desktop-helper.jar",
+      "dev/yinghuang/legacyforgebridge/BuildInfo.class",
+      "dev/yinghuang/legacyforgebridge/desktop/DesktopHelper.class",
+      "dev/yinghuang/legacyforgebridge/desktop/DesktopProgressUi.class",
+      "dev/yinghuang/legacyforgebridge/desktop/DesktopProgressUi$State.class",
+      "fabric.mod.json"
+    ],
+    "manifestUnchanged": true,
+    "energyJarUnchanged": true,
+    "energySha256": "072cd9fad2ec00c3b11b5862f34bb12f0554f727958ad685ac7b81b4fd79eac3",
+    "nestedHelperSha256": "043e0f5cb552c21bf8fc7f188350d48771c9ebc36b34efc76329992d5f78159d"
+  },
+  "validation": {
+    "swingLayoutHarness": "pass",
+    "autoHide3Seconds": "pass",
+    "errorReopen": "pass",
+    "java21VerifyNestedDesktopHelper": "pass",
+    "zipIntegrity": "pass",
+    "liveMinecraftLaunch": false
+  }
+}
