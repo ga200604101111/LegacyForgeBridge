@@ -1,0 +1,63 @@
+{
+  "schema": 1,
+  "checkpoint": "rev233-armor-hud-liquid-semantics",
+  "branch": "feature/generic-conversion-iyamato-corpus3",
+  "sourceCorpora": {
+    "bamboo": {
+      "file": "Bamboo-2.6.8.5.jar",
+      "sha256": "bcceb588950f911398cfc94856a45527b4aa17b6e130927b2e0516fdf059b402"
+    }
+  },
+  "armorHud": {
+    "trigger": "local player + Via target Minecraft 1.7.10",
+    "base": "LegacySourceItemContract.Rule.armorPoints across four armor slots",
+    "additional": "active stack ARMOR modifiers",
+    "excludedCarrierPrefixes": [
+      "legacyforgebridge:source_armor/",
+      "legacyforgebridge:compat_armor/",
+      ":converted/*_armor"
+    ],
+    "serverGameplayAuthorityPreserved": true
+  },
+  "bambooSpaWater": {
+    "sourceClass": "ruby/bamboo/block/BlockSpaWater",
+    "registryName": "spa_water",
+    "extendsBlockLiquid": true,
+    "material": "water",
+    "renderType": 4,
+    "collisionAabb": "null",
+    "selectedAabb": "zero-volume",
+    "pickBlock": null,
+    "drops": 0,
+    "defaultColor": "0xFFFFFF",
+    "correction": [
+      "liquid face tintindex 0",
+      "biome water tint",
+      "empty outline selection",
+      "existing empty collision",
+      "translucent layer"
+    ]
+  },
+  "cacheCompatibilityVersion": "0.2.0-alpha.27-corpus4-local.17-rev233-cache.1",
+  "output": {
+    "file": "legacyforgebridge-0.2.0-alpha.27-rev233-corpus4-local.17.jar",
+    "bytes": 4439272,
+    "sha256": "d5ffb4f6aef123774747335953230123b3c96a6405b666e465153d348ea28907",
+    "internalVersion": "0.2.0-alpha.27-corpus4-local.17-rev233-local-test.1",
+    "converterRevision": "2026-10-01.233-armor-hud-liquid-semantics"
+  },
+  "binaryAudit": {
+    "baseEntries": 1675,
+    "outputEntries": 1679,
+    "duplicateEntries": 0,
+    "removedEntries": 0,
+    "addedEntries": 4,
+    "changedExistingEntries": 6,
+    "nestedEnergyJarUnchanged": true
+  },
+  "validation": {
+    "zipIntegrity": "pass",
+    "javapChangedClasses": "pass",
+    "liveMinecraftLaunch": false
+  }
+}

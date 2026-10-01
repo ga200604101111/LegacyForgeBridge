@@ -4,6 +4,7 @@ import com.google.gson.*;
 import dev.yinghuang.legacyforgebridge.compat.LegacyGeometry;
 import dev.yinghuang.legacyforgebridge.compat.LegacyGeometrySpec;
 import dev.yinghuang.legacyforgebridge.convert.LegacyLiquidBlockAnalyzer;
+import dev.yinghuang.legacyforgebridge.behavior.Rev233LiquidCompat;
 import dev.yinghuang.legacyforgebridge.convert.api.*;
 
 import java.nio.charset.StandardCharsets;
@@ -56,7 +57,7 @@ public final class LegacyLiquidPresentationPass implements ConversionPass {
                 LegacyGeometry.Box box=new LegacyGeometry.Box(0D,0D,0D,1D,height,1D);
                 List<String> sprites=List.of(rule.kind().stillTexture(),rule.kind().stillTexture(),
                         rule.kind().flowTexture(),rule.kind().flowTexture(),rule.kind().flowTexture(),rule.kind().flowTexture());
-                JsonObject model=LegacyBlockGeometryPass.model(List.of(box),sprites);
+                JsonObject model=(JsonObject)Rev233LiquidCompat.tintModel(LegacyBlockGeometryPass.model(List.of(box),sprites));
                 String modelId=ns+":block/lfb_liquid/"+path+"/"+meta;
                 write(modelPath(staging,modelId),model);
                 JsonObject state=new JsonObject();state.addProperty("model",modelId);states.add("legacy_meta="+meta,state);

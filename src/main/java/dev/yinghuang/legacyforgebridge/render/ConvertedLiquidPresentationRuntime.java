@@ -3,6 +3,7 @@ package dev.yinghuang.legacyforgebridge.render;
 import com.google.gson.*;
 import dev.yinghuang.legacyforgebridge.LegacyForgeBridge;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyLiquidPresentationPass;
+import dev.yinghuang.legacyforgebridge.behavior.Rev233LiquidCompat;
 import net.fabricmc.fabric.api.client.rendering.v1.BlockRenderLayerMap;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
@@ -35,7 +36,7 @@ public final class ConvertedLiquidPresentationRuntime {
                 Identifier id=Identifier.parse(string(value,"id",""));
                 if(!modId.equals(id.getNamespace())||!BuiltInRegistries.BLOCK.containsKey(id)||!REGISTERED.add(id))continue;
                 Block block=BuiltInRegistries.BLOCK.getValue(id);if(block==null){REGISTERED.remove(id);continue;}
-                BlockRenderLayerMap.putBlock(block,ChunkSectionLayer.TRANSLUCENT);count++;
+                BlockRenderLayerMap.putBlock(block,ChunkSectionLayer.TRANSLUCENT);Rev233LiquidCompat.registerLiquid(block,id,value);count++;
             }
             if(count>0)LegacyForgeBridge.LOGGER.info("Registered converted legacy liquid render layers: mod={}, blocks={}",modId,count);
         }catch(Exception exception){

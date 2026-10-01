@@ -16,6 +16,7 @@
     "ViaBlockStateMappingBoundaryMixin",
     "SpecialModelRenderersMixin",
     "LegacyLivingBehaviorMixin",
+    "LegacyLiquidSelectionMixin",
     "LegacyHurtBehaviorMixin",
     "LegacyLocalPlayerSoundMixin",
     "LegacyNameTagBehaviorMixin",
@@ -26,7 +27,12 @@
     "LegacyFirstPersonBlockingPoseMixin",
     "LegacyThirdPersonBlockingPoseMixin",
     "LegacyHeldItemVisibilityMixin",
-    "LegacyRandomDisplayParticleMixin"
+    "LegacyRandomDisplayParticleMixin",
+    "LegacyJumpMotionPacketMixin",
+    "LegacyMotionWriteTraceMixin",
+    "LegacyViaMotionTraceMixin",
+    "LegacyInteractionDisconnectMixin",
+    "ViaLegacyDroppedItemYMixin"
   ],
   "injectors": {
     "defaultRequire": 1
