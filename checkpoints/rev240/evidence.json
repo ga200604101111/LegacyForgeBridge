@@ -1,0 +1,71 @@
+{
+  "schema": 1,
+  "checkpoint": "rev240-liquid-cache-refresh-visible-fallback",
+  "baseArtifact": "legacyforgebridge-0.2.0-alpha.27-rev239-corpus4-local.23.jar",
+  "baseSha256": "42f7d5e8ba647c8f599fe9d152aeeab24e4fe813a08f55cdea75500766d48a3d",
+  "sourceParentCommit": "b7c914369c13df6cd51f37ac6eafe9d7f6ebfbce",
+  "version": "0.2.0-alpha.27-corpus4-local.24-rev240-local-test.1",
+  "converterRevision": "2026-10-02.240-liquid-cache-refresh-visible-fallback",
+  "cacheCompatibilityVersion": "0.2.0-alpha.27-corpus4-local.17-rev233-cache.1",
+  "buildMethod": "JDK21 javac --release 21 helper + exact ASM call-site/version edits over cumulative rev239 main JAR",
+  "fullGradleLoomBuild": false,
+  "networkDependencyDownloads": false,
+  "testDoubleClassesPackaged": false,
+  "liveMinecraftLaunch": false,
+  "semantics": [
+    "source-proven WATER rules only",
+    "populate all state bindings before cache refresh",
+    "refresh existing BlockState caches at liquid registration",
+    "hide model only when renderer cached fluid equals expected real water",
+    "retain model on stale/failed cache",
+    "unchanged carrier state and registry identity",
+    "no world writes or server-side simulation"
+  ],
+  "tests": {
+    "uses_minecraft_test_doubles": true,
+    "live_minecraft_launch": false,
+    "baseline": "RESULT baseline_regression_reproduced assertions=80",
+    "fixed": "RESULT fixed_lifecycle_pass assertions=406"
+  },
+  "artifact": "legacyforgebridge-0.2.0-alpha.27-rev240-corpus4-local.24.jar",
+  "bytes": 4475411,
+  "sha256": "61afe2b2a21ff4ae2f2fae2afe3f95bf2013f19e2f3d461cd2577ed5c1fa8a45",
+  "jdk": "openjdk version \"21.0.11\" 2026-04-21\nOpenJDK Runtime Environment (build 21.0.11+10-1-deb13u2-Debian)\nOpenJDK 64-Bit Server VM (build 21.0.11+10-1-deb13u2-Debian, mixed mode, sharing)",
+  "baselineEntries": 1691,
+  "outputEntries": 1694,
+  "removedEntries": [],
+  "changedEntries": [
+    "dev/yinghuang/legacyforgebridge/BuildInfo.class",
+    "dev/yinghuang/legacyforgebridge/behavior/Rev239VanillaLiquidBridge.class",
+    "dev/yinghuang/legacyforgebridge/render/ConvertedLiquidPresentationRuntime.class",
+    "fabric.mod.json"
+  ],
+  "addedEntries": [
+    "dev/yinghuang/legacyforgebridge/behavior/Rev239VanillaLiquidBridge$Api.class",
+    "dev/yinghuang/legacyforgebridge/behavior/Rev239VanillaLiquidBridge$Binding.class",
+    "legacyforgebridge/rev240-build.json"
+  ],
+  "zipIntegrity": "pass",
+  "classfileVersion": 65,
+  "javapParse": "pass",
+  "packagedHelperLifecycle": {
+    "uses_minecraft_test_doubles": true,
+    "live_minecraft_launch": false,
+    "baseline": "RESULT baseline_regression_reproduced assertions=80",
+    "fixed": "RESULT fixed_lifecycle_pass assertions=406"
+  },
+  "allOtherEntriesContentPreserved": true,
+  "untested": [
+    "real Minecraft/Fabric/Sodium startup",
+    "in-game transparency and side-face culling",
+    "live Forge 1.7.10 server connection",
+    "shader/resource-pack interactions"
+  ],
+  "independentRebuildByteIdentical": true,
+  "sourceFiles": {
+    "source/dev/yinghuang/legacyforgebridge/behavior/Rev239VanillaLiquidBridge.java": "390cca08fa4e6038040592b2fb9fa9d45f0b4a61fad280763b8bbba6e10709e8",
+    "PatchRev240.java": "ab8a2b234b159fa8ccda310b01ece32947693d1f1399653ee06c27891020ad25",
+    "build_local.py": "d598248e4e06a88b5504c9a5135dcc559f54d79a61af81e30a04b7dc00b3f65b",
+    "test_lifecycle.py": "3d9001d44194f8f0e41dd0ea8fdadc084ef21cdc9be296aa1433a0612f676acd"
+  }
+}
