@@ -1,0 +1,82 @@
+{
+  "schema": 1,
+  "checkpoint": "rev241-source-jump-history-reconciliation",
+  "sourceParentCommit": "99df9f07ed1d86b27c6062a70a45bbecc54ee90d",
+  "baseSha256": "61afe2b2a21ff4ae2f2fae2afe3f95bf2013f19e2f3d461cd2577ed5c1fa8a45",
+  "version": "0.2.0-alpha.27-corpus4-local.25-rev241-local-test.1",
+  "converterRevision": "2026-10-02.241-source-jump-history-reconciliation",
+  "cacheCompatibilityVersion": "0.2.0-alpha.27-corpus4-local.17-rev233-cache.1",
+  "buildMethod": "JDK21 javac helper classes + narrow ASM lifecycle hooks over exact cumulative rev240 main JAR",
+  "fullGradleLoomBuild": false,
+  "networkDependencyDownloads": false,
+  "githubActionsBuild": false,
+  "minecraftTestDoubles": true,
+  "testDoubleClassesPackaged": false,
+  "liveMinecraftLaunch": false,
+  "algorithm": "bounded exact-codec matching to observed source-jump ascent history; current predicted Y retained only on a match; XZ never changed",
+  "controls": {
+    "default": "source-history",
+    "disableProperty": "-Dlegacyforgebridge.jumpReconcile=off",
+    "maxTicks": 40
+  },
+  "limitations": [
+    "S12 has no jump identity or server timestamp; historical match is a compatibility heuristic, not a proven acknowledgement",
+    "An unrelated identical encoded upward impulse without a barrier can be misclassified",
+    "Any damage/entity-status/explosion/position/respawn barrier conservatively invalidates history, including unrelated-entity status",
+    "No paired old/new real-client gameplay validation or server-side emission trace"
+  ],
+  "verification": {
+    "baseline": "RESULT mode=baseline assertions=225 fixtureMatched=0 fixturePassed=14 minecraftTestDoubles=true lifecycleFromMainJar=true",
+    "fixed": "RESULT mode=fixed assertions=5352 fixtureMatched=13 fixturePassed=1 minecraftTestDoubles=true lifecycleFromMainJar=true",
+    "off": "RESULT mode=off assertions=225 fixtureMatched=0 fixturePassed=14 minecraftTestDoubles=true lifecycleFromMainJar=true"
+  },
+  "artifact": "legacyforgebridge-0.2.0-alpha.27-rev241-corpus4-local.25.jar",
+  "bytes": 4489462,
+  "sha256": "7ebcea2bd669fb6baed5b99e5929d68d9a356660035d9b2cd67e6ef3864b9835",
+  "baselineEntries": 1694,
+  "outputEntries": 1701,
+  "changedEntries": [
+    "dev/yinghuang/legacyforgebridge/BuildInfo.class",
+    "dev/yinghuang/legacyforgebridge/behavior/LegacyClientJumpMotion.class",
+    "fabric.mod.json"
+  ],
+  "addedEntries": [
+    "dev/yinghuang/legacyforgebridge/behavior/Rev241JumpHistory$Decision.class",
+    "dev/yinghuang/legacyforgebridge/behavior/Rev241JumpHistory.class",
+    "dev/yinghuang/legacyforgebridge/behavior/Rev241JumpMotionBridge$Api.class",
+    "dev/yinghuang/legacyforgebridge/behavior/Rev241JumpMotionBridge$Pending.class",
+    "dev/yinghuang/legacyforgebridge/behavior/Rev241JumpMotionBridge$Source.class",
+    "dev/yinghuang/legacyforgebridge/behavior/Rev241JumpMotionBridge.class",
+    "legacyforgebridge/rev241-build.json"
+  ],
+  "removedEntries": [],
+  "allOtherEntriesContentPreserved": true,
+  "zipIntegrity": "pass",
+  "javapClassParse": "pass",
+  "jvmVerification": "-Xverify:all; actual original/patched lifecycle classes with Minecraft/Fabric/source-event test doubles",
+  "classfileVersion": 65,
+  "jdk": "openjdk version \"21.0.11\" 2026-04-21\nOpenJDK Runtime Environment (build 21.0.11+10-1-deb13u2-Debian)\nOpenJDK 64-Bit Server VM (build 21.0.11+10-1-deb13u2-Debian, mixed mode, sharing)",
+  "packagedVerification": {
+    "baseline": "RESULT mode=baseline assertions=225 fixtureMatched=0 fixturePassed=14 minecraftTestDoubles=true lifecycleFromMainJar=true",
+    "fixed": "RESULT mode=fixed assertions=5352 fixtureMatched=13 fixturePassed=1 minecraftTestDoubles=true lifecycleFromMainJar=true",
+    "off": "RESULT mode=off assertions=225 fixtureMatched=0 fixturePassed=14 minecraftTestDoubles=true lifecycleFromMainJar=true"
+  },
+  "sourceSha256": {
+    "PatchRev241.java": "30742eb60900e78ad6b0fc5d5216bebf3d6018fb31aa215510a1410d83f3fc50",
+    "build_local.py": "c1f22eaa8c915da2c0b6c40febc56faa267ab83aab3f3a614e5941324360c92e",
+    "source/dev/yinghuang/legacyforgebridge/behavior/Rev241JumpHistory.java": "db4f0f23f9224364895dd4685de0b86fd6c9360eb0389a4e709d479ffb17af15",
+    "source/dev/yinghuang/legacyforgebridge/behavior/Rev241JumpMotionBridge.java": "75cd67233de6b7fa9dc861076ed93ae8e78310edf55d7335cdbf958b5494e115",
+    "tests/JumpLifecycleTest.java": "502cc8c3d6c82dc4b73858f3f4c0b56bfa422033d56aca97ea1d0919c3e721a7",
+    "tests/write_stubs.py": "3795407bf1a6a139e3d8ebb80ed28bbf6dceab78ad3dcd222c41634577a4f9a4",
+    "tests/jump-fixture.tsv": "fca825d294f566a3108e6a824559720884de52aac293cff0415995623b1a5ac3",
+    "tests/jump-fixture.json": "1b83ef62c83f6a400737e99b200dbd6c2112cf37b6fecc385b9c3f352ac15b6c"
+  },
+  "untested": [
+    "real Minecraft/Fabric/Sodium startup",
+    "actual mixin application with the installed modpack",
+    "live Forge server interaction and gameplay",
+    "water visual regression in game",
+    "external impulse with identical encoded ascent Y"
+  ],
+  "independentRebuildByteIdentical": true
+}

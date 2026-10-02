@@ -1,0 +1,55 @@
+PATCH PASS sourceSites=2 lifecycleHeads=6 readiness=1 version=1 revision=1
+HOOKS [barrier(Ljava/lang/String;)V, nativePosition(Lnet/minecraft/class_1297;DDD)V, nativeVelocity(Lnet/minecraft/class_1297;Lnet/minecraft/class_243;)V, tick(Lnet/minecraft/class_310;)V, velocityHead(Lnet/minecraft/class_2743;)V, velocityTail(Lnet/minecraft/class_2743;)V]
+
+
+=== PACKAGED BASELINE ===
+REPLAY jump=1 peak=3.2236083542570264 reconciled=0
+REPLAY jump=2 peak=2.1658178319081456 reconciled=0
+REPLAY jump=3 peak=2.1658178319081456 reconciled=0
+REPLAY jump=4 peak=2.1658178319081456 reconciled=0
+REPLAY jump=5 peak=2.7348881914227543 reconciled=0
+REPLAY jump=6 peak=3.2150881879180013 reconciled=0
+REPLAY jump=7 peak=5.846647832927156 reconciled=0
+REPLAY jump=8 peak=3.2150881879180013 reconciled=0
+REPLAY jump=9 peak=5.388496558792803 reconciled=0
+REPLAY jump=10 peak=3.2150881879180013 reconciled=0
+REPLAY jump=11 peak=3.2150881879180013 reconciled=0
+REPLAY jump=12 peak=3.2150881879180013 reconciled=0
+REPLAY jump=13 peak=3.2150881879180013 reconciled=0
+REPLAY jump=14 peak=3.2150881879180013 reconciled=0
+RESULT mode=baseline assertions=225 fixtureMatched=0 fixturePassed=14 minecraftTestDoubles=true lifecycleFromMainJar=true
+
+=== PACKAGED FIXED ===
+REPLAY jump=1 peak=2.1658178319081456 reconciled=1
+REPLAY jump=2 peak=2.1658178319081456 reconciled=0
+REPLAY jump=3 peak=2.1658178319081456 reconciled=0
+REPLAY jump=4 peak=2.1658178319081456 reconciled=0
+REPLAY jump=5 peak=2.1658178319081456 reconciled=1
+REPLAY jump=6 peak=2.1658178319081456 reconciled=1
+REPLAY jump=7 peak=2.1658178319081456 reconciled=2
+REPLAY jump=8 peak=2.1658178319081456 reconciled=1
+REPLAY jump=9 peak=2.1658178319081456 reconciled=2
+REPLAY jump=10 peak=2.1658178319081456 reconciled=1
+REPLAY jump=11 peak=2.1658178319081456 reconciled=1
+REPLAY jump=12 peak=2.1658178319081456 reconciled=1
+REPLAY jump=13 peak=2.1658178319081456 reconciled=1
+REPLAY jump=14 peak=2.1658178319081456 reconciled=1
+REPEATED jumps=1000 sameSession=true peak=2.1658178319081456 worksAfterTraceCap=true
+RESULT mode=fixed assertions=5352 fixtureMatched=13 fixturePassed=1 minecraftTestDoubles=true lifecycleFromMainJar=true
+
+=== PACKAGED OFF ===
+REPLAY jump=1 peak=3.2236083542570264 reconciled=0
+REPLAY jump=2 peak=2.1658178319081456 reconciled=0
+REPLAY jump=3 peak=2.1658178319081456 reconciled=0
+REPLAY jump=4 peak=2.1658178319081456 reconciled=0
+REPLAY jump=5 peak=2.7348881914227543 reconciled=0
+REPLAY jump=6 peak=3.2150881879180013 reconciled=0
+REPLAY jump=7 peak=5.846647832927156 reconciled=0
+REPLAY jump=8 peak=3.2150881879180013 reconciled=0
+REPLAY jump=9 peak=5.388496558792803 reconciled=0
+REPLAY jump=10 peak=3.2150881879180013 reconciled=0
+REPLAY jump=11 peak=3.2150881879180013 reconciled=0
+REPLAY jump=12 peak=3.2150881879180013 reconciled=0
+REPLAY jump=13 peak=3.2150881879180013 reconciled=0
+REPLAY jump=14 peak=3.2150881879180013 reconciled=0
+RESULT mode=off assertions=225 fixtureMatched=0 fixturePassed=14 minecraftTestDoubles=true lifecycleFromMainJar=true
