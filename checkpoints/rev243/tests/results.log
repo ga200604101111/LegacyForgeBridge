@@ -1,0 +1,8 @@
+HEADER_PATCH dev/yinghuang/legacyforgebridge/LegacyFileLogger.class literals=2
+HEADER_PATCH dev/yinghuang/legacyforgebridge/network/FmlConnectionTrace.class literals=1
+PATCH_PASS version=1 revision=1 readiness=1 observationLabel=1 particleQueueHook=1 newObserverMixins=2
+AUDIT_PASS inertMotionHooks=6 observationalInjections=3 cancellations=0 gameVelocityOrPositionWrites=0 testClassesPackaged=false
+PASS 1000 authoritative velocity cases unchanged (positive/negative/zero/XZ), including old enable property
+PASS read-only tick/input/camera/collision snapshots; source event single dispatch and exception preservation; local start/stop/mark; command privacy
+PASS async writer: 4 concurrent producers/4000 complete records; controlled queue overflow disclosed; part rollover; total disk cap; truncation disclosed; clean close
+RESULT checks=1048 usesMinecraftTestDoubles=true actualPackagedHelpers=true liveMinecraftLaunch=false

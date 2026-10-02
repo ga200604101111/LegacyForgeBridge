@@ -1,0 +1,15 @@
+{
+  "PatchRev243.java": "0f7facae8b602fa23ee5ce8e5ada91a32fdddc76de052bdcc7d9576dce6c8a14",
+  "README.md": "bd3c2968b0538bdc41658fd1887d1729e9931a3fbd60f0a925949afe878c6eca",
+  "build_local.py": "d6c4e84ff705b6d17c290793ad590d66a7f7ac13053a81c11790e2f83f77d226",
+  "evidence.json": "8c679d977956d94d79afea617e158a5c5b484a67e848b9014d2f1bc8d1af3fd0",
+  "source/dev/yinghuang/legacyforgebridge/behavior/LegacyMotionTraceLog.java": "116cba4cfe8f827a505cfc2c7a8104b800bac54664b30dcd60e9784313e22b52",
+  "source/dev/yinghuang/legacyforgebridge/behavior/Rev241JumpMotionBridge.java": "46199a8f489b5ca2b4ffefe30c2b2b6645b8716c1c5069c25a598e4c81031ecf",
+  "source/dev/yinghuang/legacyforgebridge/behavior/Rev243Diagnostics.java": "a8b2a461f02dcdca1e146fae47cf40a63bcb49ef64e98af3766fb847a92dc093",
+  "source/dev/yinghuang/legacyforgebridge/behavior/Rev243RuntimeMeta.java": "085083cf419dd53fdb11f51be2c019216aeb7bb3ad6c2c16ffb6ff9f12fd3312",
+  "source/dev/yinghuang/legacyforgebridge/behavior/Rev243TraceWriter.java": "9c91e0ab5514b369d6ef10c1fcd45be2600bf1425461c283e16dfd0a75d6e77c",
+  "tests/AuditReadOnly.java": "9f9b832dd55f755a9a66c6056ef8fd2aacef4159db0ed042de6716d1c47e3798",
+  "tests/DiagnosticTest.java": "c229e4cb5bb822eda34f7cbca04b5760dd7c348e5582414f34339cb738979d65",
+  "tests/results.log": "a870e962637791fd60a1e0edf18e5a29e2f3176adb8e8fdc14d8d94e45f2f6b5",
+  "tests/write_stubs.py": "1387861c7df8a5bd5e1fa71a0f02d7b46203a4b0cc48fd516ac7ddf8d4b266de"
+}
