@@ -1,0 +1,18 @@
+FIXTURE jumps=30 full=29 shortened=1 stationaryYReplay=true
+RESULT mode=baseline assertions=114 minecraftTestDoubles=true actualSourceBodies=true
+
+FIXTURE jumps=30 full=30 shortened=0 stationaryYReplay=true
+REPEATED 1000 jumps: source-native peak retained; stale descent then ascent packet handled
+PARTICLES original source body: ten flames, legacy Y basis, dedupe, no-wing, water/teleport and exception cleanup pass
+RESULT mode=fixed assertions=6224 minecraftTestDoubles=true actualSourceBodies=true
+
+PARTICLES original source body: ten flames, legacy Y basis, dedupe, no-wing, water/teleport and exception cleanup pass
+RESULT mode=off assertions=45 minecraftTestDoubles=true actualSourceBodies=true
+
+AUDIT coreMethodsPreserved=76 structuralClassChecks=10 actualPackagedBytecode=true
+
+PACKAGED RUN
+FIXTURE jumps=30 full=30 shortened=0 stationaryYReplay=true
+REPEATED 1000 jumps: source-native peak retained; stale descent then ascent packet handled
+PARTICLES original source body: ten flames, legacy Y basis, dedupe, no-wing, water/teleport and exception cleanup pass
+RESULT mode=fixed assertions=6224 minecraftTestDoubles=true actualSourceBodies=true

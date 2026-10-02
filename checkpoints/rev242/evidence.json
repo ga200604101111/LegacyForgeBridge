@@ -1,0 +1,96 @@
+{
+  "schema": 1,
+  "checkpoint": "rev242-stationary-descent-and-source-landing",
+  "sourceParentCommit": "038581a307f9eccdb93d24ca5a30b0117c228cb1",
+  "baseSha256": "7ebcea2bd669fb6baed5b99e5929d68d9a356660035d9b2cd67e6ef3864b9835",
+  "originalSourceSha256": "b82cd54d2d2db576e82ba02ea4e55b4db92174c5814b45aa3ebbe1b44d98961d",
+  "reportedLogSha256": "5cdace8c6ff139d8df4982b92b0f4b01ca74bf9b9f5e170624769eccc389d970",
+  "version": "0.2.0-alpha.27-corpus4-local.26-rev242-local-test.1",
+  "converterRevision": "2026-10-02.242-stationary-descent-and-source-landing",
+  "cacheCompatibilityVersion": "0.2.0-alpha.27-corpus4-local.17-rev233-cache.1",
+  "buildMethod": "JDK21 javac source helpers + guarded JDK ASM edits over cumulative rev241 main JAR",
+  "fullGradleLoomBuild": false,
+  "networkDependencyDownloads": false,
+  "githubActionsBuild": false,
+  "minecraftTestDoubles": true,
+  "actualOriginalSourceMethodBodiesInTests": true,
+  "testDoubleClassesPackaged": false,
+  "liveMinecraftLaunch": false,
+  "motion": {
+    "sourceBoostModified": false,
+    "heightLimitAdded": false,
+    "incomingXZModified": false,
+    "previousDescent": "at most one exact observed negative phase from an immediately previous completed stationary jump; current stationary ascent only",
+    "maxLandingToNextJumpTicks": 2,
+    "maxLandingToPacketTicks": 8,
+    "maxCurrentPhaseForPreviousDescent": 6
+  },
+  "fall": {
+    "dispatch": "existing source-compiled fall programs, native-hook + end-client-tick fallback",
+    "deduplication": "local player and tick",
+    "coordinates": "1.7.10 local posY offset 1.62F scoped only to fall snapshots",
+    "modNameOrItemIdDispatch": false,
+    "hardcodedParticles": false,
+    "serverDamageExecuted": false
+  },
+  "verification": {
+    "baseline": "FIXTURE jumps=30 full=29 shortened=1 stationaryYReplay=true\nRESULT mode=baseline assertions=114 minecraftTestDoubles=true actualSourceBodies=true",
+    "fixed": "FIXTURE jumps=30 full=30 shortened=0 stationaryYReplay=true\nREPEATED 1000 jumps: source-native peak retained; stale descent then ascent packet handled\nPARTICLES original source body: ten flames, legacy Y basis, dedupe, no-wing, water/teleport and exception cleanup pass\nRESULT mode=fixed assertions=6224 minecraftTestDoubles=true actualSourceBodies=true",
+    "off": "PARTICLES original source body: ten flames, legacy Y basis, dedupe, no-wing, water/teleport and exception cleanup pass\nRESULT mode=off assertions=45 minecraftTestDoubles=true actualSourceBodies=true"
+  },
+  "limitations": [
+    "Legacy velocity packets lack causal IDs; exact matching is a heuristic, not a proven server acknowledgement.",
+    "An unrelated identical velocity with no observed damage/teleport barrier can still be misclassified.",
+    "Cross-jump negative guard deliberately excludes moving previous/current jumps and expires quickly.",
+    "No native 1.7.10 paired live-client measurements; normal source boost remains 0.15, not an invented 3-5 block jump.",
+    "Landing fallback is local-only and excludes fluids, climbing and flying; remote-player fall effects are not added.",
+    "Particle renderer/shader settings and actual mixin application remain untested in game."
+  ],
+  "artifact": "legacyforgebridge-0.2.0-alpha.27-rev242-corpus4-local.26.jar",
+  "bytes": 4497254,
+  "sha256": "dadc5024b8713781684caa57ca93d55f54506c2abbf205366510a3f932ab8f44",
+  "baselineEntries": 1701,
+  "outputEntries": 1704,
+  "changedEntries": [
+    "dev/yinghuang/legacyforgebridge/BuildInfo.class",
+    "dev/yinghuang/legacyforgebridge/behavior/LegacyBehaviorRuntime$Snapshot.class",
+    "dev/yinghuang/legacyforgebridge/behavior/LegacyBehaviorRuntime.class",
+    "dev/yinghuang/legacyforgebridge/behavior/LegacyClientJumpMotion.class",
+    "dev/yinghuang/legacyforgebridge/behavior/Rev241JumpHistory$Decision.class",
+    "dev/yinghuang/legacyforgebridge/behavior/Rev241JumpHistory.class",
+    "dev/yinghuang/legacyforgebridge/behavior/Rev241JumpMotionBridge$Pending.class",
+    "dev/yinghuang/legacyforgebridge/behavior/Rev241JumpMotionBridge$Source.class",
+    "dev/yinghuang/legacyforgebridge/behavior/Rev241JumpMotionBridge.class",
+    "fabric.mod.json"
+  ],
+  "addedEntries": [
+    "dev/yinghuang/legacyforgebridge/behavior/Rev241JumpHistory$Completed.class",
+    "dev/yinghuang/legacyforgebridge/behavior/Rev242ClientAccess.class",
+    "dev/yinghuang/legacyforgebridge/behavior/Rev242LandingBridge.class",
+    "legacyforgebridge/rev242-build.json"
+  ],
+  "removedEntries": [
+    "dev/yinghuang/legacyforgebridge/behavior/Rev241JumpMotionBridge$Api.class"
+  ],
+  "allOtherEntriesContentPreserved": true,
+  "zipIntegrity": "pass",
+  "javapClassParse": "pass",
+  "coreBytecodeAudit": "AUDIT coreMethodsPreserved=76 structuralClassChecks=10 actualPackagedBytecode=true",
+  "packagedVerification": "FIXTURE jumps=30 full=30 shortened=0 stationaryYReplay=true\nREPEATED 1000 jumps: source-native peak retained; stale descent then ascent packet handled\nPARTICLES original source body: ten flames, legacy Y basis, dedupe, no-wing, water/teleport and exception cleanup pass\nRESULT mode=fixed assertions=6224 minecraftTestDoubles=true actualSourceBodies=true",
+  "jvmVerification": "-Xverify:all on actual helper classes with Minecraft/logger/snapshot doubles and original source event method bodies",
+  "jdk": "openjdk version \"21.0.11\" 2026-04-21\nOpenJDK Runtime Environment (build 21.0.11+10-1-deb13u2-Debian)\nOpenJDK 64-Bit Server VM (build 21.0.11+10-1-deb13u2-Debian, mixed mode, sharing)",
+  "sourceSha256": {
+    "PatchRev242.java": "33de3923ad990cacdc0e12ef6bfa8d4020eee5c9f24618f44cb9d1c0ea241941",
+    "build_local.py": "3df8039cc3b740baa3576c172747e2a71b48c9f8b83f42a15f53e724d313594e",
+    "source/dev/yinghuang/legacyforgebridge/behavior/Rev241JumpHistory.java": "a82101ebdc660c1e9e86dd720d426822cbca8ad324678ef1665785aca9b8e08e",
+    "source/dev/yinghuang/legacyforgebridge/behavior/Rev241JumpMotionBridge.java": "8997f91d3708c9c684395f503a792dff2baa1746d8aeeb2f80602bdc2596f27d",
+    "source/dev/yinghuang/legacyforgebridge/behavior/Rev242ClientAccess.java": "9348ec6aea90120a4f98d0e6f5afefb5666060b53cd7ebe45f3e9c169be183c1",
+    "source/dev/yinghuang/legacyforgebridge/behavior/Rev242LandingBridge.java": "c664610352c63abd9eb5489013bda665a6ab2ab8cef85137eb5431530748d31e",
+    "tests/AuditPatches.java": "e10191def2b55450d6efd5a163bb692603860c314e541bb62d0c7ae7a953ca35",
+    "tests/ExtractSourceFixture.java": "a8ee6c58ffddbd337301a1b714e508f96a862b7ae78393ea019989a0e8fe8b12",
+    "tests/RegressionTest.java": "43dd31cef9d065f0c84ed18d45a44b25ef78a3bb4d3e94778c4c25b5ed6f6276",
+    "tests/reported-jumps.tsv": "748b12ca1b62eb3a632f7366a28a28c40363e6330fb931986229564ca5995209",
+    "tests/write_stubs.py": "c5fa519ed6fe5ad8a79e6ade055d0834e58664814947fe177671697ec9609251"
+  },
+  "independentRebuildByteIdentical": true
+}
