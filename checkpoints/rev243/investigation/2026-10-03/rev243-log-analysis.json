@@ -1,0 +1,264 @@
+{
+  "inputArchiveSha256": "0f8b9c4a1a975a8b0d6ac8f7f3c5c955986f06f967beb0b6445c87d74a4b0883",
+  "loadedAndDeliveredJarSha256": "87d4e3cbe4939b21c4eb955b66508bbc2724aafbf6b557c87245cc345121ef63",
+  "captureStartTaipei": "2026-10-02T23:27:15.820+08:00",
+  "captureStopTaipei": "2026-10-02T23:29:53.118+08:00",
+  "eventCount": 67095,
+  "uniqueSequenceCount": 67095,
+  "sourceJumps": 114,
+  "sourceJumpBeforeValues": {
+    "0.41999998688697815": 114
+  },
+  "sourceJumpAfterValues": {
+    "0.5699999868869782": 114
+  },
+  "packets": 119,
+  "allIncomingAppliedExactly": true,
+  "allMotionPacketXZZero": true,
+  "positivePackets": 119,
+  "negativePackets": 0,
+  "airborneDownToUp": 5,
+  "groundedPositivePackets": 2,
+  "rawHookToViaOutputMs": {
+    "n": 119,
+    "min": 0.0981,
+    "median": 0.1575,
+    "p95": 0.4189,
+    "p99": 0.7985,
+    "max": 6.9568,
+    "mean": 0.23964453781512604
+  },
+  "rawHookToApplyHeadMs": {
+    "n": 119,
+    "min": 0.3169,
+    "median": 3.1069,
+    "p95": 11.1185,
+    "p99": 20.0807,
+    "max": 30.355,
+    "mean": 4.098605882352941
+  },
+  "cameraFrames": 20403,
+  "cameraYInterpolationAbsError": {
+    "n": 20403,
+    "min": 3.1317171078626416e-12,
+    "median": 4.76837147544984e-09,
+    "p95": 1.0964593677442735e-08,
+    "p99": 1.714053343704336e-08,
+    "max": 2.305649537959198e-08,
+    "mean": 5.283446705479055e-09
+  },
+  "moveHead": 2943,
+  "moveTail": 2943,
+  "upwardMoveClips": 0,
+  "sourceFallDispatch": 122,
+  "particlesQueued": 1220,
+  "particleTypes": {
+    "flame": 1220
+  },
+  "perFallParticleCount": {
+    "10": 122
+  },
+  "marks": [
+    {
+      "mark": 1,
+      "markTaipei": "2026-10-02T23:28:05.974+08:00",
+      "localJump": 25,
+      "startTaipei": "2026-10-02T23:28:03.368+08:00",
+      "sourceStartFeetY": 4.0,
+      "firstLandingTaipei": "2026-10-02T23:28:04.622+08:00",
+      "firstLandingFeetY": 7.5,
+      "peakRiseAtFirstLanding": 5.749933663355543,
+      "pulses": [
+        {
+          "packet": 26,
+          "timeTaipei": "2026-10-02T23:28:03.501+08:00",
+          "beforeY": 0.305952090069246,
+          "incomingY": 0.5698590001831167,
+          "ground": "false",
+          "inputJump": "true",
+          "ref": "motion-2026-10-02T15-27-15.808600600Z-dhed4h49o-1-part001.log:14264 (seq=14946)",
+          "rawToApplyMs": 7.5651
+        },
+        {
+          "packet": 27,
+          "timeTaipei": "2026-10-02T23:28:03.914+08:00",
+          "beforeY": -0.100193960580899,
+          "incomingY": 0.5698590001831167,
+          "ground": "false",
+          "inputJump": "true",
+          "ref": "motion-2026-10-02T15-27-15.808600600Z-dhed4h49o-1-part001.log:14434 (seq=15125)",
+          "rawToApplyMs": 3.026
+        }
+      ]
+    },
+    {
+      "mark": 2,
+      "markTaipei": "2026-10-02T23:28:16.070+08:00",
+      "localJump": 33,
+      "startTaipei": "2026-10-02T23:28:14.317+08:00",
+      "sourceStartFeetY": 4.0,
+      "firstLandingTaipei": "2026-10-02T23:28:14.875+08:00",
+      "firstLandingFeetY": 7.5,
+      "peakRiseAtFirstLanding": 3.607284192116553,
+      "pulses": [
+        {
+          "packet": 35,
+          "timeTaipei": "2026-10-02T23:28:14.430+08:00",
+          "beforeY": 0.305952090069246,
+          "incomingY": 0.5698590001831167,
+          "ground": "false",
+          "inputJump": "true",
+          "ref": "motion-2026-10-02T15-27-15.808600600Z-dhed4h49o-1-part001.log:19238 (seq=20127)",
+          "rawToApplyMs": 7.7237
+        },
+        {
+          "packet": 36,
+          "timeTaipei": "2026-10-02T23:28:14.992+08:00",
+          "beforeY": -0.0784000015258789,
+          "incomingY": 0.3058658365378746,
+          "ground": "true",
+          "inputJump": "false",
+          "ref": "motion-2026-10-02T15-27-15.808600600Z-dhed4h49o-1-part001.log:19501 (seq=20401)",
+          "rawToApplyMs": 1.9054
+        }
+      ]
+    },
+    {
+      "mark": 3,
+      "markTaipei": "2026-10-02T23:28:25.318+08:00",
+      "localJump": 40,
+      "startTaipei": "2026-10-02T23:28:23.069+08:00",
+      "sourceStartFeetY": 4.0,
+      "firstLandingTaipei": "2026-10-02T23:28:24.322+08:00",
+      "firstLandingFeetY": 7.5,
+      "peakRiseAtFirstLanding": 5.749933663355543,
+      "pulses": [
+        {
+          "packet": 43,
+          "timeTaipei": "2026-10-02T23:28:23.188+08:00",
+          "beforeY": 0.305952090069246,
+          "incomingY": 0.5698590001831167,
+          "ground": "false",
+          "inputJump": "true",
+          "ref": "motion-2026-10-02T15-27-15.808600600Z-dhed4h49o-1-part001.log:23292 (seq=24346)",
+          "rawToApplyMs": 5.2228
+        },
+        {
+          "packet": 44,
+          "timeTaipei": "2026-10-02T23:28:23.595+08:00",
+          "beforeY": -0.100193960580899,
+          "incomingY": 0.5698590001831167,
+          "ground": "false",
+          "inputJump": "false",
+          "ref": "motion-2026-10-02T15-27-15.808600600Z-dhed4h49o-1-part001.log:23469 (seq=24532)",
+          "rawToApplyMs": 2.0899
+        }
+      ]
+    },
+    {
+      "mark": 4,
+      "markTaipei": "2026-10-02T23:28:51.021+08:00",
+      "localJump": 61,
+      "startTaipei": "2026-10-02T23:28:48.121+08:00",
+      "sourceStartFeetY": 4.0,
+      "firstLandingTaipei": "2026-10-02T23:28:49.376+08:00",
+      "firstLandingFeetY": 7.5,
+      "peakRiseAtFirstLanding": 5.749933663355543,
+      "pulses": [
+        {
+          "packet": 65,
+          "timeTaipei": "2026-10-02T23:28:48.237+08:00",
+          "beforeY": 0.305952090069246,
+          "incomingY": 0.5698590001831167,
+          "ground": "false",
+          "inputJump": "true",
+          "ref": "motion-2026-10-02T15-27-15.808600600Z-dhed4h49o-1-part002.log:437 (seq=37059)",
+          "rawToApplyMs": 5.1423
+        },
+        {
+          "packet": 66,
+          "timeTaipei": "2026-10-02T23:28:48.644+08:00",
+          "beforeY": -0.100193960580899,
+          "incomingY": 0.5698590001831167,
+          "ground": "false",
+          "inputJump": "false",
+          "ref": "motion-2026-10-02T15-27-15.808600600Z-dhed4h49o-1-part002.log:620 (seq=37251)",
+          "rawToApplyMs": 1.5675
+        }
+      ]
+    },
+    {
+      "mark": 5,
+      "markTaipei": "2026-10-02T23:29:47.215+08:00",
+      "localJump": 114,
+      "startTaipei": "2026-10-02T23:29:44.417+08:00",
+      "sourceStartFeetY": 4.0,
+      "firstLandingTaipei": "2026-10-02T23:29:45.572+08:00",
+      "firstLandingFeetY": 4.0,
+      "peakRiseAtFirstLanding": 3.1588503083034265,
+      "pulses": [
+        {
+          "packet": 119,
+          "timeTaipei": "2026-10-02T23:29:44.831+08:00",
+          "beforeY": -0.17647253743678334,
+          "incomingY": 0.3921137764756151,
+          "ground": "false",
+          "inputJump": "false",
+          "ref": "motion-2026-10-02T15-27-15.808600600Z-dhed4h49o-1-part002.log:28754 (seq=66450)",
+          "rawToApplyMs": 8.9527
+        }
+      ]
+    }
+  ],
+  "stages": {
+    "CAMERA_FRAME": 20403,
+    "CAPTURE_START": 1,
+    "CAPTURE_STOP": 1,
+    "CLIENT_APPLY_HEAD": 119,
+    "CLIENT_APPLY_TAIL": 2,
+    "CONTEXT_PACKET": 2,
+    "COVERAGE": 1,
+    "COVERAGE_HEALTH": 29,
+    "DIAGNOSTIC_CONFIG": 1,
+    "EFFECTS_CHANGED": 1,
+    "GROUND_CONTACT": 123,
+    "HOOKS": 1,
+    "INPUT_CHANGED": 399,
+    "INPUT_SNAPSHOT": 5887,
+    "JUMP_AFTER_SOURCE": 114,
+    "JUMP_BEFORE_SOURCE": 114,
+    "KNOWN_LIMITATIONS": 1,
+    "LANDING": 115,
+    "LEAVE_GROUND": 122,
+    "MOVE_HEAD": 2943,
+    "MOVE_TAIL": 2943,
+    "NETTY_PACKET_DISPATCH": 119,
+    "OUT_1710_MOVEMENT": 2944,
+    "POSITION_WRITE": 2256,
+    "RAW_1710_MOTION": 119,
+    "REV242_FALL_DISPATCH": 122,
+    "REV242_FALL_PARTICLES": 122,
+    "REV242_LANDING": 0,
+    "SOURCE_HANDLER_HEAD": 266,
+    "SOURCE_HANDLER_TAIL": 266,
+    "SOURCE_PARTICLE_QUEUED": 1220,
+    "TICK_END": 2362,
+    "TICK_SNAPSHOT_END": 2943,
+    "TICK_START": 2944,
+    "UPWARD_REWRITE": 117,
+    "USER_MARK": 5,
+    "VELOCITY_WRITE": 17847,
+    "VIA_INBOUND_HOOK_READY": 1,
+    "VIA_OUTBOUND_HOOK_READY": 1,
+    "VIA_OUTPUT_MOTION": 119
+  },
+  "limitations": [
+    "Markers are user observations, not server causal IDs. Adjacent jump association is temporal only.",
+    "Camera sample is Camera.update RETURN, not final view-bob / hurt-camera / shader matrix.",
+    "Particles are source-queue entries, not proof of GPU visibility.",
+    "Measured packet intervals start at existing raw/Via hooks, not at server send or network card receive; not ping or RTT.",
+    "No original Forge 1.7.10 client or server trace is contained in this ZIP.",
+    "No modified JAR or repository change is part of this analysis.",
+    "Source-handler label isAirBorne in rev243 actually reads field_70133_I (velocityChanged). The label and earlier interpretation were incorrect."
+  ]
+}

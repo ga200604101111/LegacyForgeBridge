@@ -1,0 +1,57 @@
+{
+  "schema": 1,
+  "type": "investigation-handoff-only",
+  "savedDateTaipei": "2026-10-03",
+  "branch": "feature/generic-conversion-iyamato-corpus3",
+  "runtimeSourceCommit": "6399f44aad1e695bb1cb49d444a3d13e772c2861",
+  "runtimeChanged": false,
+  "jarBuiltThisCheckpoint": false,
+  "jumpFixComplete": false,
+  "native1710ComparisonReceived": false,
+  "archivedReports": [
+    {
+      "file": "rev243-log-analysis.txt",
+      "bytes": 8089,
+      "sha256": "4223283801047ac554e2811be7aea998e55a87027c5eaf4f337fd2d76944f057",
+      "gitBlobSha": "31553f6d2cd56cb454a41b52dbd34b5953d1b9ed"
+    },
+    {
+      "file": "rev243-log-analysis.json",
+      "bytes": 8632,
+      "sha256": "4b14ec8903e21c7441a87bc5e5891bbae8040836bc17441d564a1f22ca4c686b",
+      "gitBlobSha": "bca5d2581e2b1f5a13d5b6ef9ba836e6289cf9cf"
+    },
+    {
+      "file": "rev243-outbound-ground-check.txt",
+      "bytes": 2747,
+      "sha256": "1d265a38b9a6d39e1aec1598e50e879f6a43bbad68e6ac3c593fd00d2f7f5d2d",
+      "gitBlobSha": "74c65405ce4599525ce1e89fbe2a7f7bea81e6fe"
+    }
+  ],
+  "relatedAttachmentsNotUploadedByThisCheckpoint": [
+    {
+      "file": "logs.zip",
+      "bytes": 32256763,
+      "sha256": "0f8b9c4a1a975a8b0d6ac8f7f3c5c955986f06f967beb0b6445c87d74a4b0883",
+      "role": "original user capture; reports contain selected data and original file/line references"
+    },
+    {
+      "file": "rev243-log-evidence.txt",
+      "bytes": 36882,
+      "sha256": "bd3511513dad30a7f31972ccd4e70d4fb23ba52f39cf68f6f51af8788424ffc7",
+      "role": "full excerpt attachment; principal event locations are also in the archived reports"
+    },
+    {
+      "file": "legacyforgebridge-0.2.0-alpha.27-rev243-corpus4-local.27-diagnostic.jar",
+      "bytes": 4517037,
+      "sha256": "87d4e3cbe4939b21c4eb955b66508bbc2724aafbf6b557c87245cc345121ef63",
+      "role": "previously delivered main JAR; current source/build scripts remain in checkpoints/rev243"
+    },
+    {
+      "file": "RPGTool1-1.1-1.7.10.jar",
+      "sha256": "b82cd54d2d2db576e82ba02ea4e55b4db92174c5814b45aa3ebbe1b44d98961d",
+      "role": "unchanged third-party source mod referenced by the earlier audit"
+    }
+  ],
+  "note": "Analysis reports are preserved as historical documents. Their no-repository-change statements describe the analysis step before this archival commit. No raw whole-log archive, binary, workflow or runtime change is included."
+}

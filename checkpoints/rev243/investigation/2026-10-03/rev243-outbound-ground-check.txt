@@ -1,0 +1,31 @@
+rev243 outgoing movement recheck
+Read-only analysis of logs.zip, no code change/no new JAR.
+{"not-yet-matched": 1, "position-matched": 2363, "no-position-idle": 580}
+onGround mismatches among matched positioned packets: 0
+Note: idle packets do not contain coordinates; matching does not prove network ordering or server processing.
+
+Jump25 outgoing packets between local takeoff and second positive velocity:
+motion-2026-10-02T15-27-15.808600600Z-dhed4h49o-1-part001.log:14210
+seq=14890 id=0x4 pos=[-432.3708957012798,4.5699999868869785,1180.300000011921] stanceY=6.189999986886979 onGround=false
+motion-2026-10-02T15-27-15.808600600Z-dhed4h49o-1-part001.log:14233
+seq=14914 id=0x4 pos=[-432.37038087984575,5.0501999833822255,1180.300000011921] stanceY=6.670199983382226 onGround=false
+motion-2026-10-02T15-27-15.808600600Z-dhed4h49o-1-part001.log:14257
+seq=14938 id=0x4 pos=[-432.36986605841173,5.442395987580777,1180.300000011921] stanceY=7.062395987580777 onGround=false
+motion-2026-10-02T15-27-15.808600600Z-dhed4h49o-1-part001.log:14280
+seq=14963 id=0x4 pos=[-432.3693512369777,6.012254987763893,1180.300000011921] stanceY=7.632254987763893 onGround=false
+motion-2026-10-02T15-27-15.808600600Z-dhed4h49o-1-part001.log:14300
+seq=14984 id=0x4 pos=[-432.3688364155437,6.4923168172866665,1180.300000011921] stanceY=8.112316817286667 onGround=false
+motion-2026-10-02T15-27-15.808600600Z-dhed4h49o-1-part001.log:14321
+seq=15006 id=0x4 pos=[-432.36832159410966,6.884377417849558,1180.300000011921] stanceY=8.504377417849557 onGround=false
+motion-2026-10-02T15-27-15.808600600Z-dhed4h49o-1-part001.log:14342
+seq=15028 id=0x4 pos=[-432.36780677267564,7.190196812353276,1180.300000011921] stanceY=8.810196812353276 onGround=false
+motion-2026-10-02T15-27-15.808600600Z-dhed4h49o-1-part001.log:14363
+seq=15050 id=0x4 pos=[-432.3672919512416,7.411499823274082,1180.300000011921] stanceY=9.031499823274082 onGround=false
+motion-2026-10-02T15-27-15.808600600Z-dhed4h49o-1-part001.log:14382
+seq=15070 id=0x4 pos=[-432.3667771298076,7.549976776671613,1180.2804067738145] stanceY=9.169976776671614 onGround=false
+motion-2026-10-02T15-27-15.808600600Z-dhed4h49o-1-part001.log:14402
+seq=15091 id=0x4 pos=[-432.36626230837356,7.607284192116553,1180.2429836885176] stanceY=9.227284192116553 onGround=false
+motion-2026-10-02T15-27-15.808600600Z-dhed4h49o-1-part001.log:14422
+seq=15112 id=0x4 pos=[-432.36574748693954,7.585045458819767,1180.1893354418094] stanceY=9.205045458819768 onGround=false
+
+Conclusion: in this marked example no intervening onGround=true report was observed; do not attribute the second server impulse to a forged/duplicate local landing flag. C0C input delivery and internal server ground state are not covered by these movement-only traces.

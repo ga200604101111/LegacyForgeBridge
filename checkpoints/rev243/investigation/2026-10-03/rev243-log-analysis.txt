@@ -1,0 +1,77 @@
+LegacyForgeBridge rev243：使用者實測日誌分析
+分析來源：本次 logs.zip 內的三個 .log，並非先前 rev240/rev241 的舊日誌。
+本次沒有啟動遊戲、建構新 JAR、修改原模組或推送 GitHub。
+
+一、資料與版本核對
+輸入 ZIP SHA-256：0f8b9c4a1a975a8b0d6ac8f7f3c5c955986f06f967beb0b6445c87d74a4b0883
+實際載入／交付 JAR 的 SHA-256 一致：87d4e3cbe4939b21c4eb955b66508bbc2724aafbf6b557c87245cc345121ef63
+版本：0.2.0-alpha.27-corpus4-local.27-rev243-diagnostic.1
+時間（台灣 UTC+8）：2026-10-02T23:27:15.820+08:00 至 2026-10-02T23:29:53.118+08:00
+兩份分段 motion log；最終 TRACE_END：offered=67095 accepted=67095 written=67095 queue=0 highWater=20 dropped=0 truncated=0 discarded=0 incomplete=false endReason=MANUAL_STOP。
+67,095 筆事件的 sequence 均唯一。序號保留給 move/wire 的空隙不等於遺失事件。
+攝影機、移動 HEAD/TAIL、tick START/END、指令及既有速度封包掛鉤都有實際紀錄。最後一個 TICK_START 後手動停止，不能當成掛鉤遺失。
+PART_END/TRACE_HEALTH 中預設的 endReason=disconnect 並非每次健康訊息都發生斷線；跨檔有 CONTINUATION，最終停止原因是 MANUAL_STOP。
+
+二、起跳與封包
+114 次 source jump，全部只有一個 handler，repeatSameTick=false；每次 Y 均由 0.41999998688697815 增至 0.5699999868869782。
+119 個本機玩家速度封包：119 個正 Y，0 個負 Y；本次全部 X=0、Z=0。全部可以對齊 raw -> Via output -> Netty dispatch -> client apply head -> apply tail。
+每筆 incoming 與 applied XYZ 完全相同，封包套用前後位置 Y 沒有直接改寫；沒有 rev241/rev242 的歷史速度還原。
+其中 5 次空中由負 Y 改成正 Y；另 2 次在 onGround=true 時收到正 Y。這些是實際速度變化，不是鏡頭單獨上移。
+原始 Y 分佈：0.569875 共114筆、0.480125共3筆、0.305875共1筆、0.392125共1筆。這不是一對一來源因果證明。
+
+三、5 個標記附近的事件（標記通常晚於異常，不能把標記時間當成封包送出時間）
+
+標記 #1：2026-10-02T23:28:05.974+08:00；附近 localJump=25
+起跳腳底Y=4.0；首次落地Y=7.5；當次首次落地紀錄 peakRise=5.749933663355543
+  2026-10-02T23:28:03.501+08:00 packet=26：Y速度 0.305952090069246 -> 0.5698590001831167；ground=false；最近輸入快照 keyJump=true；raw掛鉤到套用=7.5651ms
+  原始位置：motion-2026-10-02T15-27-15.808600600Z-dhed4h49o-1-part001.log:14264 (seq=14946)
+  2026-10-02T23:28:03.914+08:00 packet=27：Y速度 -0.100193960580899 -> 0.5698590001831167；ground=false；最近輸入快照 keyJump=true；raw掛鉤到套用=3.026ms
+  原始位置：motion-2026-10-02T15-27-15.808600600Z-dhed4h49o-1-part001.log:14434 (seq=15125)
+
+標記 #2：2026-10-02T23:28:16.070+08:00；附近 localJump=33
+起跳腳底Y=4.0；首次落地Y=7.5；當次首次落地紀錄 peakRise=3.607284192116553
+  2026-10-02T23:28:14.430+08:00 packet=35：Y速度 0.305952090069246 -> 0.5698590001831167；ground=false；最近輸入快照 keyJump=true；raw掛鉤到套用=7.7237ms
+  原始位置：motion-2026-10-02T15-27-15.808600600Z-dhed4h49o-1-part001.log:19238 (seq=20127)
+  2026-10-02T23:28:14.992+08:00 packet=36：Y速度 -0.0784000015258789 -> 0.3058658365378746；ground=true；最近輸入快照 keyJump=false；raw掛鉤到套用=1.9054ms
+  原始位置：motion-2026-10-02T15-27-15.808600600Z-dhed4h49o-1-part001.log:19501 (seq=20401)
+
+標記 #3：2026-10-02T23:28:25.318+08:00；附近 localJump=40
+起跳腳底Y=4.0；首次落地Y=7.5；當次首次落地紀錄 peakRise=5.749933663355543
+  2026-10-02T23:28:23.188+08:00 packet=43：Y速度 0.305952090069246 -> 0.5698590001831167；ground=false；最近輸入快照 keyJump=true；raw掛鉤到套用=5.2228ms
+  原始位置：motion-2026-10-02T15-27-15.808600600Z-dhed4h49o-1-part001.log:23292 (seq=24346)
+  2026-10-02T23:28:23.595+08:00 packet=44：Y速度 -0.100193960580899 -> 0.5698590001831167；ground=false；最近輸入快照 keyJump=false；raw掛鉤到套用=2.0899ms
+  原始位置：motion-2026-10-02T15-27-15.808600600Z-dhed4h49o-1-part001.log:23469 (seq=24532)
+
+標記 #4：2026-10-02T23:28:51.021+08:00；附近 localJump=61
+起跳腳底Y=4.0；首次落地Y=7.5；當次首次落地紀錄 peakRise=5.749933663355543
+  2026-10-02T23:28:48.237+08:00 packet=65：Y速度 0.305952090069246 -> 0.5698590001831167；ground=false；最近輸入快照 keyJump=true；raw掛鉤到套用=5.1423ms
+  原始位置：motion-2026-10-02T15-27-15.808600600Z-dhed4h49o-1-part002.log:437 (seq=37059)
+  2026-10-02T23:28:48.644+08:00 packet=66：Y速度 -0.100193960580899 -> 0.5698590001831167；ground=false；最近輸入快照 keyJump=false；raw掛鉤到套用=1.5675ms
+  原始位置：motion-2026-10-02T15-27-15.808600600Z-dhed4h49o-1-part002.log:620 (seq=37251)
+
+標記 #5：2026-10-02T23:29:47.215+08:00；附近 localJump=114
+起跳腳底Y=4.0；首次落地Y=4.0；當次首次落地紀錄 peakRise=3.1588503083034265
+  2026-10-02T23:29:44.831+08:00 packet=119：Y速度 -0.17647253743678334 -> 0.3921137764756151；ground=false；最近輸入快照 keyJump=false；raw掛鉤到套用=8.9527ms
+  原始位置：motion-2026-10-02T15-27-15.808600600Z-dhed4h49o-1-part002.log:28754 (seq=66450)
+
+四、鏡頭、碰撞與處理時間
+20,403 筆 CAMERA_FRAME，皆為第一人稱；以紀錄中的 lastY、playerY、tickProgress、視點偏移重算基本插值，最大絕對誤差約2.31e-8格（含文字輸出精度）。未觀察到這個取樣點額外的Y偏移。
+不能因此排除 Camera.update 之後的視角搖晃、受傷視角、光影矩陣或所有幀時間問題。
+2,943 次 MOVE_HEAD / MOVE_TAIL 成對；沒有觀察到要求向上位移卻因碰撞被裁切的 MOVE_TAIL。向下地面接觸存在，不能把一般落地當異常。
+原始封包掛鉤到Via輸出：中位0.1575ms，最大6.9568ms。原始掛鉤到客戶端套用HEAD：中位3.1069ms，最大30.355ms。這不是伺服器ping/RTT，也未包括所有掛鉤之前的等待。
+資料不支持「這些封包在已量測的Via轉換/套用区段卡住數百毫秒」；伺服器發送前與網路傳輸仍未知。
+
+五、翅膀粒子
+122 次 source fall dispatch，每次記錄queued=10，共1,220筆flame粒子入列。來源事件確實有執行；非螢幕/GPU可见性證明。
+
+六、必須更正的既有欄位解讀
+RPGTool原始JAR中的onJump等價邏輯：motionY += 0.15D; field_70133_I = true。
+field_70133_I在1.7.10 MCP映射中是velocityChanged，不是isAirBorne。rev243的SOURCE_HANDLER日誌把它標成isAirBorne，先前分析也採用過錯誤名稱；兩者均應更正。這是日誌名稱/解讀錯誤，不能直接宣稱它本身造成了網路多送封包。
+1.7.10參考伺服器EntityTrackerEntry對velocityChanged=true會建立S12PacketEntityVelocity，透過func_151261_b發給追蹤者及該玩家本人。這提供來源程式主動同步速度的解釋，不代表已證實這次119筆各自的伺服器呼叫來源。
+外部參考與使用者日誌分開：CodeMajorGeek/lwjgl3-mcp908，commit 2a6d28f2b7541b760ebb8e7a6dc905465f935a64，conf/version.cfg標示ClientVersion/ServerVersion=1.7.10；conf/fields.csv；src/minecraft_server/net/minecraft/entity/EntityTrackerEntry.java（velocityChanged區段及func_151261_b）。
+
+七、結論及尚缺的證據
+已確認：原模組本地加成只有一次，接著收到正Y封包時會重新上推；基本鏡頭插值在記錄範圍內一致。
+尚不能確認：每筆伺服器速度為何發送、第二筆是否由伺服器再次判定起跳、原生1.7.10客戶端在相同位置/裝備/按法是否亦如此。
+不能把所有相似速度判為多餘回音，也不能把「配上來源程式的一條可能路徑」宣稱成全部已證实的伺服器根因。
+維持不攔截伺服器速度；下一項有判別力的測試是同服同裝備的原生1.7.10客戶端只讀對照，而非要求使用者重跑相同rev243記錄。伺服器內部發送來源仍需伺服器側觀察才可直接證明。
