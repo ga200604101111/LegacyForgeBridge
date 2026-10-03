@@ -1,0 +1,13 @@
+{
+  "PatchRev248.java": "05e9f5ebc8b5a223afc23fa3e2eb60d96316139e86e6790c6290f7164efb93d0",
+  "README.md": "61e5c7e72b2700645e4c81bb5afb52924be48571ed58d0c256451b325ecedfad",
+  "api-references.json": "4d6cb9fbcbb9bef6310081e358ca17813f19af4a38a08bc5a906cd1f84424a69",
+  "build_local.py": "257715d6f90ef2d02ec46fe903824e60dc8615b2c3767f6f48e483635c95ee1d",
+  "source/dev/yinghuang/legacyforgebridge/protocol/Rev248ProtocolStartup.java": "9965af723f5fce45cc52f9fa17346b2acc79d8d536c095862ed6cae5772f9717",
+  "test-results.json": "637a60c9dab5f40e991f1074ac56f77b1f5201381c2827cc1209f23684b9a4e0",
+  "test_local.py": "24058afa37ebc1739407b0b3d99b15f10ab31bf69d26f24c65d48df894dc72dc",
+  "tests/CaptureContextTest.java": "4b838a14cc9eee0e50b963210f101ad8b94b01ab1a8baf7993100ce457fc7d16",
+  "tests/StartupTest.java": "a945b9dbfd05c00fb83c8784b4ccb199038edd68552797322e56010a2399dcf6",
+  "tests/write_startup_doubles.py": "33fe5427bdde2b4fccf4a0235a882a9fd033924aa78e686bbf10b7339575d5f7",
+  "verification.json": "6eb3268ca84567f67677936a01f3610e4d21c64e1bcb992bd7df7c9bf82cb410"
+}

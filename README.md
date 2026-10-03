@@ -2,25 +2,23 @@
 
 Experimental Fabric 1.21.11 client compatibility/conversion layer for Forge 1.7.10 mods. The original server owns gameplay state. Keep original JARs in `old-mods`, not modern Fabric `mods`.
 
-## Latest continuation: rev247 — UI, cache identity and post-ground observations
+## Latest continuation: rev248 — startup protocol default
 
-Complete main delivered in chat: `legacyforgebridge-0.2.0-alpha.27-rev247-corpus4-local.30-ui-cache-diagnostic.jar`, 4,553,459 bytes, SHA-256 `db7627f77ddac1d84f2eff300f6397c9304971b56f0578d507d4a573944ae88a`.
+Complete main delivered in chat: `legacyforgebridge-0.2.0-alpha.27-rev248-corpus4-local.31-startup-diagnostic.jar`, 4,561,750 bytes, SHA-256 `480964a8cd00a7bc34417fcdadf3ffcacc7cdb464aa0bd477ade9d4015679bfe`.
 
-**Jump remains observation-only and is not fixed. The user's rev246 conversion exception has not been captured, so its root cause is not confirmed.** The supplied logs are from rev245; do not represent the replay as a new game test.
+LFB now selects the 1.7.6–1.7.10 protocol family once after ViaFabricPlus's `POST_FILES_LOAD`, after its saved target has been restored, rather than selecting too early in the addon entrypoint. The startup default uses `revertOnDisconnect=false`; later manual choices and per-server settings remain untouched. Selection is guarded against an existing game/connection and checked through API/backend readback. API6/ViaFabricPlus4.4.15 source signatures were verified at a pinned upstream commit; runtime failures are disclosed, not silently treated as success.
 
-The support child dialog now wraps to the viewport width, uses vertical scrolling only, reuses the existing dialog and supports Close/Escape. The actual embedded DesktopHelper reproduces the old horizontal overflow; the new layout was tested at four widths and 2x display scaling. The main title remains `LegacyForgeBridge | [目前的狀態] | by YingHunag09`.
+**This is not a jump repair.** The existing rev247 ground/correlation observers and all movement behavior remain unchanged. One small startup-protocol context record is added to each new capture; it describes the global selection, not per-connection identity or a server causal source. The native Forge1.7.10 comparison is still missing. The unknown rev246 conversion failure is not claimed resolved.
 
-The rev245 and rev246 conversion classes are byte-identical, but rev246 changed their cache revision unnecessarily. rev247 separates its new artifact version from the retained rev245 semantic revision, accepting only the exact rev246 UI-only fingerprint alias. Source/schema/version checks, failed-result handling and artifact hash validation are retained. This fixes an independently proven invalidation issue; it does not establish why the user's conversion failed.
-
-A supplemental read-only observer labels repeated positive velocity after an observed ground contact, without suppressing movement or changing server authority. Replaying the existing valid capture parts recovered nine repeated-positive intervals including five post-ground candidates. The original correlation classes, jump handlers, landing effects, liquid adapter and mixins are preserved.
+The previous support-window layout and cache fixes are retained. Conversion semantic revision remains rev245, avoiding another UI/startup-only cache invalidation. No original-mod, server, protocol library, mixin or gameplay-conversion change is part of this checkpoint.
 
 ## Validation and reproducibility
 
-See [rev247 instructions and boundaries](checkpoints/rev247/README.md), [validation](checkpoints/rev247/verification.json), and [cache equivalence evidence](checkpoints/rev247/cache-equivalence-proof.json).
+See [rev248 build, tests and boundaries](checkpoints/rev248/README.md), [verification summary](checkpoints/rev248/verification.json), and [pinned API references](checkpoints/rev248/api-references.json).
 
-Actual packaged DesktopHelper/Swing validation: 145 checks each on outer main, nested helper, and nested helper at 2x scaling. Packaged cache checks: 25. Diagnostic regression with explicit Minecraft/Fabric/API/writer doubles: 20 scenarios / 643 assertions. Ground-evidence tests plus old-capture replay: 11 checks. Two independent offline builds are byte-identical. No full mod-corpus conversion, Minecraft launch, live Via pipeline or server call-site validation was performed.
+Packaged LFB startup tests: 22 scenarios / 241 assertions, plus two reproduced baseline defects, using explicit VFP/Minecraft/logger/session doubles. Diagnostic regression: 20 scenarios / 643 assertions; capture-context tests: 4. Actual packaged cache checks: 25. Real packaged DesktopHelper/Swing/Xvfb: 145 checks each on outer main, nested helper and nested helper at 2x scaling. Independent builds are byte-identical. No live Minecraft/VFP pipeline, original Forge client, original-mod corpus conversion or server test was performed.
 
-Root `src` is NOT the cumulative delivered state. Build from the pinned checkpoint and exact rev246 main, not root source alone. No third-party mod/game JARs or font files are stored in this checkpoint. The [previous root README](docs/README-before-rev247-e34f9ed.md) is preserved verbatim, including rev205/206 history and limitations; historical paths there are relative to the repository root. All older checkpoints remain intact.
+Root `src` is NOT the cumulative delivered state. Use the rev248 checkpoint with the exact rev247 base main. Full per-case results are included in the conversation source-tests ZIP or regenerated by the runner; the source manifest includes that delivery-only results file. No dependency, mod/game binary or font files are included in the checkpoint. The [previous root README](docs/README-before-rev248-445da5d.md) is preserved verbatim; its relative paths refer to the repository root. All earlier checkpoints remain intact.
 
 ## Policy and remaining boundaries
 

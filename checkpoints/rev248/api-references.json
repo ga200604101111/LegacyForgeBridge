@@ -1,0 +1,20 @@
+{
+  "upstream": "ViaVersion/ViaFabricPlus",
+  "commit": "2f00a92851bed1bdab05e2465cadd9b21e4e6b7f",
+  "version": "4.4.15 / API 6 / Minecraft 1.21.11",
+  "files": {
+    "gradle.properties": "d8b044ff3039ed953596c25a0e13d93beff889db",
+    "src/main/java/com/viaversion/viafabricplus/ViaFabricPlusImpl.java": "10efb8bd10f908e5570bf0abc2f517e721afe1b0",
+    "src/main/java/com/viaversion/viafabricplus/save/SaveManager.java": "a45137c89fb573e22d9e56e84593641abbbecc66",
+    "src/main/java/com/viaversion/viafabricplus/save/impl/SettingsSave.java": "6931c08b64a390be468cda29c28a28b84d76591a",
+    "src/main/java/com/viaversion/viafabricplus/protocoltranslator/ProtocolTranslator.java": "09b3b4ce97ee890e70cb98a614ace40efefabafe",
+    "viafabricplus-api/src/main/java/com/viaversion/viafabricplus/api/events/LoadingCycleCallback.java": "91a1e3ed604a893a055e6c55edc47a875df446c3",
+    "docs/USAGE.md": "675cd85e4d076cd0dc7fa416e09046d50a39ae5c"
+  },
+  "sourceOnlyVerification": true,
+  "upstreamJarDownloaded": false,
+  "minecraftApiReferences": [
+    "https://maven.fabricmc.net/docs/yarn-1.21.11+build.4/net/minecraft/client/MinecraftClient.html",
+    "https://maven.fabricmc.net/docs/yarn-1.21.11+build.4/net/minecraft/client/gui/screen/multiplayer/ConnectScreen.html"
+  ]
+}

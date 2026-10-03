@@ -1,0 +1,23 @@
+{
+  "artifact": "legacyforgebridge-0.2.0-alpha.27-rev248-corpus4-local.31-startup-diagnostic.jar",
+  "sha256": "480964a8cd00a7bc34417fcdadf3ffcacc7cdb464aa0bd477ade9d4015679bfe",
+  "startupCases": 22,
+  "startupAssertions": 241,
+  "baselineReproductions": 2,
+  "diagnosticCases": 20,
+  "diagnosticAssertions": 643,
+  "cacheAssertions": 25,
+  "uiAssertionsPerRun": 145,
+  "uiRuns": 3,
+  "captureContextAssertions": 4,
+  "minecraftAndVfpAreTestDoubles": true,
+  "desktopHelperIsActualPackagedSwing": true,
+  "liveMinecraft": false,
+  "liveVfpPipeline": false,
+  "serverTested": false,
+  "jumpRepairClaimed": false,
+  "independentRebuildByteIdentical": true,
+  "protectedClassEntriesByteIdentical": 1251,
+  "nestedHelperOnlyChangedEntry": "dev/yinghuang/legacyforgebridge/desktop/Rev247SupportWindow.class",
+  "artifactBytes": 4561750
+}
