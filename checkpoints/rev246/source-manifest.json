@@ -1,0 +1,13 @@
+{
+  "checkpoint": "rev246-desktop-status-support-window",
+  "baseCommit": "bcea7cddaa820902d1de3cb8f8a9cce6525afb31",
+  "baseJarSha256": "92d00685e9316946353bf410455e57f14a15fd4a903ce5eed749b4fafd658ae6",
+  "artifactSha256": "6fc64f88351db277ef438b8eb226d313baa5410bf5a8e1a007c65b85bed414c4",
+  "sourceSha256": {
+    "source/dev/yinghuang/legacyforgebridge/desktop/DesktopProgressUi.java": "f98bf51ef5286f27f19ce6802ea60c328433b4412e578eb0523842c9328673a0",
+    "build_local.py": "7f46d8e096a1bd0fcacecc77d2aa0d0c15112d262e673f3c2d3fff254c4baf3c",
+    "tests/DesktopProgressUiTest.java": "bd0e5420f098da853364205b3707613b22c8593cde8208c6e3027f9acea06aed"
+  },
+  "mainJarBuilt": true,
+  "liveMinecraftValidated": false
+}

@@ -1,0 +1,43 @@
+{
+  "checkpoint": "rev246-desktop-status-support-window",
+  "baseArtifact": "legacyforgebridge-0.2.0-alpha.27-rev245-corpus4-local.28-deepdiag.jar",
+  "baseSha256": "92d00685e9316946353bf410455e57f14a15fd4a903ce5eed749b4fafd658ae6",
+  "artifact": "legacyforgebridge-0.2.0-alpha.27-rev246-corpus4-local.29-deepdiag-ui.jar",
+  "artifactBytes": 4534358,
+  "artifactSha256": "6fc64f88351db277ef438b8eb226d313baa5410bf5a8e1a007c65b85bed414c4",
+  "version": "0.2.0-alpha.27-corpus4-local.29-rev246-ui.1",
+  "converterRevision": "2026-10-03.246-desktop-status-support-window",
+  "motionDiagnosticSchema": "rev245-deep.1 unchanged",
+  "build": {
+    "jdk": 21,
+    "fullGradleLoomBuild": false,
+    "networkDependencyDownloads": false,
+    "githubActionsBuild": false,
+    "independentRebuildByteIdentical": true
+  },
+  "uiValidation": {
+    "sourceSwingAssertions": 19,
+    "packagedOuterJarSwingAssertions": 19,
+    "packagedDesktopHelperSwingAssertions": 19,
+    "xvfbRealAwtSwing": true,
+    "outerInnerDesktopProgressUiByteIdentical": true,
+    "outerInnerStateByteIdentical": true
+  },
+  "preservation": {
+    "allOtherOuterEntriesContentPreserved": true,
+    "desktopHelperOtherEntriesContentPreserved": 12,
+    "motionCoreClassesByteIdentical": [
+      "dev/yinghuang/legacyforgebridge/behavior/Rev243Diagnostics.class",
+      "dev/yinghuang/legacyforgebridge/behavior/Rev243Diagnostics$ReadApi.class",
+      "dev/yinghuang/legacyforgebridge/behavior/Rev245VelocityCorrelation.class",
+      "dev/yinghuang/legacyforgebridge/behavior/Rev245VelocityCorrelation$Flow.class",
+      "dev/yinghuang/legacyforgebridge/behavior/Rev245VelocityCorrelation$Vec.class",
+      "dev/yinghuang/legacyforgebridge/behavior/LegacyClientJumpMotion.class"
+    ],
+    "legacyMotionTraceLogChange": "artifact version string only"
+  },
+  "liveMinecraftValidated": false,
+  "serverChanged": false,
+  "originalModsChanged": false,
+  "motionBehaviorChanged": false
+}

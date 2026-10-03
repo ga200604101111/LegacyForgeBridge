@@ -2,17 +2,17 @@
 
 Experimental Fabric 1.21.11 client compatibility/conversion layer for Forge 1.7.10 mods. The original server owns gameplay state. Keep original JARs in `old-mods`, not modern Fabric `mods`.
 
-## Latest continuation: rev245 deep motion correlation diagnostics
+## Latest continuation: rev246 desktop status/support UI
 
-A new complete installable diagnostic main was built locally from the exact user-supplied rev243 binary. **This remains observation-only; it does not claim the unwanted second upward lift is fixed.**
+A new complete main was built from the exact rev245 deep-diagnostic artifact. The conversion-status desktop window now presents **詳細資訊** as a real button, adds a **目前支援模組列表** child window, and dynamically titles the main window as `LegacyForgeBridge | [目前的狀態] | by YingHunag09`.
 
-Artifact delivered in chat: `legacyforgebridge-0.2.0-alpha.27-rev245-corpus4-local.28-deepdiag.jar`, 4,527,570 bytes, SHA-256 `92d00685e9316946353bf410455e57f14a15fd4a903ce5eed749b4fafd658ae6`.
+The support dialog currently documents RPGTool1 1.1 as live-validated and BambooMod 2.6.8.5 / iYAMATO's Mod 1.7.10-1.6.8 as major compatibility targets under continued verification. It explicitly states that this is not an allow-list: LegacyForgeBridge remains a generic source-driven Forge 1.7.10 converter, so other mods with similar API/bytecode structures may also convert successfully but still require actual validation.
 
-rev245 correlates existing raw 1.7.10 motion, Via output, modern packet dispatch/application and bounded post-apply tick/move/camera context. Exact legacy wire IDs and modern packet-object identities are distinguished from the Via-output-to-modern-packet `vector_time_candidate` gap. Repeated positive-Y applications can be marked `secondLiftCandidate=true`, always with `causalProof=false`. The rev244 `velocityChanged` label and capture-local diagnostic corrections are included; rev241/rev242 velocity-history heuristics remain hard-disabled.
+Artifact delivered in chat: `legacyforgebridge-0.2.0-alpha.27-rev246-corpus4-local.29-deepdiag-ui.jar`, 4,534,358 bytes, SHA-256 `6fc64f88351db277ef438b8eb226d313baa5410bf5a8e1a007c65b85bed414c4`.
 
-Packaged validation passed 20 existing diagnostic scenarios / 643 assertions, 37 new correlation assertions, ZIP/JDK21 class checks and a real packaged-writer test with 8,006/8,006 records written, zero dropped/truncated/discarded records and TRACE_END present. Two independent offline builds were byte-identical. These results use explicit Minecraft/Fabric test doubles except for the actual packaged disk writer; no live Minecraft/ViaFabricPlus/original Forge 1.7.10 client or server call-site validation was performed.
+The same new UI class is installed in both the outer main JAR and its embedded desktop-helper JAR. Swing/Xvfb validation passed 19 assertions against source, 19 against the packaged main and 19 against the packaged helper; an independent rebuild was byte-identical. rev245 motion-correlation core classes remain content-identical and the motion diagnostic schema remains `rev245-deep.1`.
 
-See [rev245 checkpoint, build and capture instructions](checkpoints/rev245/README.md). Root `src` is still not the cumulative delivered state; continue from the checkpointed sources and exact pinned base rather than compiling root source and calling it rev245.
+See [rev246 checkpoint](checkpoints/rev246/README.md). Root `src` is still not the cumulative delivered state; use the checkpointed source/build chain and exact pinned base.
 
 ## Historical source checkpoint: rev206 projectile audit / rejection reporting
 
