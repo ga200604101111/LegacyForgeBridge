@@ -1,0 +1,13 @@
+{
+  "artifact": "lfb-native1710-jumpdiag-1.0.0.jar",
+  "sha256": "0ebb1f4f1371e888fd5481cbbde8262477ace2874794a3cc94cc2efbdb9ba52e",
+  "bytes": 19169,
+  "target": "Minecraft 1.7.10 / Forge 10.13.4.1614 / Java 8",
+  "classMajorVersion": 52,
+  "packagedFlowTest": "18 assertions pass",
+  "testDoublesPackaged": false,
+  "gameplayMutation": false,
+  "commandsRequired": false,
+  "outputDirectory": "logs/lfb-native1710/",
+  "liveMinecraftValidated": false
+}
