@@ -1,0 +1,23 @@
+{
+  "artifact": "legacyforgebridge-0.2.0-alpha.27-rev249-corpus4-local.32-via-outbound-diagnostic.jar",
+  "sha256": "a1942456cf0a3eb37580e50d0ffe6c9ebc51f722fa863e7590b70b1f94bb243d",
+  "bytes": 4573473,
+  "startupCases": 22,
+  "startupAssertions": 241,
+  "diagnosticCases": 20,
+  "cacheAssertions": 25,
+  "uiAssertionsPerRun": 145,
+  "uiRuns": 3,
+  "captureContextAssertions": 4,
+  "rev249DecodeAssertions": 19,
+  "protectedGameplayClassesIdentical": 9,
+  "zipIntegrity": "pass",
+  "liveMinecraft": false,
+  "liveVfpPipeline": false,
+  "serverTested": false,
+  "newHooks": "UserConnectionImpl.transformServerbound HEAD+RETURN via existing @Pseudo mixin",
+  "gameplayMutation": false,
+  "diagnosticAssertions": 643,
+  "rev249FlowAssertions": 13,
+  "independentRebuildByteIdentical": true
+}
