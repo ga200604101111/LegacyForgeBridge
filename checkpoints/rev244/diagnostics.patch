@@ -1,0 +1,48 @@
+--- a/checkpoints/rev243/source/dev/yinghuang/legacyforgebridge/behavior/LegacyMotionTraceLog.java
++++ b/checkpoints/rev243/source/dev/yinghuang/legacyforgebridge/behavior/LegacyMotionTraceLog.java
+@@ -80,7 +80,7 @@
+             event(stage,"kind="+kind+" mod="+mod+" targetItem="+item+" program="+p.getClass().getName()
+                     +" sourcePos="+vector(ent.field_70165_t,ent.field_70163_u,ent.field_70161_v)
+                     +" sourceVel="+vector(ent.field_70159_w,ent.field_70181_x,ent.field_70179_y)
+-                    +" isAirBorne="+ent.field_70133_I+" canceled="+e.isCanceled()+" distance="+e.distance
++                    +" velocityChanged="+ent.field_70133_I+" canceled="+e.isCanceled()+" distance="+e.distance
+                     +" queuedParticles="+(ent.field_70170_p==null?0:ent.field_70170_p.particles.size()));
+         } catch(RuntimeException|LinkageError ignored) { /* Diagnostics must not skip or mask a source program. */ }
+     }
+--- a/checkpoints/rev243/source/dev/yinghuang/legacyforgebridge/behavior/Rev243Diagnostics.java
++++ b/checkpoints/rev243/source/dev/yinghuang/legacyforgebridge/behavior/Rev243Diagnostics.java
+@@ -52,9 +52,12 @@
+         } catch(ReflectiveOperationException|RuntimeException|LinkageError e) { HOOKS.put(name,false);failure(name,e); }
+     }
+     static void captureStarted() {
++        // Observations belong to this capture, not the lifetime of the JVM.
++        CAMERAS.set(0);MOVES.set(0);STARTS.set(0);
++        WARNED.clear();MOVE.remove();
+         captureEndTicks=0;sampleCostNs=0;tickStartNs=0;previousFrameNs=0;lastInput="";lastEffects="";tickPlayer=null;
+         LegacyMotionTraceLog.event("HOOKS",HOOKS.toString()+" cameraAndMove=await_first_invocation");
+-        LegacyMotionTraceLog.event("DIAGNOSTIC_CONFIG","reconciliation=hard_disabled traceAutoStart=true partMiB=16 captureMiB=128 writerThread=LFB-motion-log-writer flushMilliseconds=500");
++        LegacyMotionTraceLog.event("DIAGNOSTIC_CONFIG","reconciliation=hard_disabled diagnosticSchema=rev244-source.1 coverageCounters=capture_local sourceFlag=velocityChanged:field_70133_I traceAutoStart=true partMiB=16 captureMiB=128 writerThread=LFB-motion-log-writer flushMilliseconds=500");
+         LegacyMotionTraceLog.event("KNOWN_LIMITATIONS","server_tick_and_causal_id=unavailable camera=Camera.update_return_not_final_bob_or_shader_matrix sourceParticles=queue_not_GPU allPacketTypes=false");
+     }
+     public static boolean isLocal(Object entity) {
+@@ -75,11 +78,11 @@
+         return r;
+     }
+     public static void tickStart(Object client) {
+-        STARTS.incrementAndGet();
+         if(!LegacyMotionTraceLog.active())return;
+         long begin=System.nanoTime();
+         try {
+             Object p=local(client);if(p==null)return;
++            STARTS.incrementAndGet();
+             tickStartNs=begin;
+             if(!MOVE.get().isEmpty()) { LegacyMotionTraceLog.event("MOVE_TAIL_MISSING","count="+MOVE.get().size());MOVE.get().clear(); }
+             LegacyMotionTraceLog.event("TICK_START",state(p));
+@@ -102,6 +105,7 @@
+             if(++captureEndTicks%100==0) {
+                 LegacyMotionTraceLog.event("COVERAGE_HEALTH","startTickCalls="+STARTS.get()+" cameraCalls="+CAMERAS.get()
+                         +" moveCalls="+MOVES.get()+" observerSampleNs="+sampleCostNs+" "+LegacyMotionTraceLog.stats());
++                if(STARTS.get()==0)LegacyMotionTraceLog.event("HOOK_NOT_OBSERVED","hook=tickStart reason=not_observed_or_registration_missing");
+                 if(CAMERAS.get()==0)LegacyMotionTraceLog.event("HOOK_NOT_OBSERVED","hook=camera reason=not_rendered_or_injection_missing");
+                 if(MOVES.get()==0)LegacyMotionTraceLog.event("HOOK_NOT_OBSERVED","hook=move reason=no_move_or_injection_missing");
+             }

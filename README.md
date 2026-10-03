@@ -2,7 +2,15 @@
 
 Experimental Fabric 1.21.11 client compatibility/conversion layer for Forge 1.7.10 mods. The original server owns gameplay state. Keep original JARs in `old-mods`, not modern Fabric `mods`.
 
-## Latest source checkpoint: rev206 projectile audit / rejection reporting
+## Latest continuation: rev244 (source-only diagnostics correction)
+
+**No new installable main JAR; the jump defect remains unresolved.** The [rev244 checkpoint](checkpoints/rev244/README.md) corrects the source-event `velocityChanged` label and capture-local observer accounting. The same offline suite reproduces 12 failing scenarios on rev243 and passes all 20 scenarios on the candidate (643 Java checks and 9 preparation guards). These are explicit game/API/writer-double tests, not live Minecraft, original-mod or server validation.
+
+The latest previously delivered complete main remains `legacyforgebridge-0.2.0-alpha.27-rev243-corpus4-local.27-diagnostic.jar`, SHA-256 `87d4e3cbe4939b21c4eb955b66508bbc2724aafbf6b557c87245cc345121ef63`. That binary was not available for this continuation and is not stored in the handoff commit. Read the [rev243 investigation handoff](checkpoints/rev243/investigation/2026-10-03/HANDOFF.md) before continuing motion work. Native Forge 1.7.10 paired results are still unavailable; do not infer a packet's server-side cause from a local jump label.
+
+Root `src` is not the cumulative delivered state. The guarded rev244 generator consumes the pinned rev243 diagnostic sources without rewriting historical checkpoints. No velocity heuristics, source jump bonuses, landing particles, liquid behavior, original mods or server state are changed by this delta.
+
+## Historical source checkpoint: rev206 projectile audit / rejection reporting
 
 **No installable rev206 JAR and no new admitted projectile entities.** This checkpoint audits the latest user log and original source corpus, and fixes silent loss of upstream projectile-candidate rejections. It is not a complete generic projectile converter.
 
@@ -12,7 +20,7 @@ The original bullet/shell sprite binding uses an actually all-transparent PNG. M
 
 See [rev206 scope and reproducible tests](checkpoints/rev206/README.md), [Traditional Chinese audit](checkpoints/rev206/AUDIT.zh-TW.md), and [findings](checkpoints/rev206/audit.json). This turn passed 17 synthetic fixtures / 86 analyzer assertions and 9 actual production-pass assertions, with independent JSON readback. Local dependency provenance is recorded. No full Gradle/Loom, Minecraft/Mixin, original Bamboo or live-server validation was performed.
 
-## Preserved local main: rev205
+## Historical local main: rev205
 
 The previously delivered complete main is `legacyforgebridge-0.2.0-alpha.27-rev205-local-test.1.jar`, 3,990,189 bytes, SHA-256 `3ce19e3a6d9b4788251aae95edd0c179c93bc44f4d5f65fba054be67ce4461de`. It preserves rev202-204 source motion observation, item properties/equipment and interaction work; rev205 corrects inherited bow sprite presentation and adds source-event-gated hold-use analysis. These local incremental builds are not clean Gradle/Loom builds. Prior validation counts are historical and were not rerun for this audit.
 

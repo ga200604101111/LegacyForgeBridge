@@ -1,0 +1,13 @@
+{
+  "checkpoint": "rev244-source-only",
+  "baseCommit": "e6c4a7879b9c9407761ed133df043e97b45daefe",
+  "baseSources": {
+    "LegacyMotionTraceLog.java": "116cba4cfe8f827a505cfc2c7a8104b800bac54664b30dcd60e9784313e22b52",
+    "Rev243Diagnostics.java": "a8b2a461f02dcdca1e146fae47cf40a63bcb49ef64e98af3766fb847a92dc093"
+  },
+  "generatedSources": {
+    "LegacyMotionTraceLog.java": "4b9d754c9bdb1b37f337ca6f77fa565a17e3b0d1d51b15b797aa51eb09a6213b",
+    "Rev243Diagnostics.java": "c0ed7602ffdedcd97a1cd59577dcbd9efa8076fe001cd1085fb0672521dc1a3a"
+  },
+  "mainJarBuilt": false
+}
