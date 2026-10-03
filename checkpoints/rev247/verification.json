@@ -1,0 +1,32 @@
+{
+  "artifact": "legacyforgebridge-0.2.0-alpha.27-rev247-corpus4-local.30-ui-cache-diagnostic.jar",
+  "bytes": 4553459,
+  "sha256": "db7627f77ddac1d84f2eff300f6397c9304971b56f0578d507d4a573944ae88a",
+  "baseSha256": "6fc64f88351db277ef438b8eb226d313baa5410bf5a8e1a007c65b85bed414c4",
+  "version": "0.2.0-alpha.27-corpus4-local.30-rev247-ui-cache.1",
+  "converterRevision": "2026-10-03.245-deep-motion-correlation-diagnostics",
+  "tests": {
+    "independentRebuildByteIdentical": true,
+    "actualDesktopHelperUiAssertionsPerRun": 145,
+    "actualDesktopHelperUiRuns": ["outer-main", "nested-helper", "nested-helper-scale2"],
+    "testedDialogWidths": [480, 650, 720, 1000],
+    "cacheAssertions": 25,
+    "packagedDiagnosticAssertions": 643,
+    "groundEvidenceAssertions": 11,
+    "existingTraceReplay": {
+      "applyPackets": 89,
+      "repeatedPositiveLocalJumpIntervals": 9,
+      "postGroundCandidates": 5,
+      "isNewLiveGameTest": false
+    },
+    "rev246ConversionErrorRootCauseConfirmed": false
+  },
+  "untouchedEntriesContentIdentical": 1708,
+  "java21ClassFilesParsed": 12,
+  "buildMethod": "offline javac --release 21 + guarded named-method JDK ASM edits of pinned full rev246 main and nested helper",
+  "fullGradleLoomBuild": false,
+  "networkDependencyDownloads": false,
+  "liveMinecraft": false,
+  "liveServer": false,
+  "userLogsContainRev246Error": false
+}

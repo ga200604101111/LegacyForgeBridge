@@ -1,0 +1,17 @@
+{
+  "rev245Sha256": "92d00685e9316946353bf410455e57f14a15fd4a903ce5eed749b4fafd658ae6",
+  "rev246Sha256": "6fc64f88351db277ef438b8eb226d313baa5410bf5a8e1a007c65b85bed414c4",
+  "changedEntries": [
+    "META-INF/lfb/desktop-helper.jar",
+    "dev/yinghuang/legacyforgebridge/BuildInfo.class",
+    "dev/yinghuang/legacyforgebridge/LegacyFileLogger.class",
+    "dev/yinghuang/legacyforgebridge/behavior/LegacyMotionTraceLog.class",
+    "dev/yinghuang/legacyforgebridge/desktop/DesktopProgressUi$State.class",
+    "dev/yinghuang/legacyforgebridge/desktop/DesktopProgressUi.class",
+    "dev/yinghuang/legacyforgebridge/network/FmlConnectionTrace.class",
+    "fabric.mod.json"
+  ],
+  "addedEntries": ["dev/yinghuang/legacyforgebridge/rev246-build.json"],
+  "allConvertClassesUnchanged": true,
+  "allGameplayBehaviorClassesUnchangedExceptVersionInTraceLogger": true
+}
