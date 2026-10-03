@@ -1,0 +1,62 @@
+{
+  "checkpoint": "rev245-deep-motion-correlation-diagnostics",
+  "baseArtifact": "legacyforgebridge-0.2.0-alpha.27-rev243-corpus4-local.27-diagnostic.jar",
+  "baseSha256": "87d4e3cbe4939b21c4eb955b66508bbc2724aafbf6b557c87245cc345121ef63",
+  "artifact": "legacyforgebridge-0.2.0-alpha.27-rev245-corpus4-local.28-deepdiag.jar",
+  "artifactBytes": 4527570,
+  "artifactSha256": "92d00685e9316946353bf410455e57f14a15fd4a903ce5eed749b4fafd658ae6",
+  "version": "0.2.0-alpha.27-corpus4-local.28-rev245-deepdiag.1",
+  "converterRevision": "2026-10-03.245-deep-motion-correlation-diagnostics",
+  "build": {
+    "jdk": "21.0.11",
+    "fullGradleLoomBuild": false,
+    "networkDependencyDownloads": false,
+    "githubActionsBuild": false,
+    "independentRebuildByteIdentical": true
+  },
+  "packagedValidation": {
+    "zipIntegrity": "pass",
+    "javapJava21ClassesParsed": 11,
+    "rev244NamedScenariosPassed": 20,
+    "rev244Assertions": 643,
+    "correlationAssertions": 37,
+    "realWriter": {
+      "offered": 8006,
+      "accepted": 8006,
+      "written": 8006,
+      "dropped": 0,
+      "truncated": 0,
+      "discarded": 0,
+      "traceEnd": true,
+      "correlationLines": 8000,
+      "highWaterIsLoadDependent": true,
+      "sampleHighWaterFinalReproTest": 7022
+    },
+    "untouchedBaselineEntriesContentIdentical": 1704,
+    "removedEntries": 0
+  },
+  "liveValidation": {
+    "minecraftFabric": false,
+    "viafabricplusRealPipeline": false,
+    "originalForge1710Client": false,
+    "serverCallSite": false
+  },
+  "limitations": [
+    "Via output to modern packet is vector/time/order candidate, not exact identity.",
+    "No server causal id or server tick.",
+    "Diagnostic overhead is not representative of a performance build."
+  ],
+  "sourceSha256": {
+    "build_local.py": "465e8dd083fb2bc8ef34e414a5a50ba821dc7f1ddc32a594d7f3417c69b7ef21",
+    "source/dev/yinghuang/legacyforgebridge/behavior/LegacyMotionTraceLog.java": "6d90028cc214857058a4cb9fd7fba7434d8e5c07b1fcb32b745131234b1561ef",
+    "source/dev/yinghuang/legacyforgebridge/behavior/Rev243Diagnostics.java": "3c8d289a7fe569c5c592336d06ba7a4feb9212cdd9d05a09c80b636114f506e4",
+    "source/dev/yinghuang/legacyforgebridge/behavior/Rev245VelocityCorrelation.java": "cf271192582f0d3649e24c0e0303aecb05593924de66c3c7a294eaa4a3fac76c",
+    "test_local.py": "5540f22e0e691dc3db7c8cec511e7172b44ee0e56d4d78af60e60d0f4b185408",
+    "tests/CaptureScopeTest.java": "51d679e30f750c2b671fed5ea1d92420a01ba179fa07086e7d359a58058fedfb",
+    "tests/CorrelationTest.java": "e5e429920f78736a0ed2a2694c1e36299b88aaa4248dc5da44d55c20b729d0b1",
+    "tests/LegacyBehaviorApi.java": "58e371030aa050dbdfddfdd23b624d3467d72c382bb04d2046bcf76e352d1479",
+    "tests/RealWriterHarness.java": "43da132fd246cc18a5c33a5dd91d50bfc038e42e47dd68f15d37d2ca01db86be",
+    "tests/Rev243TraceWriter.java": "9598cb0081b8e17076b26b4f2d83e2b732219ab37271588a01af8f7a1eb37fd5",
+    "tests/write_stubs.py": "1387861c7df8a5bd5e1fa71a0f02d7b46203a4b0cc48fd516ac7ddf8d4b266de"
+  }
+}

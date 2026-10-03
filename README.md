@@ -2,13 +2,17 @@
 
 Experimental Fabric 1.21.11 client compatibility/conversion layer for Forge 1.7.10 mods. The original server owns gameplay state. Keep original JARs in `old-mods`, not modern Fabric `mods`.
 
-## Latest continuation: rev244 (source-only diagnostics correction)
+## Latest continuation: rev245 deep motion correlation diagnostics
 
-**No new installable main JAR; the jump defect remains unresolved.** The [rev244 checkpoint](checkpoints/rev244/README.md) corrects the source-event `velocityChanged` label and capture-local observer accounting. The same offline suite reproduces 12 failing scenarios on rev243 and passes all 20 scenarios on the candidate (643 Java checks and 9 preparation guards). These are explicit game/API/writer-double tests, not live Minecraft, original-mod or server validation.
+A new complete installable diagnostic main was built locally from the exact user-supplied rev243 binary. **This remains observation-only; it does not claim the unwanted second upward lift is fixed.**
 
-The latest previously delivered complete main remains `legacyforgebridge-0.2.0-alpha.27-rev243-corpus4-local.27-diagnostic.jar`, SHA-256 `87d4e3cbe4939b21c4eb955b66508bbc2724aafbf6b557c87245cc345121ef63`. That binary was not available for this continuation and is not stored in the handoff commit. Read the [rev243 investigation handoff](checkpoints/rev243/investigation/2026-10-03/HANDOFF.md) before continuing motion work. Native Forge 1.7.10 paired results are still unavailable; do not infer a packet's server-side cause from a local jump label.
+Artifact delivered in chat: `legacyforgebridge-0.2.0-alpha.27-rev245-corpus4-local.28-deepdiag.jar`, 4,527,570 bytes, SHA-256 `92d00685e9316946353bf410455e57f14a15fd4a903ce5eed749b4fafd658ae6`.
 
-Root `src` is not the cumulative delivered state. The guarded rev244 generator consumes the pinned rev243 diagnostic sources without rewriting historical checkpoints. No velocity heuristics, source jump bonuses, landing particles, liquid behavior, original mods or server state are changed by this delta.
+rev245 correlates existing raw 1.7.10 motion, Via output, modern packet dispatch/application and bounded post-apply tick/move/camera context. Exact legacy wire IDs and modern packet-object identities are distinguished from the Via-output-to-modern-packet `vector_time_candidate` gap. Repeated positive-Y applications can be marked `secondLiftCandidate=true`, always with `causalProof=false`. The rev244 `velocityChanged` label and capture-local diagnostic corrections are included; rev241/rev242 velocity-history heuristics remain hard-disabled.
+
+Packaged validation passed 20 existing diagnostic scenarios / 643 assertions, 37 new correlation assertions, ZIP/JDK21 class checks and a real packaged-writer test with 8,006/8,006 records written, zero dropped/truncated/discarded records and TRACE_END present. Two independent offline builds were byte-identical. These results use explicit Minecraft/Fabric test doubles except for the actual packaged disk writer; no live Minecraft/ViaFabricPlus/original Forge 1.7.10 client or server call-site validation was performed.
+
+See [rev245 checkpoint, build and capture instructions](checkpoints/rev245/README.md). Root `src` is still not the cumulative delivered state; continue from the checkpointed sources and exact pinned base rather than compiling root source and calling it rev245.
 
 ## Historical source checkpoint: rev206 projectile audit / rejection reporting
 

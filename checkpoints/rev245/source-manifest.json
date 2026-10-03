@@ -1,0 +1,21 @@
+{
+  "checkpoint": "rev245",
+  "baseCommit": "6bad868a91e353cb2172acc57c48709b83e524e0",
+  "baseJarSha256": "87d4e3cbe4939b21c4eb955b66508bbc2724aafbf6b557c87245cc345121ef63",
+  "artifactSha256": "92d00685e9316946353bf410455e57f14a15fd4a903ce5eed749b4fafd658ae6",
+  "files": {
+    "README.md": "4d84abd88b6ff34335efe92507f863742a4dfbdc48f485d8b8beee331f0cf569",
+    "build_local.py": "465e8dd083fb2bc8ef34e414a5a50ba821dc7f1ddc32a594d7f3417c69b7ef21",
+    "source/dev/yinghuang/legacyforgebridge/behavior/LegacyMotionTraceLog.java": "6d90028cc214857058a4cb9fd7fba7434d8e5c07b1fcb32b745131234b1561ef",
+    "source/dev/yinghuang/legacyforgebridge/behavior/Rev243Diagnostics.java": "3c8d289a7fe569c5c592336d06ba7a4feb9212cdd9d05a09c80b636114f506e4",
+    "source/dev/yinghuang/legacyforgebridge/behavior/Rev245VelocityCorrelation.java": "cf271192582f0d3649e24c0e0303aecb05593924de66c3c7a294eaa4a3fac76c",
+    "test_local.py": "5540f22e0e691dc3db7c8cec511e7172b44ee0e56d4d78af60e60d0f4b185408",
+    "tests/CaptureScopeTest.java": "51d679e30f750c2b671fed5ea1d92420a01ba179fa07086e7d359a58058fedfb",
+    "tests/CorrelationTest.java": "e5e429920f78736a0ed2a2694c1e36299b88aaa4248dc5da44d55c20b729d0b1",
+    "tests/LegacyBehaviorApi.java": "58e371030aa050dbdfddfdd23b624d3467d72c382bb04d2046bcf76e352d1479",
+    "tests/RealWriterHarness.java": "43da132fd246cc18a5c33a5dd91d50bfc038e42e47dd68f15d37d2ca01db86be",
+    "tests/Rev243TraceWriter.java": "9598cb0081b8e17076b26b4f2d83e2b732219ab37271588a01af8f7a1eb37fd5",
+    "tests/write_stubs.py": "1387861c7df8a5bd5e1fa71a0f02d7b46203a4b0cc48fd516ac7ddf8d4b266de",
+    "verification.json": "7b95b90f66a6a02c4b0e6b058260f60f342cb1899fad724f57fe2f2dc64de6d6"
+  }
+}
