@@ -1,0 +1,18 @@
+{
+  "jarSha256": "b08c3dbc12f5f436e48e8e4f2337aeacdc8d3e6ee78ebdc4e6a2a906152c96f9",
+  "changedPreexisting": [
+    "dev/yinghuang/legacyforgebridge/convert/pass/LegacyClientOnlySourceStripPass.class",
+    "dev/yinghuang/legacyforgebridge/rev254/LegacySaplingSupport.class",
+    "fabric.mod.json"
+  ],
+  "protectedEntriesUnchanged": 32,
+  "allPreexistingEntriesUnchanged": 1782,
+  "saplingRuntimeAssertions": 51,
+  "resourceVariants": 16,
+  "metadataItemAliases": 48,
+  "rawTextureMatch": true,
+  "liveMinecraft": false,
+  "actualSponge": false,
+  "actualGsonUsedInFixtures": false,
+  "realIconInterpreterInFixtures": false
+}
