@@ -1,0 +1,28 @@
+{
+  "date": "2026-10-05",
+  "artifact": "lfb-paired-jump-probe-1.7.10-1.0.0.jar",
+  "bytes": 23303,
+  "sha256": "de5260042775e74b7494434066df6b7a4cd966dfe610e38746c13bf59d069281",
+  "kind": "independent Forge 1.7.10 observation-only coremod",
+  "baseLfb251Unchanged": true,
+  "lfb251Sha256": "01b36aff7d6f5ddc2b0097356c74f568f15173c4fed821f5a6c9788236e65502",
+  "offlineChecks": {
+    "mcpFixtureChecks": 45,
+    "srgFixtureChecks": 45,
+    "traceContentChecks": 32,
+    "total": 122,
+    "passed": true
+  },
+  "classfileVersion": 52,
+  "actualAsmTransformationExecuted": true,
+  "asmTestImplementation": "JDK21 internal ASM, API5 mode, test-only remapping",
+  "forgeAsm503RuntimeTested": false,
+  "liveMinecraftTested": false,
+  "liveServerTested": false,
+  "compileOnlyDeclarationsPackaged": false,
+  "sourceSha256": {
+    "src/dev/yinghuang/lfb/jumpprobe/JumpProbe.java": "892d897c5279316e8af7def7a9d5c0861eb8576aa6d64aa737b3739b8ce9fae5",
+    "src/dev/yinghuang/lfb/jumpprobe/JumpProbePlugin.java": "c5c588db420c9f1572c941f39be71e4bbff7063a2d698f2fad1f71cfeef08f94",
+    "src/dev/yinghuang/lfb/jumpprobe/JumpProbeTransformer.java": "89d5b9dafdb3200fc1dee033a752a8be2c3a92549117412e2394bc9ae4834198"
+  }
+}
