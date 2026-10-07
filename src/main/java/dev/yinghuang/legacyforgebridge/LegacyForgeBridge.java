@@ -3,6 +3,7 @@ package dev.yinghuang.legacyforgebridge;
 import dev.yinghuang.legacyforgebridge.compat.LegacyStackComponents;
 import dev.yinghuang.legacyforgebridge.convert.LegacyConversionManager;
 import dev.yinghuang.legacyforgebridge.convert.runtime.ConvertedContentRuntime;
+import dev.yinghuang.legacyforgebridge.convert.runtime.ConvertedLegacyCloneRecipe;
 import dev.yinghuang.legacyforgebridge.convert.runtime.LegacyProcessorMenuSupport;
 import dev.yinghuang.legacyforgebridge.convert.runtime.LegacySeatEntityRuntime;
 import dev.yinghuang.legacyforgebridge.network.FmlConnectionTrace;
@@ -32,6 +33,7 @@ public final class LegacyForgeBridge implements ModInitializer {
 
         // Register shared LFB-owned state/menu/entity types before converted content is constructed.
         LegacyStackComponents.bootstrap();
+        ConvertedLegacyCloneRecipe.bootstrap();
         LegacyProcessorMenuSupport.bootstrap();
         LegacySeatEntityRuntime.bootstrap();
 
