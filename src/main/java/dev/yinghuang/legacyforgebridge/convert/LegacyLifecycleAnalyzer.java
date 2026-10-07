@@ -300,11 +300,45 @@ public final class LegacyLifecycleAnalyzer {
                     }
                 }
             }
-            if(!sawAssignment||unresolved||values.size()!=1)return UnknownValue.INSTANCE;
+            if(!sawAssignment)return sourceDefaultStaticValue(field);
+            if(unresolved||values.size()!=1)return UnknownValue.INSTANCE;
             return values.getFirst();
         }finally{
             guard.remove(fieldKey);
         }
+    }
+
+    private Value sourceDefaultStaticValue(FieldInsnNode field){
+        ClassNode owner=classes.get(field.owner);
+        if(owner==null)return UnknownValue.INSTANCE;
+        FieldNode declaration=null;
+        for(FieldNode candidate:owner.fields){
+            if(candidate.name.equals(field.name)&&candidate.desc.equals(field.desc)){
+                declaration=candidate;break;
+            }
+        }
+        if(declaration==null||(declaration.access&Opcodes.ACC_STATIC)==0)return UnknownValue.INSTANCE;
+
+        // A Java/JVM static default is safe only when the whole source JAR contains no explicit
+        // write to this field. This is intentionally stronger than lifecycle reachability:
+        // an uncalled source helper is still evidence that the field is not structurally constant.
+        for(MethodContext context:methods.values()){
+            for(AbstractInsnNode instruction:context.method().instructions){
+                if(instruction instanceof FieldInsnNode put&&put.getOpcode()==Opcodes.PUTSTATIC
+                        &&put.owner.equals(field.owner)&&put.name.equals(field.name)&&put.desc.equals(field.desc)){
+                    return UnknownValue.INSTANCE;
+                }
+            }
+        }
+
+        return switch(field.desc){
+            case "Z" -> new BooleanValue(false);
+            case "B","C","S","I" -> new NumberValue(0);
+            case "J" -> new NumberValue(0L);
+            case "F" -> new NumberValue(0F);
+            case "D" -> new NumberValue(0D);
+            default -> UnknownValue.INSTANCE;
+        };
     }
 
     private Set<MethodKey> reachableSourceMethods(){

@@ -35,7 +35,7 @@ class LegacyLifecycleAnalyzerTest {
         }
         var analysis=new LegacyLifecycleAnalyzer().analyze(jar);
         var entities=analysis.of(LegacyLifecycleAnalyzer.Kind.ENTITY);
-        assertEquals(2,entities.size());
+        assertEquals(3,entities.size());
 
         var proven=entities.stream()
                 .filter(value->value.arguments().get(1) instanceof LegacyLifecycleAnalyzer.TextValue text&&text.value().equals("fixed"))
@@ -47,6 +47,11 @@ class LegacyLifecycleAnalyzerTest {
                 .findFirst().orElseThrow();
         var unresolved=assertInstanceOf(LegacyLifecycleAnalyzer.FieldValue.class,dynamic.arguments().get(2));
         assertEquals("DYNAMIC_ID",unresolved.name());
+
+        var defaultZero=entities.stream()
+                .filter(value->value.arguments().get(1) instanceof LegacyLifecycleAnalyzer.TextValue text&&text.value().equals("default_zero"))
+                .findFirst().orElseThrow();
+        assertEquals(0,assertInstanceOf(LegacyLifecycleAnalyzer.NumberValue.class,defaultZero.arguments().get(2)).value().intValue());
     }
 
     private static byte[] staticEntityIds(){
@@ -55,6 +60,7 @@ class LegacyLifecycleAnalyzerTest {
         w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,owner,null,"java/lang/Object",null);
         w.visitField(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"FIXED_ID","I",null,null).visitEnd();
         w.visitField(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"DYNAMIC_ID","I",null,null).visitEnd();
+        w.visitField(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"DEFAULT_ID","I",null,null).visitEnd();
 
         MethodVisitor assign=w.visitMethod(Opcodes.ACC_PRIVATE,"assign","(Lnet/minecraftforge/common/config/Configuration;)V",null,null);
         assign.visitCode();
@@ -82,6 +88,9 @@ class LegacyLifecycleAnalyzerTest {
         pre.visitMethodInsn(Opcodes.INVOKESPECIAL,owner,"entity","(Ljava/lang/Class;Ljava/lang/String;I)V",false);
         pre.visitVarInsn(Opcodes.ALOAD,0);pre.visitLdcInsn(Type.getObjectType("alt/staticid/DynamicEntity"));pre.visitLdcInsn("dynamic");
         pre.visitFieldInsn(Opcodes.GETSTATIC,owner,"DYNAMIC_ID","I");
+        pre.visitMethodInsn(Opcodes.INVOKESPECIAL,owner,"entity","(Ljava/lang/Class;Ljava/lang/String;I)V",false);
+        pre.visitVarInsn(Opcodes.ALOAD,0);pre.visitLdcInsn(Type.getObjectType("alt/staticid/DefaultEntity"));pre.visitLdcInsn("default_zero");
+        pre.visitFieldInsn(Opcodes.GETSTATIC,owner,"DEFAULT_ID","I");
         pre.visitMethodInsn(Opcodes.INVOKESPECIAL,owner,"entity","(Ljava/lang/Class;Ljava/lang/String;I)V",false);
         pre.visitInsn(Opcodes.RETURN);pre.visitMaxs(4,2);pre.visitEnd();
 
