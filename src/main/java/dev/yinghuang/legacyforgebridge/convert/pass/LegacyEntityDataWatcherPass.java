@@ -57,8 +57,12 @@ public final class LegacyEntityDataWatcherPass implements ConversionPass {
             value.addProperty("updateFrequency", rule.updateFrequency());
             value.addProperty("velocityUpdates", rule.velocityUpdates());
             value.addProperty("sourceDataWatcherDefinitionComplete", true);
+            value.addProperty("entityBaseWatchersHandledExternally", true);
+            value.addProperty("initialFmlWatcherEnvelopeComplete", true);
             value.addProperty("runtimeImplementationWired", false);
             JsonArray entries = new JsonArray();
+            int platformWatcherEntryCount = 0;
+            int sourceWatcherEntryCount = 0;
             for (LegacyEntityDataWatcherAnalyzer.Entry entry : rule.entries()) {
                 JsonObject watched = new JsonObject();
                 watched.addProperty("index", entry.index());
@@ -67,8 +71,17 @@ public final class LegacyEntityDataWatcherPass implements ConversionPass {
                 else if (entry.defaultValue() instanceof Boolean bool) watched.addProperty("defaultValue", bool);
                 else watched.addProperty("defaultValue", String.valueOf(entry.defaultValue()));
                 watched.addProperty("declaredBy", entry.declaredBy());
+                boolean platformOwned = entry.declaredBy() != null
+                        && entry.declaredBy().startsWith("net/minecraft/entity/");
+                watched.addProperty("platformOwned", platformOwned);
+                watched.addProperty("ownership", platformOwned ? "platform" : "source");
+                if (platformOwned) platformWatcherEntryCount++;
+                else sourceWatcherEntryCount++;
                 entries.add(watched);
             }
+            value.addProperty("platformWatcherEntryCount", platformWatcherEntryCount);
+            value.addProperty("sourceWatcherEntryCount", sourceWatcherEntryCount);
+            value.addProperty("nonBaseWatcherBridgeEntryCount", entries.size());
             value.add("dataWatcherEntries", entries);
             rules.add(value);
         }
