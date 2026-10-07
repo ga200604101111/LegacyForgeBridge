@@ -96,6 +96,11 @@ public final class LegacyPlainEntityCodegenPass implements ConversionPass {
             copy(rule, item, "legacyNumericId");
             copy(rule, item, "trackingRange"); copy(rule, item, "updateFrequency"); copy(rule, item, "velocityUpdates");
             copy(rule, item, "width"); copy(rule, item, "height");
+            copy(rule, item, "initialFmlWatcherEnvelopeComplete");
+            copy(rule, item, "entityBaseWatchersHandledExternally");
+            copy(rule, item, "platformWatcherEntryCount");
+            copy(rule, item, "sourceWatcherEntryCount");
+            copy(rule, item, "nonBaseWatcherBridgeEntryCount");
             if (rule.has("synchedDataEntries")) item.add("synchedDataEntries", rule.get("synchedDataEntries").deepCopy());
             item.addProperty("family", LegacyEntityRuntimeAdmissionPass.FAMILY_PLAIN_SYNCHED_DATA_ONLY);
             item.addProperty("generatedClass", binaryName);
