@@ -117,7 +117,14 @@ public final class LegacyEntityDataWatcherGlobalClosureAnalyzer {
 
                 MethodKey key = new MethodKey(owner.name, method.name, method.desc);
                 int entityProven = maxProvenByMethod.getOrDefault(key, 0);
-                int proven = Math.min(runtimeCalls, entityProven + platformProven);
+                // Aggregate call counts do not identify individual instructions. Never sum an
+                // entity-lineage count and a platform count in the same method: doing so could
+                // double-count one call and accidentally mask a different unresolved call.
+                // Platform-only utility/event methods may use the pinned vanilla shortcut; mixed
+                // methods remain fail-closed until callsite identity is represented explicitly.
+                int proven = entityProven == 0
+                        ? Math.min(runtimeCalls, platformProven)
+                        : Math.min(runtimeCalls, entityProven);
                 totalRuntimeCalls += runtimeCalls;
                 totalProvenCalls += proven;
                 if (unsupported.isEmpty() && proven == runtimeCalls) {
