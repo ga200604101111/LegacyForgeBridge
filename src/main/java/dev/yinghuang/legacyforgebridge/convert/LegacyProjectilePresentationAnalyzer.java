@@ -202,6 +202,11 @@ public final class LegacyProjectilePresentationAnalyzer {
             for(var binding:registry.fieldBindings())if(binding.kind()==LegacyRegistryAnalyzer.Kind.ITEM
                     &&binding.owner().equals(field.owner)&&binding.name().equals(field.name)&&binding.descriptor().equals(field.desc))
                 matches.add(new RenderSnowballBinding(new ItemBinding(binding.registryName(),binding.implementationClass()),metadata));
+
+            LegacyVanillaRegistry1710.resolve(field.owner,field.name)
+                    .filter(entry->entry.kind()==LegacyRegistryAnalyzer.Kind.ITEM)
+                    .ifPresent(entry->matches.add(new RenderSnowballBinding(
+                            new ItemBinding(entry.registryName(),LegacyVanillaRegistry1710.ITEMS_OWNER),metadata)));
         }
         return matches.size()==1?matches.getFirst():null;
     }

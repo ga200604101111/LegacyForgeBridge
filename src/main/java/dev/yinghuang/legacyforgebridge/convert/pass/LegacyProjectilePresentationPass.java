@@ -2,6 +2,8 @@ package dev.yinghuang.legacyforgebridge.convert.pass;
 
 import com.google.gson.*;
 import dev.yinghuang.legacyforgebridge.convert.LegacyProjectilePresentationAnalyzer;
+import dev.yinghuang.legacyforgebridge.convert.LegacyVanillaRegistry1710;
+import dev.yinghuang.legacyforgebridge.convert.LegacyVanillaStackDataFix;
 import dev.yinghuang.legacyforgebridge.convert.api.*;
 
 import java.nio.charset.StandardCharsets;
@@ -12,6 +14,13 @@ import java.util.*;
 public final class LegacyProjectilePresentationPass implements ConversionPass {
     public static final String OUTPUT="legacyforgebridge/projectile-presentation-rules.json";
     private static final Gson JSON=new GsonBuilder().setPrettyPrinting().create();
+
+    record PresentationItem(String modernId,int runtimeMetadata,String sourceKind) {
+        PresentationItem {
+            if(modernId==null||modernId.isBlank()||runtimeMetadata<0||sourceKind==null||sourceKind.isBlank())
+                throw new IllegalArgumentException("Invalid projectile presentation item");
+        }
+    }
 
     @Override public String id(){return "legacy-projectile-presentation";}
 
@@ -44,11 +53,9 @@ public final class LegacyProjectilePresentationPass implements ConversionPass {
 
         JsonArray rules=new JsonArray();
         for(var rule:analysis.rules()){
-            String key=itemKey(rule.sourceItemClass(),rule.sourceItemRegistryName());
-            String itemId=ambiguousKeys.contains(key)?null:itemIds.get(key);
-            if(itemId==null&&!ambiguousClasses.contains(rule.sourceItemClass()))
-                itemId=uniqueClassIds.get(rule.sourceItemClass());
-            if(itemId==null)continue;
+            PresentationItem presentation=resolvePresentationItem(rule,itemIds,uniqueClassIds,ambiguousKeys,ambiguousClasses);
+            if(presentation==null)continue;
+            String itemId=presentation.modernId();
             JsonObject value=new JsonObject();
             value.addProperty("id",context.metadata().fabricId()+":"+modernPath(rule.registryName()));
             value.addProperty("legacyRegistryName",rule.registryName());value.addProperty("sourceClass",rule.sourceClass());
@@ -58,9 +65,11 @@ public final class LegacyProjectilePresentationPass implements ConversionPass {
             value.addProperty("baseFamily",rule.baseFamily().name());value.addProperty("adapter",rule.adapter().name());
             value.addProperty("itemId",itemId);value.addProperty("sourceItemClass",rule.sourceItemClass());
             value.addProperty("sourceItemRegistryName",rule.sourceItemRegistryName());
+            value.addProperty("presentationItemSource",presentation.sourceKind());
+            value.addProperty("legacyPresentationMetadata",rule.defaultItemMetadata());
             value.addProperty("metadataWatcherIndex",rule.metadataWatcherIndex());
             value.addProperty("metadataWatcherWireType",rule.metadataWatcherWireType());
-            value.addProperty("metadataOffset",rule.metadataOffset());value.addProperty("defaultItemMetadata",rule.defaultItemMetadata());
+            value.addProperty("metadataOffset",rule.metadataOffset());value.addProperty("defaultItemMetadata",presentation.runtimeMetadata());
             if(rule.fixedTexture()!=null)value.addProperty("fixedTexture",rule.fixedTexture());
             value.addProperty("proof",rule.proof());value.addProperty("runtimeComplete",true);rules.add(value);
         }
@@ -78,6 +87,33 @@ public final class LegacyProjectilePresentationPass implements ConversionPass {
                 "Source-proven remote projectile presentation rules="+rules.size()+"; FML throwable velocity and item-bound rendering are candidate-owned.");
         for(var skip:analysis.skipped())context.diagnostics().warning("LFB-CONVERT-PROJECTILE-0002",SupportLevel.RUNTIME_BRIDGE,
                 "Projectile presentation not admitted for "+skip.registryName()+": "+skip.reason());
+    }
+
+    static PresentationItem resolvePresentationItem(
+            LegacyProjectilePresentationAnalyzer.Rule rule,
+            Map<String,String> itemIds,
+            Map<String,String> uniqueClassIds,
+            Set<String> ambiguousKeys,
+            Set<String> ambiguousClasses
+    ){
+        if(rule==null)return null;
+        if(LegacyVanillaRegistry1710.ITEMS_OWNER.equals(rule.sourceItemClass())){
+            if(rule.metadataWatcherIndex()>=0||rule.metadataWatcherWireType()>=0||rule.metadataOffset()!=0)return null;
+            try{
+                LegacyVanillaStackDataFix.ModernStack modern=LegacyVanillaStackDataFix.upgrade(
+                        rule.sourceItemRegistryName(),rule.defaultItemMetadata());
+                if(modern.hasComponents())return null;
+                return new PresentationItem(modern.id(),0,"VANILLA_1710_DFU");
+            }catch(RuntimeException unresolved){
+                return null;
+            }
+        }
+
+        String key=itemKey(rule.sourceItemClass(),rule.sourceItemRegistryName());
+        String itemId=ambiguousKeys.contains(key)?null:itemIds.get(key);
+        if(itemId==null&&!ambiguousClasses.contains(rule.sourceItemClass()))
+            itemId=uniqueClassIds.get(rule.sourceItemClass());
+        return itemId==null?null:new PresentationItem(itemId,rule.defaultItemMetadata(),"CONVERTED_MOD_ITEM");
     }
 
     private static String itemKey(String sourceClass,String registryName){

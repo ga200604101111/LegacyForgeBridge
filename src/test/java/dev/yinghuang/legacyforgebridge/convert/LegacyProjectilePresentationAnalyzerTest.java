@@ -68,6 +68,27 @@ class LegacyProjectilePresentationAnalyzerTest {
     }
 
     @Test
+    void vanilla1710RenderSnowballItemFieldIsAPlatformPresentationIdentity()throws Exception{
+        Path jar=tempDir.resolve("foreign-vanilla-snowball.jar");
+        try(JarOutputStream out=new JarOutputStream(Files.newOutputStream(jar))){
+            put(out,"mcmod.info","[{\"modid\":\"foreign\",\"name\":\"Foreign\",\"version\":\"1\",\"mcversion\":\"1.7.10\"}]".getBytes(StandardCharsets.UTF_8));
+            put(out,"foreign/vanilla/Orb.class",vanillaSnowballThrowable());
+            put(out,"foreign/vanilla/Bootstrap.class",vanillaSnowballBootstrap());
+            put(out,"foreign/vanilla/Client.class",vanillaSnowballClient());
+        }
+
+        var analysis=new LegacyProjectilePresentationAnalyzer().analyze(jar);
+        var rule=analysis.rules().stream().filter(value->value.registryName().equals("vanilla_orb")).findFirst()
+                .orElseThrow(()->new AssertionError("Vanilla RenderSnowball proof missing; skipped="+analysis.skipped()+" diagnostics="+analysis.diagnostics()));
+        assertEquals(LegacyProjectilePresentationAnalyzer.BaseFamily.THROWABLE,rule.baseFamily());
+        assertEquals(LegacyProjectilePresentationAnalyzer.Adapter.THROWN_ITEM,rule.adapter());
+        assertEquals(LegacyVanillaRegistry1710.ITEMS_OWNER,rule.sourceItemClass());
+        assertEquals("snowball",rule.sourceItemRegistryName());
+        assertEquals(0,rule.defaultItemMetadata());
+        assertNull(rule.fixedTexture());
+    }
+
+    @Test
     void copiedArrowWireRenderSnowballDoesNotRequireUniqueLauncher()throws Exception{
         Path jar=tempDir.resolve("foreign-copied-arrow.jar");
         try(JarOutputStream out=new JarOutputStream(Files.newOutputStream(jar))){
@@ -88,6 +109,44 @@ class LegacyProjectilePresentationAnalyzerTest {
         assertEquals("reach_carrier",rule.sourceItemRegistryName());
         assertTrue(rule.proof().contains("IProjectile + DataWatcher16 byte wire proof"));
         assertEquals(.5F,rule.width(),0.0001F);assertEquals(.5F,rule.height(),0.0001F);
+    }
+
+    private static byte[] vanillaSnowballThrowable(){
+        String n="foreign/vanilla/Orb";
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,n,null,"net/minecraft/entity/projectile/EntityThrowable",null);
+        MethodVisitor c=w.visitMethod(Opcodes.ACC_PUBLIC,"<init>","(Lnet/minecraft/world/World;)V",null,null);
+        c.visitCode();c.visitVarInsn(Opcodes.ALOAD,0);c.visitVarInsn(Opcodes.ALOAD,1);
+        c.visitMethodInsn(Opcodes.INVOKESPECIAL,"net/minecraft/entity/projectile/EntityThrowable","<init>","(Lnet/minecraft/world/World;)V",false);
+        c.visitInsn(Opcodes.RETURN);c.visitMaxs(0,0);c.visitEnd();w.visitEnd();return w.toByteArray();
+    }
+
+    private static byte[] vanillaSnowballBootstrap(){
+        String n="foreign/vanilla/Bootstrap";
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,n,null,"java/lang/Object",null);
+        MethodVisitor m=w.visitMethod(Opcodes.ACC_PUBLIC,"preInit","(Lcpw/mods/fml/common/event/FMLPreInitializationEvent;)V",null,null);
+        AnnotationVisitor a=m.visitAnnotation("Lcpw/mods/fml/common/Mod$EventHandler;",true);a.visitEnd();m.visitCode();
+        m.visitLdcInsn(Type.getObjectType("foreign/vanilla/Orb"));m.visitLdcInsn("vanilla_orb");
+        m.visitIntInsn(Opcodes.BIPUSH,47);m.visitVarInsn(Opcodes.ALOAD,0);m.visitIntInsn(Opcodes.BIPUSH,64);
+        m.visitInsn(Opcodes.ICONST_2);m.visitInsn(Opcodes.ICONST_1);
+        m.visitMethodInsn(Opcodes.INVOKESTATIC,"cpw/mods/fml/common/registry/EntityRegistry","registerModEntity",
+                "(Ljava/lang/Class;Ljava/lang/String;ILjava/lang/Object;IIZ)V",false);
+        m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
+    }
+
+    private static byte[] vanillaSnowballClient(){
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,"foreign/vanilla/Client",null,"java/lang/Object",null);
+        MethodVisitor m=w.visitMethod(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"register","()V",null,null);m.visitCode();
+        m.visitLdcInsn(Type.getObjectType("foreign/vanilla/Orb"));
+        m.visitTypeInsn(Opcodes.NEW,"net/minecraft/client/renderer/entity/RenderSnowball");m.visitInsn(Opcodes.DUP);
+        m.visitFieldInsn(Opcodes.GETSTATIC,LegacyVanillaRegistry1710.ITEMS_OWNER,"field_151126_ay","Lnet/minecraft/item/Item;");
+        m.visitMethodInsn(Opcodes.INVOKESPECIAL,"net/minecraft/client/renderer/entity/RenderSnowball","<init>",
+                "(Lnet/minecraft/item/Item;)V",false);
+        m.visitMethodInsn(Opcodes.INVOKESTATIC,"cpw/mods/fml/client/registry/RenderingRegistry","registerEntityRenderingHandler",
+                "(Ljava/lang/Class;Lnet/minecraft/client/renderer/entity/Render;)V",false);
+        m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
     }
 
     private static byte[] pellet(){
