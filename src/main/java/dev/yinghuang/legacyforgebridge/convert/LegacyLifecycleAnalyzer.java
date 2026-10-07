@@ -283,7 +283,6 @@ public final class LegacyLifecycleAnalyzer {
             boolean sawAssignment=false;
             boolean unresolved=false;
             for(MethodKey key:lifecycleReachable){
-                if(!key.owner().equals(field.owner))continue;
                 MethodContext context=methods.get(key);
                 if(context==null)continue;
                 for(int i=0;i<context.method().instructions.size();i++){
