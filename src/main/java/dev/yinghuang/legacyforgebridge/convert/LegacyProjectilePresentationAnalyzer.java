@@ -382,6 +382,16 @@ public final class LegacyProjectilePresentationAnalyzer {
         }catch(IllegalArgumentException invalid){return null;}
     }
 
+    /**
+     * Returns the supplied node when it is already executable, otherwise walks backward over
+     * labels/frames/line nodes to the nearest executable instruction.
+     */
+    private static AbstractInsnNode previousReal(AbstractInsnNode instruction){
+        AbstractInsnNode current=instruction;
+        while(current!=null&&current.getOpcode()<0)current=current.getPrevious();
+        return current;
+    }
+
     private static int wireType(String kind){return switch(kind){case "byte"->0;case "short"->1;case "int"->2;case "float"->3;case "string"->4;case "itemstack"->5;case "coordinates"->6;default->-1;};}
     private static Integer intConstant(AbstractInsnNode insn){
         if(insn==null)return null;return switch(insn.getOpcode()){
