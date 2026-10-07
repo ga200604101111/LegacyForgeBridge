@@ -74,6 +74,14 @@ public final class LegacyEntityRuntimeAdmissionPass implements ConversionPass {
             boolean emptySpawnPair = behaviorRule != null && emptyAdditionalSpawnDataPairProven(behaviorRule);
 
             if (!bool(runtimeRule, "synchedDataMappingComplete", false)) blockers.add("synched-data-mapping-incomplete");
+            if (!bool(runtimeRule, "initialFmlWatcherEnvelopeComplete", false))
+                blockers.add("initial-fml-watcher-envelope-incomplete");
+            if (!bool(runtimeRule, "entityBaseWatchersHandledExternally", false))
+                blockers.add("legacy-entity-base-watcher-handler-missing");
+            int nonBaseWatcherBridgeEntryCount = number(runtimeRule, "nonBaseWatcherBridgeEntryCount", -1);
+            if (nonBaseWatcherBridgeEntryCount < 0
+                    || array(runtimeRule, "synchedDataEntries").size() != nonBaseWatcherBridgeEntryCount)
+                blockers.add("initial-fml-watcher-bridge-coverage-mismatch");
             if (!bool(runtimeRule, "sourceWideDataWatcherCallClosureComplete", false)) blockers.add("source-wide-datawatcher-call-closure-incomplete");
             if (!bool(runtimeRule, "postInitSourceDataWatcherMutationFree", false)
                     || number(runtimeRule, "sourceOwnedDataWatcherWriteCount", -1) != 0)
@@ -130,6 +138,11 @@ public final class LegacyEntityRuntimeAdmissionPass implements ConversionPass {
             copy(runtimeRule, rule, "legacyNumericId"); copy(runtimeRule, rule, "trackingRange"); copy(runtimeRule, rule, "updateFrequency");
             copy(runtimeRule, rule, "velocityUpdates"); copy(runtimeRule, rule, "sourceOwnedDataWatcherReadCount");
             copy(runtimeRule, rule, "sourceOwnedDataWatcherWriteCount"); copy(runtimeRule, rule, "postInitSourceDataWatcherMutationFree");
+            copy(runtimeRule, rule, "initialFmlWatcherEnvelopeComplete");
+            copy(runtimeRule, rule, "entityBaseWatchersHandledExternally");
+            copy(runtimeRule, rule, "platformWatcherEntryCount");
+            copy(runtimeRule, rule, "sourceWatcherEntryCount");
+            copy(runtimeRule, rule, "nonBaseWatcherBridgeEntryCount");
             rule.addProperty("family", FAMILY_PLAIN_SYNCHED_DATA_ONLY);
             rule.addProperty("admitted", admitted);
             rule.addProperty("runtimeImplementationWired", false);
