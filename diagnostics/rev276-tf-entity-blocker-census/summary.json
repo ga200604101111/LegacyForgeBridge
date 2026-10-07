@@ -1,0 +1,69 @@
+{
+  "registeredEntities": 77,
+  "watcherStatus": {
+    "schema": "77/77",
+    "accessSurface": "77/77",
+    "sourceRuntimeCalls": "94/94",
+    "unresolvedMethods": 0,
+    "platformWatcherEntryInstances": 396,
+    "sourceWatcherEntryInstances": 37,
+    "platformSourceConflicts": 0
+  },
+  "currentPlainEntityAdmission": {
+    "admitted": 0,
+    "total": 77,
+    "entitiesWithUnclassifiedSourceMethods": 77,
+    "entitiesWithUnsupportedExternalBase": 74,
+    "unsupportedEffectiveCallbackEntityCounts": {
+      "INTERACT": 8,
+      "WRITE_NBT": 22,
+      "READ_NBT": 22,
+      "TICK": 34,
+      "CAN_TRIGGER_WALKING": 9,
+      "HURT": 21,
+      "GET_PARTS": 5,
+      "MOUNTED_Y_OFFSET": 5,
+      "CAN_COLLIDE": 2,
+      "COLLISION_BOX": 1,
+      "WRITE_SPAWN_DATA": 1,
+      "READ_SPAWN_DATA": 1
+    }
+  },
+  "construction": {
+    "worldConstructorPresent": 77,
+    "sourceSetSizeOverridePresent": 0,
+    "sizeProofBlockedByExternalBase": 74,
+    "directEntityBaseSizeProofComplete": 3,
+    "directEntityBaseWithUnmappedConstructorEffects": 3,
+    "fullyCleanForCurrentPlainConstructionAdmission": 0
+  },
+  "rendererBindings": {
+    "tfClientProxyBindings": 82,
+    "registeredEntitiesWithDirectBinding": 74,
+    "missingRegisteredBindings": [
+      "twilightforest/entity/EntityTFHostileWolf",
+      "twilightforest/entity/EntityTFArmoredGiant",
+      "twilightforest/entity/EntitySeekerArrow"
+    ]
+  },
+  "projectilePresentation": {
+    "candidates": 15,
+    "admittedByCurrentSemanticRules": 0,
+    "reasons": {
+      "render-snowball-vanilla-item-identity-not-yet-supported": 7,
+      "no-unique-direct-registered-item-launcher": 3,
+      "custom-renderer-not-supported-by-getIcon-item-selector-family": 4,
+      "renderer-binding-missing-or-ambiguous": 1
+    }
+  },
+  "visiblePresentation": {
+    "admittedByCurrentNarrowAdapters": 0,
+    "adapters": [
+      "SLIDE_PANEL",
+      "TINTED_CUSHION",
+      "TRAY_ITEMS",
+      "HANGING_ATLAS"
+    ]
+  },
+  "recommendedNextSlice": "Extend generic RenderSnowball presentation identity to pinned vanilla 1.7.10 Items fields in both analyzer and materialization pass; expected immediate target: 7 TF projectile candidates."
+}
