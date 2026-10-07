@@ -136,6 +136,11 @@ public final class LegacyEntityDataWatcherAnalyzer {
     private DefinitionResult definitions(String sourceClass) {
         List<Entry> entries = new ArrayList<>();
         String externalBase = externalBase(sourceClass);
+        if (!LegacyVanillaEntityDataWatcher1710.supportsExternalBase(externalBase)) {
+            return new DefinitionResult(List.of(),
+                    "Unpinned external Entity/DataWatcher base " + String.valueOf(externalBase)
+                            + " for " + sourceClass + ".");
+        }
         for (LegacyVanillaEntityDataWatcher1710.Entry entry
                 : LegacyVanillaEntityDataWatcher1710.inheritedForExternalBase(externalBase)) {
             entries.add(new Entry(entry.index(), entry.valueKind(), entry.defaultValue(), entry.declaredBy()));

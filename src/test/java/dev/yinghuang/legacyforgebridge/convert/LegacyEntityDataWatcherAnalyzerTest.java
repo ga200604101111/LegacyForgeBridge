@@ -97,6 +97,19 @@ class LegacyEntityDataWatcherAnalyzerTest {
         assertEquals("net/minecraft/entity/monster/EntityGhast",entry.declaredBy());
     }
 
+    @Test void unpinnedExternalEntityBaseFailsClosedInsteadOfPretendingItHasNoWatchers() throws Exception {
+        Path jar=tempDir.resolve("UnpinnedBaseEntity.jar");
+        try(JarOutputStream out=new JarOutputStream(Files.newOutputStream(jar))){
+            put(out,"foreign/unpinned/Carrier.class",unpinnedCarrier());
+            put(out,"foreign/unpinned/Bootstrap.class",unpinnedBootstrap());
+        }
+        var analysis=new LegacyEntityDataWatcherAnalyzer().analyze(jar);
+        assertTrue(analysis.rules().isEmpty());
+        assertEquals(1,analysis.skipped().size());
+        assertTrue(analysis.skipped().getFirst().reason().contains("Unpinned external Entity/DataWatcher base"),
+                analysis.skipped().getFirst().reason());
+    }
+
     @Test void dynamicWatcherIndexFailsClosed() throws Exception {
         Path jar = tempDir.resolve("UnsafeEntity.jar");
         try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(jar))) {
@@ -108,6 +121,27 @@ class LegacyEntityDataWatcherAnalyzerTest {
         assertEquals(1, analysis.skipped().size());
         assertTrue(analysis.skipped().getFirst().reason().contains("Dynamic/unproven DataWatcher index"),
                 analysis.skipped().getFirst().reason());
+    }
+
+    private static byte[] unpinnedCarrier(){
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,"foreign/unpinned/Carrier",null,
+                "net/minecraft/entity/projectile/EntityFireball",null);
+        w.visitEnd();return w.toByteArray();
+    }
+
+    private static byte[] unpinnedBootstrap(){
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,"foreign/unpinned/Bootstrap",null,"java/lang/Object",null);
+        MethodVisitor m=w.visitMethod(Opcodes.ACC_PUBLIC,"preInit",
+                "(Lcpw/mods/fml/common/event/FMLPreInitializationEvent;)V",null,null);
+        m.visitAnnotation("Lcpw/mods/fml/common/Mod$EventHandler;",true).visitEnd();m.visitCode();
+        m.visitLdcInsn(Type.getObjectType("foreign/unpinned/Carrier"));m.visitLdcInsn("unpinned");
+        m.visitIntInsn(Opcodes.BIPUSH,42);m.visitVarInsn(Opcodes.ALOAD,0);
+        m.visitIntInsn(Opcodes.BIPUSH,80);m.visitInsn(Opcodes.ICONST_3);m.visitInsn(Opcodes.ICONST_1);
+        m.visitMethodInsn(Opcodes.INVOKESTATIC,"cpw/mods/fml/common/registry/EntityRegistry","registerModEntity",
+                "(Ljava/lang/Class;Ljava/lang/String;ILjava/lang/Object;IIZ)V",false);
+        m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
     }
 
     private static byte[] ghastCarrier(){

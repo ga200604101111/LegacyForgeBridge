@@ -137,7 +137,8 @@ public final class LegacyVanillaEntityDataWatcher1710 {
                 Entry prior = byIndex.putIfAbsent(entry.index(), entry);
                 if (prior != null && (!prior.valueKind().equals(entry.valueKind())
                         || !java.util.Objects.equals(prior.defaultValue(), entry.defaultValue()))) {
-                    return List.of();
+                    throw new IllegalStateException("Conflicting pinned vanilla 1.7.10 watcher index "
+                            + entry.index() + " while expanding " + externalBase);
                 }
             }
             current = PARENT.get(current);
@@ -155,6 +156,10 @@ public final class LegacyVanillaEntityDataWatcher1710 {
             if (entry.index() == index && entry.valueKind().equals(valueKind)) return true;
         }
         return false;
+    }
+
+    public static boolean supportsExternalBase(String externalBase) {
+        return externalBase != null && supportedExternalBases().contains(externalBase);
     }
 
     /** Exact vanilla classes for which a transitive platform schema is pinned. */

@@ -56,6 +56,17 @@ class LegacyVanillaEntityDataWatcher1710Test {
                 "net/minecraft/entity/projectile/EntityThrowable").isEmpty());
     }
 
+    @Test void onlyPinnedExternalBasesAreAdmitted() {
+        assertTrue(LegacyVanillaEntityDataWatcher1710.supportsExternalBase(
+                "net/minecraft/entity/monster/EntityMob"));
+        assertTrue(LegacyVanillaEntityDataWatcher1710.supportsExternalBase(
+                "net/minecraft/entity/Entity"));
+        assertFalse(LegacyVanillaEntityDataWatcher1710.supportsExternalBase(
+                "net/minecraft/entity/projectile/EntityFireball"));
+        assertFalse(LegacyVanillaEntityDataWatcher1710.supportsExternalBase(
+                "foreign/dependency/BaseEntity"));
+    }
+
     @Test void platformGetterLookupUsesTheSameTransitiveSchema() {
         assertTrue(LegacyVanillaEntityDataWatcher1710.matchesPlatformAccess(
                 "net/minecraft/entity/passive/EntityWolf", 12, "int"));
