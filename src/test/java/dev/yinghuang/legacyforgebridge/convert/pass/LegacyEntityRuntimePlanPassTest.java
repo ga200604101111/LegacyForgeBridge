@@ -44,6 +44,11 @@ class LegacyEntityRuntimePlanPassTest {
         JsonObject rule = root.getAsJsonArray("rules").get(0).getAsJsonObject();
         assertEquals("foreign:orb", rule.get("id").getAsString());
         assertTrue(rule.get("synchedDataMappingComplete").getAsBoolean());
+        assertTrue(rule.get("initialFmlWatcherEnvelopeComplete").getAsBoolean());
+        assertTrue(rule.get("entityBaseWatchersHandledExternally").getAsBoolean());
+        assertEquals(0, rule.get("platformWatcherEntryCount").getAsInt());
+        assertEquals(5, rule.get("sourceWatcherEntryCount").getAsInt());
+        assertEquals(5, rule.get("nonBaseWatcherBridgeEntryCount").getAsInt());
         assertTrue(rule.get("reachableExactDispatchHelperClosureComplete").getAsBoolean());
         assertFalse(rule.get("reachableHelperClosureComplete").getAsBoolean());
         assertTrue(rule.get("sourceWideDataWatcherCallClosureComplete").getAsBoolean());
@@ -60,6 +65,8 @@ class LegacyEntityRuntimePlanPassTest {
         assertEquals(5, rule.get("synchedDataEntryCount").getAsInt());
 
         JsonArray entries = rule.getAsJsonArray("synchedDataEntries");
+        assertFalse(entries.get(0).getAsJsonObject().get("platformOwned").getAsBoolean());
+        assertEquals("source", entries.get(0).getAsJsonObject().get("ownership").getAsString());
         assertMapping(entries, 10, "byte", "byte", "BYTE", "identity", 1, 1);
         assertMapping(entries, 11, "short", "int", "INT", "signed_short_widen", 1, 0);
         assertMapping(entries, 12, "int", "int", "INT", "identity", 0, 0);
@@ -150,12 +157,17 @@ class LegacyEntityRuntimePlanPassTest {
                       "updateFrequency": 2,
                       "velocityUpdates": true,
                       "sourceDataWatcherDefinitionComplete": true,
+                      "entityBaseWatchersHandledExternally": true,
+                      "initialFmlWatcherEnvelopeComplete": true,
+                      "platformWatcherEntryCount": 0,
+                      "sourceWatcherEntryCount": 5,
+                      "nonBaseWatcherBridgeEntryCount": 5,
                       "dataWatcherEntries": [
-                        {"index":10,"valueKind":"byte","defaultValue":0,"declaredBy":"foreign/Orb"},
-                        {"index":11,"valueKind":"short","defaultValue":-2,"declaredBy":"foreign/Orb"},
-                        {"index":12,"valueKind":"int","defaultValue":7,"declaredBy":"foreign/Orb"},
-                        {"index":13,"valueKind":"float","defaultValue":1.5,"declaredBy":"foreign/Orb"},
-                        {"index":14,"valueKind":"string","defaultValue":"idle","declaredBy":"foreign/Orb"}
+                        {"index":10,"valueKind":"byte","defaultValue":0,"declaredBy":"foreign/Orb","platformOwned":false,"ownership":"source"},
+                        {"index":11,"valueKind":"short","defaultValue":-2,"declaredBy":"foreign/Orb","platformOwned":false,"ownership":"source"},
+                        {"index":12,"valueKind":"int","defaultValue":7,"declaredBy":"foreign/Orb","platformOwned":false,"ownership":"source"},
+                        {"index":13,"valueKind":"float","defaultValue":1.5,"declaredBy":"foreign/Orb","platformOwned":false,"ownership":"source"},
+                        {"index":14,"valueKind":"string","defaultValue":"idle","declaredBy":"foreign/Orb","platformOwned":false,"ownership":"source"}
                       ]
                     }
                   ],

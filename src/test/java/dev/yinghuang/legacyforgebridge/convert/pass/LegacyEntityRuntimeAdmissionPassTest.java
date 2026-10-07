@@ -37,6 +37,9 @@ class LegacyEntityRuntimeAdmissionPassTest {
         assertTrue(rule.get("admitted").getAsBoolean());
         assertEquals(0, rule.get("sourceOwnedDataWatcherWriteCount").getAsInt());
         assertTrue(rule.get("postInitSourceDataWatcherMutationFree").getAsBoolean());
+        assertTrue(rule.get("initialFmlWatcherEnvelopeComplete").getAsBoolean());
+        assertTrue(rule.get("entityBaseWatchersHandledExternally").getAsBoolean());
+        assertEquals(1, rule.get("nonBaseWatcherBridgeEntryCount").getAsInt());
         assertTrue(rule.getAsJsonArray("blockers").isEmpty());
     }
 
@@ -76,6 +79,25 @@ class LegacyEntityRuntimeAdmissionPassTest {
         assertFalse(admitted.get("admitted").getAsBoolean());
         assertTrue(admitted.getAsJsonArray("blockers").asList().stream()
                 .anyMatch(value -> value.getAsString().equals("post-init-datawatcher-writes-require-runtime-sync")));
+    }
+
+    @Test void missingInitialWatcherEnvelopeProofIsAnAdmissionBlocker() throws Exception {
+        Path staging = tempDir.resolve("missing-envelope-proof");
+        ConversionContext context = context(staging, "missing-envelope-proof.jar");
+        writeRuntimePlan(staging, true, true, 0);
+        JsonObject plan = JsonParser.parseString(Files.readString(
+                staging.resolve(LegacyEntityRuntimePlanPass.OUTPUT), StandardCharsets.UTF_8)).getAsJsonObject();
+        plan.getAsJsonArray("rules").get(0).getAsJsonObject().remove("initialFmlWatcherEnvelopeComplete");
+        Files.writeString(staging.resolve(LegacyEntityRuntimePlanPass.OUTPUT), plan.toString(), StandardCharsets.UTF_8);
+        writeBehavior(staging, false, false);
+        writeConstruction(staging, 0);
+
+        new LegacyEntityRuntimeAdmissionPass().apply(context);
+
+        JsonObject rule = readAdmission(staging).getAsJsonArray("rules").get(0).getAsJsonObject();
+        assertFalse(rule.get("admitted").getAsBoolean());
+        assertTrue(rule.getAsJsonArray("blockers").asList().stream()
+                .anyMatch(value -> value.getAsString().equals("initial-fml-watcher-envelope-incomplete")));
     }
 
     @Test void nonNoopNbtRemainsBlocked() throws Exception {
@@ -173,6 +195,11 @@ class LegacyEntityRuntimeAdmissionPassTest {
                       "velocityUpdates": %s,
                       "sourceWideDataWatcherCallClosureComplete": %s,
                       "synchedDataMappingComplete": true,
+                      "initialFmlWatcherEnvelopeComplete": true,
+                      "entityBaseWatchersHandledExternally": true,
+                      "platformWatcherEntryCount": 0,
+                      "sourceWatcherEntryCount": 1,
+                      "nonBaseWatcherBridgeEntryCount": 1,
                       "sourceOwnedDataWatcherReadCount": 0,
                       "sourceOwnedDataWatcherWriteCount": %d,
                       "postInitSourceDataWatcherMutationFree": %s,

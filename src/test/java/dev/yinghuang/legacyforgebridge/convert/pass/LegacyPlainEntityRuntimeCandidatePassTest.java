@@ -27,7 +27,7 @@ class LegacyPlainEntityRuntimeCandidatePassTest {
         JsonObject root = JsonParser.parseString(Files.readString(staging.resolve(LegacyPlainEntityRuntimeCandidatePass.OUTPUT), StandardCharsets.UTF_8)).getAsJsonObject();
         assertTrue(root.get("modernNoOpRendererAdapterAvailable").getAsBoolean());assertTrue(root.get("legacyWatcherBridgeRequired").getAsBoolean());assertTrue(root.get("constantBehaviorOverrideCodegenRequired").getAsBoolean());
         assertFalse(root.get("entityTypeRegistrationWired").getAsBoolean());assertFalse(root.get("clientRendererRegistrationWired").getAsBoolean());assertEquals(1, root.get("runtimeCandidateReadyCount").getAsInt());assertEquals(1, root.get("blockedRuntimeCandidateCount").getAsInt());
-        JsonObject ready = root.getAsJsonArray("rules").get(0).getAsJsonObject();assertTrue(ready.get("runtimeCandidateReady").getAsBoolean());assertTrue(ready.get("legacyWatcherBridgeWired").getAsBoolean());assertTrue(ready.get("constantBehaviorOverrideCodegenComplete").getAsBoolean());assertEquals(1,ready.get("constantBehaviorOverrideCount").getAsInt());assertEquals(23, ready.get("legacyNumericId").getAsInt());assertEquals("third/client/RenderEmpty", ready.get("rendererClass").getAsString());assertTrue(ready.getAsJsonArray("blockers").isEmpty());
+        JsonObject ready = root.getAsJsonArray("rules").get(0).getAsJsonObject();assertTrue(ready.get("runtimeCandidateReady").getAsBoolean());assertTrue(ready.get("legacyWatcherBridgeWired").getAsBoolean());assertTrue(ready.get("constantBehaviorOverrideCodegenComplete").getAsBoolean());assertEquals(1,ready.get("constantBehaviorOverrideCount").getAsInt());assertEquals(23, ready.get("legacyNumericId").getAsInt());assertTrue(ready.get("initialFmlWatcherEnvelopeComplete").getAsBoolean());assertTrue(ready.get("entityBaseWatchersHandledExternally").getAsBoolean());assertEquals(1,ready.get("nonBaseWatcherBridgeEntryCount").getAsInt());assertEquals("third/client/RenderEmpty", ready.get("rendererClass").getAsString());assertTrue(ready.getAsJsonArray("blockers").isEmpty());
         JsonObject blocked = root.getAsJsonArray("rules").get(1).getAsJsonObject();assertFalse(blocked.get("runtimeCandidateReady").getAsBoolean());assertTrue(blocked.getAsJsonArray("blockers").asList().stream().anyMatch(value -> value.getAsString().equals("constant-behavior-override-codegen-incomplete")));
     }
 
@@ -46,6 +46,8 @@ class LegacyPlainEntityRuntimeCandidatePassTest {
                       "id":"foreign:orb","legacyRegistryName":"orb","sourceClass":"third/entity/Orb","legacyNumericId":23,
                       "generatedClass":"dev.yinghuang.legacyforgebridge.generated.foreign.entity.PlainEntity_orb_a","generatedInternalName":"dev/yinghuang/legacyforgebridge/generated/foreign/entity/PlainEntity_orb_a",
                       "classGenerated":true,"synchedDataAccessorCount":1,"legacyWatcherBridgeWired":true,"legacyBaseHurtSemanticsMapped":true,
+                      "initialFmlWatcherEnvelopeComplete":true,"entityBaseWatchersHandledExternally":true,
+                      "platformWatcherEntryCount":0,"sourceWatcherEntryCount":1,"nonBaseWatcherBridgeEntryCount":1,
                       "constantBehaviorOverrideCodegenComplete":true,"constantBehaviorOverrideCount":1,
                       "constantBehaviorOverrides":[{"sourceKind":"CAN_PUSH","targetMethod":"isPushable","targetDescriptor":"()Z","constantBoolean":false}],
                       "trackingRange":80,"updateFrequency":2,"velocityUpdates":true,"width":0.5,"height":0.75

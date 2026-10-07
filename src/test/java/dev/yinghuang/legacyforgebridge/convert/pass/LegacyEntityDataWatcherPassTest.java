@@ -53,8 +53,16 @@ class LegacyEntityDataWatcherPassTest {
         assertEquals(2, rule.get("updateFrequency").getAsInt());
         assertFalse(rule.get("velocityUpdates").getAsBoolean());
         assertTrue(rule.get("sourceDataWatcherDefinitionComplete").getAsBoolean());
+        assertTrue(rule.get("entityBaseWatchersHandledExternally").getAsBoolean());
+        assertTrue(rule.get("initialFmlWatcherEnvelopeComplete").getAsBoolean());
+        assertEquals(0, rule.get("platformWatcherEntryCount").getAsInt());
+        assertEquals(1, rule.get("sourceWatcherEntryCount").getAsInt());
+        assertEquals(1, rule.get("nonBaseWatcherBridgeEntryCount").getAsInt());
         assertFalse(rule.get("runtimeImplementationWired").getAsBoolean());
         assertEquals(1, rule.getAsJsonArray("dataWatcherEntries").size());
+        JsonObject entry = rule.getAsJsonArray("dataWatcherEntries").get(0).getAsJsonObject();
+        assertFalse(entry.get("platformOwned").getAsBoolean());
+        assertEquals("source", entry.get("ownership").getAsString());
     }
 
     private static byte[] entity() {

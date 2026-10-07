@@ -42,6 +42,11 @@ class LegacyPlainEntityWatcherBridgeCodegenTest {
                     "height":0.75,
                     "family":"PLAIN_ENTITY_SYNCHED_DATA_ONLY",
                     "admitted":true,
+                    "initialFmlWatcherEnvelopeComplete":true,
+                    "entityBaseWatchersHandledExternally":true,
+                    "platformWatcherEntryCount":0,
+                    "sourceWatcherEntryCount":2,
+                    "nonBaseWatcherBridgeEntryCount":2,
                     "synchedDataEntries":[
                       {"sourceIndex":12,"modernValueKind":"byte","serializer":"BYTE","adapter":"identity","defaultValue":1},
                       {"sourceIndex":13,"modernValueKind":"int","serializer":"INT","adapter":"signed_short_widen","defaultValue":-4}
@@ -52,7 +57,11 @@ class LegacyPlainEntityWatcherBridgeCodegenTest {
         ConversionContext context=context(staging);
         new LegacyPlainEntityCodegenPass().apply(context);
         var root=com.google.gson.JsonParser.parseString(Files.readString(staging.resolve(LegacyPlainEntityCodegenPass.OUTPUT))).getAsJsonObject();
-        String internal=root.getAsJsonArray("generatedClasses").get(0).getAsJsonObject().get("generatedInternalName").getAsString();
+        var generated=root.getAsJsonArray("generatedClasses").get(0).getAsJsonObject();
+        assertTrue(generated.get("initialFmlWatcherEnvelopeComplete").getAsBoolean());
+        assertTrue(generated.get("entityBaseWatchersHandledExternally").getAsBoolean());
+        assertEquals(2,generated.get("nonBaseWatcherBridgeEntryCount").getAsInt());
+        String internal=generated.get("generatedInternalName").getAsString();
         ClassNode node=new ClassNode(Opcodes.ASM9);new ClassReader(Files.readAllBytes(staging.resolve(internal+".class"))).accept(node,0);
         assertTrue(node.interfaces.contains("dev/yinghuang/legacyforgebridge/compat/LegacyPlainEntityWatcherBridge"));
         MethodNode method=node.methods.stream().filter(value->value.name.equals("legacyforgebridge$applyWatcher")&&value.desc.equals("(IILjava/lang/Object;)Z")).findFirst().orElse(null);
