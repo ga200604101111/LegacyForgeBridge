@@ -90,6 +90,11 @@ public final class LegacyPlainEntityRuntimeCandidatePass implements ConversionPa
             copy(source, rule, "generatedClass"); copy(source, rule, "generatedInternalName");
             copy(source, rule, "trackingRange"); copy(source, rule, "updateFrequency"); copy(source, rule, "velocityUpdates");
             copy(source, rule, "width"); copy(source, rule, "height"); copy(source, rule, "synchedDataAccessorCount");
+            copy(source, rule, "initialFmlWatcherEnvelopeComplete");
+            copy(source, rule, "entityBaseWatchersHandledExternally");
+            copy(source, rule, "platformWatcherEntryCount");
+            copy(source, rule, "sourceWatcherEntryCount");
+            copy(source, rule, "nonBaseWatcherBridgeEntryCount");
             copy(source, rule, "legacyWatcherBridgeWired");
             copy(source, rule, "constantBehaviorOverrideCodegenComplete");
             copy(source, rule, "constantBehaviorOverrideCount");
