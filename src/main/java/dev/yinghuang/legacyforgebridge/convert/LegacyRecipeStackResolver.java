@@ -44,7 +44,7 @@ public final class LegacyRecipeStackResolver {
         return switch (object.constructorDescriptor()) {
             case "(Lnet/minecraft/item/Item;)V", "(Lnet/minecraft/block/Block;)V" ->
                     stack(args, 1, 0, 1);
-            case "(Lnet/minecraft/item/Item;I)V" ->
+            case "(Lnet/minecraft/item/Item;I)V", "(Lnet/minecraft/block/Block;I)V" ->
                     stack(args, number(args, 1), 0, 2);
             case "(Lnet/minecraft/item/Item;II)V", "(Lnet/minecraft/block/Block;II)V" ->
                     stack(args, number(args, 1), number(args, 2), 3);

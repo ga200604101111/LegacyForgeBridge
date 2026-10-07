@@ -28,6 +28,7 @@ class LegacyRecipeStackResolverTest {
         assertStack(MOD_ITEM, 4, 0, stack("(Lnet/minecraft/item/Item;I)V", MOD_ITEM, 4));
         assertStack(MOD_ITEM, 2, 7, stack("(Lnet/minecraft/item/Item;II)V", MOD_ITEM, 2, 7));
         assertStack(VANILLA_BLOCK, 1, 0, stack("(Lnet/minecraft/block/Block;)V", VANILLA_BLOCK));
+        assertStack(VANILLA_BLOCK, 5, 0, stack("(Lnet/minecraft/block/Block;I)V", VANILLA_BLOCK, 5));
         assertStack(VANILLA_BLOCK, 3, 11, stack("(Lnet/minecraft/block/Block;II)V", VANILLA_BLOCK, 3, 11));
     }
 
