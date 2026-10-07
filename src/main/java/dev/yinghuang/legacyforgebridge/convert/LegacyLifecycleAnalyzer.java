@@ -65,10 +65,11 @@ public final class LegacyLifecycleAnalyzer {
     private final Map<MethodKey,MethodContext> methods = new LinkedHashMap<>();
     private final Map<MethodKey,LinkedHashSet<Template>> templates = new LinkedHashMap<>();
     private final List<String> diagnostics = new ArrayList<>();
+    private Set<MethodKey> lifecycleReachable = Set.of();
 
     public Analysis analyze(Path jarPath) throws IOException {
-        classes.clear(); methods.clear(); templates.clear(); diagnostics.clear();
-        load(jarPath); analyzeFrames(); collectDirect(); propagate();
+        classes.clear(); methods.clear(); templates.clear(); diagnostics.clear(); lifecycleReachable=Set.of();
+        load(jarPath); analyzeFrames(); lifecycleReachable=reachableSourceMethods(); collectDirect(); propagate();
         LinkedHashSet<Registration> output = new LinkedHashSet<>();
         for (var entry : methods.entrySet()) {
             if (!isRoot(entry.getValue()) && !entry.getKey().name().equals("<clinit>")) continue;
@@ -261,6 +262,8 @@ public final class LegacyLifecycleAnalyzer {
         if(producer instanceof FieldInsnNode field&&field.getOpcode()==Opcodes.GETSTATIC){
             ClassNode owner=classes.get(field.owner);if(owner!=null)for(FieldNode candidate:owner.fields)if(candidate.name.equals(field.name)&&candidate.desc.equals(field.desc)){
                 if(candidate.value instanceof String s)return new TextValue(s);if(candidate.value instanceof Number n)return new NumberValue(n);}
+            Value assigned=resolveStaticFieldAssignment(field,depth,guard);
+            if(assigned!=UnknownValue.INSTANCE)return assigned;
             return new FieldValue(field.owner,field.name,field.desc);
         }
         if(producer instanceof MethodInsnNode call){
@@ -270,6 +273,60 @@ public final class LegacyLifecycleAnalyzer {
             if(!isStatic&&result.getSort()==Type.OBJECT&&frame.getStackSize()>=argc+1){Value receiver=resolve(context,frame.getStack(frame.getStackSize()-argc-1),pi,depth+1,guard);if(receiver instanceof ObjectValue||receiver instanceof ParamValue||receiver instanceof FieldValue)return receiver;}
         }
         return UnknownValue.INSTANCE;
+    }
+
+    private Value resolveStaticFieldAssignment(FieldInsnNode field,int depth,Set<String> guard){
+        String fieldKey="static:"+field.owner+"."+field.name+field.desc;
+        if(depth>32||!guard.add(fieldKey))return UnknownValue.INSTANCE;
+        try{
+            LinkedHashSet<Value> values=new LinkedHashSet<>();
+            boolean sawAssignment=false;
+            boolean unresolved=false;
+            for(MethodKey key:lifecycleReachable){
+                if(!key.owner().equals(field.owner))continue;
+                MethodContext context=methods.get(key);
+                if(context==null)continue;
+                for(int i=0;i<context.method().instructions.size();i++){
+                    AbstractInsnNode instruction=context.method().instructions.get(i);
+                    if(!(instruction instanceof FieldInsnNode put)||put.getOpcode()!=Opcodes.PUTSTATIC
+                            ||!put.owner.equals(field.owner)||!put.name.equals(field.name)||!put.desc.equals(field.desc))continue;
+                    sawAssignment=true;
+                    Frame<SourceValue> frame=context.frames()[i];
+                    if(frame==null||frame.getStackSize()<1){unresolved=true;continue;}
+                    Value value=resolve(context,frame.getStack(frame.getStackSize()-1),i,depth+1,guard);
+                    if(value==UnknownValue.INSTANCE||value==NullValue.INSTANCE||value instanceof ParamValue||value instanceof FieldValue){
+                        unresolved=true;
+                    }else{
+                        values.add(value);
+                    }
+                }
+            }
+            if(!sawAssignment||unresolved||values.size()!=1)return UnknownValue.INSTANCE;
+            return values.getFirst();
+        }finally{
+            guard.remove(fieldKey);
+        }
+    }
+
+    private Set<MethodKey> reachableSourceMethods(){
+        LinkedHashSet<MethodKey> reachable=new LinkedHashSet<>();
+        ArrayDeque<MethodKey> queue=new ArrayDeque<>();
+        for(var entry:methods.entrySet()){
+            if(isRoot(entry.getValue())||"<clinit>".equals(entry.getKey().name()))queue.add(entry.getKey());
+        }
+        while(!queue.isEmpty()&&reachable.size()<=MAX_TEMPLATES){
+            MethodKey key=queue.removeFirst();
+            if(!reachable.add(key))continue;
+            MethodContext context=methods.get(key);
+            if(context==null)continue;
+            for(AbstractInsnNode instruction:context.method().instructions){
+                if(!(instruction instanceof MethodInsnNode call))continue;
+                MethodKey target=new MethodKey(call.owner,call.name,call.desc);
+                if(methods.containsKey(target)&&!reachable.contains(target))queue.addLast(target);
+            }
+        }
+        if(!queue.isEmpty())diagnostics.add("Lifecycle reachable-method budget exceeded while proving static fields.");
+        return Collections.unmodifiableSet(reachable);
     }
 
     private static boolean isLoad(int opcode){
