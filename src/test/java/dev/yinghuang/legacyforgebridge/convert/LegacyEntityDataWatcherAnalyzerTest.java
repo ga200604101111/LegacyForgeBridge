@@ -63,6 +63,22 @@ class LegacyEntityDataWatcherAnalyzerTest {
         assertEquals("foreign/staticwatch/Base",rule.entries().getFirst().declaredBy());
     }
 
+    @Test void constructorBoxedStaticIntDefaultIsProven() throws Exception {
+        Path jar=tempDir.resolve("ConstructorBoxedWatcher.jar");
+        try(JarOutputStream out=new JarOutputStream(Files.newOutputStream(jar))){
+            put(out,"foreign/boxed/Carrier.class",constructorBoxedEntity());
+            put(out,"foreign/boxed/Bootstrap.class",constructorBoxedBootstrap());
+        }
+        var analysis=new LegacyEntityDataWatcherAnalyzer().analyze(jar);
+        assertTrue(analysis.diagnostics().isEmpty(),String.join("\n",analysis.diagnostics()));
+        assertTrue(analysis.skipped().isEmpty(),analysis.skipped().toString());
+        var rule=analysis.rules().getFirst();
+        assertEquals(1,rule.entries().size());
+        assertEquals(18,rule.entries().getFirst().index());
+        assertEquals("int",rule.entries().getFirst().valueKind());
+        assertEquals(360,((Number)rule.entries().getFirst().defaultValue()).intValue());
+    }
+
     @Test void dynamicWatcherIndexFailsClosed() throws Exception {
         Path jar = tempDir.resolve("UnsafeEntity.jar");
         try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(jar))) {
@@ -74,6 +90,44 @@ class LegacyEntityDataWatcherAnalyzerTest {
         assertEquals(1, analysis.skipped().size());
         assertTrue(analysis.skipped().getFirst().reason().contains("Dynamic/unproven DataWatcher index"),
                 analysis.skipped().getFirst().reason());
+    }
+
+    private static byte[] constructorBoxedEntity(){
+        String owner="foreign/boxed/Carrier";
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,owner,null,"net/minecraft/entity/Entity",null);
+        w.visitField(Opcodes.ACC_PRIVATE|Opcodes.ACC_STATIC,"MAX","I",null,null).visitEnd();
+
+        MethodVisitor init=w.visitMethod(Opcodes.ACC_PROTECTED,"func_70088_a","()V",null,null);init.visitCode();
+        init.visitVarInsn(Opcodes.ALOAD,0);
+        init.visitMethodInsn(Opcodes.INVOKESPECIAL,"net/minecraft/entity/Entity","func_70088_a","()V",false);
+        init.visitVarInsn(Opcodes.ALOAD,0);
+        init.visitFieldInsn(Opcodes.GETFIELD,"net/minecraft/entity/Entity","field_70180_af","Lnet/minecraft/entity/DataWatcher;");
+        init.visitIntInsn(Opcodes.BIPUSH,18);
+        init.visitTypeInsn(Opcodes.NEW,"java/lang/Integer");init.visitInsn(Opcodes.DUP);
+        init.visitFieldInsn(Opcodes.GETSTATIC,owner,"MAX","I");
+        init.visitMethodInsn(Opcodes.INVOKESPECIAL,"java/lang/Integer","<init>","(I)V",false);
+        init.visitMethodInsn(Opcodes.INVOKEVIRTUAL,"net/minecraft/entity/DataWatcher","func_75682_a","(ILjava/lang/Object;)V",false);
+        init.visitInsn(Opcodes.RETURN);init.visitMaxs(0,0);init.visitEnd();
+
+        MethodVisitor cl=w.visitMethod(Opcodes.ACC_STATIC,"<clinit>","()V",null,null);cl.visitCode();
+        cl.visitIntInsn(Opcodes.SIPUSH,360);cl.visitFieldInsn(Opcodes.PUTSTATIC,owner,"MAX","I");
+        cl.visitInsn(Opcodes.RETURN);cl.visitMaxs(0,0);cl.visitEnd();
+        w.visitEnd();return w.toByteArray();
+    }
+
+    private static byte[] constructorBoxedBootstrap(){
+        ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,"foreign/boxed/Bootstrap",null,"java/lang/Object",null);
+        MethodVisitor m=w.visitMethod(Opcodes.ACC_PUBLIC,"preInit",
+                "(Lcpw/mods/fml/common/event/FMLPreInitializationEvent;)V",null,null);
+        m.visitAnnotation("Lcpw/mods/fml/common/Mod$EventHandler;",true).visitEnd();m.visitCode();
+        m.visitLdcInsn(Type.getObjectType("foreign/boxed/Carrier"));m.visitLdcInsn("boxed");
+        m.visitIntInsn(Opcodes.BIPUSH,39);m.visitVarInsn(Opcodes.ALOAD,0);
+        m.visitIntInsn(Opcodes.BIPUSH,80);m.visitInsn(Opcodes.ICONST_3);m.visitInsn(Opcodes.ICONST_1);
+        m.visitMethodInsn(Opcodes.INVOKESTATIC,"cpw/mods/fml/common/registry/EntityRegistry","registerModEntity",
+                "(Ljava/lang/Class;Ljava/lang/String;ILjava/lang/Object;IIZ)V",false);
+        m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
     }
 
     private static byte[] staticWatcherBase(){

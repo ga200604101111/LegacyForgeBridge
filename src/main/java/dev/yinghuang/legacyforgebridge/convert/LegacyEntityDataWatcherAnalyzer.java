@@ -415,6 +415,9 @@ public final class LegacyEntityDataWatcherAnalyzer {
             return value instanceof String text ? new Decoded("string", text) : null;
         }
         if (producer instanceof MethodInsnNode call) return decodeWrapper(context, call, depth + 1, guard);
+        if (producer instanceof TypeInsnNode allocation && allocation.getOpcode() == Opcodes.NEW) {
+            return decodeWrapperConstruction(context, allocation, depth + 1, guard);
+        }
         if (producer instanceof TypeInsnNode cast && cast.getOpcode() == Opcodes.CHECKCAST) {
             Integer index = context.indices().get(producer);
             if (index == null) return null;
@@ -427,27 +430,116 @@ public final class LegacyEntityDataWatcherAnalyzer {
 
     private Decoded decodeWrapper(MethodContext context, MethodInsnNode call, int depth, Set<AbstractInsnNode> guard) {
         if (call.getOpcode() != Opcodes.INVOKESTATIC || !"valueOf".equals(call.name) || Type.getArgumentTypes(call.desc).length != 1) return null;
-        String kind = switch (call.owner) {
-            case "java/lang/Byte" -> "byte";
-            case "java/lang/Short" -> "short";
-            case "java/lang/Integer" -> "int";
-            case "java/lang/Float" -> "float";
-            default -> null;
-        };
+        String kind = wrapperKind(call.owner);
         if (kind == null) return null;
         Integer index = context.indices().get(call);
         if (index == null) return null;
         Frame<SourceValue> frame = context.frames()[index];
         if (frame == null || frame.getStackSize() == 0) return null;
         Object raw = scalar(context, frame.getStack(frame.getStackSize() - 1), depth + 1, guard);
+        return decodedNumber(kind, raw);
+    }
+
+    private Decoded decodeWrapperConstruction(
+            MethodContext context,
+            TypeInsnNode allocation,
+            int depth,
+            Set<AbstractInsnNode> guard
+    ) {
+        String kind = wrapperKind(allocation.desc);
+        if (kind == null || depth > 32) return null;
+        String constructorDescriptor = switch (kind) {
+            case "byte" -> "(B)V";
+            case "short" -> "(S)V";
+            case "int" -> "(I)V";
+            case "float" -> "(F)V";
+            default -> null;
+        };
+        if (constructorDescriptor == null) return null;
+
+        Integer allocationIndex = context.indices().get(allocation);
+        if (allocationIndex == null) return null;
+        int limit = Math.min(context.method().instructions.size(), allocationIndex + 64);
+        MethodInsnNode constructor = null;
+        Frame<SourceValue> constructorFrame = null;
+        for (int i = allocationIndex + 1; i < limit; i++) {
+            AbstractInsnNode instruction = context.method().instructions.get(i);
+            if (!(instruction instanceof MethodInsnNode call)
+                    || call.getOpcode() != Opcodes.INVOKESPECIAL
+                    || !"<init>".equals(call.name)
+                    || !allocation.desc.equals(call.owner)
+                    || !constructorDescriptor.equals(call.desc)) continue;
+            Frame<SourceValue> frame = context.frames()[i];
+            if (frame == null || frame.getStackSize() < 2) continue;
+            SourceValue receiver = frame.getStack(frame.getStackSize() - 2);
+            if (!originatesFrom(context, receiver, allocation, 0, new HashSet<>())) continue;
+            if (constructor != null) return null;
+            constructor = call;
+            constructorFrame = frame;
+        }
+        if (constructor == null || constructorFrame == null) return null;
+        Object raw = scalar(context, constructorFrame.getStack(constructorFrame.getStackSize() - 1),
+                depth + 1, guard);
+        return decodedNumber(kind, raw);
+    }
+
+    private static String wrapperKind(String owner) {
+        return switch (owner) {
+            case "java/lang/Byte" -> "byte";
+            case "java/lang/Short" -> "short";
+            case "java/lang/Integer" -> "int";
+            case "java/lang/Float" -> "float";
+            default -> null;
+        };
+    }
+
+    private static Decoded decodedNumber(String kind, Object raw) {
         if (!(raw instanceof Number number)) return null;
         Object value = switch (kind) {
             case "byte" -> number.byteValue();
             case "short" -> number.shortValue();
             case "int" -> number.intValue();
-            default -> number.floatValue();
+            case "float" -> number.floatValue();
+            default -> null;
         };
-        return new Decoded(kind, value);
+        return value == null ? null : new Decoded(kind, value);
+    }
+
+    private boolean originatesFrom(
+            MethodContext context,
+            SourceValue value,
+            AbstractInsnNode target,
+            int depth,
+            Set<AbstractInsnNode> guard
+    ) {
+        if (value == null || value.insns == null || depth > 32) return false;
+        for (AbstractInsnNode producer : value.insns) {
+            if (producer == target) return true;
+            if (!guard.add(producer)) continue;
+            try {
+                Integer index = context.indices().get(producer);
+                if (index == null) continue;
+                Frame<SourceValue> frame = context.frames()[index];
+                if (producer instanceof InsnNode insn && insn.getOpcode() == Opcodes.DUP) {
+                    if (frame != null && frame.getStackSize() > 0
+                            && originatesFrom(context, frame.getStack(frame.getStackSize() - 1),
+                            target, depth + 1, guard)) return true;
+                } else if (producer instanceof VarInsnNode variable
+                        && variable.getOpcode() == Opcodes.ALOAD) {
+                    if (frame != null && variable.var < frame.getLocals()
+                            && originatesFrom(context, frame.getLocal(variable.var),
+                            target, depth + 1, guard)) return true;
+                } else if (producer instanceof TypeInsnNode cast
+                        && cast.getOpcode() == Opcodes.CHECKCAST) {
+                    if (frame != null && frame.getStackSize() > 0
+                            && originatesFrom(context, frame.getStack(frame.getStackSize() - 1),
+                            target, depth + 1, guard)) return true;
+                }
+            } finally {
+                guard.remove(producer);
+            }
+        }
+        return false;
     }
 
     private void load(Path jarPath) throws IOException {
