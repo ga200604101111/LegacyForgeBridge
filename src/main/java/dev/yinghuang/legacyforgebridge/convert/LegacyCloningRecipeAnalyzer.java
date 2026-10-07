@@ -368,6 +368,7 @@ public final class LegacyCloningRecipeAnalyzer {
                 ||otherRecipeItemFields(code,recipe.name,fields))return null;
         if(opcodeCount(code,Opcodes.NEW)!=1||!newOnly(code,STACK)
                 ||opcodeCount(code,Opcodes.IADD)!=1
+                ||!blankCountPlusOne(code)
                 ||opcodeCount(code,Opcodes.IINC)!=2
                 ||opcodeCount(code,Opcodes.IF_ICMPGE)!=1
                 ||opcodeCount(code,Opcodes.IF_ACMPNE)!=1
@@ -451,6 +452,18 @@ public final class LegacyCloningRecipeAnalyzer {
 
     private static int opcodeCount(List<AbstractInsnNode> code,int opcode){
         int count=0;for(AbstractInsnNode insn:code)if(insn.getOpcode()==opcode)count++;return count;
+    }
+
+    private static boolean blankCountPlusOne(List<AbstractInsnNode> code){
+        AbstractInsnNode add=null;
+        for(AbstractInsnNode insn:code)if(insn.getOpcode()==Opcodes.IADD){
+            if(add!=null)return false;
+            add=insn;
+        }
+        if(add==null)return false;
+        AbstractInsnNode one=previousReal(add),count=previousReal(one);
+        return integerConstant(one)!=null&&integerConstant(one)==1
+                &&count instanceof VarInsnNode variable&&variable.getOpcode()==Opcodes.ILOAD;
     }
 
     private static boolean hasBackwardJump(List<AbstractInsnNode> code){
