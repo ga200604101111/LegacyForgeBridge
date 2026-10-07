@@ -66,6 +66,7 @@ public final class LegacyRecipeStackMaterializer {
                         registry.registryName(), stack.meta());
                 JsonObject exactComponents = fixed.components().deepCopy();
                 preserveExplicitZeroDamage(registry.registryName(), stack.meta(), fixed.id(), exactComponents);
+                if (!applySourceComponents(stack, exactComponents)) return Optional.empty();
                 return Optional.of(new ModernStack(fixed.id(), stack.count(), exactComponents, false));
             } catch (RuntimeException invalidVanillaStack) {
                 return Optional.empty();
@@ -83,7 +84,25 @@ public final class LegacyRecipeStackMaterializer {
         if (!wildcard) {
             components.addProperty(LegacyStackComponents.LEGACY_META_ID.toString(), stack.meta());
         }
+        if (!applySourceComponents(stack, components)) return Optional.empty();
         return Optional.of(new ModernStack(modernId, stack.count(), components, wildcard));
+    }
+
+    private static boolean applySourceComponents(
+            LegacyRecipeStackResolver.StackSpec stack,
+            JsonObject components
+    ) {
+        if (stack.enchantments().isEmpty()) return true;
+        if (components.has("minecraft:enchantments")) return false;
+        JsonObject enchantments = new JsonObject();
+        java.util.LinkedHashSet<String> seen = new java.util.LinkedHashSet<>();
+        for (LegacyRecipeStackResolver.EnchantmentSpec spec : stack.enchantments()) {
+            Optional<String> id = LegacyVanillaEnchantment1710.resolve(spec.enchantment());
+            if (id.isEmpty() || !seen.add(id.get())) return false;
+            enchantments.addProperty(id.get(), spec.level());
+        }
+        components.add("minecraft:enchantments", enchantments);
+        return true;
     }
 
     /**

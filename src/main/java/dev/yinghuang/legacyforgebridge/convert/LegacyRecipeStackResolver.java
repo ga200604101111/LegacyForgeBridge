@@ -16,13 +16,25 @@ public final class LegacyRecipeStackResolver {
 
     private LegacyRecipeStackResolver() { }
 
-    public record StackSpec(LegacyRecipeAnalyzer.RegistryValue registry, int count, int meta) {
+    public record EnchantmentSpec(LegacyRecipeAnalyzer.FieldValue enchantment, int level) {
+        public EnchantmentSpec {
+            if (enchantment == null) throw new IllegalArgumentException("enchantment");
+            if (level < 1 || level > 255) throw new IllegalArgumentException("enchantment level");
+        }
+    }
+
+    public record StackSpec(LegacyRecipeAnalyzer.RegistryValue registry, int count, int meta,
+                            List<EnchantmentSpec> enchantments) {
+        public StackSpec(LegacyRecipeAnalyzer.RegistryValue registry,int count,int meta) {
+            this(registry,count,meta,List.of());
+        }
         public StackSpec {
             if (registry == null) throw new IllegalArgumentException("registry");
             if (count <= 0) throw new IllegalArgumentException("Legacy recipe stack count must be positive: " + count);
             if (meta < 0 || meta > WILDCARD_META) {
                 throw new IllegalArgumentException("Legacy recipe metadata outside supported 1.7.10 range: " + meta);
             }
+            enchantments = List.copyOf(enchantments);
         }
 
         public boolean wildcardMeta() {
@@ -33,6 +45,22 @@ public final class LegacyRecipeStackResolver {
     public static Optional<StackSpec> resolve(LegacyRecipeAnalyzer.Value value) {
         if (value instanceof LegacyRecipeAnalyzer.RegistryValue registry) {
             return Optional.of(new StackSpec(registry, 1, 0));
+        }
+        if (value instanceof LegacyRecipeAnalyzer.EnchantedObjectValue enchanted) {
+            Optional<StackSpec> base = resolve(enchanted.object());
+            if (base.isEmpty()) return Optional.empty();
+            java.util.ArrayList<EnchantmentSpec> mutations = new java.util.ArrayList<>();
+            for (LegacyRecipeAnalyzer.EnchantmentValue mutation : enchanted.enchantments()) {
+                if (mutation.enchantment() == LegacyRecipeAnalyzer.NullValue.INSTANCE) continue;
+                if (!(mutation.enchantment() instanceof LegacyRecipeAnalyzer.FieldValue field)
+                        || !(mutation.level() instanceof LegacyRecipeAnalyzer.NumberValue number)) return Optional.empty();
+                double raw = number.value().doubleValue();
+                int level = number.value().intValue();
+                if (!Double.isFinite(raw) || raw != level || level < 1 || level > 255) return Optional.empty();
+                mutations.add(new EnchantmentSpec(field, level));
+            }
+            StackSpec source = base.get();
+            return Optional.of(new StackSpec(source.registry(), source.count(), source.meta(), mutations));
         }
         if (!(value instanceof LegacyRecipeAnalyzer.ObjectValue object)
                 || !ITEM_STACK.equals(object.internalName())

@@ -40,6 +40,16 @@ public final class LegacyRecipeValueResolver {
                     object.constructorDescriptor(),
                     object.constructorArguments().stream().map(this::resolve).toList());
         }
+        if (value instanceof LegacyRecipeAnalyzer.EnchantedObjectValue enchanted) {
+            var object = enchanted.object();
+            return new LegacyRecipeAnalyzer.EnchantedObjectValue(
+                    new LegacyRecipeAnalyzer.ObjectValue(
+                            object.internalName(),
+                            object.constructorDescriptor(),
+                            object.constructorArguments().stream().map(this::resolve).toList()),
+                    enchanted.enchantments().stream().map(mutation -> new LegacyRecipeAnalyzer.EnchantmentValue(
+                            resolve(mutation.enchantment()), resolve(mutation.level()))).toList());
+        }
         if (value instanceof LegacyRecipeAnalyzer.ArrayValue array) {
             return new LegacyRecipeAnalyzer.ArrayValue(array.elements().stream().map(this::resolve).toList());
         }

@@ -24,7 +24,7 @@ public final class LegacyRecipeAnalyzer {
     public enum Kind { SHAPED, SHAPELESS, SMELTING, ORE_REGISTER, FUEL_HANDLER }
 
     public sealed interface Value permits TextValue, NumberValue, CharacterValue, RegistryValue,
-            FieldValue, ObjectValue, ArrayValue, ParamValue, NullValue, UnknownValue { }
+            FieldValue, ObjectValue, EnchantedObjectValue, ArrayValue, ParamValue, NullValue, UnknownValue { }
     public record TextValue(String value) implements Value { }
     public record NumberValue(Number value) implements Value { }
     public record CharacterValue(char value) implements Value { }
@@ -34,6 +34,11 @@ public final class LegacyRecipeAnalyzer {
     public record FieldValue(String owner,String name,String descriptor) implements Value { }
     public record ObjectValue(String internalName,String constructorDescriptor,List<Value> constructorArguments) implements Value {
         public ObjectValue { constructorArguments=List.copyOf(constructorArguments); }
+    }
+    /** Source-proven ItemStack mutation retained for recipe result materialization. */
+    public record EnchantmentValue(Value enchantment,Value level) { }
+    public record EnchantedObjectValue(ObjectValue object,List<EnchantmentValue> enchantments) implements Value {
+        public EnchantedObjectValue { enchantments=List.copyOf(enchantments); }
     }
     public record ArrayValue(List<Value> elements) implements Value { public ArrayValue { elements=List.copyOf(elements); } }
     public record ParamValue(int local) implements Value { }
@@ -49,7 +54,7 @@ public final class LegacyRecipeAnalyzer {
     }
 
     private sealed interface Symbol permits TextSymbol,NumberSymbol,CharacterSymbol,RegistrySymbol,FieldSymbol,ObjectSymbol,
-            ArraySymbol,ParamSymbol,NullSymbol,UnknownSymbol { }
+            EnchantedObjectSymbol,ArraySymbol,ParamSymbol,NullSymbol,UnknownSymbol { }
     private record TextSymbol(String value) implements Symbol { }
     private record NumberSymbol(Number value) implements Symbol { }
     private record CharacterSymbol(char value) implements Symbol { }
@@ -57,6 +62,10 @@ public final class LegacyRecipeAnalyzer {
     private record FieldSymbol(String owner,String name,String descriptor) implements Symbol { }
     private record ObjectSymbol(String internalName,String constructorDescriptor,List<Symbol> args) implements Symbol {
         ObjectSymbol(String internalName){this(internalName,null,List.of());} ObjectSymbol{args=List.copyOf(args);}
+    }
+    private record EnchantmentSymbol(Symbol enchantment,Symbol level) { }
+    private record EnchantedObjectSymbol(ObjectSymbol object,List<EnchantmentSymbol> enchantments) implements Symbol {
+        EnchantedObjectSymbol { enchantments=List.copyOf(enchantments); }
     }
     private record ArraySymbol(String identity,List<Symbol> elements) implements Symbol { ArraySymbol{elements=List.copyOf(elements);} }
     private record ParamSymbol(int local) implements Symbol { }
@@ -129,6 +138,10 @@ public final class LegacyRecipeAnalyzer {
     private static Symbol substitute(Symbol v,Map<Integer,Symbol>m){
         if(v instanceof ParamSymbol p)return m.getOrDefault(p.local(),UnknownSymbol.INSTANCE);
         if(v instanceof ObjectSymbol o)return new ObjectSymbol(o.internalName(),o.constructorDescriptor(),o.args().stream().map(x->substitute(x,m)).toList());
+        if(v instanceof EnchantedObjectSymbol e)return new EnchantedObjectSymbol(
+                (ObjectSymbol)substitute(e.object(),m),
+                e.enchantments().stream().map(x->new EnchantmentSymbol(
+                        substitute(x.enchantment(),m),substitute(x.level(),m))).toList());
         if(v instanceof ArraySymbol a)return new ArraySymbol(a.identity(),a.elements().stream().map(x->substitute(x,m)).toList());return v;
     }
 
@@ -138,6 +151,10 @@ public final class LegacyRecipeAnalyzer {
         if(s instanceof RegistrySymbol v){var b=v.binding();return new RegistryValue(b.kind(),b.registryName(),b.legacyNamespace(),b.owner(),b.name());}
         if(s instanceof FieldSymbol v)return new FieldValue(v.owner(),v.name(),v.descriptor());
         if(s instanceof ObjectSymbol v)return new ObjectValue(v.internalName(),v.constructorDescriptor(),v.args().stream().map(this::publicValue).toList());
+        if(s instanceof EnchantedObjectSymbol v)return new EnchantedObjectValue(
+                (ObjectValue)publicValue(v.object()),
+                v.enchantments().stream().map(x->new EnchantmentValue(
+                        publicValue(x.enchantment()),publicValue(x.level()))).toList());
         if(s instanceof ArraySymbol v)return new ArrayValue(v.elements().stream().map(this::publicValue).toList());if(s instanceof ParamSymbol v)return new ParamValue(v.local());if(s==NullSymbol.INSTANCE)return NullValue.INSTANCE;return UnknownValue.INSTANCE;
     }
 
@@ -166,7 +183,29 @@ public final class LegacyRecipeAnalyzer {
         if(p instanceof MethodInsnNode call){Frame<SourceValue>f=c.frames()[pi];if(f==null)return UnknownSymbol.INSTANCE;List<Symbol>a=invocationArgs(c,pi,call,f,arrays);if(call.owner.equals("java/lang/Character")&&call.name.equals("valueOf")&&a!=null&&a.size()==1&&a.getFirst() instanceof NumberSymbol n)return new CharacterSymbol((char)n.value().intValue());Type rt=Type.getReturnType(call.desc);int argc=Type.getArgumentTypes(call.desc).length;if(call.getOpcode()!=Opcodes.INVOKESTATIC&&rt.getSort()==Type.OBJECT&&f.getStackSize()>=argc+1){Symbol receiver=resolve(c,f.getStack(f.getStackSize()-argc-1),current,depth+1,guard,arrays);if(!(receiver instanceof UnknownSymbol))return receiver;}}
         return UnknownSymbol.INSTANCE;
     }
-    private Symbol constructorObject(MethodContext c,String type,int newIndex,int current,int depth,Set<String>guard,boolean arrays){int limit=Math.min(c.method().instructions.size(),newIndex+240);for(int i=newIndex+1;i<limit;i++){AbstractInsnNode n=c.method().instructions.get(i);if(!(n instanceof MethodInsnNode call)||call.getOpcode()!=Opcodes.INVOKESPECIAL||!call.name.equals("<init>")||!call.owner.equals(type))continue;Frame<SourceValue>f=c.frames()[i];if(f==null)break;List<Symbol>a=invocationArgs(c,i,call,f,arrays);return new ObjectSymbol(type,call.desc,a==null?List.of():a);}return new ObjectSymbol(type);}
+    private Symbol constructorObject(MethodContext c,String type,int newIndex,int current,int depth,Set<String>guard,boolean arrays){
+        AbstractInsnNode allocation=c.method().instructions.get(newIndex);int limit=Math.min(c.method().instructions.size(),newIndex+240);
+        for(int i=newIndex+1;i<limit;i++){AbstractInsnNode n=c.method().instructions.get(i);if(!(n instanceof MethodInsnNode call)||call.getOpcode()!=Opcodes.INVOKESPECIAL||!call.name.equals("<init>")||!call.owner.equals(type))continue;Frame<SourceValue>f=c.frames()[i];if(f==null)break;List<Symbol>a=invocationArgs(c,i,call,f,arrays);
+            ObjectSymbol object=new ObjectSymbol(type,call.desc,a==null?List.of():a);
+            if(!"net/minecraft/item/ItemStack".equals(type))return object;
+            List<EnchantmentSymbol> enchantments=itemStackEnchantments(c,allocation,i+1,current,depth,guard);
+            return enchantments.isEmpty()?object:new EnchantedObjectSymbol(object,enchantments);
+        }return new ObjectSymbol(type);
+    }
+    private List<EnchantmentSymbol> itemStackEnchantments(MethodContext c,AbstractInsnNode allocation,int start,int current,int depth,Set<String>guard){
+        ArrayList<EnchantmentSymbol> out=new ArrayList<>();int limit=Math.min(current,c.method().instructions.size());
+        for(int i=start;i<limit;i++){AbstractInsnNode insn=c.method().instructions.get(i);if(!(insn instanceof MethodInsnNode call)
+                    ||!call.owner.equals("net/minecraft/item/ItemStack")
+                    ||!Set.of("addEnchantment","func_77966_a").contains(call.name)
+                    ||!call.desc.equals("(Lnet/minecraft/enchantment/Enchantment;I)V"))continue;
+            Frame<SourceValue> f=c.frames()[i];if(f==null||f.getStackSize()<3)continue;
+            SourceValue receiver=f.getStack(f.getStackSize()-3);if(!originatesFrom(c,receiver,allocation,0,new LinkedHashSet<>()))continue;
+            Symbol enchantment=resolve(c,f.getStack(f.getStackSize()-2),i,depth+1,new LinkedHashSet<>(guard),false);
+            Symbol level=resolve(c,f.getStack(f.getStackSize()-1),i,depth+1,new LinkedHashSet<>(guard),false);
+            out.add(new EnchantmentSymbol(enchantment,level));
+        }
+        return List.copyOf(out);
+    }
     private Symbol array(MethodContext c,TypeInsnNode allocation,int allocationIndex,int current,int depth,Set<String>guard){
         Frame<SourceValue>af=c.frames()[allocationIndex];int size=-1;if(af!=null&&af.getStackSize()>0){Symbol n=resolve(c,af.getStack(af.getStackSize()-1),allocationIndex,depth+1,guard,false);if(n instanceof NumberSymbol v)size=v.value().intValue();}if(size<0||size>512)return new ArraySymbol(c.owner().name+":"+allocationIndex,List.of());
         ArrayList<Symbol>elements=new ArrayList<>(Collections.nCopies(size,UnknownSymbol.INSTANCE));int limit=Math.min(current,c.method().instructions.size());
