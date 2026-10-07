@@ -97,9 +97,26 @@ public final class LegacyEntityRuntimePlanPass implements ConversionPass {
                 continue;
             }
 
+            if (!booleanValue(definition, "initialFmlWatcherEnvelopeComplete", false)
+                    || !booleanValue(definition, "entityBaseWatchersHandledExternally", false)) {
+                skip(skipped, registryName, sourceClass,
+                        "Initial FML watcher-envelope/platform-base proof is missing.");
+                continue;
+            }
+            int declaredPlatformEntries = intValue(definition, "platformWatcherEntryCount", -1);
+            int declaredSourceEntries = intValue(definition, "sourceWatcherEntryCount", -1);
+            int declaredBridgeEntries = intValue(definition, "nonBaseWatcherBridgeEntryCount", -1);
+            if (declaredPlatformEntries < 0 || declaredSourceEntries < 0 || declaredBridgeEntries < 0) {
+                skip(skipped, registryName, sourceClass,
+                        "Initial FML watcher-envelope counts are missing.");
+                continue;
+            }
+
             JsonArray definitionEntries = array(definition, "dataWatcherEntries");
             LinkedHashMap<Integer,JsonObject> entryByIndex = new LinkedHashMap<>();
             String validationError = null;
+            int platformEntries = 0;
+            int sourceEntries = 0;
             for (JsonElement entryElement : definitionEntries) {
                 if (!entryElement.isJsonObject()) {
                     validationError = "DataWatcher definition entry is not an object.";
@@ -120,6 +137,28 @@ public final class LegacyEntityRuntimePlanPass implements ConversionPass {
                             + entry.get("valueKind").getAsString() + " at index " + index + ".";
                     break;
                 }
+                if (!entry.has("platformOwned") || !entry.has("ownership") || !entry.has("declaredBy")) {
+                    validationError = "DataWatcher definition entry is missing ownership provenance.";
+                    break;
+                }
+                boolean platformOwned = entry.get("platformOwned").getAsBoolean();
+                String ownership = entry.get("ownership").getAsString();
+                String declaredBy = entry.get("declaredBy").getAsString();
+                if (platformOwned != "platform".equals(ownership)
+                        || (!platformOwned && !"source".equals(ownership))
+                        || (platformOwned && !declaredBy.startsWith("net/minecraft/entity/"))
+                        || (!platformOwned && declaredBy.startsWith("net/minecraft/entity/"))) {
+                    validationError = "DataWatcher ownership provenance is inconsistent at index " + index + ".";
+                    break;
+                }
+                if (platformOwned) platformEntries++;
+                else sourceEntries++;
+            }
+            if (validationError == null && (platformEntries != declaredPlatformEntries
+                    || sourceEntries != declaredSourceEntries
+                    || definitionEntries.size() != declaredBridgeEntries
+                    || platformEntries + sourceEntries != declaredBridgeEntries)) {
+                validationError = "Initial FML watcher-envelope counts do not match definition entries.";
             }
             if (validationError != null) {
                 skip(skipped, registryName, sourceClass, validationError);
@@ -187,6 +226,11 @@ public final class LegacyEntityRuntimePlanPass implements ConversionPass {
             plan.addProperty("reachableHelperClosureComplete", generalHelperClosure);
             plan.addProperty("sourceWideDataWatcherCallClosureComplete", sourceWideClosure);
             plan.addProperty("synchedDataMappingComplete", true);
+            plan.addProperty("entityBaseWatchersHandledExternally", true);
+            plan.addProperty("initialFmlWatcherEnvelopeComplete", true);
+            plan.addProperty("platformWatcherEntryCount", platformEntries);
+            plan.addProperty("sourceWatcherEntryCount", sourceEntries);
+            plan.addProperty("nonBaseWatcherBridgeEntryCount", definitionEntries.size());
             plan.addProperty("sourceOwnedDataWatcherReadCount", sourceOwnedReadCount);
             plan.addProperty("sourceOwnedDataWatcherWriteCount", sourceOwnedWriteCount);
             plan.addProperty("postInitSourceDataWatcherMutationFree", postInitMutationFree);
@@ -213,6 +257,8 @@ public final class LegacyEntityRuntimePlanPass implements ConversionPass {
                 mapped.addProperty("adapter", mapping.adapter());
                 if (entry.has("defaultValue")) mapped.add("defaultValue", entry.get("defaultValue").deepCopy());
                 copyPrimitive(entry, mapped, "declaredBy");
+                copyPrimitive(entry, mapped, "platformOwned");
+                copyPrimitive(entry, mapped, "ownership");
                 int[] count = counts.getOrDefault(index, new int[2]);
                 mapped.addProperty("readCount", count[0]);
                 mapped.addProperty("writeCount", count[1]);
