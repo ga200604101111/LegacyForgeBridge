@@ -1,0 +1,16 @@
+{
+  "revision": "rev262",
+  "version": "0.2.0-alpha.27-corpus4-local.45-rev262-tf-creative.1",
+  "converterRevision": "2026-10-07.262-block-creative-allocation-proof",
+  "base": "rev260 user-supplied complete runtime JAR",
+  "repositoryWritesBeforeCheckpoint": false,
+  "fullGradleLoomBuild": false,
+  "githubActionsTriggered": false,
+  "twilightForest238": {
+    "registeredBlocks": 61,
+    "creativeTabMembers": 57,
+    "hidden": 4,
+    "unknown": 0
+  },
+  "policy": "allocation-specific constructor-aware proof; fail closed; no Twilight Forest allowlist"
+}
