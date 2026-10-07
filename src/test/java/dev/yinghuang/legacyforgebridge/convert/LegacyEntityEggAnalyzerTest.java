@@ -36,7 +36,7 @@ class LegacyEntityEggAnalyzerTest {
         m.visitVarInsn(Opcodes.ALOAD,0);m.visitMethodInsn(Opcodes.INVOKESPECIAL,"java/lang/Object","<init>","()V",false);
         for(int i=1;i<=3;i++){m.visitVarInsn(Opcodes.ALOAD,0);m.visitVarInsn(Opcodes.ILOAD,i);
             m.visitFieldInsn(Opcodes.PUTFIELD,o,i==1?"id":i==2?"a":"b","I");}
-        m.visitInsn(Opcodes.RETURN);m.visitMaxs(2,4);m.visitEnd();w.visitEnd();return w.toByteArray();
+        m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
     }
 
     private static byte[] bootstrap(){
@@ -47,7 +47,7 @@ class LegacyEntityEggAnalyzerTest {
         MethodVisitor cl=w.visitMethod(Opcodes.ACC_STATIC,"<clinit>","()V",null,null);cl.visitCode();
         cl.visitTypeInsn(Opcodes.NEW,"java/util/HashMap");cl.visitInsn(Opcodes.DUP);
         cl.visitMethodInsn(Opcodes.INVOKESPECIAL,"java/util/HashMap","<init>","()V",false);
-        cl.visitFieldInsn(Opcodes.PUTSTATIC,o,"EGGS","Ljava/util/HashMap;");cl.visitInsn(Opcodes.RETURN);cl.visitEnd();
+        cl.visitFieldInsn(Opcodes.PUTSTATIC,o,"EGGS","Ljava/util/HashMap;");cl.visitInsn(Opcodes.RETURN);cl.visitMaxs(0,0);cl.visitEnd();
 
         MethodVisitor h=w.visitMethod(Opcodes.ACC_STATIC,"helper","(Ljava/lang/Class;Ljava/lang/String;IIIIIZ)V",null,null);h.visitCode();
         h.visitVarInsn(Opcodes.ALOAD,0);h.visitVarInsn(Opcodes.ALOAD,1);h.visitVarInsn(Opcodes.ILOAD,2);
@@ -60,14 +60,14 @@ class LegacyEntityEggAnalyzerTest {
         h.visitVarInsn(Opcodes.ILOAD,2);h.visitVarInsn(Opcodes.ILOAD,3);h.visitVarInsn(Opcodes.ILOAD,4);
         h.visitMethodInsn(Opcodes.INVOKESPECIAL,"foreign/egg/Info","<init>","(III)V",false);
         h.visitMethodInsn(Opcodes.INVOKEVIRTUAL,"java/util/HashMap","put","(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",false);
-        h.visitInsn(Opcodes.POP);h.visitInsn(Opcodes.RETURN);h.visitEnd();
+        h.visitInsn(Opcodes.POP);h.visitInsn(Opcodes.RETURN);h.visitMaxs(0,0);h.visitEnd();
 
         MethodVisitor wrap=w.visitMethod(Opcodes.ACC_STATIC,"wrapper","(Ljava/lang/Class;Ljava/lang/String;III)V",null,null);wrap.visitCode();
         wrap.visitVarInsn(Opcodes.ALOAD,0);wrap.visitVarInsn(Opcodes.ALOAD,1);wrap.visitVarInsn(Opcodes.ILOAD,2);
         wrap.visitVarInsn(Opcodes.ILOAD,3);wrap.visitVarInsn(Opcodes.ILOAD,4);
         wrap.visitIntInsn(Opcodes.BIPUSH,80);wrap.visitInsn(Opcodes.ICONST_3);wrap.visitInsn(Opcodes.ICONST_1);
         wrap.visitMethodInsn(Opcodes.INVOKESTATIC,o,"helper","(Ljava/lang/Class;Ljava/lang/String;IIIIIZ)V",false);
-        wrap.visitInsn(Opcodes.RETURN);wrap.visitEnd();
+        wrap.visitInsn(Opcodes.RETURN);wrap.visitMaxs(0,0);wrap.visitEnd();
 
         MethodVisitor m=w.visitMethod(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"init",
                 "(Lcpw/mods/fml/common/event/FMLInitializationEvent;)V",null,null);
@@ -75,7 +75,7 @@ class LegacyEntityEggAnalyzerTest {
         m.visitLdcInsn(Type.getObjectType("foreign/egg/MossBeast"));m.visitLdcInsn("moss_beast");m.visitIntInsn(Opcodes.BIPUSH,37);
         m.visitLdcInsn(0x123456);m.visitLdcInsn(0xABCDEF);
         m.visitMethodInsn(Opcodes.INVOKESTATIC,o,"wrapper","(Ljava/lang/Class;Ljava/lang/String;III)V",false);
-        m.visitInsn(Opcodes.RETURN);m.visitEnd();
+        m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();
         w.visitEnd();return w.toByteArray();
     }
 
