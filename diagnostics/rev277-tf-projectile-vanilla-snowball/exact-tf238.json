@@ -1,0 +1,82 @@
+{
+  "validatedCandidates": 7,
+  "candidates": [
+    {
+      "name": "tfnaturebolt",
+      "sourceClass": "twilightforest/entity/EntityTFNatureBolt",
+      "legacyItemField": "field_151014_N",
+      "legacyItem": "wheat_seeds",
+      "baseFamily": "EntityThrowable",
+      "renderer": "RenderSnowball",
+      "additionalSpawnData": false,
+      "fixedLegacyMetadata": 0,
+      "pinnedField": true
+    },
+    {
+      "name": "tflichbolt",
+      "sourceClass": "twilightforest/entity/boss/EntityTFLichBolt",
+      "legacyItemField": "field_151079_bi",
+      "legacyItem": "ender_pearl",
+      "baseFamily": "EntityThrowable",
+      "renderer": "RenderSnowball",
+      "additionalSpawnData": false,
+      "fixedLegacyMetadata": 0,
+      "pinnedField": true
+    },
+    {
+      "name": "tftwilightwandbolt",
+      "sourceClass": "twilightforest/entity/EntityTFTwilightWandBolt",
+      "legacyItemField": "field_151079_bi",
+      "legacyItem": "ender_pearl",
+      "baseFamily": "EntityThrowable",
+      "renderer": "RenderSnowball",
+      "additionalSpawnData": false,
+      "fixedLegacyMetadata": 0,
+      "pinnedField": true
+    },
+    {
+      "name": "tftomebolt",
+      "sourceClass": "twilightforest/entity/EntityTFTomeBolt",
+      "legacyItemField": "field_151121_aF",
+      "legacyItem": "paper",
+      "baseFamily": "EntityThrowable",
+      "renderer": "RenderSnowball",
+      "additionalSpawnData": false,
+      "fixedLegacyMetadata": 0,
+      "pinnedField": true
+    },
+    {
+      "name": "tflichbomb",
+      "sourceClass": "twilightforest/entity/boss/EntityTFLichBomb",
+      "legacyItemField": "field_151064_bs",
+      "legacyItem": "magma_cream",
+      "baseFamily": "EntityThrowable",
+      "renderer": "RenderSnowball",
+      "additionalSpawnData": false,
+      "fixedLegacyMetadata": 0,
+      "pinnedField": true
+    },
+    {
+      "name": "tfslimeblob",
+      "sourceClass": "twilightforest/entity/EntityTFSlimeProjectile",
+      "legacyItemField": "field_151123_aH",
+      "legacyItem": "slime_ball",
+      "baseFamily": "EntityThrowable",
+      "renderer": "RenderSnowball",
+      "additionalSpawnData": false,
+      "fixedLegacyMetadata": 0,
+      "pinnedField": true
+    },
+    {
+      "name": "tficesnowball",
+      "sourceClass": "twilightforest/entity/EntityTFIceSnowball",
+      "legacyItemField": "field_151126_ay",
+      "legacyItem": "snowball",
+      "baseFamily": "EntityThrowable",
+      "renderer": "RenderSnowball",
+      "additionalSpawnData": false,
+      "fixedLegacyMetadata": 0,
+      "pinnedField": true
+    }
+  ]
+}
