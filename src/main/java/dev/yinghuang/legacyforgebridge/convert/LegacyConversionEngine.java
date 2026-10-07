@@ -81,6 +81,7 @@ public final class LegacyConversionEngine {
             builder.add(new LegacyPlantPlacementProofPass());
             builder.add(new LegacySnowballItemPass());
             builder.add(new LegacyLifecycleAnalysisPass());
+            builder.add(new LegacyEntityEggAnalysisPass());
             builder.add(new LegacyBlockBehaviorAnalysisPass());
             builder.add(new LegacyBlockMaterialProvenancePass());
             builder.add(new LegacyBlockDropAnalysisPass());
