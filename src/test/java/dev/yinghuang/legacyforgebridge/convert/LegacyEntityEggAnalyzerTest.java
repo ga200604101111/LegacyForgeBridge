@@ -16,7 +16,7 @@ class LegacyEntityEggAnalyzerTest {
         Path jar=temp.resolve("egg.jar");
         try(JarOutputStream out=new JarOutputStream(Files.newOutputStream(jar))){
             put(out,"foreign/egg/Info.class",info());
-            put(out,"foreign/egg/Bootstrap.class",bootstrap());
+            put(out,"foreign/egg/Bootstrap.class",bootstrap(false));
         }
         var result=new LegacyEntityEggAnalyzer().analyze(jar);
         assertTrue(result.diagnostics().isEmpty(),String.join("\n",result.diagnostics()));
@@ -26,6 +26,16 @@ class LegacyEntityEggAnalyzerTest {
         assertEquals(37,r.numericId());
         assertEquals(0x123456,r.primaryColor());
         assertEquals(0xABCDEF,r.secondaryColor());
+    }
+
+    @Test void mapValueUsingDifferentIdIsRejected() throws Exception {
+        Path jar=temp.resolve("bad-egg.jar");
+        try(JarOutputStream out=new JarOutputStream(Files.newOutputStream(jar))){
+            put(out,"foreign/egg/Info.class",info());
+            put(out,"foreign/egg/Bootstrap.class",bootstrap(true));
+        }
+        var result=new LegacyEntityEggAnalyzer().analyze(jar);
+        assertTrue(result.rules().isEmpty());
     }
 
     private static byte[] info(){
@@ -39,7 +49,7 @@ class LegacyEntityEggAnalyzerTest {
         m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
     }
 
-    private static byte[] bootstrap(){
+    private static byte[] bootstrap(boolean mismatched){
         String o="foreign/egg/Bootstrap";ClassWriter w=new ClassWriter(ClassWriter.COMPUTE_MAXS);
         w.visit(Opcodes.V1_7,Opcodes.ACC_PUBLIC,o,null,"java/lang/Object",null);
         w.visitField(Opcodes.ACC_STATIC,"EGGS","Ljava/util/HashMap;",null,null).visitEnd();
@@ -57,7 +67,7 @@ class LegacyEntityEggAnalyzerTest {
         h.visitFieldInsn(Opcodes.GETSTATIC,o,"EGGS","Ljava/util/HashMap;");
         h.visitVarInsn(Opcodes.ILOAD,2);h.visitMethodInsn(Opcodes.INVOKESTATIC,"java/lang/Integer","valueOf","(I)Ljava/lang/Integer;",false);
         h.visitTypeInsn(Opcodes.NEW,"foreign/egg/Info");h.visitInsn(Opcodes.DUP);
-        h.visitVarInsn(Opcodes.ILOAD,2);h.visitVarInsn(Opcodes.ILOAD,3);h.visitVarInsn(Opcodes.ILOAD,4);
+        h.visitVarInsn(Opcodes.ILOAD,mismatched?3:2);h.visitVarInsn(Opcodes.ILOAD,3);h.visitVarInsn(Opcodes.ILOAD,4);
         h.visitMethodInsn(Opcodes.INVOKESPECIAL,"foreign/egg/Info","<init>","(III)V",false);
         h.visitMethodInsn(Opcodes.INVOKEVIRTUAL,"java/util/HashMap","put","(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",false);
         h.visitInsn(Opcodes.POP);h.visitInsn(Opcodes.RETURN);h.visitMaxs(0,0);h.visitEnd();
