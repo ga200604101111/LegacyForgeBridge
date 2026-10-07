@@ -13,9 +13,16 @@ import java.util.Map;
 public final class LegacyVanillaEntityDataWatcher1710 {
     public record Entry(int index,String valueKind,Object defaultValue,String declaredBy) { }
 
+    private static final String LIVING_BASE = "net/minecraft/entity/EntityLivingBase";
     private static final String GHAST = "net/minecraft/entity/monster/EntityGhast";
 
     private static final Map<String,List<Entry>> BY_EXTERNAL_BASE = Map.of(
+            LIVING_BASE, List.of(
+                    new Entry(6, "float", 1.0F, LIVING_BASE),
+                    new Entry(7, "int", 0, LIVING_BASE),
+                    new Entry(8, "byte", (byte)0, LIVING_BASE),
+                    new Entry(9, "byte", (byte)0, LIVING_BASE)
+            ),
             GHAST, List.of(new Entry(16, "byte", (byte)0, GHAST))
     );
 
@@ -24,5 +31,13 @@ public final class LegacyVanillaEntityDataWatcher1710 {
     public static List<Entry> inheritedForExternalBase(String externalBase) {
         if (externalBase == null || externalBase.isBlank()) return List.of();
         return BY_EXTERNAL_BASE.getOrDefault(externalBase, List.of());
+    }
+
+    public static boolean matchesPlatformAccess(String owner,int index,String valueKind) {
+        if (owner == null || valueKind == null) return false;
+        for (Entry entry : BY_EXTERNAL_BASE.getOrDefault(owner, List.of())) {
+            if (entry.index() == index && entry.valueKind().equals(valueKind)) return true;
+        }
+        return false;
     }
 }

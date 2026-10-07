@@ -40,6 +40,28 @@ class LegacyEntityDataWatcherGlobalClosureAnalyzerTest {
         assertEquals(0, unresolved.provenAccessCount());
     }
 
+    @Test void pinnedVanillaLivingBaseWatcherGettersCanCloseOutsideEntityLineage() throws Exception {
+        Path safe = tempDir.resolve("platform-safe.jar");
+        try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(safe))) {
+            put(out, "third/global/PlatformReader.class", platformReader(false));
+        }
+        var safeAnalysis = new LegacyEntityDataWatcherGlobalClosureAnalyzer().analyze(safe);
+        assertTrue(safeAnalysis.sourceWideClosureComplete(), safeAnalysis.unresolved().toString());
+        assertEquals(2, safeAnalysis.runtimeCallCount());
+        assertEquals(2, safeAnalysis.provenRuntimeCallCount());
+        assertEquals(1, safeAnalysis.accounted().size());
+
+        Path wrong = tempDir.resolve("platform-wrong.jar");
+        try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(wrong))) {
+            put(out, "third/global/PlatformReader.class", platformReader(true));
+        }
+        var wrongAnalysis = new LegacyEntityDataWatcherGlobalClosureAnalyzer().analyze(wrong);
+        assertFalse(wrongAnalysis.sourceWideClosureComplete());
+        assertEquals(2, wrongAnalysis.runtimeCallCount());
+        assertEquals(1, wrongAnalysis.provenRuntimeCallCount());
+        assertEquals(1, wrongAnalysis.unresolved().size());
+    }
+
     private Path fixture(String name, boolean rogue) throws Exception {
         Path jar = tempDir.resolve(name);
         try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(jar))) {
@@ -91,6 +113,42 @@ class LegacyEntityDataWatcherGlobalClosureAnalyzerTest {
         get.visitMaxs(0, 0);
         get.visitEnd();
 
+        w.visitEnd();
+        return w.toByteArray();
+    }
+
+    private static byte[] platformReader(boolean wrongType) {
+        ClassWriter w = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7, Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL, "third/global/PlatformReader",
+                null, "java/lang/Object", null);
+        MethodVisitor read = w.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, "read",
+                "(Lnet/minecraft/entity/EntityLivingBase;)V", null, null);
+        read.visitCode();
+
+        read.visitVarInsn(Opcodes.ALOAD, 0);
+        read.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "net/minecraft/entity/EntityLivingBase",
+                "func_70096_w", "()Lnet/minecraft/entity/DataWatcher;", false);
+        read.visitIntInsn(Opcodes.BIPUSH, 7);
+        if (wrongType) {
+            read.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "net/minecraft/entity/DataWatcher",
+                    "func_75683_a", "(I)B", false);
+        } else {
+            read.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "net/minecraft/entity/DataWatcher",
+                    "func_75679_c", "(I)I", false);
+        }
+        read.visitInsn(Opcodes.POP);
+
+        read.visitVarInsn(Opcodes.ALOAD, 0);
+        read.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "net/minecraft/entity/EntityLivingBase",
+                "func_70096_w", "()Lnet/minecraft/entity/DataWatcher;", false);
+        read.visitIntInsn(Opcodes.BIPUSH, 8);
+        read.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "net/minecraft/entity/DataWatcher",
+                "func_75683_a", "(I)B", false);
+        read.visitInsn(Opcodes.POP);
+
+        read.visitInsn(Opcodes.RETURN);
+        read.visitMaxs(0, 0);
+        read.visitEnd();
         w.visitEnd();
         return w.toByteArray();
     }

@@ -6,6 +6,11 @@ import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
+import org.objectweb.asm.tree.analysis.Analyzer;
+import org.objectweb.asm.tree.analysis.AnalyzerException;
+import org.objectweb.asm.tree.analysis.Frame;
+import org.objectweb.asm.tree.analysis.SourceInterpreter;
+import org.objectweb.asm.tree.analysis.SourceValue;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -51,12 +56,16 @@ public final class LegacyEntityDataWatcherGlobalClosureAnalyzer {
     }
 
     private record MethodKey(String owner, String name, String descriptor) { }
+    private record MethodContext(MethodNode method,Frame<SourceValue>[] frames,
+                                 Map<AbstractInsnNode,Integer> indices) { }
 
     private final Map<String,ClassNode> classes = new LinkedHashMap<>();
+    private final Map<MethodKey,MethodContext> contexts = new HashMap<>();
     private final List<String> diagnostics = new ArrayList<>();
 
     public Analysis analyze(Path jarPath) throws IOException {
         classes.clear();
+        contexts.clear();
         diagnostics.clear();
         load(jarPath);
 
@@ -82,20 +91,35 @@ public final class LegacyEntityDataWatcherGlobalClosureAnalyzer {
         for (ClassNode owner : classes.values()) {
             for (MethodNode method : owner.methods) {
                 int runtimeCalls = 0;
+                int platformProven = 0;
                 List<String> unsupported = new ArrayList<>();
+                MethodContext context = null;
                 for (int i = 0; i < method.instructions.size(); i++) {
                     AbstractInsnNode instruction = method.instructions.get(i);
                     if (!(instruction instanceof MethodInsnNode call) || !DATA_WATCHER.equals(call.owner)) continue;
                     if (definitionCall(method, call)) continue;
                     runtimeCalls++;
-                    if (!supportedAccessCall(call)) unsupported.add(call.name + call.desc + "@" + i);
+                    if (!supportedAccessCall(call)) {
+                        unsupported.add(call.name + call.desc + "@" + i);
+                        continue;
+                    }
+                    if (context == null) {
+                        try {
+                            context = context(owner, method);
+                        } catch (AnalyzerException error) {
+                            diagnostics.add("Platform DataWatcher closure dataflow unavailable for "
+                                    + owner.name + "." + method.name + method.desc + ": " + error.getMessage());
+                        }
+                    }
+                    if (context != null && platformGetter(context, i, call)) platformProven++;
                 }
                 if (runtimeCalls == 0) continue;
 
                 MethodKey key = new MethodKey(owner.name, method.name, method.desc);
-                int proven = maxProvenByMethod.getOrDefault(key, 0);
+                int entityProven = maxProvenByMethod.getOrDefault(key, 0);
+                int proven = Math.min(runtimeCalls, entityProven + platformProven);
                 totalRuntimeCalls += runtimeCalls;
-                totalProvenCalls += Math.min(proven, runtimeCalls);
+                totalProvenCalls += proven;
                 if (unsupported.isEmpty() && proven == runtimeCalls) {
                     accounted.add(new MethodSurface(owner.name, method.name, method.desc,
                             runtimeCalls, proven, List.of()));
@@ -117,6 +141,61 @@ public final class LegacyEntityDataWatcherGlobalClosureAnalyzer {
     private static boolean supportedAccessCall(MethodInsnNode call) {
         if (SUPPORTED_GETTERS.contains(call.name + call.desc)) return true;
         return UPDATE_NAMES.contains(call.name) && "(ILjava/lang/Object;)V".equals(call.desc);
+    }
+
+    private boolean platformGetter(MethodContext context,int instructionIndex,MethodInsnNode call) {
+        String valueKind = switch (call.name + call.desc) {
+            case "getWatchableObjectByte(I)B", "func_75683_a(I)B" -> "byte";
+            case "getWatchableObjectShort(I)S", "func_75693_b(I)S" -> "short";
+            case "getWatchableObjectInt(I)I", "func_75679_c(I)I" -> "int";
+            case "getWatchableObjectFloat(I)F", "func_111145_d(I)F" -> "float";
+            case "getWatchableObjectString(I)Ljava/lang/String;",
+                    "func_75681_e(I)Ljava/lang/String;" -> "string";
+            default -> null;
+        };
+        if (valueKind == null) return false;
+        Frame<SourceValue> frame = context.frames()[instructionIndex];
+        if (frame == null || frame.getStackSize() < 2) return false;
+        Integer index = scalarInt(context, frame.getStack(frame.getStackSize() - 1));
+        if (index == null) return false;
+        String owner = platformWatcherOwner(context, frame.getStack(frame.getStackSize() - 2));
+        return owner != null && LegacyVanillaEntityDataWatcher1710.matchesPlatformAccess(owner, index, valueKind);
+    }
+
+    private String platformWatcherOwner(MethodContext context,SourceValue value) {
+        if (value == null || value.insns == null || value.insns.size() != 1) return null;
+        AbstractInsnNode producer = value.insns.iterator().next();
+        if (!(producer instanceof MethodInsnNode call)
+                || call.getOpcode() == Opcodes.INVOKESTATIC
+                || !Set.of("getDataWatcher","func_70096_w").contains(call.name)
+                || !"()Lnet/minecraft/entity/DataWatcher;".equals(call.desc)
+                || !call.owner.startsWith("net/minecraft/entity/")) return null;
+        return call.owner;
+    }
+
+    private static Integer scalarInt(MethodContext context,SourceValue value) {
+        if (value == null || value.insns == null || value.insns.size() != 1) return null;
+        AbstractInsnNode producer = value.insns.iterator().next();
+        if (producer instanceof org.objectweb.asm.tree.IntInsnNode integer
+                && (integer.getOpcode() == Opcodes.BIPUSH || integer.getOpcode() == Opcodes.SIPUSH))
+            return integer.operand;
+        if (producer instanceof org.objectweb.asm.tree.LdcInsnNode ldc && ldc.cst instanceof Integer integer)
+            return integer;
+        int opcode = producer.getOpcode();
+        if (opcode >= Opcodes.ICONST_M1 && opcode <= Opcodes.ICONST_5) return opcode - Opcodes.ICONST_0;
+        return null;
+    }
+
+    private MethodContext context(ClassNode owner,MethodNode method) throws AnalyzerException {
+        MethodKey key = new MethodKey(owner.name, method.name, method.desc);
+        MethodContext cached = contexts.get(key);
+        if (cached != null) return cached;
+        Frame<SourceValue>[] frames = new Analyzer<>(new SourceInterpreter()).analyze(owner.name, method);
+        Map<AbstractInsnNode,Integer> indices = new java.util.IdentityHashMap<>();
+        for (int i = 0; i < method.instructions.size(); i++) indices.put(method.instructions.get(i), i);
+        MethodContext result = new MethodContext(method, frames, indices);
+        contexts.put(key, result);
+        return result;
     }
 
     private void load(Path jarPath) throws IOException {
