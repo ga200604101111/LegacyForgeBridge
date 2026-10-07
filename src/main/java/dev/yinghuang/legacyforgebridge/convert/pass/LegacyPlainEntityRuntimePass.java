@@ -58,6 +58,10 @@ public final class LegacyPlainEntityRuntimePass implements ConversionPass {
             boolean velocityUpdates = bool(source, "velocityUpdates", false);
             boolean legacyWatcherBridgeWired = bool(source, "legacyWatcherBridgeWired", false);
             boolean constantOverrideCodegenComplete = bool(source, "constantBehaviorOverrideCodegenComplete", false);
+            boolean initialFmlWatcherEnvelopeComplete = bool(source, "initialFmlWatcherEnvelopeComplete", false);
+            boolean entityBaseWatchersHandledExternally = bool(source, "entityBaseWatchersHandledExternally", false);
+            int nonBaseWatcherBridgeEntryCount = integer(source, "nonBaseWatcherBridgeEntryCount", -1);
+            int synchedDataAccessorCount = integer(source, "synchedDataAccessorCount", -1);
 
             String reason = null;
             if (id == null || id.isBlank()) reason = "runtime candidate id missing";
@@ -65,6 +69,10 @@ public final class LegacyPlainEntityRuntimePass implements ConversionPass {
             else if (legacyModId == null || legacyModId.isBlank()) reason = "legacy mod id missing";
             else if (legacyModEntityTypeId < 0) reason = "legacy mod entity type id missing";
             else if (!legacyWatcherBridgeWired) reason = "legacy watcher bridge missing";
+            else if (!initialFmlWatcherEnvelopeComplete) reason = "initial FML watcher envelope proof missing";
+            else if (!entityBaseWatchersHandledExternally) reason = "legacy Entity base watcher handler missing";
+            else if (nonBaseWatcherBridgeEntryCount < 0 || synchedDataAccessorCount != nonBaseWatcherBridgeEntryCount)
+                reason = "generated watcher accessor coverage does not match initial FML envelope";
             else if (!constantOverrideCodegenComplete) reason = "constant behavior override codegen incomplete";
             else if (!LegacyPlainEntityRuntimeCandidatePass.PRESENTATION_ADAPTER_NOOP.equals(presentationAdapter))
                 reason = "unsupported presentation adapter " + presentationAdapter;
@@ -85,6 +93,11 @@ public final class LegacyPlainEntityRuntimePass implements ConversionPass {
             copy(source, rule, "legacyNumericId"); copy(source, rule, "generatedClass"); copy(source, rule, "generatedInternalName");
             copy(source, rule, "width"); copy(source, rule, "height"); copy(source, rule, "updateFrequency"); copy(source, rule, "velocityUpdates");
             copy(source, rule, "synchedDataAccessorCount"); copy(source, rule, "rendererClass");
+            copy(source, rule, "initialFmlWatcherEnvelopeComplete");
+            copy(source, rule, "entityBaseWatchersHandledExternally");
+            copy(source, rule, "platformWatcherEntryCount");
+            copy(source, rule, "sourceWatcherEntryCount");
+            copy(source, rule, "nonBaseWatcherBridgeEntryCount");
             copy(source, rule, "constantBehaviorOverrideCodegenComplete"); copy(source, rule, "constantBehaviorOverrideCount");
             if (source.has("constantBehaviorOverrides")) rule.add("constantBehaviorOverrides", source.get("constantBehaviorOverrides").deepCopy());
             if (source.has("synchedDataEntries")) rule.add("synchedDataEntries", source.get("synchedDataEntries").deepCopy());
@@ -94,6 +107,7 @@ public final class LegacyPlainEntityRuntimePass implements ConversionPass {
             rule.addProperty("presentationAdapter", presentationAdapter); rule.addProperty("mobCategory", "MISC");
             rule.addProperty("entityTypeRegistrationWired", true); rule.addProperty("clientRendererRegistrationWired", true);
             rule.addProperty("legacyWatcherBridgeWired", true); rule.addProperty("constantBehaviorOverrideCodegenWired", true);
+            rule.addProperty("initialFmlWatcherEnvelopeRuntimeComplete", true);
             rule.addProperty("remoteEntitySpawnRuntimeComplete", true); rule.addProperty("runtimeImplementationWired", true); rule.addProperty("runtimeComplete", true);
             rules.add(rule);
         }
