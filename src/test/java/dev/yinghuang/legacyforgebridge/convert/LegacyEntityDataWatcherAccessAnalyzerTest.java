@@ -34,6 +34,24 @@ class LegacyEntityDataWatcherAccessAnalyzerTest {
         assertTrue(rule.accesses().stream().anyMatch(a -> a.index() == 13 && a.operation().equals("read") && a.valueKind().equals("int")));
     }
 
+    @Test void stringParameterAndLocalAliasWritesRetainReferenceTypeProvenance() throws Exception {
+        Path jar = tempDir.resolve("StringAccess.jar");
+        try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(jar))) {
+            put(out, "third/entity/StringOrb.class", stringEntity());
+            put(out, "third/entity/StringBootstrap.class", stringBootstrap());
+        }
+
+        var analysis = new LegacyEntityDataWatcherAccessAnalyzer().analyze(jar);
+        assertTrue(analysis.skipped().isEmpty(), analysis.skipped().toString());
+        assertEquals(1, analysis.rules().size());
+        var accesses = analysis.rules().getFirst().accesses();
+        assertEquals(3, accesses.size(), accesses.toString());
+        assertEquals(2, accesses.stream().filter(a -> a.index() == 14
+                && a.operation().equals("write") && a.valueKind().equals("string")).count());
+        assertTrue(accesses.stream().anyMatch(a -> a.index() == 14
+                && a.operation().equals("read") && a.valueKind().equals("string")));
+    }
+
     @Test void dynamicReadAndMismatchedWriteFailClosed() throws Exception {
         for (Mode mode : new Mode[]{Mode.DYNAMIC_READ, Mode.WRONG_WRITE_TYPE}) {
             Path jar = tempDir.resolve(mode.name() + ".jar");
@@ -147,6 +165,85 @@ class LegacyEntityDataWatcherAccessAnalyzerTest {
         count.visitMaxs(0, 0);
         count.visitEnd();
 
+        w.visitEnd();
+        return w.toByteArray();
+    }
+
+    private static byte[] stringEntity() {
+        ClassWriter w = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7, Opcodes.ACC_PUBLIC, "third/entity/StringOrb", null,
+                "net/minecraft/entity/Entity", null);
+
+        MethodVisitor init = w.visitMethod(Opcodes.ACC_PROTECTED, "func_70088_a", "()V", null, null);
+        init.visitCode();
+        init.visitVarInsn(Opcodes.ALOAD, 0);
+        init.visitMethodInsn(Opcodes.INVOKESPECIAL, "net/minecraft/entity/Entity", "func_70088_a", "()V", false);
+        watcher(init);
+        init.visitIntInsn(Opcodes.BIPUSH, 14);
+        init.visitLdcInsn("");
+        init.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "net/minecraft/entity/DataWatcher", "func_75682_a",
+                "(ILjava/lang/Object;)V", false);
+        init.visitInsn(Opcodes.RETURN);
+        init.visitMaxs(0, 0);
+        init.visitEnd();
+
+        MethodVisitor direct = w.visitMethod(Opcodes.ACC_PUBLIC, "setDirect", "(Ljava/lang/String;)V", null, null);
+        direct.visitCode();
+        watcher(direct);
+        direct.visitIntInsn(Opcodes.BIPUSH, 14);
+        direct.visitVarInsn(Opcodes.ALOAD, 1);
+        direct.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "net/minecraft/entity/DataWatcher", "func_75692_b",
+                "(ILjava/lang/Object;)V", false);
+        direct.visitInsn(Opcodes.RETURN);
+        direct.visitMaxs(0, 0);
+        direct.visitEnd();
+
+        MethodVisitor alias = w.visitMethod(Opcodes.ACC_PUBLIC, "setAlias", "(Ljava/lang/String;)V", null, null);
+        alias.visitCode();
+        alias.visitVarInsn(Opcodes.ALOAD, 1);
+        alias.visitVarInsn(Opcodes.ASTORE, 2);
+        watcher(alias);
+        alias.visitIntInsn(Opcodes.BIPUSH, 14);
+        alias.visitVarInsn(Opcodes.ALOAD, 2);
+        alias.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "net/minecraft/entity/DataWatcher", "func_75692_b",
+                "(ILjava/lang/Object;)V", false);
+        alias.visitInsn(Opcodes.RETURN);
+        alias.visitMaxs(0, 0);
+        alias.visitEnd();
+
+        MethodVisitor read = w.visitMethod(Opcodes.ACC_PUBLIC, "label", "()Ljava/lang/String;", null, null);
+        read.visitCode();
+        watcher(read);
+        read.visitIntInsn(Opcodes.BIPUSH, 14);
+        read.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "net/minecraft/entity/DataWatcher", "func_75681_e",
+                "(I)Ljava/lang/String;", false);
+        read.visitInsn(Opcodes.ARETURN);
+        read.visitMaxs(0, 0);
+        read.visitEnd();
+
+        w.visitEnd();
+        return w.toByteArray();
+    }
+
+    private static byte[] stringBootstrap() {
+        ClassWriter w = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7, Opcodes.ACC_PUBLIC, "third/entity/StringBootstrap", null, "java/lang/Object", null);
+        MethodVisitor m = w.visitMethod(Opcodes.ACC_PUBLIC, "preInit",
+                "(Lcpw/mods/fml/common/event/FMLPreInitializationEvent;)V", null, null);
+        m.visitAnnotation("Lcpw/mods/fml/common/Mod$EventHandler;", true).visitEnd();
+        m.visitCode();
+        m.visitLdcInsn(Type.getObjectType("third/entity/StringOrb"));
+        m.visitLdcInsn("string_orb");
+        m.visitIntInsn(Opcodes.BIPUSH, 18);
+        m.visitVarInsn(Opcodes.ALOAD, 0);
+        m.visitIntInsn(Opcodes.BIPUSH, 80);
+        m.visitInsn(Opcodes.ICONST_2);
+        m.visitInsn(Opcodes.ICONST_1);
+        m.visitMethodInsn(Opcodes.INVOKESTATIC, "cpw/mods/fml/common/registry/EntityRegistry",
+                "registerModEntity", "(Ljava/lang/Class;Ljava/lang/String;ILjava/lang/Object;IIZ)V", false);
+        m.visitInsn(Opcodes.RETURN);
+        m.visitMaxs(0, 0);
+        m.visitEnd();
         w.visitEnd();
         return w.toByteArray();
     }

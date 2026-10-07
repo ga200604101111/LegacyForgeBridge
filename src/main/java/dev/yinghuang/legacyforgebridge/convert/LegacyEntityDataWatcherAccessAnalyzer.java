@@ -238,10 +238,21 @@ public final class LegacyEntityDataWatcherAccessAnalyzer {
     }
 
     private String objectKind(MethodContext context, SourceValue value) {
-        if (value == null || value.insns == null || value.insns.isEmpty()) return null;
+        return objectKind(context, value, 0, new HashSet<>());
+    }
+
+    private String objectKind(
+            MethodContext context,
+            SourceValue value,
+            int depth,
+            Set<AbstractInsnNode> guard
+    ) {
+        if (value == null || depth > 24 || value.insns == null || value.insns.isEmpty()) return null;
         String kind = null;
         for (AbstractInsnNode producer : value.insns) {
-            String candidate = objectProducerKind(producer);
+            if (!guard.add(producer)) return null;
+            String candidate = objectProducerKind(context, producer, depth + 1, guard);
+            guard.remove(producer);
             if (candidate == null) return null;
             if (kind == null) kind = candidate;
             else if (!kind.equals(candidate)) return null;
@@ -249,7 +260,12 @@ public final class LegacyEntityDataWatcherAccessAnalyzer {
         return kind;
     }
 
-    private static String objectProducerKind(AbstractInsnNode producer) {
+    private String objectProducerKind(
+            MethodContext context,
+            AbstractInsnNode producer,
+            int depth,
+            Set<AbstractInsnNode> guard
+    ) {
         if (producer instanceof LdcInsnNode ldc && ldc.cst instanceof String) return "string";
         if (producer instanceof MethodInsnNode call) {
             if (call.getOpcode() == Opcodes.INVOKESTATIC && "valueOf".equals(call.name)) {
@@ -264,7 +280,38 @@ public final class LegacyEntityDataWatcherAccessAnalyzer {
             return returnKind(call.desc);
         }
         if (producer instanceof FieldInsnNode field) return descriptorKind(field.desc);
-        if (producer instanceof VarInsnNode) return null;
+        if (producer instanceof TypeInsnNode cast && cast.getOpcode() == Opcodes.CHECKCAST) {
+            String castKind = descriptorKind("L" + cast.desc + ";");
+            if (castKind != null) return castKind;
+            Integer index = context.indices().get(producer);
+            if (index == null) return null;
+            Frame<SourceValue> frame = context.frames()[index];
+            return frame == null || frame.getStackSize() == 0 ? null
+                    : objectKind(context, frame.getStack(frame.getStackSize() - 1), depth + 1, guard);
+        }
+        if (producer instanceof VarInsnNode variable && variable.getOpcode() == Opcodes.ALOAD) {
+            String parameterKind = parameterReferenceKind(context.method(), variable.var);
+            if (parameterKind != null) return parameterKind;
+            Integer index = context.indices().get(producer);
+            if (index == null) return null;
+            Frame<SourceValue> frame = context.frames()[index];
+            return frame == null || variable.var >= frame.getLocals() ? null
+                    : objectKind(context, frame.getLocal(variable.var), depth + 1, guard);
+        }
+        return null;
+    }
+
+    private static String parameterReferenceKind(MethodNode method, int local) {
+        int slot = (method.access & Opcodes.ACC_STATIC) == 0 ? 1 : 0;
+        for (Type type : Type.getArgumentTypes(method.desc)) {
+            if (slot == local) {
+                return switch (type.getSort()) {
+                    case Type.OBJECT -> descriptorKind(type.getDescriptor());
+                    default -> null;
+                };
+            }
+            slot += type.getSize();
+        }
         return null;
     }
 
