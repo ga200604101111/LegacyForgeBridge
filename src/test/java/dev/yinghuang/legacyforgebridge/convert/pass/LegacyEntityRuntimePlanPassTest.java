@@ -112,6 +112,28 @@ class LegacyEntityRuntimePlanPassTest {
         assertFalse(rule.get("runtimeAdmissionReady").getAsBoolean());
     }
 
+    @Test void watcherEnvelopeCountMismatchFailsClosedBeforeRuntimePlanAdmission() throws Exception {
+        Path staging = tempDir.resolve("envelope-count-mismatch");
+        ConversionContext context = context(staging, "envelope-count-mismatch.jar");
+        writeDefinitions(staging);
+        JsonObject definitions = JsonParser.parseString(Files.readString(
+                staging.resolve(LegacyEntityDataWatcherPass.OUTPUT), StandardCharsets.UTF_8)).getAsJsonObject();
+        definitions.getAsJsonArray("rules").get(0).getAsJsonObject().addProperty("sourceWatcherEntryCount", 4);
+        Files.writeString(staging.resolve(LegacyEntityDataWatcherPass.OUTPUT),
+                definitions.toString(), StandardCharsets.UTF_8);
+        writeAccesses(staging, false, false);
+        writeGlobalClosure(staging, true);
+
+        new LegacyEntityRuntimePlanPass().apply(context);
+
+        JsonObject root = JsonParser.parseString(Files.readString(
+                staging.resolve(LegacyEntityRuntimePlanPass.OUTPUT), StandardCharsets.UTF_8)).getAsJsonObject();
+        assertEquals(0, root.get("mappedRegistrations").getAsInt());
+        assertEquals(1, root.get("skippedRegistrations").getAsInt());
+        String reason = root.getAsJsonArray("skipped").get(0).getAsJsonObject().get("reason").getAsString();
+        assertTrue(reason.contains("watcher-envelope counts"), reason);
+    }
+
     @Test void accessKindMismatchFailsClosedBeforeRuntimePlanAdmission() throws Exception {
         Path staging = tempDir.resolve("mismatch-staging");
         ConversionContext context = context(staging, "mismatch.jar");
