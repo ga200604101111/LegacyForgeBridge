@@ -1,0 +1,23 @@
+{
+  "revision": "rev263",
+  "version": "0.2.0-alpha.27-corpus4-local.46-rev263-tf-registry.1",
+  "converterRevision": "2026-10-07.263-registry-vanilla-boundary-field-bindings",
+  "baseRuntime": "rev262-tf-creative-final",
+  "jarSha256": "8fca946690da6e3db31c2704e4293afafff12d4580699d465144d859d5c722ef",
+  "twilightForest238": {
+    "registrations": 171,
+    "items": 110,
+    "blocks": 61,
+    "fieldBindings": 171,
+    "tfItemBindings": 110,
+    "tfBlockBindings": 61,
+    "diagnostics": 0
+  },
+  "rev260Baseline": {
+    "registrations": 145,
+    "items": 110,
+    "blocks": 35,
+    "fieldBindings": 0
+  },
+  "policy": "generic vanilla Block hierarchy boundary + normalized field-binding identity; fail closed; no Twilight Forest allowlist"
+}
