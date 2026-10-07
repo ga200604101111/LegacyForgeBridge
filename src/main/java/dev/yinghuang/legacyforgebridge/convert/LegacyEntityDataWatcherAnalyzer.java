@@ -134,11 +134,18 @@ public final class LegacyEntityDataWatcherAnalyzer {
     }
 
     private DefinitionResult definitions(String sourceClass) {
-        MethodKey root = effectiveEntityInit(sourceClass);
-        if (root == null) return new DefinitionResult(List.of(), null);
         List<Entry> entries = new ArrayList<>();
-        String error = collectDefinitions(root, entries, new LinkedHashSet<>());
-        if (error != null) return new DefinitionResult(List.of(), error);
+        String externalBase = externalBase(sourceClass);
+        for (LegacyVanillaEntityDataWatcher1710.Entry entry
+                : LegacyVanillaEntityDataWatcher1710.inheritedForExternalBase(externalBase)) {
+            entries.add(new Entry(entry.index(), entry.valueKind(), entry.defaultValue(), entry.declaredBy()));
+        }
+
+        MethodKey root = effectiveEntityInit(sourceClass);
+        if (root != null) {
+            String error = collectDefinitions(root, entries, new LinkedHashSet<>());
+            if (error != null) return new DefinitionResult(List.of(), error);
+        }
         LinkedHashMap<Integer,Entry> byIndex = new LinkedHashMap<>();
         for (Entry entry : entries) {
             if (entry.index() < 0 || entry.index() > 31)
@@ -148,6 +155,17 @@ public final class LegacyEntityDataWatcherAnalyzer {
                 return new DefinitionResult(List.of(), "Duplicate legacy DataWatcher definition for index " + entry.index() + ".");
         }
         return new DefinitionResult(List.copyOf(byIndex.values()), null);
+    }
+
+    private String externalBase(String sourceClass) {
+        String current = sourceClass;
+        Set<String> seen = new HashSet<>();
+        while (current != null && seen.add(current)) {
+            ClassNode node = classes.get(current);
+            if (node == null) return current;
+            current = node.superName;
+        }
+        return null;
     }
 
     private MethodKey effectiveEntityInit(String sourceClass) {

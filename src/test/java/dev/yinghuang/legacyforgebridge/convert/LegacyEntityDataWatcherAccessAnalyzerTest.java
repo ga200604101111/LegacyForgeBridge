@@ -52,6 +52,24 @@ class LegacyEntityDataWatcherAccessAnalyzerTest {
                 && a.operation().equals("read") && a.valueKind().equals("string")));
     }
 
+    @Test void inheritedVanillaGhastWatcherAccessUsesThePinnedPlatformSchema() throws Exception {
+        Path jar = tempDir.resolve("GhastAccess.jar");
+        try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(jar))) {
+            put(out, "third/entity/GhastCarrier.class", ghastAccessEntity());
+            put(out, "third/entity/GhastBootstrap.class", ghastAccessBootstrap());
+        }
+
+        var analysis = new LegacyEntityDataWatcherAccessAnalyzer().analyze(jar);
+        assertTrue(analysis.skipped().isEmpty(), analysis.skipped().toString());
+        assertEquals(1, analysis.rules().size());
+        var accesses = analysis.rules().getFirst().accesses();
+        assertEquals(2, accesses.size(), accesses.toString());
+        assertTrue(accesses.stream().anyMatch(a -> a.index() == 16
+                && a.operation().equals("read") && a.valueKind().equals("byte")));
+        assertTrue(accesses.stream().anyMatch(a -> a.index() == 16
+                && a.operation().equals("write") && a.valueKind().equals("byte")));
+    }
+
     @Test void dynamicReadAndMismatchedWriteFailClosed() throws Exception {
         for (Mode mode : new Mode[]{Mode.DYNAMIC_READ, Mode.WRONG_WRITE_TYPE}) {
             Path jar = tempDir.resolve(mode.name() + ".jar");
@@ -165,6 +183,63 @@ class LegacyEntityDataWatcherAccessAnalyzerTest {
         count.visitMaxs(0, 0);
         count.visitEnd();
 
+        w.visitEnd();
+        return w.toByteArray();
+    }
+
+    private static byte[] ghastAccessEntity() {
+        ClassWriter w = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7, Opcodes.ACC_PUBLIC, "third/entity/GhastCarrier", null,
+                "net/minecraft/entity/monster/EntityGhast", null);
+
+        MethodVisitor get = w.visitMethod(Opcodes.ACC_PUBLIC, "status", "()B", null, null);
+        get.visitCode();
+        get.visitVarInsn(Opcodes.ALOAD, 0);
+        get.visitFieldInsn(Opcodes.GETFIELD, "net/minecraft/entity/Entity", "field_70180_af",
+                "Lnet/minecraft/entity/DataWatcher;");
+        get.visitIntInsn(Opcodes.BIPUSH, 16);
+        get.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "net/minecraft/entity/DataWatcher", "func_75683_a", "(I)B", false);
+        get.visitInsn(Opcodes.IRETURN);
+        get.visitMaxs(0, 0);
+        get.visitEnd();
+
+        MethodVisitor set = w.visitMethod(Opcodes.ACC_PUBLIC, "setStatus", "(B)V", null, null);
+        set.visitCode();
+        set.visitVarInsn(Opcodes.ALOAD, 0);
+        set.visitFieldInsn(Opcodes.GETFIELD, "net/minecraft/entity/Entity", "field_70180_af",
+                "Lnet/minecraft/entity/DataWatcher;");
+        set.visitIntInsn(Opcodes.BIPUSH, 16);
+        set.visitVarInsn(Opcodes.ILOAD, 1);
+        set.visitMethodInsn(Opcodes.INVOKESTATIC, "java/lang/Byte", "valueOf", "(B)Ljava/lang/Byte;", false);
+        set.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "net/minecraft/entity/DataWatcher", "func_75692_b",
+                "(ILjava/lang/Object;)V", false);
+        set.visitInsn(Opcodes.RETURN);
+        set.visitMaxs(0, 0);
+        set.visitEnd();
+
+        w.visitEnd();
+        return w.toByteArray();
+    }
+
+    private static byte[] ghastAccessBootstrap() {
+        ClassWriter w = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V1_7, Opcodes.ACC_PUBLIC, "third/entity/GhastBootstrap", null, "java/lang/Object", null);
+        MethodVisitor m = w.visitMethod(Opcodes.ACC_PUBLIC, "preInit",
+                "(Lcpw/mods/fml/common/event/FMLPreInitializationEvent;)V", null, null);
+        m.visitAnnotation("Lcpw/mods/fml/common/Mod$EventHandler;", true).visitEnd();
+        m.visitCode();
+        m.visitLdcInsn(Type.getObjectType("third/entity/GhastCarrier"));
+        m.visitLdcInsn("ghast_carrier");
+        m.visitIntInsn(Opcodes.BIPUSH, 41);
+        m.visitVarInsn(Opcodes.ALOAD, 0);
+        m.visitIntInsn(Opcodes.BIPUSH, 80);
+        m.visitInsn(Opcodes.ICONST_3);
+        m.visitInsn(Opcodes.ICONST_1);
+        m.visitMethodInsn(Opcodes.INVOKESTATIC, "cpw/mods/fml/common/registry/EntityRegistry",
+                "registerModEntity", "(Ljava/lang/Class;Ljava/lang/String;ILjava/lang/Object;IIZ)V", false);
+        m.visitInsn(Opcodes.RETURN);
+        m.visitMaxs(0, 0);
+        m.visitEnd();
         w.visitEnd();
         return w.toByteArray();
     }
