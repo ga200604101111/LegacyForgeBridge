@@ -6,6 +6,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import dev.yinghuang.legacyforgebridge.convert.LegacyBlockTileModelPreflight;
 import dev.yinghuang.legacyforgebridge.convert.LegacyBlockTileVisualStateAnalyzer;
+import dev.yinghuang.legacyforgebridge.convert.LegacyTileFacingRotationAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.api.ConversionContext;
 import dev.yinghuang.legacyforgebridge.convert.api.ConversionPass;
 import dev.yinghuang.legacyforgebridge.convert.api.SupportLevel;
@@ -16,6 +17,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Objects;
 import java.util.Map;
+import java.util.LinkedHashMap;
 
 /**
  * Auditable, non-executable source provenance for ordinary 1.7.10 Block + TileEntity + TESR.
@@ -45,7 +47,21 @@ public final class LegacyBlockTileModelPreflightPass implements ConversionPass {
                                     +incomplete.getClass().getSimpleName()+"); runtime remains unwired.");
                 }
             }
-            var manifest=manifest(context.sourceHash(),context.metadata().primary().modId(),source,visuals);
+            // A static six-facing map is independent of TileEntity animation/sync proof.
+            // Rev285's state observation must never become a fake client networking bridge.
+            Map<String, LegacyTileFacingRotationAnalyzer.Proof> facing = new LinkedHashMap<>();
+            LegacyTileFacingRotationAnalyzer facingAnalyzer = new LegacyTileFacingRotationAnalyzer();
+            for (var candidate : source.candidates()) {
+                try {
+                    var result = facingAnalyzer.analyze(context.sourceJar(),candidate);
+                    result.proof().ifPresent(proof -> facing.put(candidate.sourceBlockClass(),proof));
+                } catch (IOException | RuntimeException incomplete) {
+                    context.diagnostics().info("LFB-CONVERT-BLOCK-TILE-0006",SupportLevel.AUTO,
+                            "Optional static facing proof unavailable for " + candidate.sourceBlockClass()
+                                    + " (" + incomplete.getClass().getSimpleName() + "); runtime unwired.");
+                }
+            }
+            var manifest=manifest(context.sourceHash(),context.metadata().primary().modId(),source,visuals,facing);
             Path output=context.stagingDir().resolve(OUTPUT);
             Files.createDirectories(output.getParent());
             Files.writeString(output,JSON.toJson(manifest)+"\n",StandardCharsets.UTF_8);
@@ -64,15 +80,24 @@ public final class LegacyBlockTileModelPreflightPass implements ConversionPass {
 
     public static JsonObject manifest(String sourceSha, String modId,
                                       LegacyBlockTileModelPreflight.Analysis analysis) {
-        return manifest(sourceSha,modId,analysis,Map.of());
+        return manifest(sourceSha,modId,analysis,Map.of(),Map.of());
     }
 
     /** Optional per-source-Class observations only; no runtime admission is possible here. */
     public static JsonObject manifest(String sourceSha, String modId,
                                       LegacyBlockTileModelPreflight.Analysis analysis,
                                       Map<String, LegacyBlockTileVisualStateAnalyzer.Evidence> visualState) {
+        return manifest(sourceSha,modId,analysis,visualState,Map.of());
+    }
+
+    /** Bounded, static source facing metadata; never implies client animation or tile sync. */
+    public static JsonObject manifest(String sourceSha, String modId,
+                                      LegacyBlockTileModelPreflight.Analysis analysis,
+                                      Map<String, LegacyBlockTileVisualStateAnalyzer.Evidence> visualState,
+                                      Map<String, LegacyTileFacingRotationAnalyzer.Proof> sourceFacingMaps) {
         Objects.requireNonNull(analysis);
         Objects.requireNonNull(visualState);
+        Objects.requireNonNull(sourceFacingMaps);
         JsonObject root=new JsonObject();
         root.addProperty("schemaVersion",1);
         root.addProperty("sourceSha256",sourceSha);
@@ -85,7 +110,7 @@ public final class LegacyBlockTileModelPreflightPass implements ConversionPass {
         root.addProperty("tileStateSyncProven",false);
         root.addProperty("modernBlockGeometryProven",false);
         JsonArray candidates=new JsonArray();
-        int observedState=0, tickDriven=0;
+        int observedState=0, tickDriven=0, staticFacing=0;
         for (var p : analysis.candidates()) {
             JsonObject entry=new JsonObject();
             entry.addProperty("legacyBlockRegistryName",p.registryName());
@@ -122,9 +147,29 @@ public final class LegacyBlockTileModelPreflightPass implements ConversionPass {
                 entry.addProperty("sourceTilePacketHookPresent",state.sourceTilePacketHookPresent());
                 entry.addProperty("sourceTileSyncAssessment",state.tileSyncAssessment().name());
                 entry.addProperty("sourceTileStateSyncProven",false);
-                entry.addProperty("sourceFacingMapProven",false);
                 entry.addProperty("sourceAnimationRuntimeWired",false);
                 if(!state.tickDrivenRenderFields().isEmpty())tickDriven++;
+            }
+            var map = sourceFacingMaps.get(p.sourceBlockClass());
+            boolean facingProven = map != null && map.sourceTileClass().equals(p.tileClass())
+                    && map.sourceRendererClass().equals(p.rendererClass()) && !map.runtimeWired();
+            entry.addProperty("sourceFacingMapProven",facingProven);
+            entry.addProperty("sourceFacingRendererRuntimeWired",false);
+            if (facingProven) {
+                staticFacing++;
+                entry.addProperty("sourceFacingMetadataMask",map.sourceMetadataMask());
+                entry.addProperty("sourceFacingDrawMethod",map.drawMethod());
+                entry.addProperty("sourceFacingDrawDescriptor",map.drawDescriptor());
+                entry.addProperty("sourceAdditionalGlRotationPresent",map.additionalSourceGlRotationPresent());
+                JsonArray faces=new JsonArray();
+                for (var face:map.facing0to15()) {
+                    JsonObject element=new JsonObject();
+                    element.addProperty("legacyMetadata",face.metadata());
+                    element.addProperty("sourceRotationXDegrees",face.rotationXDegrees());
+                    element.addProperty("sourceRotationZDegrees",face.rotationZDegrees());
+                    faces.add(element);
+                }
+                entry.add("sourceFacingMap0to15",faces);
             }
             entry.addProperty("runtimeReady",false);
             candidates.add(entry);
@@ -133,6 +178,7 @@ public final class LegacyBlockTileModelPreflightPass implements ConversionPass {
         root.addProperty("sourceCandidates",candidates.size());
         root.addProperty("visualStateAuditCandidateCount",observedState);
         root.addProperty("tileTickVisualDependencyCandidateCount",tickDriven);
+        root.addProperty("sourceStaticFacingMapCandidateCount",staticFacing);
         JsonArray skipped=new JsonArray();
         for(var p : analysis.skipped()){
             JsonObject entry=new JsonObject();
