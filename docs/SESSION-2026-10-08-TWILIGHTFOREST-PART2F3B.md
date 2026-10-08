@@ -53,8 +53,20 @@ A future `FIXED_MODEL_PROJECTILE` route must require **all** of these:
 6. construct a modern client-only mesh renderer with correct texture and unit-safe axis-angle orientation, no client simulation of projectile gameplay;
 7. synthetic renamed tests, missing/ambiguous asset and dynamic/multipart rejection tests, exact-`-tw` analyzer evidence, full source restoration (rev260 handoff gap), then a real Loom build and in-game visual acceptance.
 
-Threw ice / chain block / annihilation cube must remain independently gated as block-backed, multipart, and dynamic translucent renderer families.
+Thrown ice / chain block / annihilation cube must remain independently gated as block-backed, multipart, and dynamic translucent renderer families.
 
 ## Validation boundary
 
 This is a source/evidence checkpoint only. Neither a complete main JAR nor a live Fabric/VFP or original server test is implied. See `docs/SESSION-2026-10-07-REV260-REV262-HANDOFF-GAP.md` before attempting any full production build.
+
+## rev279 proof-only implementation
+
+Now committed to this branch:
+
+- `src/main/java/dev/yinghuang/legacyforgebridge/convert/LegacyFixedModelProjectileAnalyzer.java`: source-only, fail-closed ASM proof for static cuboid projectile render paths. It returns fixed texture/atlas, cuboid UV/box/pivot geometry, exact render scale and constant axis-angle data; no production adapter or remote entity registry wire-up is changed.
+- `src/test/java/dev/yinghuang/legacyforgebridge/convert/LegacyFixedModelProjectileFixture.java`: renamed synthetic Minecraft 1.7.10 renderer/model fixture, including unreachable tile animation and invalid draw variants.
+- `src/test/java/dev/yinghuang/legacyforgebridge/convert/LegacyFixedModelProjectileAnalyzerTest.java`: seven JUnit assertions covering one fixed positive, one unreachable-tile-animation positive, reached model mutation, dynamic rotation, unsupported GL call, unmodeled constructor rotation and missing texture.
+
+A standalone Java 21 smoke run using temporary `jdk.internal.org.objectweb.asm` import substitutions (not project ASM dependency) compiled the code and matched all seven expected accept/reject outcomes. **Gradle/Loom/JUnit not run**, original `-tw.jar` unavailable, exact binary evidence absent, and no game-side testing or build occurred.
+
+The analyzer is intentionally **not connected** to the conversion pass, JSON sidecar, modern mesh renderer or runtime registration. Unique launcher bytecode dataflow, fullbright shader mapping and unchanged remote-server gameplay authority are mandatory before any new entity can be admitted. Existing `THROWN_ITEM` and `ORIENTED_ITEM` behavior remains untouched.
