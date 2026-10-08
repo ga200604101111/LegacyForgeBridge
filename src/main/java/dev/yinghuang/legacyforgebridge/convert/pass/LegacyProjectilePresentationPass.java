@@ -2,10 +2,12 @@ package dev.yinghuang.legacyforgebridge.convert.pass;
 
 import com.google.gson.*;
 import dev.yinghuang.legacyforgebridge.convert.LegacyProjectilePresentationAnalyzer;
+import dev.yinghuang.legacyforgebridge.convert.LegacyFixedModelProjectilePreflight;
 import dev.yinghuang.legacyforgebridge.convert.LegacyVanillaRegistry1710;
 import dev.yinghuang.legacyforgebridge.convert.LegacyVanillaStackDataFix;
 import dev.yinghuang.legacyforgebridge.convert.api.*;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.*;
@@ -13,6 +15,9 @@ import java.util.*;
 /** Publishes source-proven remote projectile presentation rules without executing legacy classes. */
 public final class LegacyProjectilePresentationPass implements ConversionPass {
     public static final String OUTPUT="legacyforgebridge/projectile-presentation-rules.json";
+    /** Source-only census; this file is never a live renderer/EntityType rule input. */
+    public static final String FIXED_MODEL_PREFLIGHT_OUTPUT=
+            "legacyforgebridge/projectile-fixed-model-preflight.json";
     private static final Gson JSON=new GsonBuilder().setPrettyPrinting().create();
 
     record PresentationItem(String modernId,int runtimeMetadata,String sourceKind) {
@@ -27,6 +32,16 @@ public final class LegacyProjectilePresentationPass implements ConversionPass {
     @Override public void apply(ConversionContext context)throws Exception{
         Path contentPath=context.stagingDir().resolve(LegacyClientContentBaselinePass.CONTENT);
         if(!Files.isRegularFile(contentPath))return;
+        // A completely separate, non-executable proof surface: existing projectile rules
+        // and their runtime readiness flags must not change when this optional census changes.
+        try {
+            publishFixedModelPreflight(context,
+                    new LegacyFixedModelProjectilePreflight().analyze(context.sourceJar()));
+        } catch (IOException | RuntimeException unavailable) {
+            context.diagnostics().warning("LFB-CONVERT-PROJECTILE-0003", SupportLevel.RUNTIME_BRIDGE,
+                    "Fixed-model projectile evidence unavailable; no new runtime adapter admitted ("
+                            + unavailable.getClass().getSimpleName() + ").");
+        }
         JsonObject content=JsonParser.parseString(Files.readString(contentPath,StandardCharsets.UTF_8)).getAsJsonObject();
         Map<String,String> itemIds=new LinkedHashMap<>(),uniqueClassIds=new LinkedHashMap<>();
         Set<String> ambiguousKeys=new HashSet<>(),ambiguousClasses=new HashSet<>();
@@ -87,6 +102,77 @@ public final class LegacyProjectilePresentationPass implements ConversionPass {
                 "Source-proven remote projectile presentation rules="+rules.size()+"; FML throwable velocity and item-bound rendering are candidate-owned.");
         for(var skip:analysis.skipped())context.diagnostics().warning("LFB-CONVERT-PROJECTILE-0002",SupportLevel.RUNTIME_BRIDGE,
                 "Projectile presentation not admitted for "+skip.registryName()+": "+skip.reason());
+    }
+
+
+    static JsonObject fixedModelPreflightManifest(String sourceSha256, String legacyModId,
+                                                   LegacyFixedModelProjectilePreflight.Analysis analysis) {
+        Objects.requireNonNull(analysis, "analysis");
+        JsonObject root=new JsonObject();
+        root.addProperty("schemaVersion", 1);
+        root.addProperty("sourceSha256", sourceSha256);
+        root.addProperty("legacyModId", legacyModId);
+        root.addProperty("presentationFamily", "FIXED_CUBOID_PROJECTILE_PREFLIGHT");
+        root.addProperty("runtimeWired", false);
+        root.addProperty("launcherDataflowProven", false);
+        root.addProperty("fmlSpawnRuntimeProven", false);
+        root.addProperty("clientFullbrightProven", false);
+        JsonArray candidates=new JsonArray();
+        for (var candidate : analysis.candidates()) {
+            var proof=candidate.geometry();
+            JsonObject entry=new JsonObject();
+            entry.addProperty("registryName", candidate.registryName());
+            entry.addProperty("sourceClass", candidate.entityClass());
+            entry.addProperty("rendererClass", candidate.rendererClass());
+            entry.addProperty("modelClass", proof.modelClass());
+            entry.addProperty("texture", proof.texture());
+            entry.addProperty("textureWidth", proof.textureWidth());
+            entry.addProperty("textureHeight", proof.textureHeight());
+            entry.addProperty("scale", proof.scale());
+            entry.addProperty("angle", proof.angle());
+            entry.addProperty("axisX", proof.axisX());
+            entry.addProperty("axisY", proof.axisY());
+            entry.addProperty("axisZ", proof.axisZ());
+            entry.addProperty("runtimeReady", false);
+            JsonArray cuboids=new JsonArray();
+            for (var part : proof.cuboids()) {
+                JsonObject cuboid=new JsonObject();
+                cuboid.addProperty("name",part.name());cuboid.addProperty("u",part.u());cuboid.addProperty("v",part.v());
+                cuboid.addProperty("x",part.x());cuboid.addProperty("y",part.y());cuboid.addProperty("z",part.z());
+                cuboid.addProperty("width",part.width());cuboid.addProperty("height",part.height());
+                cuboid.addProperty("depth",part.depth());cuboid.addProperty("pivotX",part.pivotX());
+                cuboid.addProperty("pivotY",part.pivotY());cuboid.addProperty("pivotZ",part.pivotZ());
+                cuboids.add(cuboid);
+            }
+            entry.add("cuboids",cuboids);
+            candidates.add(entry);
+        }
+        root.add("candidates",candidates);
+        root.addProperty("provenRendererCandidates",candidates.size());
+        JsonArray skipped=new JsonArray();
+        for (var candidate : analysis.skipped()) {
+            JsonObject entry=new JsonObject();
+            if (candidate.registryName()!=null) entry.addProperty("registryName",candidate.registryName());
+            if (candidate.entityClass()!=null) entry.addProperty("sourceClass",candidate.entityClass());
+            entry.addProperty("reason",candidate.reason());
+            skipped.add(entry);
+        }
+        root.add("skipped",skipped);
+        return root;
+    }
+
+    private static void publishFixedModelPreflight(
+            ConversionContext context, LegacyFixedModelProjectilePreflight.Analysis analysis) throws IOException {
+        if (analysis.candidates().isEmpty() && analysis.skipped().isEmpty()) return;
+        Path output=context.stagingDir().resolve(FIXED_MODEL_PREFLIGHT_OUTPUT);
+        Files.createDirectories(output.getParent());
+        JsonObject json=fixedModelPreflightManifest(
+                context.sourceHash(), context.metadata().primary().modId(), analysis);
+        Files.writeString(output,JSON.toJson(json)+"\\n",StandardCharsets.UTF_8);
+        if (!analysis.candidates().isEmpty()) context.diagnostics().info(
+                "LFB-CONVERT-PROJECTILE-0004",SupportLevel.RUNTIME_BRIDGE,
+                "Fixed-model projectile geometry source-proof candidates="+analysis.candidates().size()
+                        + "; runtime/launcher/lighting adaptation remains unwired.");
     }
 
     static PresentationItem resolvePresentationItem(
