@@ -4,6 +4,7 @@ import dev.yinghuang.legacyforgebridge.convert.api.ConversionPlan;
 import dev.yinghuang.legacyforgebridge.convert.api.LegacyModMetadata;
 import dev.yinghuang.legacyforgebridge.convert.api.LegacyModProfile;
 import dev.yinghuang.legacyforgebridge.convert.pass.GenericContentPass;
+import dev.yinghuang.legacyforgebridge.convert.pass.LegacyBlockTileModelPreflightPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyEntityBehaviorSurfacePass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyEntityConstantOverridePass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyEntityConstructionPass;
@@ -38,6 +39,8 @@ public final class GenericLegacyModProfile implements LegacyModProfile {
     @Override public boolean matches(LegacyModMetadata metadata,String sourceHash){ return true; }
     @Override public void configure(ConversionPlan.Builder plan){
         plan.add(new GenericContentPass());
+        // Source-only proof for ordinary Block+TileEntity+TESR; never registers a runnable BlockEntity.
+        plan.add(new LegacyBlockTileModelPreflightPass());
         plan.add(new LegacyCreativeTabPresentationPass());
         plan.add(new LegacyVariantSnowballPass());
         plan.add(new LegacyVariantSnowballLaunchPass());
