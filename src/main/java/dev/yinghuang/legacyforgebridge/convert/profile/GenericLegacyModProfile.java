@@ -26,6 +26,8 @@ import dev.yinghuang.legacyforgebridge.convert.pass.LegacyPlainEntityRuntimePass
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyProjectilePresentationPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyProjectileFixedModelPreflightPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyStaticTileModelBakerPass;
+import dev.yinghuang.legacyforgebridge.convert.pass.LegacyBatchVisualRecoveryPass;
+import dev.yinghuang.legacyforgebridge.convert.pass.LegacyItemSemanticsRecoveryPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyRotatingAssemblyEntityPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacySeatBedPresentationPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyVariantSnowballLaunchPass;
@@ -66,6 +68,8 @@ public final class GenericLegacyModProfile implements LegacyModProfile {
         plan.add(new LegacyBlockTileModelPreflightPass());
         // Provisional source-proven static 3D block geometry; dynamic tile rendering remains unimplemented.
         plan.add(new LegacyStaticTileModelBakerPass());
+        plan.add(new LegacyBatchVisualRecoveryPass());
+        plan.add(new LegacyItemSemanticsRecoveryPass());
         plan.add(new LegacyRotatingAssemblyEntityPass());
         plan.add(new LegacyPlainEntityRuntimeCandidatePass());
         plan.add(new LegacyPlainEntityRuntimePass());
