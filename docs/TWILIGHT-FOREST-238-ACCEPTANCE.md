@@ -107,3 +107,17 @@ The generic Block + TileEntity + TESR preflight now matches source visual-state 
 There is **still no network/client runtime admission**: `sourceTilePacketPayloadProven=false`, `tileStateSyncProven=false`, `runtimeWired=false`, per-source `runtimeReady=false` and no executable rules. In the public upstream Moonworm TileEntity, `currentYaw`, `desiredYaw`, and `yawDelay` have no paired NBT persistence from the tile source. Actual translated `-tw.jar`, S35 packet payload, Fabric BlockEntityRenderer, Forge multiplayer parity and full main JAR build all remain unverified.
 
 Latest Java21 independent synthetic source/manifest tests: rev289 30 analyzer + 11 manifest; rev284–288 143 regressions: **184/184 passed** with JDK-internal ASM substitutions and dependency test doubles, not official Loom/Gradle or in-game. Details: `docs/SESSION-2026-10-08-TWILIGHTFOREST-PART2G-REV289.md`.
+
+## rev291 — exact-source generic static TESR geometry (2026-10-08)
+
+**First actual client asset change** of rev279+ beyond source-only diagnostics: a newly compiled `LegacyStaticTileModelBakerPass` integrated into the complete rev260-preserving **rev291 preview main JAR** parses the user-provided exact `twilightforest-1.7.10-2.3.8-tw.jar` and outputs source-proven, six-direction static 3D cuboid models with original model PNG texture/UV and all 16 blockstate metadata mappings for **2** ordinary legacy blocks:
+
+- **Moonworm**: old converted candidate was `cube_all`; new model has **4** parts and six static facing poses.
+- **Cicada**: old converted candidate was `cube_all`; new model has **6** parts and six static facing poses.
+- **Firefly**: old converted candidate was `cube_all`; remained **excluded** because its legacy TESR has an unproved multi-pass glow/blend renderer. No fake static equivalence admitted.
+
+This does **not** reduce the independently measured **22 magenta placeholder block models**: Moonworm and Cicada previously had *textured cube_all*, not magenta placeholders. There are still approximately **8 barrier placeholder items**, **0/77 runtime entity adaptations**, and major portal/worldgen/interaction/boss gaps. This is a narrow but real first geometry improvement, not a complete mod conversion.
+
+Local proof: real compiled rev291 Pass loaded from the packaged JAR (with temporary JDK-internal ASM test-package relocation, no shim distributed) configured a 32-pass generic profile and processed the **exact user source JAR** successfully; 2 admitted source models, Firefly skipped, all JSON element/UV/16-state constraints checked. **Actual Minecraft 1.21.11 Fabric/ViaFabricPlus rendered appearance and original Forge 1.7.10 multiplayer have not been tested.** The generated mod manifest still declares `status=partial` and `installable=false`; no gameplay readiness percentage can be inferred.
+
+Full development evidence and binary provenance: `docs/SESSION-2026-10-08-REV291-STATIC-TESR-VISUAL-PREVIEW.md`, `diagnostics/rev291-twilight-exact-source-visual/verification.json`.
