@@ -17,7 +17,10 @@ MOD = {"id":"legacyforgebridge", "schemaVersion":1, "environment":"client", "ver
        "jars":[{"file":"META-INF/jars/energy-4.2.0.jar"}]}
 BASE = {"fabric.mod.json":json.dumps(MOD).encode(),"a/Core.class":b"\xca\xfe\xba\xbeold",
         "META-INF/jars/energy-4.2.0.jar":b"energy", "META-INF/lfb/desktop-helper.jar":b"helper",
-        "legacyforgebridge.rev258.mixins.json":b"{}"}
+        "legacyforgebridge.rev258.mixins.json":b"{}",
+        "legacyforgebridge.client.mixins.json":b"{}",
+        "example/Client.class":b"\xca\xfe\xba\xbe\x00\x00\x00\x41stub"}
+BASE["a/Core.class"] = b"\xca\xfe\xba\xbe\x00\x00\x00\x41old"
 
 
 def jar(path, files):
@@ -40,14 +43,14 @@ class GuardTests(unittest.TestCase):
         return files
 
     def test_explicit_addition_and_version_bump_passes_structural_only(self):
-        f=self.new_files();f["new/source/Proof.class"]=b"\xca\xfe\xba\xbearg"
+        f=self.new_files();f["new/source/Proof.class"]=b"\xca\xfe\xba\xbe\x00\x00\x00\x41arg"
         jar(self.new,f)
         r=mod.validate(self.base,self.new,{"new/source/Proof.class"},{"fabric.mod.json"})
         self.assertEqual(r["verdict"],"PASS_STRUCTURAL_ONLY")
         self.assertEqual(r["changes"]["added"],["new/source/Proof.class"])
 
     def test_unreviewed_added_class_blocks(self):
-        f=self.new_files();f["new/source/Proof.class"]=b"\xca\xfe\xba\xbearg"
+        f=self.new_files();f["new/source/Proof.class"]=b"\xca\xfe\xba\xbe\x00\x00\x00\x41arg"
         jar(self.new,f)
         r=mod.validate(self.base,self.new,set(),{"fabric.mod.json"})
         self.assertEqual(r["verdict"],"FAIL")
@@ -70,12 +73,12 @@ class GuardTests(unittest.TestCase):
         self.assertTrue(any("FABRIC_METADATA_CHANGED: mixins" in x for x in r["errors"]))
 
     def test_same_version_with_modified_binary_is_blocked(self):
-        f=copy.deepcopy(BASE);f["a/Core.class"]=b"\xca\xfe\xba\xbenew";jar(self.new,f)
+        f=copy.deepcopy(BASE);f["a/Core.class"]=b"\xca\xfe\xba\xbe\x00\x00\x00\x41new";jar(self.new,f)
         r=mod.validate(self.base,self.new,set(),{"a/Core.class"})
         self.assertTrue(any("VERSION_NOT_BUMPED" in x for x in r["errors"]))
 
     def test_test_classes_cannot_ship(self):
-        f=self.new_files();f["org/junit/Test.class"]=b"\xca\xfe\xba\xbeinit";jar(self.new,f)
+        f=self.new_files();f["org/junit/Test.class"]=b"\xca\xfe\xba\xbe\x00\x00\x00\x41init";jar(self.new,f)
         r=mod.validate(self.base,self.new,{"org/junit/Test.class"},{"fabric.mod.json"})
         self.assertTrue(any("TEST_CLASS_OR_RESOURCE_PACKAGED" in x for x in r["errors"]))
 
