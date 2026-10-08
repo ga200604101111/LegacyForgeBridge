@@ -120,6 +120,16 @@ public final class LegacyFixedModelProjectilePreflight {
                         "Renderer is not the fixed cuboid family: " + String.join("; ", proof.diagnostics())));
                 continue;
             }
+            // A fixed cuboid source proof is not ready for modern rendering if 1.7.10
+            // ModelBox faces escape the exact source texture or geometry becomes degenerate.
+            // Keep this a source-only admission gate; never create a runtime entity here.
+            try {
+                LegacyModelBoxMesh1710.build(proof.proof().orElseThrow());
+            } catch (IllegalArgumentException unsafeMesh) {
+                skipped.add(new Skipped(registryName, sourceClass,
+                        "ModelBox UV/mesh conversion is unproven: " + unsafeMesh.getMessage()));
+                continue;
+            }
             var launch = launcherItems.isEmpty() ? java.util.Optional.<LegacyProjectileLauncherAnalyzer.Proof>empty()
                     : new LegacyProjectileLauncherAnalyzer().inspect(jar, sourceClass, launcherItems).proof();
             candidates.add(new Candidate(registryName, sourceClass, rendererClass, proof.proof().orElseThrow(), launch));
