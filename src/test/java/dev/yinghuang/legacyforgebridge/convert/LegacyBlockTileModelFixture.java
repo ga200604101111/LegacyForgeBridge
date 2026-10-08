@@ -31,7 +31,7 @@ final class LegacyBlockTileModelFixture {
         GOOD, MARKER_FALSE, BLOCK_FACTORY_WRONG_RETURN, CLIENT_BIND_MISSING,
         CLIENT_BIND_DUPLICATE, UNKNOWN_RENDERER_BASE, MODEL_ALLOCATION_MISSING,
         MODEL_ANIMATION_MISSING, BLOCK_NO_INHERITED_MARKER, NO_RENDER_DRAW,
-        UNRESOLVED_CLIENT_BIND, DYNAMIC_LIGHT, MISSING_TILE_SOURCE
+        UNRESOLVED_CLIENT_BIND, CLIENT_REGISTER_WITH_ID, DYNAMIC_LIGHT, MISSING_TILE_SOURCE
     }
     static Path jar(Path output, Case variant) throws IOException {
         try (JarOutputStream jar = new JarOutputStream(Files.newOutputStream(output))) {
@@ -152,10 +152,19 @@ final class LegacyBlockTileModelFixture {
         var m=w.visitMethod(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"register","()V",null,null);
         m.visitCode();
         if(v!=Case.CLIENT_BIND_MISSING){
-            emitBinding(m,v==Case.UNRESOLVED_CLIENT_BIND);
+            if(v==Case.CLIENT_REGISTER_WITH_ID)emitRegisterWithId(m);
+            else emitBinding(m,v==Case.UNRESOLVED_CLIENT_BIND);
             if(v==Case.CLIENT_BIND_DUPLICATE)emitBinding(m,false);
         }
         m.visitInsn(Opcodes.RETURN);m.visitMaxs(0,0);m.visitEnd();w.visitEnd();return w.toByteArray();
+    }
+    private static void emitRegisterWithId(MethodVisitor m) {
+        m.visitLdcInsn(Type.getObjectType(TILE));
+        m.visitLdcInsn("Unrelated Registered Tile");
+        m.visitTypeInsn(Opcodes.NEW,RENDERER);m.visitInsn(Opcodes.DUP);
+        m.visitMethodInsn(Opcodes.INVOKESPECIAL,RENDERER,"<init>","()V",false);
+        m.visitMethodInsn(Opcodes.INVOKESTATIC,"cpw/mods/fml/client/registry/ClientRegistry",
+                "registerTileEntity","(Ljava/lang/Class;Ljava/lang/String;L"+MC_RENDER+";)V",false);
     }
     private static void emitBinding(MethodVisitor m,boolean unresolved){
         m.visitLdcInsn(Type.getObjectType(TILE));
