@@ -7,6 +7,7 @@ import com.google.gson.JsonObject;
 import dev.yinghuang.legacyforgebridge.convert.LegacyBlockTileModelPreflight;
 import dev.yinghuang.legacyforgebridge.convert.LegacyBlockTileVisualStateAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.LegacyTileFacingRotationAnalyzer;
+import dev.yinghuang.legacyforgebridge.convert.LegacyTileDynamicYawAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.api.ConversionContext;
 import dev.yinghuang.legacyforgebridge.convert.api.ConversionPass;
 import dev.yinghuang.legacyforgebridge.convert.api.SupportLevel;
@@ -61,7 +62,25 @@ public final class LegacyBlockTileModelPreflightPass implements ConversionPass {
                                     + " (" + incomplete.getClass().getSimpleName() + "); runtime unwired.");
                 }
             }
-            var manifest=manifest(context.sourceHash(),context.metadata().primary().modId(),source,visuals,facing);
+            // Rev287: the optional, third source GL-Y rotation must read ONE actual
+            // TileEntity field. This is angle-operand evidence, not packet/NBT proof.
+            Map<String, LegacyTileDynamicYawAnalyzer.Proof> dynamicYaw=new LinkedHashMap<>();
+            LegacyTileDynamicYawAnalyzer yawAnalyzer=new LegacyTileDynamicYawAnalyzer();
+            for (var candidate:source.candidates()) {
+                var staticFace=facing.get(candidate.sourceBlockClass());
+                if (staticFace==null || !staticFace.additionalSourceGlRotationPresent())continue;
+                try {
+                    var dynamic=yawAnalyzer.analyze(context.sourceJar(),candidate,staticFace);
+                    dynamic.proof().ifPresent(proof -> dynamicYaw.put(candidate.sourceBlockClass(),proof));
+                } catch (IOException | RuntimeException incomplete) {
+                    context.diagnostics().info("LFB-CONVERT-BLOCK-TILE-0007",SupportLevel.AUTO,
+                            "Optional tile Y-axis operand source proof unavailable for "
+                                    + candidate.sourceBlockClass()+" ("+incomplete.getClass().getSimpleName()
+                                    + "); tile field sync and client rendering remain unwired.");
+                }
+            }
+            var manifest=manifest(context.sourceHash(),context.metadata().primary().modId(),
+                    source,visuals,facing,dynamicYaw);
             Path output=context.stagingDir().resolve(OUTPUT);
             Files.createDirectories(output.getParent());
             Files.writeString(output,JSON.toJson(manifest)+"\n",StandardCharsets.UTF_8);
@@ -80,14 +99,14 @@ public final class LegacyBlockTileModelPreflightPass implements ConversionPass {
 
     public static JsonObject manifest(String sourceSha, String modId,
                                       LegacyBlockTileModelPreflight.Analysis analysis) {
-        return manifest(sourceSha,modId,analysis,Map.of(),Map.of());
+        return manifest(sourceSha,modId,analysis,Map.of(),Map.of(),Map.of());
     }
 
     /** Optional per-source-Class observations only; no runtime admission is possible here. */
     public static JsonObject manifest(String sourceSha, String modId,
                                       LegacyBlockTileModelPreflight.Analysis analysis,
                                       Map<String, LegacyBlockTileVisualStateAnalyzer.Evidence> visualState) {
-        return manifest(sourceSha,modId,analysis,visualState,Map.of());
+        return manifest(sourceSha,modId,analysis,visualState,Map.of(),Map.of());
     }
 
     /** Bounded, static source facing metadata; never implies client animation or tile sync. */
@@ -95,9 +114,19 @@ public final class LegacyBlockTileModelPreflightPass implements ConversionPass {
                                       LegacyBlockTileModelPreflight.Analysis analysis,
                                       Map<String, LegacyBlockTileVisualStateAnalyzer.Evidence> visualState,
                                       Map<String, LegacyTileFacingRotationAnalyzer.Proof> sourceFacingMaps) {
+        return manifest(sourceSha,modId,analysis,visualState,sourceFacingMaps,Map.of());
+    }
+
+    /** Independent, source-causal GL operand evidence. Still no network/render runtime. */
+    public static JsonObject manifest(String sourceSha, String modId,
+                                      LegacyBlockTileModelPreflight.Analysis analysis,
+                                      Map<String, LegacyBlockTileVisualStateAnalyzer.Evidence> visualState,
+                                      Map<String, LegacyTileFacingRotationAnalyzer.Proof> sourceFacingMaps,
+                                      Map<String, LegacyTileDynamicYawAnalyzer.Proof> sourceYawMaps) {
         Objects.requireNonNull(analysis);
         Objects.requireNonNull(visualState);
         Objects.requireNonNull(sourceFacingMaps);
+        Objects.requireNonNull(sourceYawMaps);
         JsonObject root=new JsonObject();
         root.addProperty("schemaVersion",1);
         root.addProperty("sourceSha256",sourceSha);
@@ -110,7 +139,7 @@ public final class LegacyBlockTileModelPreflightPass implements ConversionPass {
         root.addProperty("tileStateSyncProven",false);
         root.addProperty("modernBlockGeometryProven",false);
         JsonArray candidates=new JsonArray();
-        int observedState=0, tickDriven=0, staticFacing=0;
+        int observedState=0, tickDriven=0, staticFacing=0, sourceYaw=0;
         for (var p : analysis.candidates()) {
             JsonObject entry=new JsonObject();
             entry.addProperty("legacyBlockRegistryName",p.registryName());
@@ -171,6 +200,31 @@ public final class LegacyBlockTileModelPreflightPass implements ConversionPass {
                 }
                 entry.add("sourceFacingMap0to15",faces);
             }
+            // Do NOT promote source-proven Y rotation to executable animation or assume
+            // a legacy server's TileEntity field was serialized on any packet.
+            var yaw=sourceYawMaps.get(p.sourceBlockClass());
+            boolean yawProven=facingProven && yaw!=null
+                    && yaw.sourceTileClass().equals(p.tileClass())
+                    && yaw.sourceRendererClass().equals(p.rendererClass())
+                    && yaw.drawMethod().equals(map.drawMethod())
+                    && yaw.drawDescriptor().equals(map.drawDescriptor())
+                    && yaw.unconditionalSourceRotation()
+                    && !yaw.tileFieldSyncProven() && !yaw.runtimeWired();
+            entry.addProperty("sourceDynamicYawOperandProven",yawProven);
+            entry.addProperty("sourceDynamicYawFieldSyncProven",false);
+            entry.addProperty("sourceDynamicYawRuntimeWired",false);
+            if(yawProven) {
+                sourceYaw++;
+                entry.addProperty("sourceDynamicYawFieldOwner",yaw.sourceFieldOwner());
+                entry.addProperty("sourceDynamicYawFieldName",yaw.sourceFieldName());
+                entry.addProperty("sourceDynamicYawFieldDescriptor",yaw.sourceFieldDescriptor());
+                entry.addProperty("sourceDynamicYawOperand",yaw.operand().name());
+                entry.addProperty("sourceDynamicYawUnconditionalSourceRotation",
+                        yaw.unconditionalSourceRotation());
+                entry.addProperty("sourceYawFieldTickWrittenObserved",
+                        relevant && state.tickDrivenRenderFields().contains(yaw.sourceFieldName()));
+                entry.addProperty("sourceYawFieldPacketHookObserved", relevant && state.sourceTilePacketHookPresent());
+            }
             entry.addProperty("runtimeReady",false);
             candidates.add(entry);
         }
@@ -179,6 +233,7 @@ public final class LegacyBlockTileModelPreflightPass implements ConversionPass {
         root.addProperty("visualStateAuditCandidateCount",observedState);
         root.addProperty("tileTickVisualDependencyCandidateCount",tickDriven);
         root.addProperty("sourceStaticFacingMapCandidateCount",staticFacing);
+        root.addProperty("sourceDynamicYawOperandCandidateCount",sourceYaw);
         JsonArray skipped=new JsonArray();
         for(var p : analysis.skipped()){
             JsonObject entry=new JsonObject();
