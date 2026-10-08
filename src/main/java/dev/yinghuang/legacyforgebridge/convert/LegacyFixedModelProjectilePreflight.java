@@ -33,15 +33,24 @@ public final class LegacyFixedModelProjectilePreflight {
     public record RendererRegistration(String entityClass, String rendererClass) { }
     public record Candidate(String registryName, String entityClass, String rendererClass,
                             LegacyFixedModelProjectileAnalyzer.Proof geometry,
-                            java.util.Optional<LegacyProjectileLauncherAnalyzer.Proof> launcherProof) {
+                            java.util.Optional<LegacyProjectileLauncherAnalyzer.Proof> launcherProof,
+                            java.util.Optional<LegacyProjectileFullbright1710Analyzer.Proof> fullbrightProof) {
         public Candidate {
             Objects.requireNonNull(geometry);
             launcherProof = Objects.requireNonNull(launcherProof);
+            fullbrightProof = Objects.requireNonNull(fullbrightProof);
         }
-        /** Geometry-only synthetic fixture compatibility; no launcher may be inferred. */
+        /** Historical geometry+launcher test fixture compatibility; lighting is not inferred. */
+        public Candidate(String registryName, String entityClass, String rendererClass,
+                         LegacyFixedModelProjectileAnalyzer.Proof geometry,
+                         java.util.Optional<LegacyProjectileLauncherAnalyzer.Proof> launcherProof) {
+            this(registryName, entityClass, rendererClass, geometry, launcherProof, java.util.Optional.empty());
+        }
+        /** Geometry-only synthetic fixture compatibility; no launcher or light may be inferred. */
         public Candidate(String registryName, String entityClass, String rendererClass,
                          LegacyFixedModelProjectileAnalyzer.Proof geometry) {
-            this(registryName, entityClass, rendererClass, geometry, java.util.Optional.empty());
+            this(registryName, entityClass, rendererClass, geometry,
+                    java.util.Optional.empty(), java.util.Optional.empty());
         }
     }
     public record Skipped(String registryName, String entityClass, String reason) { }
@@ -132,7 +141,9 @@ public final class LegacyFixedModelProjectilePreflight {
             }
             var launch = launcherItems.isEmpty() ? java.util.Optional.<LegacyProjectileLauncherAnalyzer.Proof>empty()
                     : new LegacyProjectileLauncherAnalyzer().inspect(jar, sourceClass, launcherItems).proof();
-            candidates.add(new Candidate(registryName, sourceClass, rendererClass, proof.proof().orElseThrow(), launch));
+            var fullbright = new LegacyProjectileFullbright1710Analyzer().analyze(jar, sourceClass).proof();
+            candidates.add(new Candidate(registryName, sourceClass, rendererClass,
+                    proof.proof().orElseThrow(), launch, fullbright));
         }
         candidates.sort(Comparator.comparing(Candidate::registryName).thenComparing(Candidate::entityClass));
         skipped.sort(Comparator.comparing(Skipped::registryName, Comparator.nullsFirst(String::compareTo))
