@@ -50,6 +50,24 @@ class PackagerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'already exists'):
             build(self.base,self.out,self.overlay,self.reviewed,self.digest)
         self.assertEqual(self.out.read_bytes(),b'personal file')
+    def test_report_cannot_overwrite_baseline_or_candidate(self):
+        for path in (self.base,self.out):
+            with self.subTest(path=path):
+                with self.assertRaisesRegex(ValueError,'Report path must not overwrite'):
+                    build(self.base,self.out,self.overlay,self.reviewed,self.digest,path)
+        self.assertEqual(sha256(self.base.read_bytes()),self.digest)
+    def test_report_is_written_only_after_package_can_be_published(self):
+        report_path=self.root/'verification.json'
+        result=build(self.base,self.out,self.overlay,self.reviewed,self.digest,report_path)
+        self.assertEqual(json.loads(report_path.read_text())['candidate']['sha256'],
+                         sha256(self.out.read_bytes()))
+        self.assertEqual(result['candidate']['name'],self.out.name)
+    def test_report_failure_rolls_back_candidate_output(self):
+        report_path=self.root/'report-directory'
+        report_path.mkdir()
+        with self.assertRaises(OSError):
+            build(self.base,self.out,self.overlay,self.reviewed,self.digest,report_path)
+        self.assertFalse(self.out.exists())
     def test_wrong_base_hash_fails_before_output(self):
         with self.assertRaisesRegex(ValueError,'baseline SHA'):
             build(self.base,self.out,self.overlay,self.reviewed,'0'*64)
