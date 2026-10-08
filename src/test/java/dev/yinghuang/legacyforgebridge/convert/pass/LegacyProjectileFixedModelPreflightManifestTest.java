@@ -41,6 +41,11 @@ class LegacyProjectileFixedModelPreflightManifestTest {
         var candidate=candidates.get(0).getAsJsonObject();
         assertEquals("shot", candidate.get("registryName").getAsString());
         assertEquals("foreign/client/StaticModel",candidate.get("modelClass").getAsString());
+        assertTrue(candidate.get("legacyModelBoxFaceProof").getAsBoolean());
+        assertEquals(6,candidate.get("modelBoxFaceCount").getAsInt());
+        assertEquals(24,candidate.get("modelBoxVertexCount").getAsInt());
+        assertEquals(12,candidate.get("modelBoxTriangleCount").getAsInt());
+        assertTrue(candidate.get("sourceAxisAngleBakedIntoMesh").getAsBoolean());
         assertFalse(candidate.get("runtimeReady").getAsBoolean());
         assertEquals(4, candidate.getAsJsonArray("cuboids").get(0)
                 .getAsJsonObject().get("width").getAsInt());
