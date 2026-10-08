@@ -2,6 +2,9 @@ package dev.yinghuang.legacyforgebridge.convert.pass;
 
 import dev.yinghuang.legacyforgebridge.convert.LegacyFixedModelProjectileAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.LegacyFixedModelProjectilePreflight;
+import dev.yinghuang.legacyforgebridge.convert.api.ConversionStatus;
+import dev.yinghuang.legacyforgebridge.convert.api.DiagnosticCollector;
+import dev.yinghuang.legacyforgebridge.convert.api.SupportLevel;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -41,6 +44,15 @@ class LegacyProjectileFixedModelPreflightManifestTest {
         assertEquals(4, candidate.getAsJsonArray("cuboids").get(0)
                 .getAsJsonObject().get("width").getAsInt());
         assertEquals(1, manifest.getAsJsonArray("skipped").size());
+    }
+
+    @Test void optionalEvidenceDiagnosticsMustNotChangeInstallableConversionStatus() {
+        var diagnostics=new DiagnosticCollector();
+        diagnostics.info("LFB-CONVERT-PROJECTILE-0004", SupportLevel.AUTO,
+                "Preflight geometry observed; runtime not connected");
+        diagnostics.warning("LFB-CONVERT-PROJECTILE-0003", SupportLevel.AUTO,
+                "Optional preflight could not be completed");
+        assertEquals(ConversionStatus.CONVERTED, diagnostics.status());
     }
 
     @Test void emptyPreflightDoesNotDeclareRuntimeReadiness() {
