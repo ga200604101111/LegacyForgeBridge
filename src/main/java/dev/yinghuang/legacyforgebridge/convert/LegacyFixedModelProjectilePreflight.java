@@ -32,8 +32,17 @@ public final class LegacyFixedModelProjectilePreflight {
     public record EntityRegistration(String registryName, String sourceClass) { }
     public record RendererRegistration(String entityClass, String rendererClass) { }
     public record Candidate(String registryName, String entityClass, String rendererClass,
-                            LegacyFixedModelProjectileAnalyzer.Proof geometry) {
-        public Candidate { Objects.requireNonNull(geometry); }
+                            LegacyFixedModelProjectileAnalyzer.Proof geometry,
+                            java.util.Optional<LegacyProjectileLauncherAnalyzer.Proof> launcherProof) {
+        public Candidate {
+            Objects.requireNonNull(geometry);
+            launcherProof = Objects.requireNonNull(launcherProof);
+        }
+        /** Geometry-only synthetic fixture compatibility; no launcher may be inferred. */
+        public Candidate(String registryName, String entityClass, String rendererClass,
+                         LegacyFixedModelProjectileAnalyzer.Proof geometry) {
+            this(registryName, entityClass, rendererClass, geometry, java.util.Optional.empty());
+        }
     }
     public record Skipped(String registryName, String entityClass, String reason) { }
     public record Analysis(List<Candidate> candidates, List<Skipped> skipped) {
@@ -50,7 +59,11 @@ public final class LegacyFixedModelProjectilePreflight {
         List<RendererRegistration> bindings = new ArrayList<>();
         for (var binding : renderers.registrations())
             bindings.add(new RendererRegistration(binding.entityClass(), binding.rendererClass()));
-        return inspect(jar, registered, bindings);
+        List<LegacyProjectileLauncherAnalyzer.ItemRegistration> items = new ArrayList<>();
+        for (var item : new LegacyRegistryAnalyzer().analyze(jar).items())
+            items.add(new LegacyProjectileLauncherAnalyzer.ItemRegistration(
+                    item.registryName(), item.implementationClass()));
+        return inspect(jar, registered, bindings, items);
     }
 
     /**
@@ -59,8 +72,15 @@ public final class LegacyFixedModelProjectilePreflight {
      */
     public Analysis inspect(Path jar, List<EntityRegistration> registrations,
                             List<RendererRegistration> rendererRegistrations) throws IOException {
+        return inspect(jar, registrations, rendererRegistrations, List.of());
+    }
+
+    /** Joins optional, independently source-proven registered launcher classes when available. */
+    public Analysis inspect(Path jar, List<EntityRegistration> registrations,
+                            List<RendererRegistration> rendererRegistrations,
+                            List<LegacyProjectileLauncherAnalyzer.ItemRegistration> launcherItems) throws IOException {
         Objects.requireNonNull(jar); Objects.requireNonNull(registrations);
-        Objects.requireNonNull(rendererRegistrations);
+        Objects.requireNonNull(rendererRegistrations); Objects.requireNonNull(launcherItems);
         Map<String, ClassNode> classes = loadHierarchy(jar);
         Map<String, List<EntityRegistration>> entities = new LinkedHashMap<>();
         for (var row : registrations) if (row != null && row.sourceClass() != null)
@@ -100,7 +120,9 @@ public final class LegacyFixedModelProjectilePreflight {
                         "Renderer is not the fixed cuboid family: " + String.join("; ", proof.diagnostics())));
                 continue;
             }
-            candidates.add(new Candidate(registryName, sourceClass, rendererClass, proof.proof().orElseThrow()));
+            var launch = launcherItems.isEmpty() ? java.util.Optional.<LegacyProjectileLauncherAnalyzer.Proof>empty()
+                    : new LegacyProjectileLauncherAnalyzer().inspect(jar, sourceClass, launcherItems).proof();
+            candidates.add(new Candidate(registryName, sourceClass, rendererClass, proof.proof().orElseThrow(), launch));
         }
         candidates.sort(Comparator.comparing(Candidate::registryName).thenComparing(Candidate::entityClass));
         skipped.sort(Comparator.comparing(Skipped::registryName, Comparator.nullsFirst(String::compareTo))
