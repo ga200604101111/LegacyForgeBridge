@@ -41,7 +41,7 @@ class LegacyBlockTileModelPreflightTest {
         assertTrue(p.rendererReadsTileFields());
         assertTrue(p.metadataDependentBounds());
         assertEquals(14,p.sourceConstantLight());
-        assertTrue(p.sourceZeroDrop());
+        assertTrue(p.sourceQuantityDroppedZero());
     }
     @Test void inheritedTileMarkerMustReturnTrue() throws Exception {
         assertTrue(check(LegacyBlockTileModelFixture.Case.MARKER_FALSE).candidates().isEmpty());
