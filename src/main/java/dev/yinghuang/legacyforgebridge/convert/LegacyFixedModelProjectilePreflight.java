@@ -65,6 +65,9 @@ public final class LegacyFixedModelProjectilePreflight {
         Map<String, List<EntityRegistration>> entities = new LinkedHashMap<>();
         for (var row : registrations) if (row != null && row.sourceClass() != null)
             entities.computeIfAbsent(row.sourceClass(), ignored -> new ArrayList<>()).add(row);
+        Map<String, Integer> registryNameCounts = new HashMap<>();
+        for (var row : registrations) if (row != null && row.registryName() != null)
+            registryNameCounts.merge(row.registryName(), 1, Integer::sum);
         Map<String, List<RendererRegistration>> renderers = new HashMap<>();
         for (var row : rendererRegistrations) if (row != null && row.entityClass() != null)
             renderers.computeIfAbsent(row.entityClass(), ignored -> new ArrayList<>()).add(row);
@@ -76,7 +79,8 @@ public final class LegacyFixedModelProjectilePreflight {
             String sourceClass = rows.getFirst().sourceClass();
             if (!inherits(classes, sourceClass, THROWABLE)) continue;
             String registryName = rows.getFirst().registryName();
-            if (rows.size() != 1 || registryName == null || registryName.isBlank()) {
+            if (rows.size() != 1 || registryName == null || registryName.isBlank()
+                    || registryNameCounts.getOrDefault(registryName, 0) != 1) {
                 skipped.add(new Skipped(registryName, sourceClass, "Projectile entity registration is missing or not unique"));
                 continue;
             }
