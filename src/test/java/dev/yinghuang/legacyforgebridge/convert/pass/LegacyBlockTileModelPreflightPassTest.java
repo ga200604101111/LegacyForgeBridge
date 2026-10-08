@@ -31,7 +31,7 @@ class LegacyBlockTileModelPreflightPassTest {
         assertEquals("renamed_wall_light",row.get("legacyBlockRegistryName").getAsString());
         assertEquals("renamed/block/BaseVisual",row.get("hasTileEntityDeclaredBy").getAsString());
         assertEquals(14,row.get("sourceConstantLight").getAsInt());
-        assertTrue(row.get("sourceZeroDropProven").getAsBoolean());
+        assertTrue(row.get("sourceQuantityDroppedZeroProven").getAsBoolean());
         assertTrue(row.get("rendererCallsTileModelMethod").getAsBoolean());
         assertFalse(row.get("runtimeReady").getAsBoolean());
     }
