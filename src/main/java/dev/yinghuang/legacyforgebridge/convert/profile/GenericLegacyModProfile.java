@@ -24,6 +24,8 @@ import dev.yinghuang.legacyforgebridge.convert.pass.LegacyPlainEntityRendererReg
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyPlainEntityRuntimeCandidatePass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyPlainEntityRuntimePass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyProjectilePresentationPass;
+import dev.yinghuang.legacyforgebridge.convert.pass.LegacyProjectileFixedModelPreflightPass;
+import dev.yinghuang.legacyforgebridge.convert.pass.LegacyStaticTileModelBakerPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyRotatingAssemblyEntityPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacySeatBedPresentationPass;
 import dev.yinghuang.legacyforgebridge.convert.pass.LegacyVariantSnowballLaunchPass;
@@ -39,8 +41,6 @@ public final class GenericLegacyModProfile implements LegacyModProfile {
     @Override public boolean matches(LegacyModMetadata metadata,String sourceHash){ return true; }
     @Override public void configure(ConversionPlan.Builder plan){
         plan.add(new GenericContentPass());
-        // Source-only proof for ordinary Block+TileEntity+TESR; never registers a runnable BlockEntity.
-        plan.add(new LegacyBlockTileModelPreflightPass());
         plan.add(new LegacyCreativeTabPresentationPass());
         plan.add(new LegacyVariantSnowballPass());
         plan.add(new LegacyVariantSnowballLaunchPass());
@@ -62,6 +62,10 @@ public final class GenericLegacyModProfile implements LegacyModProfile {
         plan.add(new LegacyEntityPresentationPass());
         plan.add(new LegacyVisibleEntityPresentationPass());
         plan.add(new LegacyProjectilePresentationPass());
+        plan.add(new LegacyProjectileFixedModelPreflightPass());
+        plan.add(new LegacyBlockTileModelPreflightPass());
+        // Provisional source-proven static 3D block geometry; dynamic tile rendering remains unimplemented.
+        plan.add(new LegacyStaticTileModelBakerPass());
         plan.add(new LegacyRotatingAssemblyEntityPass());
         plan.add(new LegacyPlainEntityRuntimeCandidatePass());
         plan.add(new LegacyPlainEntityRuntimePass());
