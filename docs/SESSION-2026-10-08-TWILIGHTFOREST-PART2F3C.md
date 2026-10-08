@@ -52,3 +52,16 @@ Local Java 21 standalone smoke using temporary JDK-internal ASM substitutions an
 ## Next slice
 
 Add a reusable, **source-dataflow-bound** launcher proof (registered item -> supported use/release callback -> unique projectile allocation -> World.spawnEntityInWorld operand) and explicit fixed-render lighting semantics. Only then can the preflight be considered for a dedicated modern client renderer, followed by exact-corpus and live game validation.
+
+## Follow-up proof hardening — model-field identity and constructor closure
+
+The same continuation additionally hardened `LegacyFixedModelProjectileAnalyzer`:
+
+- the renderer must declare **one** instance model field of the proven ModelBase class;
+- that exact declared field must be assigned by its constructor and then read by the projectile draw; a second, same-typed but uninitialized field is not interchangeable;
+- renderer and model constructors now reject unsupported control flow, exception handlers, extra returns and unknown static writes;
+- a ModelBase constructor can write only its bounded texture dimensions and proven ModelRenderer part fields; arbitrary source model instance state can no longer be silently accepted.
+
+Two JUnit negative regressions were added to `LegacyFixedModelProjectileAnalyzerTest`, with two matching synthetic bytecode fixture variants: `misbound renderer model field` and `unproved model constructor state mutation`.
+
+The model analyzer smoke was re-run with its original seven cases passing and both new negative cases rejected. The preflight's eight synthetic cases were also re-run and passed using standalone Java 21 with temporary JDK-internal ASM substitutions. The full Gradle/Loom/JUnit or exact legacy corpus test remains **unexecuted**.
