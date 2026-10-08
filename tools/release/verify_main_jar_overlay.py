@@ -106,6 +106,26 @@ def inventory(path: Path, expected_hash: str | None = None) -> dict:
     }
 
 
+def manifest_attributes(path: Path) -> dict[str, str] | None:
+    with ZipFile(path) as jar:
+        try:
+            content = jar.read("META-INF/MANIFEST.MF").decode("utf-8")
+        except KeyError:
+            return None
+    result: dict[str, str] = {}
+    unfolded: list[str] = []
+    for line in content.splitlines():
+        if line.startswith(" ") and unfolded:
+            unfolded[-1] += line[1:]
+        elif line:
+            unfolded.append(line)
+    for line in unfolded:
+        if ": " in line:
+            name, value = line.split(": ", 1)
+            result[name] = value
+    return result
+
+
 def validate(base: Path, candidate: Path, allow_add: set[str], allow_change: set[str],
              expected_base_sha: str | None = None) -> dict:
     if base.resolve() == candidate.resolve():
@@ -147,6 +167,20 @@ def validate(base: Path, candidate: Path, allow_add: set[str], allow_change: set
             errors.append(f"BUNDLED_CONTENT_MISSING: {path}")
     if old_mod.get("version") == new_mod.get("version") and candidate_hash != base_hash:
         errors.append("VERSION_NOT_BUMPED: modified main JAR retains the old version")
+    old_manifest = manifest_attributes(base)
+    new_manifest = manifest_attributes(candidate)
+    if old_manifest is not None:
+        if new_manifest is None:
+            errors.append("MISSING_BUILD_MANIFEST")
+        else:
+            for key in ("Fabric-Mapping-Namespace", "Fabric-Minecraft-Version", "Fabric-Jar-Type"):
+                if old_manifest.get(key) != new_manifest.get(key):
+                    errors.append(f"BUILD_MANIFEST_COMPATIBILITY_CHANGED: {key}")
+            if old_manifest.get("LFB-Local-Patch-Revision"):
+                if old_manifest.get("LFB-Local-Patch-Revision") == new_manifest.get("LFB-Local-Patch-Revision"):
+                    errors.append("STALE_BUILD_REVISION: old manifest marker cannot describe a new main")
+                if not new_manifest.get("LFB-Local-Build-Method") or old_manifest.get("LFB-Local-Build-Method") == new_manifest.get("LFB-Local-Build-Method"):
+                    errors.append("STALE_BUILD_METHOD: exact new assembly provenance must be declared")
     if not any(path.endswith(".class") for path in added + modified):
         errors.append("NO_EXECUTABLE_CLASS_CHANGE: a renamed/metadata-only old main is not a feature build")
     # In a source-only checkpoint, reusing an old version or faking a build would be misleading.
