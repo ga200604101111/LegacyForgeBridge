@@ -65,3 +65,9 @@ The same continuation additionally hardened `LegacyFixedModelProjectileAnalyzer`
 Two JUnit negative regressions were added to `LegacyFixedModelProjectileAnalyzerTest`, with two matching synthetic bytecode fixture variants: `misbound renderer model field` and `unproved model constructor state mutation`.
 
 The model analyzer smoke was re-run with its original seven cases passing and both new negative cases rejected. The preflight's eight synthetic cases were also re-run and passed using standalone Java 21 with temporary JDK-internal ASM substitutions. The full Gradle/Loom/JUnit or exact legacy corpus test remains **unexecuted**.
+
+## Conversion-status regression discovered and repaired
+
+After wiring the optional preflight, the repository's `DiagnosticCollector.status()` policy was checked: **any** diagnostic using `SupportLevel.RUNTIME_BRIDGE`, including `INFO`, can downgrade an otherwise `CONVERTED` result to `PARTIAL`. The first preflight implementation had used that level for its `0003` / `0004` audit messages. This was an unintended status side effect.
+
+Both new preflight diagnostics now use `SupportLevel.AUTO` while their message explicitly states they are **source-only evidence, not executable support**. This preserves the original conversion status whether the optional audit finds a geometry candidate or cannot complete. The active projectile rule diagnostics retain their existing behavior. A third JUnit regression source case in `LegacyProjectileFixedModelPreflightManifestTest` locks the `CONVERTED` status contract; it was committed but not executed by the full JUnit/Gradle runner in this session.
