@@ -3,6 +3,7 @@ package dev.yinghuang.legacyforgebridge.convert.pass;
 import com.google.gson.*;
 import dev.yinghuang.legacyforgebridge.convert.LegacyProjectilePresentationAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.LegacyFixedModelProjectilePreflight;
+import dev.yinghuang.legacyforgebridge.convert.LegacyModelBoxMesh1710;
 import dev.yinghuang.legacyforgebridge.convert.LegacyVanillaRegistry1710;
 import dev.yinghuang.legacyforgebridge.convert.LegacyVanillaStackDataFix;
 import dev.yinghuang.legacyforgebridge.convert.api.*;
@@ -121,6 +122,9 @@ public final class LegacyProjectilePresentationPass implements ConversionPass {
         int sourceLauncherProven=0;
         for (var candidate : analysis.candidates()) {
             var proof=candidate.geometry();
+            // Encode only bounded, source-proven mesh metadata. The executable renderer remains
+            // disabled; consumers must never interpret this preflight as a runtime rule.
+            var sourceMesh=LegacyModelBoxMesh1710.build(proof);
             JsonObject entry=new JsonObject();
             entry.addProperty("registryName", candidate.registryName());
             entry.addProperty("sourceClass", candidate.entityClass());
@@ -130,6 +134,11 @@ public final class LegacyProjectilePresentationPass implements ConversionPass {
             entry.addProperty("textureWidth", proof.textureWidth());
             entry.addProperty("textureHeight", proof.textureHeight());
             entry.addProperty("scale", proof.scale());
+            entry.addProperty("legacyModelBoxFaceProof", true);
+            entry.addProperty("modelBoxFaceCount",sourceMesh.quads().size());
+            entry.addProperty("modelBoxVertexCount",sourceMesh.vertexCount());
+            entry.addProperty("modelBoxTriangleCount",sourceMesh.triangleCount());
+            entry.addProperty("sourceAxisAngleBakedIntoMesh",sourceMesh.sourceAxisAngleBaked());
             entry.addProperty("angle", proof.angle());
             entry.addProperty("axisX", proof.axisX());
             entry.addProperty("axisY", proof.axisY());
