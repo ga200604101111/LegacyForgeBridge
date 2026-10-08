@@ -45,6 +45,14 @@ class LegacyFixedModelProjectilePreflightTest {
         assertTrue(result.skipped().getFirst().reason().contains("not unique"));
     }
 
+    @Test void duplicateRegistryNameAcrossDifferentClassesIsBlocked() throws Exception {
+        var result = new LegacyFixedModelProjectilePreflight().inspect(jar("same-name", false, false, false),
+                List.of(entity(), new LegacyFixedModelProjectilePreflight.EntityRegistration(
+                        "foreign_disc", "foreign/another/Entity")), List.of(renderer()));
+        assertTrue(result.candidates().isEmpty());
+        assertTrue(result.skipped().getFirst().reason().contains("not unique"));
+    }
+
     @Test void foreignAdditionalSpawnEnvelopeIsNotAdmitted() throws Exception {
         var result = new LegacyFixedModelProjectilePreflight().inspect(jar("spawn-data", true, false, false),
                 List.of(entity()), List.of(renderer()));
