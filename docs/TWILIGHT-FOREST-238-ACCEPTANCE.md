@@ -91,3 +91,11 @@ A new **generic**, exact-bytecode analyzer verifies that a TESR's third `GL11.gl
 **No new playable feature is admitted.** The yaw field is not known to be transmitted to the modern Fabric client, and the source model's per-part `setLivingAnimations` formula, 1.7.10 TESR transform closure, client BlockEntity renderer, exact translated `-tw.jar`, original Forge server comparison, and complete main JAR build remain unverified. No automatic legacy server tick replay is authorized.
 
 Synthetic source-only regression: rev287 (19 analyzer + 9 manifest), rev286 (24 + 6), rev285 (16 + 6), rev284 (18 + 2): **100/100 independently executed** with Java 21/JDK ASM substitutions and compact dependency test doubles. These are not official Loom/JUnit or Minecraft tests. Details: `docs/SESSION-2026-10-08-TWILIGHTFOREST-PART2G-REV287.md`.
+
+## rev288 — source-causal per-part TileEntity animation proof (2026-10-08)
+
+The **generic**, non-executable Block+TileEntity+TESR preflight can now prove a ModelRenderer animation family in source-owned 1.7.10 bytecode: each constructed part has exactly one constant Y-pivot reset followed by one zero-guarded dynamic update, with the source expression `originalPivot + Math.min(0, MathHelper.sin(sourceTileInputsAndPartialTick))`. The original TileEntity integer guard and individual state-field dependencies are captured. Fake model assignments, missing operands, extra arithmetic, unrelated method calls, animation receiver mismatches and inverted guards fail closed.
+
+**Gameplay acceptance remains unchanged:** no server packet/payload proof, no client replay of legacy updateEntity, no Fabric 1.21.11 animated BlockEntityRenderer, no exact translated `twilightforest-1.7.10-2.3.8-tw.jar` run, no original Forge server/live client comparison. The existing sidecar remains `runtimeWired=false`, `tileStateSyncProven=false`, per-candidate `runtimeReady=false`, with no executable rules. The analyzer has no Twilight Forest name/ID dispatch.
+
+Rev288 independent Java21 synthetic tests 43/43, previous rev284–287 tests 100/100, **143/143 combined** (ASM import substitutions + JUnit/Gson test doubles, not real Loom/Gradle or in-game). See `docs/SESSION-2026-10-08-TWILIGHTFOREST-PART2G-REV288.md`.
