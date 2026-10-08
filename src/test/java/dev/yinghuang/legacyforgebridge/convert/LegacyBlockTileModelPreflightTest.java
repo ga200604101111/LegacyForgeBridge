@@ -88,6 +88,17 @@ class LegacyBlockTileModelPreflightTest {
     @Test void noReachableModelDrawIsNotModelPresentation() throws Exception {
         assertTrue(check(LegacyBlockTileModelFixture.Case.NO_RENDER_DRAW).candidates().isEmpty());
     }
+    @Test void combinedClientRegistryTileAndRendererRegistrationWorksGenerically() throws Exception {
+        var a=check(LegacyBlockTileModelFixture.Case.CLIENT_REGISTER_WITH_ID);
+        assertEquals(1,a.candidates().size());
+        assertEquals(LegacyBlockTileModelFixture.MODEL,a.candidates().getFirst().modelClass());
+    }
+    @Test void aMatchingSourceClassWithoutBlockRegistryEntryMustNotQualify() throws Exception {
+        Path jar=LegacyBlockTileModelFixture.jar(directory.resolve("no-source-registration.jar"),
+                LegacyBlockTileModelFixture.Case.GOOD);
+        var a=new LegacyBlockTileModelPreflight().inspect(jar,List.of(),List.of(TILE_ID));
+        assertTrue(a.candidates().isEmpty());
+    }
     @Test void unprovenClientRendererOperandsFailClosed() throws Exception {
         var a=check(LegacyBlockTileModelFixture.Case.UNRESOLVED_CLIENT_BIND);
         assertTrue(a.candidates().isEmpty());
