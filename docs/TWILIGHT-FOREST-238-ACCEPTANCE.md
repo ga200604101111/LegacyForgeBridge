@@ -99,3 +99,11 @@ The **generic**, non-executable Block+TileEntity+TESR preflight can now prove a 
 **Gameplay acceptance remains unchanged:** no server packet/payload proof, no client replay of legacy updateEntity, no Fabric 1.21.11 animated BlockEntityRenderer, no exact translated `twilightforest-1.7.10-2.3.8-tw.jar` run, no original Forge server/live client comparison. The existing sidecar remains `runtimeWired=false`, `tileStateSyncProven=false`, per-candidate `runtimeReady=false`, with no executable rules. The analyzer has no Twilight Forest name/ID dispatch.
 
 Rev288 independent Java21 synthetic tests 43/43, previous rev284–287 tests 100/100, **143/143 combined** (ASM import substitutions + JUnit/Gson test doubles, not real Loom/Gradle or in-game). See `docs/SESSION-2026-10-08-TWILIGHTFOREST-PART2G-REV288.md`.
+
+## rev289 — renderer state NBT field-pair provenance is not packet synchronization (2026-10-08)
+
+The generic Block + TileEntity + TESR preflight now matches source visual-state fields to **both** NBT writer and reader through verifier-frame operand provenance, literal tag keys and exact primitive types. Actual Java 7 source-inheritance super calls must be proven; overlapping NBT tag names and unverified reads/writes are rejected. An inherited source NBT override that only forwards to `TileEntity` does **not** prove the source animation fields are serialized.
+
+There is **still no network/client runtime admission**: `sourceTilePacketPayloadProven=false`, `tileStateSyncProven=false`, `runtimeWired=false`, per-source `runtimeReady=false` and no executable rules. In the public upstream Moonworm TileEntity, `currentYaw`, `desiredYaw`, and `yawDelay` have no paired NBT persistence from the tile source. Actual translated `-tw.jar`, S35 packet payload, Fabric BlockEntityRenderer, Forge multiplayer parity and full main JAR build all remain unverified.
+
+Latest Java21 independent synthetic source/manifest tests: rev289 30 analyzer + 11 manifest; rev284–288 143 regressions: **184/184 passed** with JDK-internal ASM substitutions and dependency test doubles, not official Loom/Gradle or in-game. Details: `docs/SESSION-2026-10-08-TWILIGHTFOREST-PART2G-REV289.md`.
