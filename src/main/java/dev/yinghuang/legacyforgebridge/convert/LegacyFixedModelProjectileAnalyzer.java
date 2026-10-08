@@ -38,6 +38,7 @@ public final class LegacyFixedModelProjectileAnalyzer {
     public record Analysis(Optional<Proof> proof, List<String> diagnostics) {
         public Analysis { proof = Objects.requireNonNull(proof); diagnostics = List.copyOf(diagnostics); }
     }
+    private record ModelBinding(String modelClass, String fieldName) { }
     private record Texture(String identifier, int width, int height, String field) { }
     private record Transform(float scale, float angle, float x, float y, float z) { }
     private record Box(int u, int v, float x, float y, float z, int w, int h, int d) { }
@@ -49,14 +50,15 @@ public final class LegacyFixedModelProjectileAnalyzer {
         ClassNode renderer = classes.get(rendererClass);
         if (renderer == null || !RENDER.equals(renderer.superName))
             return blocked("Renderer is not source-owned with an exact vanilla Render base");
-        String modelName = uniqueModel(renderer, classes);
-        if (modelName == null) return blocked("Renderer does not construct one uniquely-owned ModelBase field");
+        ModelBinding modelBinding = uniqueModel(renderer, classes);
+        if (modelBinding == null) return blocked("Renderer does not construct one uniquely-owned ModelBase field");
+        String modelName = modelBinding.modelClass();
         ClassNode model = classes.get(modelName);
         Texture texture = fixedTexture(jarPath, renderer);
         if (texture == null) return blocked("Renderer texture is not one fixed, present PNG resource");
         if (!fixedTextureGetter(renderer, texture.field()))
             return blocked("Renderer entity-texture accessor does not return the bound fixed texture");
-        Transform transform = fixedTransform(renderer, modelName, texture.field());
+        Transform transform = fixedTransform(renderer, modelBinding, texture.field());
         if (transform == null) return blocked("Projectile draw has an unproved call, pose, texture or transform");
         List<Cuboid> cuboids = fixedCuboids(model, texture.width(), texture.height());
         if (cuboids == null) return blocked("Projectile model draw is not a closed, fixed cuboid path");
@@ -69,7 +71,7 @@ public final class LegacyFixedModelProjectileAnalyzer {
         return new Analysis(Optional.empty(), List.of(reason));
     }
 
-    private static String uniqueModel(ClassNode renderer, Map<String, ClassNode> classes) {
+    private static ModelBinding uniqueModel(ClassNode renderer, Map<String, ClassNode> classes) {
         MethodNode ctor = method(renderer, "<init>", "()V");
         if (ctor == null) return null;
         String found = null;
@@ -82,7 +84,16 @@ public final class LegacyFixedModelProjectileAnalyzer {
         if (found == null) return null;
         // Require one construction and storage on this renderer: no borrowed/shared source model.
         int constructors = 0, fields = 0, baseConstructors = 0, shadows = 0;
-        for (AbstractInsnNode insn : ctor.instructions) {
+        String assignedField = null;
+        if (!ctor.tryCatchBlocks.isEmpty()) return null;
+        List<AbstractInsnNode> constructorCode = real(ctor);
+        if (constructorCode.isEmpty() || constructorCode.getLast().getOpcode() != Opcodes.RETURN) return null;
+        int returns = 0;
+        for (AbstractInsnNode insn : constructorCode) {
+            if (insn.getOpcode() == Opcodes.RETURN) returns++;
+            if (insn instanceof JumpInsnNode || insn instanceof TableSwitchInsnNode
+                    || insn instanceof LookupSwitchInsnNode || insn instanceof InvokeDynamicInsnNode
+                    || insn.getOpcode() == Opcodes.ATHROW || insn.getOpcode() == Opcodes.PUTSTATIC) return null;
             if (insn instanceof MethodInsnNode call) {
                 if (call.getOpcode() != Opcodes.INVOKESPECIAL || !call.name.equals("<init>")
                         || !call.desc.equals("()V")) return null;
@@ -91,12 +102,21 @@ public final class LegacyFixedModelProjectileAnalyzer {
                 else return null;
             }
             if (insn instanceof FieldInsnNode field && field.getOpcode() == Opcodes.PUTFIELD) {
-                if (field.owner.equals(renderer.name) && field.desc.equals("L" + found + ";")) fields++;
+                if (field.owner.equals(renderer.name) && field.desc.equals("L" + found + ";")) {
+                    fields++; assignedField = field.name;
+                }
                 else if (field.name.equals("shadowSize") && field.desc.equals("F")) shadows++;
                 else return null;
             }
         }
-        return constructors == 1 && fields == 1 && baseConstructors == 1 && shadows <= 1 ? found : null;
+        int declaredFields = 0;
+        for (FieldNode field : renderer.fields) if (field.desc.equals("L" + found + ";")) {
+            if ((field.access & Opcodes.ACC_STATIC) != 0) return null;
+            if (!field.name.equals(assignedField)) return null;
+            declaredFields++;
+        }
+        return returns == 1 && constructors == 1 && fields == 1 && declaredFields == 1
+                && baseConstructors == 1 && shadows <= 1 ? new ModelBinding(found, assignedField) : null;
     }
 
     private static Texture fixedTexture(Path jar, ClassNode renderer) throws IOException {
@@ -154,7 +174,8 @@ public final class LegacyFixedModelProjectileAnalyzer {
                 && field.name.equals(textureField) && code.getLast().getOpcode() == Opcodes.ARETURN;
     }
 
-    private static Transform fixedTransform(ClassNode renderer, String model, String textureField) {
+    private static Transform fixedTransform(ClassNode renderer, ModelBinding modelBinding, String textureField) {
+        String model = modelBinding.modelClass();
         List<MethodNode> candidates = new ArrayList<>();
         for (MethodNode method : renderer.methods) if (method.desc.equals(DRAW_DESC)
                 && (method.name.equals("doRender") || method.name.equals("func_76986_a"))
@@ -176,7 +197,8 @@ public final class LegacyFixedModelProjectileAnalyzer {
                     && !(var.getOpcode() == Opcodes.DLOAD && (var.var == 2 || var.var == 4 || var.var == 6)))
                 return null;
             if (insn instanceof FieldInsnNode field && field.getOpcode() == Opcodes.GETFIELD
-                    && (!field.owner.equals(renderer.name) || !field.desc.equals("L" + model + ";"))) return null;
+                    && (!field.owner.equals(renderer.name) || !field.desc.equals("L" + model + ";")
+                    || !field.name.equals(modelBinding.fieldName()))) return null;
             if (insn instanceof FieldInsnNode field && field.getOpcode() == Opcodes.GETSTATIC
                     && (!field.owner.equals(renderer.name) || !field.name.equals(textureField))) return null;
             if (!(insn instanceof MethodInsnNode call)) continue;
@@ -201,7 +223,8 @@ public final class LegacyFixedModelProjectileAnalyzer {
             } else if (call.owner.equals(model) && call.name.equals("render") && call.desc.equals("(F)V")) {
                 if (render >= 0 || i < 2 || !(code.get(i - 2) instanceof FieldInsnNode field)
                         || field.getOpcode() != Opcodes.GETFIELD || !field.owner.equals(renderer.name)
-                        || !field.desc.equals("L" + model + ";")) return null;
+                        || !field.desc.equals("L" + model + ";")
+                        || !field.name.equals(modelBinding.fieldName())) return null;
                 Float sourceScale = number(code.get(i - 1));
                 if (sourceScale == null || !Float.isFinite(sourceScale) || sourceScale <= 0F || sourceScale > 1F) return null;
                 scale = sourceScale; render = i;
@@ -229,8 +252,9 @@ public final class LegacyFixedModelProjectileAnalyzer {
     private static List<Cuboid> fixedCuboids(ClassNode model, int pngWidth, int pngHeight) {
         if (model == null || !inherits(Map.of(model.name, model), model.name, MODEL)) return null;
         MethodNode ctor = method(model, "<init>", "()V"), draw = method(model, "render", "(F)V");
-        if (ctor == null || draw == null || !draw.tryCatchBlocks.isEmpty()) return null;
+        if (ctor == null || draw == null || !ctor.tryCatchBlocks.isEmpty() || !draw.tryCatchBlocks.isEmpty()) return null;
         List<AbstractInsnNode> code = real(ctor);
+        if (code.isEmpty() || code.getLast().getOpcode() != Opcodes.RETURN) return null;
         Map<String, int[]> uvs = new LinkedHashMap<>();
         Map<String, Box> boxes = new LinkedHashMap<>();
         Map<String, Pivot> pivots = new LinkedHashMap<>();
@@ -239,8 +263,13 @@ public final class LegacyFixedModelProjectileAnalyzer {
                 && (field.access & Opcodes.ACC_STATIC) == 0) fields.add(field.name);
         if (fields.isEmpty() || fields.size() > 64) return null;
         Integer logicalWidth = null, logicalHeight = null;
+        int returnCount = 0;
         for (int i = 0; i < code.size(); i++) {
             AbstractInsnNode insn = code.get(i);
+            if (insn.getOpcode() == Opcodes.RETURN) returnCount++;
+            if (insn instanceof JumpInsnNode || insn instanceof TableSwitchInsnNode
+                    || insn instanceof LookupSwitchInsnNode || insn instanceof InvokeDynamicInsnNode
+                    || insn.getOpcode() == Opcodes.ATHROW || insn.getOpcode() == Opcodes.PUTSTATIC) return null;
             if (insn instanceof MethodInsnNode call) {
                 boolean allowed = call.getOpcode() == Opcodes.INVOKESPECIAL
                         && call.name.equals("<init>") && call.desc.equals("()V")
@@ -252,8 +281,15 @@ public final class LegacyFixedModelProjectileAnalyzer {
                         || call.name.equals("setRotationPoint") && call.desc.equals("(FFF)V"));
                 if (!allowed) return null;
             }
-            if (insn instanceof FieldInsnNode field && field.getOpcode() == Opcodes.PUTFIELD
-                    && field.owner.equals(PART)) return null;
+            if (insn instanceof FieldInsnNode field && field.getOpcode() == Opcodes.PUTFIELD) {
+                if (field.owner.equals(PART)) return null;
+                boolean textureDimension = field.desc.equals("I")
+                        && (field.name.equals("textureWidth") || field.name.equals("textureHeight"))
+                        && (field.owner.equals(MODEL) || field.owner.equals(model.name));
+                boolean modelPart = field.owner.equals(model.name) && field.desc.equals(PART_DESC)
+                        && fields.contains(field.name);
+                if (!textureDimension && !modelPart) return null;
+            }
             if (insn instanceof FieldInsnNode field && field.getOpcode() == Opcodes.PUTFIELD
                     && field.desc.equals("I") && i > 0
                     && (field.name.equals("textureWidth") || field.name.equals("textureHeight"))) {
@@ -294,7 +330,7 @@ public final class LegacyFixedModelProjectileAnalyzer {
                         || !Float.isFinite(z) || pivots.putIfAbsent(field.name, new Pivot(x, y, z)) != null) return null;
             }
         }
-        if (logicalWidth == null || logicalHeight == null || logicalWidth != pngWidth
+        if (returnCount != 1 || logicalWidth == null || logicalHeight == null || logicalWidth != pngWidth
                 || logicalHeight != pngHeight || !fields.equals(uvs.keySet())
                 || !fields.equals(boxes.keySet()) || !fields.equals(pivots.keySet())) return null;
         // Constructor-defined geometry only; reject post-construction part mutators reachable from render(float).
