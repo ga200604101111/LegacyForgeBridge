@@ -56,6 +56,12 @@ class LegacyTileNbtPersistenceAnalyzerTest {
         assertTrue(inspect(LegacyTileNbtPersistenceFixture.Shape.DUPLICATE_WRITE,"currentYaw")
                 .audit().orElseThrow().pairedNbtFields().isEmpty());
     }
+    @Test void twoDifferentSourceFieldsWritingOneNbtKeyMustNotBothBePersistent()throws Exception {
+        var audit=inspect(LegacyTileNbtPersistenceFixture.Shape.TAG_COLLISION,"currentYaw")
+                .audit().orElseThrow();
+        assertTrue(audit.pairedNbtFields().isEmpty());
+        assertEquals(LegacyTileNbtPersistenceAnalyzer.Status.SOURCE_NBT_UNPROVABLE,audit.status());
+    }
     @Test void conditionalReadNeedsAPathProofBeyondThisFamily()throws Exception {
         assertTrue(inspect(LegacyTileNbtPersistenceFixture.Shape.BRANCHED_READ,"currentYaw")
                 .audit().orElseThrow().pairedNbtFields().isEmpty());
