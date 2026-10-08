@@ -50,6 +50,8 @@ def build(base: Path, output: Path, overlay_root: Path, reviewed: set[str],
         raise ValueError("A pinned baseline SHA-256 is required")
     if output.resolve() == base.resolve():
         raise ValueError("Refusing to overwrite original complete main JAR")
+    if report_path and report_path.resolve() in {base.resolve(), output.resolve()}:
+        raise ValueError("Report path must not overwrite the baseline or candidate JAR")
     if output.exists():
         raise ValueError("Output already exists; choose an unused output name")
     if sha256(base.read_bytes()) != expected_base_sha256.lower():
@@ -59,6 +61,8 @@ def build(base: Path, output: Path, overlay_root: Path, reviewed: set[str],
     fd, name = tempfile.mkstemp(prefix=".lfb-unverified-", suffix=".jar", dir=output.parent)
     os.close(fd)
     stage = Path(name)
+    staged_report: Path | None = None
+    candidate_linked = False
     try:
         with ZipFile(base, "r") as original, ZipFile(stage, "w") as dest:
             prior = set()
@@ -83,13 +87,28 @@ def build(base: Path, output: Path, overlay_root: Path, reviewed: set[str],
             raise ValueError("Candidate JAR failed structural release guard: " + "; ".join(report["errors"][:10]))
         # Report filename should identify the delivered candidate, not the temporary ZIP.
         report["candidate"]["name"] = output.name
-        os.replace(stage, output)
         if report_path:
             report_path.parent.mkdir(parents=True, exist_ok=True)
-            report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            report_fd, report_temp = tempfile.mkstemp(prefix=".lfb-report-", suffix=".json",
+                                                    dir=report_path.parent)
+            os.close(report_fd)
+            staged_report = Path(report_temp)
+            staged_report.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        # Hard-linking a completed staged archive fails if the destination appeared in the
+        # meantime. os.replace() would silently overwrite a pre-existing user file.
+        os.link(stage, output)
+        candidate_linked = True
+        if staged_report:
+            os.replace(staged_report, report_path)
         return report
+    except Exception:
+        if candidate_linked:
+            output.unlink(missing_ok=True)
+        raise
     finally:
         stage.unlink(missing_ok=True)
+        if staged_report:
+            staged_report.unlink(missing_ok=True)
 
 
 def main() -> int:
