@@ -55,3 +55,9 @@ Only layer 4 passing may be described as gameplay-compatible. Partial layers are
 - GitHub Actions, PR, release/tag creation, default/Bamboo branch mutations, force pushes, and original server/mod edits are prohibited under `AGENTS.md`.
 
 Related checkpoints: `docs/SESSION-2026-10-07-TWILIGHTFOREST-PART1.md`, `docs/SESSION-2026-10-07-TWILIGHTFOREST-PART2E.md`, `docs/SESSION-2026-10-07-TWILIGHTFOREST-PART2F.md`, `docs/SESSION-2026-10-08-TWILIGHTFOREST-PART2F4.md`.
+
+## rev283 latest addition: source geometry and light-map fidelity (2026-10-08)
+
+The fixed-cuboid renderer candidate pipeline now requires an exact 1.7.10 ModelBox mesh/atlas UV proof and can optionally attach an exact source full-bright (1.0 / 0x00F000F0) getter proof. It is **still a source-only diagnostic**. The MoonwormShot upstream Java geometry can be exported as 24 correct UV quads for inspection, but the exact localized Twilight Forest JAR, runnable client renderer, entity spawn mapping, source texture packaging, FML networking and real Forge server/gameplay verification remain open.
+
+See `docs/SESSION-2026-10-08-TWILIGHTFOREST-PART2F5.md`. This is not an increase in the count of confirmed playable mobs/projectiles, nor a whole-mod completion percentage.
