@@ -94,16 +94,16 @@ public final class LegacyItemSemanticsRecoveryPass implements ConversionPass {
                         ||!args.get(2).getAsJsonPrimitive().isNumber())continue;
                 int slot=args.get(2).getAsInt();if(slot<0||slot>3)continue;
                 item.addProperty("kind","armor_slot_"+slot);
-                item.addProperty("legacyArmorSlot",slot);
-                row.addProperty("sourceArmorSlot",slot);
+                item.addProperty("legacyArmorSlot",(Number)Integer.valueOf(slot));
+                row.addProperty("sourceArmorSlot",(Number)Integer.valueOf(slot));
                 armorSlots++;
                 var material=materials.armor().get(field.key());
                 if(material!=null) {
                     int points=material.points()[slot];
-                    item.addProperty("armor",points);
-                    item.addProperty("durability",material.factor()*SLOT_DURABILITY_FACTOR[slot]);
+                    item.addProperty("armor",(Number)Integer.valueOf(points));
+                    item.addProperty("durability",(Number)Integer.valueOf(material.factor()*SLOT_DURABILITY_FACTOR[slot]));
                     item.addProperty("legacyArmorMaterialSource",field.key());
-                    row.addProperty("sourceArmorPoints",points);
+                    row.addProperty("sourceArmorPoints",(Number)Integer.valueOf(points));
                     armorStats++;
                 }
                 proofRows.add(row);
@@ -112,12 +112,12 @@ public final class LegacyItemSemanticsRecoveryPass implements ConversionPass {
                 if(tool==null)continue;
                 // Vanilla 1.7.10 ItemSword base hit = 4 + ToolMaterial.getDamageVsEntity().
                 // -2.4 is the modern sword attack-speed adapter, not a source gameplay proof.
-                item.addProperty("attackDamage",4.0F+tool.damageBonus());
-                item.addProperty("attackSpeed",-2.4F);
-                item.addProperty("durability",tool.durability());
+                item.addProperty("attackDamage",(Number)Float.valueOf(4.0F+tool.damageBonus()));
+                item.addProperty("attackSpeed",(Number)Float.valueOf(-2.4F));
+                item.addProperty("durability",(Number)Integer.valueOf(tool.durability()));
                 item.addProperty("legacyToolMaterialSource",field.key());
-                row.addProperty("sourceSwordBaseAttack",4.0F+tool.damageBonus());
-                row.addProperty("modernAttackSpeedAdapter",-2.4F);
+                row.addProperty("sourceSwordBaseAttack",(Number)Float.valueOf(4.0F+tool.damageBonus()));
+                row.addProperty("modernAttackSpeedAdapter",(Number)Float.valueOf(-2.4F));
                 proofRows.add(row);swords++;
             }
         }
@@ -127,15 +127,15 @@ public final class LegacyItemSemanticsRecoveryPass implements ConversionPass {
         }
         Files.writeString(contentPath,JSON.toJson(content)+"\n",StandardCharsets.UTF_8);
         JsonObject result=new JsonObject();result.addProperty("sourceSha256",sourceHash);
-        result.addProperty("sourceOnlySpecialBehaviorsUnchanged",true);
-        result.addProperty("translationKeysFixedItems",renamedItems);
-        result.addProperty("translationKeysFixedBlocks",renamedBlocks);
-        result.addProperty("missingLocaleEntriesRecovered",addedLanguage);
-        result.addProperty("sourceArmorSlotsRecovered",armorSlots);
-        result.addProperty("sourceArmorProtectionRecovered",armorStats);
-        result.addProperty("sourceSwordBaselineRecovered",swords);
-        result.addProperty("specialWeaponSkillsRuntimeWired",false);
-        result.addProperty("legacyServerGameplayReplayed",false);
+        result.addProperty("sourceOnlySpecialBehaviorsUnchanged",Boolean.TRUE);
+        result.addProperty("translationKeysFixedItems",(Number)Integer.valueOf(renamedItems));
+        result.addProperty("translationKeysFixedBlocks",(Number)Integer.valueOf(renamedBlocks));
+        result.addProperty("missingLocaleEntriesRecovered",(Number)Integer.valueOf(addedLanguage));
+        result.addProperty("sourceArmorSlotsRecovered",(Number)Integer.valueOf(armorSlots));
+        result.addProperty("sourceArmorProtectionRecovered",(Number)Integer.valueOf(armorStats));
+        result.addProperty("sourceSwordBaselineRecovered",(Number)Integer.valueOf(swords));
+        result.addProperty("specialWeaponSkillsRuntimeWired",Boolean.FALSE);
+        result.addProperty("legacyServerGameplayReplayed",Boolean.FALSE);
         result.add("itemProofs",proofRows);
         Path proof=root.resolve(OUTPUT);Files.createDirectories(proof.getParent());
         Files.writeString(proof,JSON.toJson(result)+"\n",StandardCharsets.UTF_8);
