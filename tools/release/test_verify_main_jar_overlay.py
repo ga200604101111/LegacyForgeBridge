@@ -100,4 +100,20 @@ class GuardTests(unittest.TestCase):
             mod.validate(self.base,self.base,set(),set())
 
 
+    def test_rev260_manifest_provenance_must_change_on_any_new_main(self):
+        old=b"Manifest-Version: 1.0\r\nFabric-Mapping-Namespace: intermediary\r\nFabric-Minecraft-Version: 1.21.11\r\nFabric-Jar-Type: classes\r\nLFB-Local-Patch-Revision: rev260\r\nLFB-Local-Build-Method: old-local\r\n\r\n"
+        files=copy.deepcopy(BASE);files['META-INF/MANIFEST.MF']=old;jar(self.base,files)
+        updated=self.new_files();updated['META-INF/MANIFEST.MF']=old
+        updated['dev/new/Feature.class']=b'\xca\xfe\xba\xbe\x00\x00\x00\x41new'
+        jar(self.new,updated)
+        r=mod.validate(self.base,self.new,{'dev/new/Feature.class'},{'fabric.mod.json'})
+        self.assertTrue(any('STALE_BUILD_REVISION' in x for x in r['errors']))
+        self.assertTrue(any('STALE_BUILD_METHOD' in x for x in r['errors']))
+        updated['META-INF/MANIFEST.MF']=old.replace(b'rev260',b'rev282').replace(b'old-local',b'base260-overlay')
+        jar(self.new,updated)
+        r=mod.validate(self.base,self.new,{'dev/new/Feature.class'},
+                       {'fabric.mod.json','META-INF/MANIFEST.MF'})
+        self.assertEqual(r['verdict'],'PASS_STRUCTURAL_ONLY')
+
+
 if __name__ == "__main__": unittest.main(verbosity=2)
