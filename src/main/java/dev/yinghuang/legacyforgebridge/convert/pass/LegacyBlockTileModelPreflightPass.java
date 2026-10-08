@@ -75,7 +75,7 @@ public final class LegacyBlockTileModelPreflightPass implements ConversionPass {
             entry.addProperty("rendererReadsTileFields",p.rendererReadsTileFields());
             entry.addProperty("metadataDependentBoundsObserved",p.metadataDependentBounds());
             if(p.sourceConstantLight()!=null)entry.addProperty("sourceConstantLight",p.sourceConstantLight());
-            entry.addProperty("sourceZeroDropProven",p.sourceZeroDrop());
+            entry.addProperty("sourceQuantityDroppedZeroProven",p.sourceQuantityDroppedZero());
             entry.addProperty("runtimeReady",false);
             candidates.add(entry);
         }
