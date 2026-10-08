@@ -15,7 +15,7 @@ User-provided complete main:
 
 ## New reusable code (source-only, not an installable Minecraft update)
 
-- `tools/release/verify_main_jar_overlay.py`: read-only base archive inventory and fail-closed base-vs-candidate comparison. Checks exact base SHA, ZIP CRC, duplicated/unsafe entries, JVM class headers, entrypoint/mixin/jar references, dependency and mapping metadata, unreviewed/removed binary entries, nested DesktopHelper preservation, output version bump and an actual executable class delta. Its status `PASS_STRUCTURAL_ONLY` is deliberately **not** a compatibility certification.
+- `tools/release/verify_main_jar_overlay.py`: read-only base archive inventory and fail-closed base-vs-candidate comparison. Checks exact base SHA, ZIP CRC, duplicated/unsafe entries, JVM class headers, entrypoint/mixin/jar references, dependency and mapping metadata, unreviewed/removed binary entries, nested DesktopHelper preservation, output version bump, updated build revision/method manifest and an actual executable class delta. Its status `PASS_STRUCTURAL_ONLY` is deliberately **not** a compatibility certification.
 - `tools/release/build_main_from_base.py`: reproducible complete outer JAR packaging from the user-provided exact baseline and a directory containing explicitly allowlisted, *already compiled* overlay classes/resources. Never rewrites the input JAR or silently overwrites a pre-existing output. Stages a temporary candidate, runs the structural verifier, then publishes it with no-overwrite handling. Failed report publication removes an incomplete output.
 - `tools/release/test_verify_main_jar_overlay.py` and `tools/release/test_build_main_from_base.py`: isolated regression suites for release-guard and packager behavior.
 - `diagnostics/rev282-rev260-binary-baseline/verification.json`: machine-readable baseline and validation summary.
@@ -37,6 +37,7 @@ python tools/release/build_main_from_base.py \
   --output genuinely-built-new-main.jar \
   --expect-base-sha256 03a7bff020197b275977227ff0ee4dbbf7c9e3df77ea6c1425470f7fde4b93d9 \
   --allow-file fabric.mod.json \
+  --allow-file META-INF/MANIFEST.MF \
   --allow-file dev/yinghuang/legacyforgebridge/newfeature/ActualCompiledFeature.class \
   --report new-main-structural-verification.json
 ```
@@ -45,10 +46,10 @@ This example does **not** imply that `ActualCompiledFeature.class` currently exi
 
 ## Executed checks
 
-- 10 synthetic archive verifier tests passed.
+- 11 synthetic archive verifier tests passed, including a stale-manifest build provenance rejection.
 - 11 deterministic outer main packaging/rollback tests passed.
 - 4 additional validation checks against the **actual uploaded** rev260 archive passed (accepted an explicitly allowlisted compiled synthetic class; rejected removal of the desktop helper, dropped Mixin declarations and metadata-only changes).
-- End-to-end packaging smoke on the actual rev260 used one synthetic `javac21` class and a bumped *test-only* metadata version: **all 1,825 unchanged original file contents were preserved**, both independent candidate JAR builds had identical SHA-256 and the original baseline JAR SHA-256 was unchanged. Both smoke candidates were destroyed, **not delivered**.
+- End-to-end packaging smoke on the actual rev260 used one synthetic `javac21` class and a bumped *test-only* metadata version: **all 1,824 unmodified original file contents were preserved** (only the explicitly reviewed Fabric version and build manifest changed), both independent candidate JAR builds had identical SHA-256 and the original baseline JAR SHA-256 was unchanged. Both smoke candidates were destroyed, **not delivered**.
 - 33 rev281 synthetic launcher/geometry-preflight methods passed when compiled against the **actual** rev260 archive as Java classpath, with temporary JDK-internal ASM substitutions. This is stronger binary-ABI evidence than earlier test doubles, but still not the actual Fabric ASM / Minecraft runtime.
 
 ## Critical handoff gap and nonclaims
@@ -68,3 +69,5 @@ No new installable complete main JAR, native 1.7.10 comparison, live game test, 
 5. Only after real Minecraft/VFP and original Forge server acceptance should a new complete main JAR be distributed.
 
 See `docs/SESSION-2026-10-08-TWILIGHTFOREST-PART2F4.md`, `docs/TWILIGHT-FOREST-238-ACCEPTANCE.md` and `docs/SESSION-2026-10-07-REV260-REV262-HANDOFF-GAP.md`.
+
+**Build provenance guard:** the actual rev260 `META-INF/MANIFEST.MF` carries `LFB-Local-Patch-Revision: rev260` and `LFB-Local-Build-Method: javac21-and-audited-bytecode-delta`. A new complete candidate must include a reviewed replacement manifest with an accurate, different patch revision and build method, while retaining the intermediary namespace, Minecraft version and Fabric JAR type. The structural guard checks that these fields changed; it does not itself verify the honesty of the newly declared build method.
