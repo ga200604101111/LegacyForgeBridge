@@ -69,3 +69,9 @@ The source-only generic adapter now recognizes an **ordinary Block subtype** wit
 This is intentionally distinct from `EntityTFMoonwormShot` projectile conversion. Both reuse a source cuboid model but differ in animation state, world placement/attachment, light and rendering pipeline.
 
 The new evidence resource is `legacyforgebridge/block-tile-model-preflight.json` and explicitly declares no modern BlockEntity/animation/runtime or network adaptation. No additional Twilight Forest block is claimed playable based on this analysis. Exact corpus verification remains outstanding; see `docs/SESSION-2026-10-08-TWILIGHTFOREST-PART2G-REV284.md`.
+
+## rev285: placed-block state observation vs server sync (2026-10-08)
+
+The rev284 generic ordinary-Block → TileEntity → TESR source preflight now also inventories the source-rendered TileEntity field dependencies, update-tick field writes, metadata lookups, OpenGL rotations and model animation-pivot writes. NBT and legacy packet-hook **presence is not packet payload/dataflow proof**. Both tile networking and animation runtime readiness remain `false`. No placed Moonworm or other legacy block has been newly confirmed playable from this source-only change.
+
+The historical upstream Moonworm placed block (14 source light) is different from the Queen-fired MoonwormShot projectile (source fullbright). Keep independent conversion/acceptance paths; the exact translated `-tw.jar` has not yet been tested. See `docs/SESSION-2026-10-08-TWILIGHTFOREST-PART2G-REV285.md`.
