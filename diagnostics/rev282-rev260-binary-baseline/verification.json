@@ -22,15 +22,16 @@
     "originalFullGradleLoomBuild": false
   },
   "verifiedLocal": {
-    "releaseGuardSyntheticUnitCases": 10,
+    "releaseGuardSyntheticUnitCases": 11,
     "packagerSyntheticUnitCases": 11,
     "uploadedBaselineGuardIntegrationChecks": 4,
     "uploadedBaselinePackager": {
-      "unchangedFileContents": 1825,
-      "baselineFilesChecked": 1825,
+      "unchangedFileContents": 1824,
+      "baselineFilesChecked": 1824,
       "deterministicIndependentPackaging": true,
       "baselineHashUnaffected": true,
-      "testCandidateDeleted": true
+      "testCandidateDeleted": true,
+      "manifestProvenanceUpdatedForSmoke": true
     },
     "rev281AnalyzerAbiSmokeAgainstUploadedBase": {
       "syntheticMethodsPassed": 33,
@@ -53,7 +54,8 @@
       "candidate version change",
       "real changed class payload",
       "no output overwrite",
-      "rollback on report publication failure"
+      "rollback on report publication failure",
+      "manifest build revision and build method updated and mapped namespace preserved"
     ]
   },
   "disclosedLimits": [
