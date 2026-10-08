@@ -9,6 +9,7 @@ import dev.yinghuang.legacyforgebridge.convert.LegacyBlockTileVisualStateAnalyze
 import dev.yinghuang.legacyforgebridge.convert.LegacyTileFacingRotationAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.LegacyTileDynamicYawAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.LegacyTilePivotAnimationAnalyzer;
+import dev.yinghuang.legacyforgebridge.convert.LegacyTileNbtPersistenceAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.api.ConversionContext;
 import dev.yinghuang.legacyforgebridge.convert.api.ConversionPass;
 import dev.yinghuang.legacyforgebridge.convert.api.SupportLevel;
@@ -20,6 +21,8 @@ import java.nio.file.Path;
 import java.util.Objects;
 import java.util.Map;
 import java.util.LinkedHashMap;
+import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * Auditable, non-executable source provenance for ordinary 1.7.10 Block + TileEntity + TESR.
@@ -102,8 +105,42 @@ public final class LegacyBlockTileModelPreflightPass implements ConversionPass {
                                     +"); no client animation or packet bridge admitted.");
                 }
             }
+            // Rev289: persistency and network transfer are different contracts. Even paired
+            // NBT write/read of all render fields cannot prove getDescriptionPacket actually
+            // sends those tags to this client's onDataPacket path.
+            Map<String, LegacyTileNbtPersistenceAnalyzer.Audit> nbtAudits=new LinkedHashMap<>();
+            LegacyTileNbtPersistenceAnalyzer nbtAnalyzer=new LegacyTileNbtPersistenceAnalyzer();
+            for (var candidate:source.candidates()) {
+                var state=visuals.get(candidate.sourceBlockClass());
+                boolean stateBound=state!=null && state.tileClass().equals(candidate.tileClass())
+                        && state.rendererClass().equals(candidate.rendererClass())
+                        && state.modelClass().equals(candidate.modelClass());
+                var yaw=dynamicYaw.get(candidate.sourceBlockClass());
+                if(yaw!=null && (!yaw.sourceTileClass().equals(candidate.tileClass())
+                        || !yaw.sourceRendererClass().equals(candidate.rendererClass())))yaw=null;
+                var pivot=pivotAnimations.get(candidate.sourceBlockClass());
+                if(pivot!=null && (!pivot.sourceTileClass().equals(candidate.tileClass())
+                        || !pivot.sourceRendererClass().equals(candidate.rendererClass())
+                        || !pivot.sourceModelClass().equals(candidate.modelClass())))pivot=null;
+                Set<String> required=requiredSourceVisualFields(stateBound?state:null,yaw,pivot);
+                if(required.isEmpty())continue;
+                try {
+                    var result=nbtAnalyzer.analyze(context.sourceJar(),candidate,required);
+                    result.audit().ifPresent(proof -> nbtAudits.put(candidate.sourceBlockClass(),proof));
+                    if(result.audit().isEmpty())for(String note:result.diagnostics())
+                        context.diagnostics().info("LFB-CONVERT-BLOCK-TILE-0010",SupportLevel.AUTO,
+                                "Optional source TileEntity NBT field proof unavailable for "
+                                        +candidate.sourceBlockClass()+": "+note);
+                } catch(IOException|RuntimeException incomplete) {
+                    context.diagnostics().info("LFB-CONVERT-BLOCK-TILE-0011",SupportLevel.AUTO,
+                            "Optional source TileEntity NBT proof unavailable for "
+                                    +candidate.sourceBlockClass()+" ("
+                                    +incomplete.getClass().getSimpleName()
+                                    +"); no legacy packet payload or client renderer admitted.");
+                }
+            }
             var manifest=manifest(context.sourceHash(),context.metadata().primary().modId(),
-                    source,visuals,facing,dynamicYaw,pivotAnimations);
+                    source,visuals,facing,dynamicYaw,pivotAnimations,nbtAudits);
             Path output=context.stagingDir().resolve(OUTPUT);
             Files.createDirectories(output.getParent());
             Files.writeString(output,JSON.toJson(manifest)+"\n",StandardCharsets.UTF_8);
@@ -156,6 +193,19 @@ public final class LegacyBlockTileModelPreflightPass implements ConversionPass {
                                       Map<String, LegacyTileFacingRotationAnalyzer.Proof> sourceFacingMaps,
                                       Map<String, LegacyTileDynamicYawAnalyzer.Proof> sourceYawMaps,
                                       Map<String, LegacyTilePivotAnimationAnalyzer.Proof> pivotAnimations) {
+        return manifest(sourceSha,modId,analysis,visualState,sourceFacingMaps,sourceYawMaps,
+                pivotAnimations,Map.of());
+    }
+
+    /** Source-serialized NBT field pairs are distinct from proven client packet delivery. */
+    public static JsonObject manifest(String sourceSha, String modId,
+                                      LegacyBlockTileModelPreflight.Analysis analysis,
+                                      Map<String, LegacyBlockTileVisualStateAnalyzer.Evidence> visualState,
+                                      Map<String, LegacyTileFacingRotationAnalyzer.Proof> sourceFacingMaps,
+                                      Map<String, LegacyTileDynamicYawAnalyzer.Proof> sourceYawMaps,
+                                      Map<String, LegacyTilePivotAnimationAnalyzer.Proof> pivotAnimations,
+                                      Map<String, LegacyTileNbtPersistenceAnalyzer.Audit> sourceNbtAudits) {
+        Objects.requireNonNull(sourceNbtAudits);
         Objects.requireNonNull(analysis);
         Objects.requireNonNull(visualState);
         Objects.requireNonNull(sourceFacingMaps);
@@ -174,6 +224,7 @@ public final class LegacyBlockTileModelPreflightPass implements ConversionPass {
         root.addProperty("modernBlockGeometryProven",false);
         JsonArray candidates=new JsonArray();
         int observedState=0, tickDriven=0, staticFacing=0, sourceYaw=0, pivotEvidence=0;
+        int nbtObservations=0, fullyPersisted=0;
         for (var p : analysis.candidates()) {
             JsonObject entry=new JsonObject();
             entry.addProperty("legacyBlockRegistryName",p.registryName());
@@ -291,6 +342,39 @@ public final class LegacyBlockTileModelPreflightPass implements ConversionPass {
                 entry.addProperty("sourceAnimationPacketHookObserved",
                         relevant && state.sourceTilePacketHookPresent());
             }
+            Set<String> required=requiredSourceVisualFields(relevant?state:null,
+                    yawProven?yaw:null,pivotSourceProven?pivot:null);
+            var nbt=sourceNbtAudits.get(p.sourceBlockClass());
+            boolean pairAuditBound=nbt!=null && nbt.sourceTileClass().equals(p.tileClass())
+                    && !nbt.clientRuntimeWired() && !nbt.networkPayloadProven()
+                    && !required.isEmpty() && required.equals(new TreeSet<>(nbt.requiredVisualFields()))
+                    && validNbtFieldPartition(nbt,required);
+            entry.addProperty("sourceTileNbtFieldPairAuditPresent",pairAuditBound);
+            entry.addProperty("sourceTilePacketPayloadProven",false);
+            entry.addProperty("sourceTileNbtRuntimeWired",false);
+            if(pairAuditBound){
+                nbtObservations++;
+                entry.addProperty("sourceTileNbtPairStatus",nbt.status().name());
+                entry.addProperty("sourceDescriptionPacketHookObserved",nbt.descriptionPacketHookObserved());
+                entry.addProperty("sourceOnDataPacketHookObserved",nbt.dataPacketHookObserved());
+                JsonArray paired=new JsonArray();
+                for (var value:nbt.pairedNbtFields()) {
+                    JsonObject field=new JsonObject();
+                    field.addProperty("sourceTileFieldOwner",value.owner());
+                    field.addProperty("sourceTileField",value.name());
+                    field.addProperty("sourceFieldDescriptor",value.descriptor());
+                    field.addProperty("sourceNbtTagKey",value.key());
+                    field.addProperty("sourceNbtValueKind",value.primitiveKind());
+                    paired.add(field);
+                }
+                entry.add("sourcePairedNbtVisualFields",paired);
+                entry.add("sourceUnpairedNbtVisualFields",strings(nbt.unpairedVisualFields()));
+                boolean allPaired=nbt.status()==LegacyTileNbtPersistenceAnalyzer.Status.PAIRED_NBT_ONLY
+                        && nbt.unpairedVisualFields().isEmpty()
+                        && nbt.pairedNbtFields().size()==required.size();
+                entry.addProperty("sourceAllVisualFieldsNbtPersistent",allPaired);
+                if(allPaired)fullyPersisted++;
+            }
             entry.addProperty("runtimeReady",false);
             candidates.add(entry);
         }
@@ -301,6 +385,8 @@ public final class LegacyBlockTileModelPreflightPass implements ConversionPass {
         root.addProperty("sourceStaticFacingMapCandidateCount",staticFacing);
         root.addProperty("sourceDynamicYawOperandCandidateCount",sourceYaw);
         root.addProperty("sourcePivotSineClampCandidateCount",pivotEvidence);
+        root.addProperty("sourceTileNbtPairAuditCandidateCount",nbtObservations);
+        root.addProperty("sourceFullyPersistentVisualStateCandidateCount",fullyPersisted);
         JsonArray skipped=new JsonArray();
         for(var p : analysis.skipped()){
             JsonObject entry=new JsonObject();
@@ -314,6 +400,37 @@ public final class LegacyBlockTileModelPreflightPass implements ConversionPass {
         analysis.diagnostics().forEach(diagnostics::add);
         root.add("analysisDiagnostics",diagnostics);
         return root;
+    }
+
+    /** Assemble only dependencies proven for THIS registered source Tile + TESR + Model. */
+    private static Set<String> requiredSourceVisualFields(
+            LegacyBlockTileVisualStateAnalyzer.Evidence state,
+            LegacyTileDynamicYawAnalyzer.Proof yaw,
+            LegacyTilePivotAnimationAnalyzer.Proof pivot) {
+        Set<String> required=new TreeSet<>();
+        if(state!=null){
+            required.addAll(state.rendererTileFieldsRead());
+            required.addAll(state.modelAnimationTileFieldsRead());
+        }
+        if(yaw!=null)required.add(yaw.sourceFieldName());
+        if(pivot!=null){
+            required.add(pivot.guardTileField());
+            for (var part:pivot.parts())required.addAll(part.sourceTileFields());
+        }
+        return required;
+    }
+
+    /** Fail-closed guard for injecting evidence from a different candidate/field collection. */
+    private static boolean validNbtFieldPartition(LegacyTileNbtPersistenceAnalyzer.Audit audit,
+                                                  Set<String> required) {
+        Set<String> accounted=new TreeSet<>();
+        for(var field:audit.pairedNbtFields()){
+            if(field==null || !required.contains(field.name()) || !accounted.add(field.name()))return false;
+        }
+        for(String missing:audit.unpairedVisualFields()){
+            if(missing==null || !required.contains(missing) || !accounted.add(missing))return false;
+        }
+        return accounted.equals(required);
     }
     private static JsonArray strings(java.util.List<String> text) {
         JsonArray array=new JsonArray();
