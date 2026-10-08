@@ -99,7 +99,6 @@ class GuardTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"separate files"):
             mod.validate(self.base,self.base,set(),set())
 
-
     def test_rev260_manifest_provenance_must_change_on_any_new_main(self):
         old=b"Manifest-Version: 1.0\r\nFabric-Mapping-Namespace: intermediary\r\nFabric-Minecraft-Version: 1.21.11\r\nFabric-Jar-Type: classes\r\nLFB-Local-Patch-Revision: rev260\r\nLFB-Local-Build-Method: old-local\r\n\r\n"
         files=copy.deepcopy(BASE);files['META-INF/MANIFEST.MF']=old;jar(self.base,files)
