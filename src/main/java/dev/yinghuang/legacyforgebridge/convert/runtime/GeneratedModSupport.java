@@ -176,7 +176,7 @@ public final class GeneratedModSupport {
             properties.attributes(legacyWeaponAttributes(attackDamage,attackSpeed));
         }
         if(source!=null&&source.hooks().contains("hit"))properties.component(DataComponents.WEAPON,new Weapon(0));
-        int sourceSlot=source==null?-1:source.item().armorSlot;
+        int sourceSlot=LegacySourceArmorSlotFallback.choose(kind,source==null?-1:source.item().armorSlot);
         EquipmentSlot slot=switch(sourceSlot){case 0->EquipmentSlot.HEAD;case 1->EquipmentSlot.CHEST;case 2->EquipmentSlot.LEGS;case 3->EquipmentSlot.FEET;default->null;};
         if(slot==null){if("wing".equals(kind))slot=EquipmentSlot.CHEST;else if("circle".equals(kind))slot=EquipmentSlot.FEET;}
         if(slot!=null){
