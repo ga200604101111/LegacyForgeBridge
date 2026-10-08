@@ -22,8 +22,9 @@ import java.util.jar.JarFile;
 
 /**
  * Non-executable evidence only: joins source-proven entity registrations, renderer registrations,
- * vanilla projectile ancestry and a closed, fixed-cuboid rendering proof. It deliberately does NOT
- * prove player item launch, legacy FML spawn semantics, lighting, or modern renderer readiness.
+ * vanilla projectile ancestry and a closed, fixed-cuboid rendering proof. Independent optional
+ * launcher and full-bright bytecode evidence may be attached, but this stage never proves FML
+ * runtime spawn semantics, modern client lighting integration, or renderer readiness.
  */
 public final class LegacyFixedModelProjectilePreflight {
     private static final String THROWABLE = "net/minecraft/entity/projectile/EntityThrowable";
