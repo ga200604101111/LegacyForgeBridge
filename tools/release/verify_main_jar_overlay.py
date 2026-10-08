@@ -45,8 +45,12 @@ def scan(path: Path) -> tuple[dict[str, dict], dict]:
             if item.is_dir():
                 continue
             data = jar.read(item)
-            if name.endswith(".class") and not data.startswith(b"\xca\xfe\xba\xbe"):
-                raise ValueError(f"Invalid Java class magic: {name}")
+            if name.endswith(".class"):
+                if len(data) < 8 or not data.startswith(b"\xca\xfe\xba\xbe"):
+                    raise ValueError(f"Invalid Java class header: {name}")
+                major = int.from_bytes(data[6:8], "big")
+                if major < 45 or major > 65:
+                    raise ValueError(f"Class is not compatible with Java 21: {name}, major={major}")
             entries[name] = {"sha256": sha256(data), "size": len(data)}
         try:
             mod = json.loads(jar.read(CRITICAL_RESOURCE).decode("utf-8"))
@@ -54,6 +58,20 @@ def scan(path: Path) -> tuple[dict[str, dict], dict]:
             raise ValueError("Invalid or missing fabric.mod.json") from exc
     if mod.get("id") != "legacyforgebridge":
         raise ValueError("Unexpected Fabric mod id")
+    for value in mod.get("entrypoints", {}).values():
+        for item in value:
+            target = item if isinstance(item, str) else item.get("value", "")
+            owner = target.split("::", 1)[0]
+            if not owner or owner.replace(".", "/") + ".class" not in entries:
+                raise ValueError(f"Missing declared Fabric entrypoint: {target}")
+    for item in mod.get("mixins", []):
+        path = item if isinstance(item, str) else item.get("config", "")
+        if path not in entries:
+            raise ValueError(f"Missing declared Mixin configuration: {path}")
+    for item in mod.get("jars", []):
+        path = item.get("file", "")
+        if path not in entries:
+            raise ValueError(f"Missing declared nested dependency: {path}")
     return entries, mod
 
 
