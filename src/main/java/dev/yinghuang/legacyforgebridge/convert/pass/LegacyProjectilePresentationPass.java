@@ -118,6 +118,7 @@ public final class LegacyProjectilePresentationPass implements ConversionPass {
         root.addProperty("fmlSpawnRuntimeProven", false);
         root.addProperty("clientFullbrightProven", false);
         JsonArray candidates=new JsonArray();
+        int sourceLauncherProven=0;
         for (var candidate : analysis.candidates()) {
             var proof=candidate.geometry();
             JsonObject entry=new JsonObject();
@@ -134,6 +135,18 @@ public final class LegacyProjectilePresentationPass implements ConversionPass {
             entry.addProperty("axisY", proof.axisY());
             entry.addProperty("axisZ", proof.axisZ());
             entry.addProperty("runtimeReady", false);
+            boolean launcherProven=candidate.launcherProof().isPresent();
+            entry.addProperty("sourceLauncherDataflowProven", launcherProven);
+            if (launcherProven) {
+                sourceLauncherProven++;
+                var launcher=candidate.launcherProof().orElseThrow();
+                entry.addProperty("launcherRegistryName",launcher.registryName());
+                entry.addProperty("launcherSourceItemClass",launcher.sourceItemClass());
+                entry.addProperty("launcherCallbackOwner",launcher.declaringOwner());
+                entry.addProperty("launcherCallbackName",launcher.callbackName());
+                entry.addProperty("launcherCallbackDescriptor",launcher.callbackDescriptor());
+                entry.addProperty("launcherCallbackKind",launcher.callback().name());
+            }
             JsonArray cuboids=new JsonArray();
             for (var part : proof.cuboids()) {
                 JsonObject cuboid=new JsonObject();
@@ -149,6 +162,8 @@ public final class LegacyProjectilePresentationPass implements ConversionPass {
         }
         root.add("candidates",candidates);
         root.addProperty("provenRendererCandidates",candidates.size());
+        root.addProperty("sourceLauncherProofCandidateCount",sourceLauncherProven);
+        root.addProperty("launcherDataflowProven",candidates.size()>0&&sourceLauncherProven==candidates.size());
         JsonArray skipped=new JsonArray();
         for (var candidate : analysis.skipped()) {
             JsonObject entry=new JsonObject();
