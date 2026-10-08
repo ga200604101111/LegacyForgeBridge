@@ -75,3 +75,11 @@ The new evidence resource is `legacyforgebridge/block-tile-model-preflight.json`
 The rev284 generic ordinary-Block → TileEntity → TESR source preflight now also inventories the source-rendered TileEntity field dependencies, update-tick field writes, metadata lookups, OpenGL rotations and model animation-pivot writes. NBT and legacy packet-hook **presence is not packet payload/dataflow proof**. Both tile networking and animation runtime readiness remain `false`. No placed Moonworm or other legacy block has been newly confirmed playable from this source-only change.
 
 The historical upstream Moonworm placed block (14 source light) is different from the Queen-fired MoonwormShot projectile (source fullbright). Keep independent conversion/acceptance paths; the exact translated `-tw.jar` has not yet been tested. See `docs/SESSION-2026-10-08-TWILIGHTFOREST-PART2G-REV285.md`.
+
+## rev286 — six-facing placed Block/TESR orientation source proof (2026-10-08)
+
+The generic ordinary-Block + TileEntity + TESR preflight now derives bounded static X/Z rotation angles for all 16 legacy metadata values from source Java 7 bytecode (including explicit `&7` masking when present), and flags additional source GL rotation separately. This is independent of any mod name or Moonworm ID.
+
+**Not yet accepted as playable**: the Moonworm TileEntity's dynamic `currentYaw`, the animation pivot writes, authoritative field/packet sync, facing-dependent collision/attachment/placement, full TESR GL transform sequence, real client renderer, the exact translated Twilight Forest `-tw.jar` source, and modern/FML multiplayer verification. Do not promote these new source proofs to an active modern block renderer or increment a gameplay completion tally.
+
+Regression checkpoint: 24 rev286 analyzer + 6 manifest + 22 rev285 + 20 rev284 = **72 independent synthetic tests passed**, not a real Minecraft runtime test. See `docs/SESSION-2026-10-08-TWILIGHTFOREST-PART2G-REV286.md`.
