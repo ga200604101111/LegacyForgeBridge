@@ -2,6 +2,7 @@ package dev.yinghuang.legacyforgebridge.convert.pass;
 
 import dev.yinghuang.legacyforgebridge.convert.LegacyFixedModelProjectileAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.LegacyFixedModelProjectilePreflight;
+import dev.yinghuang.legacyforgebridge.convert.LegacyProjectileLauncherAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.api.ConversionStatus;
 import dev.yinghuang.legacyforgebridge.convert.api.DiagnosticCollector;
 import dev.yinghuang.legacyforgebridge.convert.api.SupportLevel;
@@ -44,6 +45,34 @@ class LegacyProjectileFixedModelPreflightManifestTest {
         assertEquals(4, candidate.getAsJsonArray("cuboids").get(0)
                 .getAsJsonObject().get("width").getAsInt());
         assertEquals(1, manifest.getAsJsonArray("skipped").size());
+    }
+
+    @Test void provenSourceLauncherIsRecordedButCannotCreateExecutableRules() {
+        var shape=new LegacyFixedModelProjectileAnalyzer.Proof(
+                "arbitrary/client/Renderer", "arbitrary/client/Model",
+                "arbitrary:textures/model/throwable.png", 32,32,.075F,90F,1F,0F,1F,
+                List.of(new LegacyFixedModelProjectileAnalyzer.Cuboid(
+                        "part",0,4,-1F,-1F,-1F,2,2,2,1F,7F,0F)));
+        var launcher=new LegacyProjectileLauncherAnalyzer.Proof(
+                "thrower", "arbitrary/items/ChargedCaster", "arbitrary/items/ChargedCaster",
+                "onPlayerStoppedUsing",
+                "(Lnet/minecraft/item/ItemStack;Lnet/minecraft/world/World;Lnet/minecraft/entity/player/EntityPlayer;I)V",
+                LegacyProjectileLauncherAnalyzer.Callback.RELEASE_USE,
+                "arbitrary/projectile/Shot");
+        var evidence=new LegacyFixedModelProjectilePreflight.Analysis(
+                List.of(new LegacyFixedModelProjectilePreflight.Candidate(
+                        "shot", "arbitrary/projectile/Shot", "arbitrary/client/Renderer",
+                        shape, java.util.Optional.of(launcher))), List.of());
+        var manifest=LegacyProjectilePresentationPass.fixedModelPreflightManifest("sha","arbitrary",evidence);
+        assertTrue(manifest.get("launcherDataflowProven").getAsBoolean());
+        assertEquals(1,manifest.get("sourceLauncherProofCandidateCount").getAsInt());
+        var item=manifest.getAsJsonArray("candidates").get(0).getAsJsonObject();
+        assertTrue(item.get("sourceLauncherDataflowProven").getAsBoolean());
+        assertEquals("thrower",item.get("launcherRegistryName").getAsString());
+        assertEquals("RELEASE_USE",item.get("launcherCallbackKind").getAsString());
+        assertFalse(item.get("runtimeReady").getAsBoolean());
+        assertFalse(manifest.get("runtimeWired").getAsBoolean());
+        assertFalse(manifest.has("rules"));
     }
 
     @Test void optionalEvidenceDiagnosticsMustNotChangeInstallableConversionStatus() {
