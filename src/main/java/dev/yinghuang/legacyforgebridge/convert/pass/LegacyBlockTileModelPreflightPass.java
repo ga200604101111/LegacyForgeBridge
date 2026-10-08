@@ -8,6 +8,7 @@ import dev.yinghuang.legacyforgebridge.convert.LegacyBlockTileModelPreflight;
 import dev.yinghuang.legacyforgebridge.convert.LegacyBlockTileVisualStateAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.LegacyTileFacingRotationAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.LegacyTileDynamicYawAnalyzer;
+import dev.yinghuang.legacyforgebridge.convert.LegacyTilePivotAnimationAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.api.ConversionContext;
 import dev.yinghuang.legacyforgebridge.convert.api.ConversionPass;
 import dev.yinghuang.legacyforgebridge.convert.api.SupportLevel;
@@ -79,8 +80,30 @@ public final class LegacyBlockTileModelPreflightPass implements ConversionPass {
                                     + "); tile field sync and client rendering remain unwired.");
                 }
             }
+            // Rev288: the source animator must causally write each constructed ModelRenderer
+            // pivot from tile fields + partial time through its original clamped-sine graph.
+            // It does NOT prove those tile fields were delivered by the legacy server.
+            Map<String, LegacyTilePivotAnimationAnalyzer.Proof> pivotAnimations = new LinkedHashMap<>();
+            LegacyTilePivotAnimationAnalyzer pivotAnalyzer = new LegacyTilePivotAnimationAnalyzer();
+            for (var candidate:source.candidates()) {
+                if (!candidate.rendererCallsTileModelMethod()) continue;
+                try {
+                    var graph=pivotAnalyzer.analyze(context.sourceJar(),candidate);
+                    graph.proof().ifPresent(proof ->
+                            pivotAnimations.put(candidate.sourceBlockClass(),proof));
+                    if(graph.proof().isEmpty())for(String note:graph.diagnostics())
+                        context.diagnostics().info("LFB-CONVERT-BLOCK-TILE-0009",SupportLevel.AUTO,
+                                "Source-only pivot family not admitted for "+candidate.sourceBlockClass()
+                                        +": "+note);
+                } catch (IOException | RuntimeException incomplete) {
+                    context.diagnostics().info("LFB-CONVERT-BLOCK-TILE-0008",SupportLevel.AUTO,
+                            "Optional source model pivot animation proof unavailable for "
+                                    +candidate.sourceBlockClass()+" ("+incomplete.getClass().getSimpleName()
+                                    +"); no client animation or packet bridge admitted.");
+                }
+            }
             var manifest=manifest(context.sourceHash(),context.metadata().primary().modId(),
-                    source,visuals,facing,dynamicYaw);
+                    source,visuals,facing,dynamicYaw,pivotAnimations);
             Path output=context.stagingDir().resolve(OUTPUT);
             Files.createDirectories(output.getParent());
             Files.writeString(output,JSON.toJson(manifest)+"\n",StandardCharsets.UTF_8);
@@ -99,14 +122,14 @@ public final class LegacyBlockTileModelPreflightPass implements ConversionPass {
 
     public static JsonObject manifest(String sourceSha, String modId,
                                       LegacyBlockTileModelPreflight.Analysis analysis) {
-        return manifest(sourceSha,modId,analysis,Map.of(),Map.of(),Map.of());
+        return manifest(sourceSha,modId,analysis,Map.of(),Map.of(),Map.of(),Map.of());
     }
 
     /** Optional per-source-Class observations only; no runtime admission is possible here. */
     public static JsonObject manifest(String sourceSha, String modId,
                                       LegacyBlockTileModelPreflight.Analysis analysis,
                                       Map<String, LegacyBlockTileVisualStateAnalyzer.Evidence> visualState) {
-        return manifest(sourceSha,modId,analysis,visualState,Map.of(),Map.of());
+        return manifest(sourceSha,modId,analysis,visualState,Map.of(),Map.of(),Map.of());
     }
 
     /** Bounded, static source facing metadata; never implies client animation or tile sync. */
@@ -114,19 +137,30 @@ public final class LegacyBlockTileModelPreflightPass implements ConversionPass {
                                       LegacyBlockTileModelPreflight.Analysis analysis,
                                       Map<String, LegacyBlockTileVisualStateAnalyzer.Evidence> visualState,
                                       Map<String, LegacyTileFacingRotationAnalyzer.Proof> sourceFacingMaps) {
-        return manifest(sourceSha,modId,analysis,visualState,sourceFacingMaps,Map.of());
+        return manifest(sourceSha,modId,analysis,visualState,sourceFacingMaps,Map.of(),Map.of());
     }
 
-    /** Independent, source-causal GL operand evidence. Still no network/render runtime. */
+    /** Historical six-argument overload: source Y source proof without model animation. */
     public static JsonObject manifest(String sourceSha, String modId,
                                       LegacyBlockTileModelPreflight.Analysis analysis,
                                       Map<String, LegacyBlockTileVisualStateAnalyzer.Evidence> visualState,
                                       Map<String, LegacyTileFacingRotationAnalyzer.Proof> sourceFacingMaps,
                                       Map<String, LegacyTileDynamicYawAnalyzer.Proof> sourceYawMaps) {
+        return manifest(sourceSha,modId,analysis,visualState,sourceFacingMaps,sourceYawMaps,Map.of());
+    }
+
+    /** Independent source-causal animation pivot operands. No client networking or renderer. */
+    public static JsonObject manifest(String sourceSha, String modId,
+                                      LegacyBlockTileModelPreflight.Analysis analysis,
+                                      Map<String, LegacyBlockTileVisualStateAnalyzer.Evidence> visualState,
+                                      Map<String, LegacyTileFacingRotationAnalyzer.Proof> sourceFacingMaps,
+                                      Map<String, LegacyTileDynamicYawAnalyzer.Proof> sourceYawMaps,
+                                      Map<String, LegacyTilePivotAnimationAnalyzer.Proof> pivotAnimations) {
         Objects.requireNonNull(analysis);
         Objects.requireNonNull(visualState);
         Objects.requireNonNull(sourceFacingMaps);
         Objects.requireNonNull(sourceYawMaps);
+        Objects.requireNonNull(pivotAnimations);
         JsonObject root=new JsonObject();
         root.addProperty("schemaVersion",1);
         root.addProperty("sourceSha256",sourceSha);
@@ -139,7 +173,7 @@ public final class LegacyBlockTileModelPreflightPass implements ConversionPass {
         root.addProperty("tileStateSyncProven",false);
         root.addProperty("modernBlockGeometryProven",false);
         JsonArray candidates=new JsonArray();
-        int observedState=0, tickDriven=0, staticFacing=0, sourceYaw=0;
+        int observedState=0, tickDriven=0, staticFacing=0, sourceYaw=0, pivotEvidence=0;
         for (var p : analysis.candidates()) {
             JsonObject entry=new JsonObject();
             entry.addProperty("legacyBlockRegistryName",p.registryName());
@@ -225,6 +259,38 @@ public final class LegacyBlockTileModelPreflightPass implements ConversionPass {
                         relevant && state.tickDrivenRenderFields().contains(yaw.sourceFieldName()));
                 entry.addProperty("sourceYawFieldPacketHookObserved", relevant && state.sourceTilePacketHookPresent());
             }
+            // The animator proof must bind all three independent identities to this
+            // exact registered Block -> Tile -> TESR -> Model candidate. A proof with a
+            // different model or another source block cannot inject presentation.
+            var pivot=pivotAnimations.get(p.sourceBlockClass());
+            boolean pivotSourceProven=pivot!=null && pivot.sourceTileClass().equals(p.tileClass())
+                    && pivot.sourceRendererClass().equals(p.rendererClass())
+                    && pivot.sourceModelClass().equals(p.modelClass())
+                    && !pivot.packetPayloadProven() && !pivot.clientAnimationRuntimeWired();
+            entry.addProperty("sourcePivotSineClampAnimationProven",pivotSourceProven);
+            entry.addProperty("sourcePivotTileSyncProven",false);
+            entry.addProperty("sourcePivotAnimationRuntimeWired",false);
+            if(pivotSourceProven){
+                pivotEvidence++;
+                entry.addProperty("sourceModelAnimatorMethod",pivot.modelAnimationMethod());
+                entry.addProperty("sourceModelAnimationGuardTileField",pivot.guardTileField());
+                JsonArray parts=new JsonArray();
+                for(var part:pivot.parts()){
+                    JsonObject row=new JsonObject();
+                    row.addProperty("sourceModelPartField",part.modelField());
+                    row.addProperty("sourceModelPivotField",part.pivotField());
+                    row.addProperty("sourceRestPivotY",part.restPivotY());
+                    row.add("sourceDynamicTileFields",strings(part.sourceTileFields()));
+                    row.addProperty("sourceUsesRenderPartialTick",part.usesPartialTick());
+                    row.addProperty("sourceSineClampAndPriorPivotProven",part.sourceSineClampAndPriorPivot());
+                    row.addProperty("sourceAnimatedPartRuntimeWired",false);
+                    parts.add(row);
+                }
+                entry.add("sourcePivotAnimatedParts",parts);
+                // Presence of NBT or a packet hook in source is not payload-level proof.
+                entry.addProperty("sourceAnimationPacketHookObserved",
+                        relevant && state.sourceTilePacketHookPresent());
+            }
             entry.addProperty("runtimeReady",false);
             candidates.add(entry);
         }
@@ -234,6 +300,7 @@ public final class LegacyBlockTileModelPreflightPass implements ConversionPass {
         root.addProperty("tileTickVisualDependencyCandidateCount",tickDriven);
         root.addProperty("sourceStaticFacingMapCandidateCount",staticFacing);
         root.addProperty("sourceDynamicYawOperandCandidateCount",sourceYaw);
+        root.addProperty("sourcePivotSineClampCandidateCount",pivotEvidence);
         JsonArray skipped=new JsonArray();
         for(var p : analysis.skipped()){
             JsonObject entry=new JsonObject();
