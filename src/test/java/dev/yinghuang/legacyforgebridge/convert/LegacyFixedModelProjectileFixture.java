@@ -30,19 +30,37 @@ final class LegacyFixedModelProjectileFixture {
     static Path jar(Path target, boolean unreachableAnimation, boolean renderMutation,
                     boolean dynamicRotation, boolean extraRenderCall,
                     boolean partCtorRotation, boolean omitTexture) throws IOException {
+        return jarDetailed(target, unreachableAnimation, renderMutation, dynamicRotation,
+                extraRenderCall, partCtorRotation, omitTexture, false, false);
+    }
+
+    static Path jarWithMisboundModelField(Path target) throws IOException {
+        return jarDetailed(target, false, false, false, false, false, false, true, false);
+    }
+
+    static Path jarWithUnprovedConstructorFieldWrite(Path target) throws IOException {
+        return jarDetailed(target, false, false, false, false, false, false, false, true);
+    }
+
+    private static Path jarDetailed(Path target, boolean unreachableAnimation, boolean renderMutation,
+                    boolean dynamicRotation, boolean extraRenderCall, boolean partCtorRotation,
+                    boolean omitTexture, boolean misboundModel, boolean constructorSideEffect) throws IOException {
         try (JarOutputStream stream = new JarOutputStream(Files.newOutputStream(target))) {
-            put(stream, RENDERER + ".class", renderer(dynamicRotation, extraRenderCall));
-            put(stream, MODEL + ".class", model(unreachableAnimation, renderMutation, partCtorRotation));
+            put(stream, RENDERER + ".class", renderer(dynamicRotation, extraRenderCall, misboundModel));
+            put(stream, MODEL + ".class", model(unreachableAnimation, renderMutation,
+                    partCtorRotation, constructorSideEffect));
             if (!omitTexture) put(stream, "assets/foreign/textures/model/static.png", pngHeader());
         }
         return target;
     }
 
-    private static byte[] model(boolean unreachableAnimation, boolean renderMutation, boolean partCtorRotation) {
+    private static byte[] model(boolean unreachableAnimation, boolean renderMutation,
+                                boolean partCtorRotation, boolean constructorSideEffect) {
         ClassWriter classWriter = new ClassWriter(ClassWriter.COMPUTE_MAXS);
         classWriter.visit(Opcodes.V1_7, Opcodes.ACC_PUBLIC, MODEL, null, MODELBASE, null);
         for (String part : NAMES) classWriter.visitField(Opcodes.ACC_PRIVATE, part,
                 "L" + PART + ";", null, null).visitEnd();
+        if (constructorSideEffect) classWriter.visitField(Opcodes.ACC_PRIVATE, "hiddenState", "I", null, null).visitEnd();
         MethodVisitor ctor = classWriter.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null);
         ctor.visitCode();
         ctor.visitVarInsn(Opcodes.ALOAD, 0);
@@ -78,6 +96,11 @@ final class LegacyFixedModelProjectileFixture {
                 ctor.visitFieldInsn(Opcodes.PUTFIELD, PART, "rotateAngleX", "F");
             }
         }
+        if (constructorSideEffect) {
+            ctor.visitVarInsn(Opcodes.ALOAD, 0);
+            ctor.visitInsn(Opcodes.ICONST_1);
+            ctor.visitFieldInsn(Opcodes.PUTFIELD, MODEL, "hiddenState", "I");
+        }
         ctor.visitInsn(Opcodes.RETURN); ctor.visitMaxs(0, 0); ctor.visitEnd();
 
         MethodVisitor render = classWriter.visitMethod(Opcodes.ACC_PUBLIC, "render", "(F)V", null, null);
@@ -107,11 +130,12 @@ final class LegacyFixedModelProjectileFixture {
         return classWriter.toByteArray();
     }
 
-    private static byte[] renderer(boolean dynamicRotation, boolean extraRenderCall) {
+    private static byte[] renderer(boolean dynamicRotation, boolean extraRenderCall, boolean misboundModel) {
         ClassWriter classWriter = new ClassWriter(ClassWriter.COMPUTE_MAXS);
         classWriter.visit(Opcodes.V1_7, Opcodes.ACC_PUBLIC, RENDERER, null,
                 "net/minecraft/client/renderer/entity/Render", null);
         classWriter.visitField(Opcodes.ACC_PRIVATE, "model", "L" + MODEL + ";", null, null).visitEnd();
+        if (misboundModel) classWriter.visitField(Opcodes.ACC_PRIVATE, "decoyModel", "L" + MODEL + ";", null, null).visitEnd();
         classWriter.visitField(Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC | Opcodes.ACC_FINAL,
                 "texture", "L" + RESOURCE + ";", null, null).visitEnd();
         MethodVisitor ctor = classWriter.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null);
@@ -152,7 +176,7 @@ final class LegacyFixedModelProjectileFixture {
         draw.visitFieldInsn(Opcodes.GETSTATIC, RENDERER, "texture", "L" + RESOURCE + ";");
         draw.visitMethodInsn(Opcodes.INVOKEVIRTUAL, RENDERER, "bindTexture", "(L" + RESOURCE + ";)V", false);
         draw.visitVarInsn(Opcodes.ALOAD, 0);
-        draw.visitFieldInsn(Opcodes.GETFIELD, RENDERER, "model", "L" + MODEL + ";");
+        draw.visitFieldInsn(Opcodes.GETFIELD, RENDERER, misboundModel ? "decoyModel" : "model", "L" + MODEL + ";");
         draw.visitLdcInsn(0.075F);
         draw.visitMethodInsn(Opcodes.INVOKEVIRTUAL, MODEL, "render", "(F)V", false);
         draw.visitMethodInsn(Opcodes.INVOKESTATIC, GL, "glPopMatrix", "()V", false);
