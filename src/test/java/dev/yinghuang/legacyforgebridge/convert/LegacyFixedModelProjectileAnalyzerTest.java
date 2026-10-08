@@ -74,6 +74,24 @@ class LegacyFixedModelProjectileAnalyzerTest {
         assertRejected("missing-texture", false, false, false, false, false, true);
     }
 
+    @Test
+    void modelDrawMustReadTheExactlyConstructedRendererField() throws Exception {
+        Path jar=LegacyFixedModelProjectileFixture.jarWithMisboundModelField(
+                tempDir.resolve("wrong-model-field.jar"));
+        var result=new LegacyFixedModelProjectileAnalyzer().analyze(jar,
+                LegacyFixedModelProjectileFixture.RENDERER);
+        assertTrue(result.proof().isEmpty(), "A different uninitialized renderer field must not become a model proof");
+    }
+
+    @Test
+    void modelConstructorCannotWriteUnprovedSourceState() throws Exception {
+        Path jar=LegacyFixedModelProjectileFixture.jarWithUnprovedConstructorFieldWrite(
+                tempDir.resolve("model-state.jar"));
+        var result=new LegacyFixedModelProjectileAnalyzer().analyze(jar,
+                LegacyFixedModelProjectileFixture.RENDERER);
+        assertTrue(result.proof().isEmpty(), "Unmodelled constructor effects are not an inert fixed cuboid");
+    }
+
     private void assertRejected(String name, boolean unreachable, boolean renderMutation,
                                 boolean dynamicRotation, boolean extraCall, boolean constructorRotation,
                                 boolean omitTexture) throws Exception {
