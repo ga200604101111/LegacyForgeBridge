@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "checkpoint": "rev291",
+  "kind": "exact-corpus-source-static-TESR-geometry",
+  "date": "2026-10-08",
+  "sourceOriginal": {
+    "file": "twilightforest-1.7.10-2.3.8-tw.jar",
+    "sha256": "1aa2c191170ff707499c42cd58bdcc69f2772b59014cb684ba99a6d1e6540589",
+    "classCount": 799
+  },
+  "inputConverted": {
+    "file": "twilightforest-1.7.10-2.3.8-tw-lfb.jar",
+    "sha256": "f2c5fc8b2bc59c261a6da35dc22d0f798418089ab51e0f1c47c721642e26ec22",
+    "classCount": 6,
+    "status": "partial",
+    "installable": false,
+    "registeredBlocks": 35,
+    "placeholderBlockModels": 22,
+    "barrierItemModels": 8,
+    "knownEntityRegistrations": 77,
+    "executableEntityReplacements": 0
+  },
+  "result": {
+    "newMain": {
+      "file": "legacyforgebridge-0.2.0-alpha.27-rev291-static-tesr-preview.jar",
+      "sha256": "6d1476bee30d4e9a2727dedf2fdaf87bf520f7d1f2e6b1e1a292878a0d093f5f",
+      "bytes": 4958922,
+      "zipEntries": 1917,
+      "javaClasses": 1832,
+      "addedEntries": 8,
+      "changedEntries": 4,
+      "removedEntries": 0,
+      "baseRev290Sha256": "87ab6768dacb6ee579376e49815e668624ff8660aba51103f5e460a4ed2b5ea8",
+      "sourcePassesRegistered": 32,
+      "sourceModelPassIndex": 24,
+      "fullGradleLoomBuild": false,
+      "realFabricStartupTested": false
+    },
+    "accepted": [
+      {
+        "sourceRegistry": "tile.TFMoonworm",
+        "sourceModelParts": 4,
+        "distinctStaticFaces": 6,
+        "metadataStates": 16
+      },
+      {
+        "sourceRegistry": "tile.TFCicada",
+        "sourceModelParts": 6,
+        "distinctStaticFaces": 6,
+        "metadataStates": 16
+      }
+    ],
+    "rejected": [
+      {
+        "sourceRegistry": "tile.TFFirefly",
+        "reason": "multi-pass original GL renderer with blend/depth state not source-proven safe as a single static block model"
+      }
+    ],
+    "convertedPreview": {
+      "file": "twilightforest-1.7.10-2.3.8-tw-lfb-static-visual-preview.jar",
+      "sha256": "a1f553f3c61f1a72ed4324a3dfee6ed2f86c0e9d73877898df0402d2af26f20a",
+      "addedEntries": 15,
+      "modifiedEntries": 2,
+      "deletedEntries": 0,
+      "sourceStatusUnchanged": "partial",
+      "installable": false
+    }
+  },
+  "proofs": [
+    "Exact source registration Block->TileEntity->TESR->ModelBase and texture provenance from user JAR",
+    "ASM verified ModelRenderer part fields and drawn part closure, legacy GL transform closure",
+    "16 metadata static poses generated for each admitted candidate, six UV rects per cuboid",
+    "Only canonical GenericContentPass cube_all placeholders overwritten in main-new-pass output",
+    "Two blocks emitted by ACTUAL compiled complete rev291 main pass on exact source JAR and real source fallback staging",
+    "Complete rev291 profile 32 unique source passes loaded from PACKAGED test runtime (test ASM relocation)",
+    "ZIP CRC passed; original 1909 file entries all preserved, nested dependencies and entrypoints unchanged"
+  ],
+  "notProven": [
+    "1.21.11 Fabric actual start/render (not run here)",
+    "Native Forge 1.7.10 server exact remote packet/TileEntity state synchronization",
+    "Animated parts and yaw source runtime rendering",
+    "Transparent multi-pass TESR shader parity",
+    "77 living/entity runtime implementations, portal, dimension, bosses, gameplay",
+    "Repeat converted candidate entire Gradle/Loom build from missing rev260 overlay sources"
+  ],
+  "serverMutated": false,
+  "originalModModified": false,
+  "originalMainModified": false
+}
