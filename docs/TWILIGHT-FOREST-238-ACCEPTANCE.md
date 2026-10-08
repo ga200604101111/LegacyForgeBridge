@@ -83,3 +83,11 @@ The generic ordinary-Block + TileEntity + TESR preflight now derives bounded sta
 **Not yet accepted as playable**: the Moonworm TileEntity's dynamic `currentYaw`, the animation pivot writes, authoritative field/packet sync, facing-dependent collision/attachment/placement, full TESR GL transform sequence, real client renderer, the exact translated Twilight Forest `-tw.jar` source, and modern/FML multiplayer verification. Do not promote these new source proofs to an active modern block renderer or increment a gameplay completion tally.
 
 Regression checkpoint: 24 rev286 analyzer + 6 manifest + 22 rev285 + 20 rev284 = **72 independent synthetic tests passed**, not a real Minecraft runtime test. See `docs/SESSION-2026-10-08-TWILIGHTFOREST-PART2G-REV286.md`.
+
+## rev287 — static facing followed by a source TileEntity field Y angle (2026-10-08)
+
+A new **generic**, exact-bytecode analyzer verifies that a TESR's third `GL11.glRotatef` is an unconditional rotation around Y and that its angle is read directly from one source-owned TileEntity instance field (integer-to-float or directly float). It revalidates rev286's static X/Z facing proof against the same source JAR and rejects other receivers, missing members, conditional rotations, additional transformations and forged evidence. The diagnostic sidecar can identify the source field and distinguish source tick-write observations from mere packet-hook presence.
+
+**No new playable feature is admitted.** The yaw field is not known to be transmitted to the modern Fabric client, and the source model's per-part `setLivingAnimations` formula, 1.7.10 TESR transform closure, client BlockEntity renderer, exact translated `-tw.jar`, original Forge server comparison, and complete main JAR build remain unverified. No automatic legacy server tick replay is authorized.
+
+Synthetic source-only regression: rev287 (19 analyzer + 9 manifest), rev286 (24 + 6), rev285 (16 + 6), rev284 (18 + 2): **100/100 independently executed** with Java 21/JDK ASM substitutions and compact dependency test doubles. These are not official Loom/JUnit or Minecraft tests. Details: `docs/SESSION-2026-10-08-TWILIGHTFOREST-PART2G-REV287.md`.
