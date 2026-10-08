@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "checkpoint": "rev282",
+  "sourceDate": "2026-10-08",
+  "branch": "feature/generic-conversion-iyamato-corpus3",
+  "baseline": {
+    "filename": "legacyforgebridge-0.2.0-alpha.27-rev260-handoff-fix.jar",
+    "sha256": "03a7bff020197b275977227ff0ee4dbbf7c9e3df77ea6c1425470f7fde4b93d9",
+    "bytes": 4757585,
+    "fileEntries": 1826,
+    "classEntries": 1743,
+    "fabricMinecraftVersion": "1.21.11",
+    "fabricEntrypointCount": 11,
+    "mixinConfigCount": 6,
+    "criticalBinaryClasses": [
+      "dev/yinghuang/legacyforgebridge/convert/pass/Corpus3GenericCompletionPass.class",
+      "dev/yinghuang/legacyforgebridge/convert/LegacyProjectileLaunchGraph.class",
+      "dev/yinghuang/legacyforgebridge/desktop/DesktopConversionSession.class",
+      "dev/yinghuang/legacyforgebridge/rev260/HandoffIO.class"
+    ],
+    "originalBuildMethod": "local javac21 new production helpers plus exact-count audited bytecode deltas over complete rev259; embedded desktop-helper repackaged from its original contents with same IPC classes",
+    "originalFullGradleLoomBuild": false
+  },
+  "verifiedLocal": {
+    "releaseGuardSyntheticUnitCases": 10,
+    "packagerSyntheticUnitCases": 11,
+    "uploadedBaselineGuardIntegrationChecks": 4,
+    "uploadedBaselinePackager": {
+      "unchangedFileContents": 1825,
+      "baselineFilesChecked": 1825,
+      "deterministicIndependentPackaging": true,
+      "baselineHashUnaffected": true,
+      "testCandidateDeleted": true
+    },
+    "rev281AnalyzerAbiSmokeAgainstUploadedBase": {
+      "syntheticMethodsPassed": 33,
+      "compiler": "javac21 with actual rev260 JAR in classpath and temporary JDK-internal ASM substitutions",
+      "minecraftRuntimeExecuted": false
+    }
+  },
+  "releaseGuard": {
+    "script": "tools/release/verify_main_jar_overlay.py",
+    "packager": "tools/release/build_main_from_base.py",
+    "kind": "structural-only",
+    "enforces": [
+      "exact pinned base sha256",
+      "byte preservation of all unchanged baseline file entries",
+      "explicit add/replace allowlist",
+      "no original class removal",
+      "no nested helper replacement",
+      "no Fabric entrypoint or Mixin metadata removal",
+      "Java 21 compatible class headers",
+      "candidate version change",
+      "real changed class payload",
+      "no output overwrite",
+      "rollback on report publication failure"
+    ]
+  },
+  "disclosedLimits": [
+    "Original Twilight Forest -tw corpus JAR not available in this session",
+    "Production rev256-rev260 sources remain partially absent from GitHub src",
+    "Standalone test ASM substitutes are not a Fabric/ASM runtime proof",
+    "No full Gradle/Loom build, Minecraft 1.21.11 client startup or native Forge1.7.10 server comparison",
+    "No new installable complete main JAR produced; synthetic smoke JARs were destroyed",
+    "No GitHub Actions, PR, release, force push, main or Bamboo modifications"
+  ]
+}
