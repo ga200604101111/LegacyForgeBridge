@@ -26,7 +26,7 @@ final class LegacyTileNbtPersistenceFixture {
         SOURCE_SUPER_CHAIN, OVERRIDE_WITHOUT_SUPER, SHADOWED_FIELD,
         PACKET_HOOKS_WITHOUT_NBT, GETTER_WITHOUT_STORE, OPAQUE_SETTER,
         SOURCE_EXTRA_WRITE, EXTRA_FLOAT_PAIR, SOURCE_NBT_GETTER_DYNAMIC_KEY,
-        SUPER_WRONG_COMPOUND, SUPER_WRONG_RECEIVER, INHERITED_NO_STATE_PAIRS, EXTRA_RETURN
+        SUPER_WRONG_COMPOUND, SUPER_WRONG_RECEIVER, INHERITED_NO_STATE_PAIRS, EXTRA_RETURN, TAG_COLLISION
     }
     static Path jar(Path target,Shape shape) throws IOException {
         try(JarOutputStream output=new JarOutputStream(Files.newOutputStream(target))){
@@ -89,6 +89,7 @@ final class LegacyTileNbtPersistenceFixture {
             store(out,TILE,shape==Shape.WRITE_OTHER_FIELD?"otherYaw":"currentYaw","I","yaw",
                     shape==Shape.WRITE_OTHER_COMPOUND,shape==Shape.FIELD_OTHER_RECEIVER,shape);
             if(shape==Shape.DUPLICATE_WRITE)store(out,TILE,"currentYaw","I","yaw",false,false,shape);
+            if(shape==Shape.TAG_COLLISION)store(out,TILE,"otherYaw","I","yaw",false,false,shape);
             if(shape==Shape.EXTRA_FLOAT_PAIR)store(out,BASE,"framePhase","F","phase",false,false,shape);
             if(shape==Shape.EXTRA_RETURN)out.visitInsn(Opcodes.RETURN);
             end(out);
