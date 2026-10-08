@@ -38,7 +38,7 @@ public final class LegacyProjectilePresentationPass implements ConversionPass {
             publishFixedModelPreflight(context,
                     new LegacyFixedModelProjectilePreflight().analyze(context.sourceJar()));
         } catch (IOException | RuntimeException unavailable) {
-            context.diagnostics().warning("LFB-CONVERT-PROJECTILE-0003", SupportLevel.RUNTIME_BRIDGE,
+            context.diagnostics().warning("LFB-CONVERT-PROJECTILE-0003", SupportLevel.AUTO,
                     "Fixed-model projectile evidence unavailable; no new runtime adapter admitted ("
                             + unavailable.getClass().getSimpleName() + ").");
         }
@@ -170,7 +170,7 @@ public final class LegacyProjectilePresentationPass implements ConversionPass {
                 context.sourceHash(), context.metadata().primary().modId(), analysis);
         Files.writeString(output,JSON.toJson(json)+"\n",StandardCharsets.UTF_8);
         if (!analysis.candidates().isEmpty()) context.diagnostics().info(
-                "LFB-CONVERT-PROJECTILE-0004",SupportLevel.RUNTIME_BRIDGE,
+                "LFB-CONVERT-PROJECTILE-0004",SupportLevel.AUTO,
                 "Fixed-model projectile geometry source-proof candidates="+analysis.candidates().size()
                         + "; runtime/launcher/lighting adaptation remains unwired.");
     }
