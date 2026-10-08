@@ -168,7 +168,7 @@ public final class LegacyProjectilePresentationPass implements ConversionPass {
         Files.createDirectories(output.getParent());
         JsonObject json=fixedModelPreflightManifest(
                 context.sourceHash(), context.metadata().primary().modId(), analysis);
-        Files.writeString(output,JSON.toJson(json)+"\\n",StandardCharsets.UTF_8);
+        Files.writeString(output,JSON.toJson(json)+"\n",StandardCharsets.UTF_8);
         if (!analysis.candidates().isEmpty()) context.diagnostics().info(
                 "LFB-CONVERT-PROJECTILE-0004",SupportLevel.RUNTIME_BRIDGE,
                 "Fixed-model projectile geometry source-proof candidates="+analysis.candidates().size()
