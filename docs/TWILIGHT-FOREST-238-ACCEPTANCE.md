@@ -61,3 +61,11 @@ Related checkpoints: `docs/SESSION-2026-10-07-TWILIGHTFOREST-PART1.md`, `docs/SE
 The fixed-cuboid renderer candidate pipeline now requires an exact 1.7.10 ModelBox mesh/atlas UV proof and can optionally attach an exact source full-bright (1.0 / 0x00F000F0) getter proof. It is **still a source-only diagnostic**. The MoonwormShot upstream Java geometry can be exported as 24 correct UV quads for inspection, but the exact localized Twilight Forest JAR, runnable client renderer, entity spawn mapping, source texture packaging, FML networking and real Forge server/gameplay verification remain open.
 
 See `docs/SESSION-2026-10-08-TWILIGHTFOREST-PART2F5.md`. This is not an increase in the count of confirmed playable mobs/projectiles, nor a whole-mod completion percentage.
+
+## rev284: ordinary Block + TileEntity + TESR (2026-10-08)
+
+The source-only generic adapter now recognizes an **ordinary Block subtype** with inherited `hasTileEntity(int)=true`, exact constructed TileEntity return, unique GameRegistry TileEntity identity, ClientRegistry TESR binding, and constructor-owned ModelBase rendering. This matters for `BlockTFMoonworm`, which is **not a BlockContainer**. The block's metadata-dependent bounds, constant light 14 and model animation invocation are upstream-source observations, **not playable conversion gates**.
+
+This is intentionally distinct from `EntityTFMoonwormShot` projectile conversion. Both reuse a source cuboid model but differ in animation state, world placement/attachment, light and rendering pipeline.
+
+The new evidence resource is `legacyforgebridge/block-tile-model-preflight.json` and explicitly declares no modern BlockEntity/animation/runtime or network adaptation. No additional Twilight Forest block is claimed playable based on this analysis. Exact corpus verification remains outstanding; see `docs/SESSION-2026-10-08-TWILIGHTFOREST-PART2G-REV284.md`.
