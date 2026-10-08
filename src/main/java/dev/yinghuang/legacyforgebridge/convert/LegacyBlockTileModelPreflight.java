@@ -45,7 +45,7 @@ public final class LegacyBlockTileModelPreflight {
                             String hasTileEntityOwner, String createTileEntityOwner,
                             boolean sourceTileTickPresent, boolean rendererCallsTileModelMethod,
                             boolean rendererReadsTileFields, boolean metadataDependentBounds,
-                            Integer sourceConstantLight, boolean sourceZeroDrop) { }
+                            Integer sourceConstantLight, boolean sourceQuantityDroppedZero) { }
     public record Skipped(String registryName, String sourceBlockClass, String reason) { }
     public record Analysis(List<Candidate> candidates, List<Skipped> skipped,
                            List<String> diagnostics) {
