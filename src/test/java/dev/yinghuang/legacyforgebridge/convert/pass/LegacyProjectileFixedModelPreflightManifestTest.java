@@ -3,6 +3,7 @@ package dev.yinghuang.legacyforgebridge.convert.pass;
 import dev.yinghuang.legacyforgebridge.convert.LegacyFixedModelProjectileAnalyzer;
 import dev.yinghuang.legacyforgebridge.convert.LegacyFixedModelProjectilePreflight;
 import dev.yinghuang.legacyforgebridge.convert.LegacyProjectileLauncherAnalyzer;
+import dev.yinghuang.legacyforgebridge.convert.LegacyProjectileFullbright1710Analyzer;
 import dev.yinghuang.legacyforgebridge.convert.api.ConversionStatus;
 import dev.yinghuang.legacyforgebridge.convert.api.DiagnosticCollector;
 import dev.yinghuang.legacyforgebridge.convert.api.SupportLevel;
@@ -78,6 +79,29 @@ class LegacyProjectileFixedModelPreflightManifestTest {
         assertFalse(item.get("runtimeReady").getAsBoolean());
         assertFalse(manifest.get("runtimeWired").getAsBoolean());
         assertFalse(manifest.has("rules"));
+    }
+
+    @Test void sourceProvenFullbrightIsRecordedWithoutBecomingExecutableRenderer() {
+        var sourceGeometry=new LegacyFixedModelProjectileAnalyzer.Proof(
+                "renamed/client/Renderer","renamed/client/Model",
+                "renamed:textures/model/shot.png",32,32,.075F,90F,1F,0F,1F,
+                List.of(new LegacyFixedModelProjectileAnalyzer.Cuboid(
+                        "segment",0,4,-1,-1,-1,4,2,2,-1,7,3)));
+        var lighting=new LegacyProjectileFullbright1710Analyzer.Proof(
+                "renamed/Orb",1.0F,0x00F000F0,"getBrightness","getBrightnessForRender");
+        var evidence=new LegacyFixedModelProjectilePreflight.Analysis(
+                List.of(new LegacyFixedModelProjectilePreflight.Candidate(
+                        "orb","renamed/Orb","renamed/client/Renderer",sourceGeometry,
+                        java.util.Optional.empty(),java.util.Optional.of(lighting))),List.of());
+        var result=LegacyProjectilePresentationPass.fixedModelPreflightManifest("hash","renamed",evidence);
+        assertEquals(1,result.get("sourceConstantFullbrightCandidateCount").getAsInt());
+        var row=result.getAsJsonArray("candidates").get(0).getAsJsonObject();
+        assertTrue(row.get("sourceConstantFullbright1710Proven").getAsBoolean());
+        assertEquals(0x00F000F0,row.get("legacyPackedLight").getAsInt());
+        assertEquals(1.0F,row.get("legacyBrightness").getAsFloat());
+        assertFalse(row.get("runtimeReady").getAsBoolean());
+        assertFalse(result.get("runtimeWired").getAsBoolean());
+        assertFalse(result.has("rules"));
     }
 
     @Test void optionalEvidenceDiagnosticsMustNotChangeInstallableConversionStatus() {
