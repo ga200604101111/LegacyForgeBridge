@@ -317,6 +317,9 @@ public final class LegacyTileNbtPersistenceAnalyzer {
     private static boolean scanWrite(Map<String,ClassNode> classes,List<MethodRef> methods,
                                      Map<FieldKey,Access> writes){
         if(methods.isEmpty())return true;
+        // NBTTagCompound maps each literal key to ONE tag. Two source fields cannot both
+        // be losslessly persisted under the same key: later writes overwrite earlier ones.
+        Set<String> usedTagKeys=new HashSet<>();
         for(MethodRef ref:methods){
             MethodNode method=ref.method;if(!linear(method))return false;
             Context ctx=frames(ref.owner,method);if(ctx==null)return false;
@@ -342,7 +345,8 @@ public final class LegacyTileNbtPersistenceAnalyzer {
                     if(!(origin instanceof FieldInsnNode field)||field.getOpcode()!=Opcodes.GETFIELD
                             || !field.desc.equals(desc))return false;
                     FieldKey id=new FieldKey(field.owner,field.name,field.desc);
-                    if(!thisField(ctx,value,id,classes)||writes.putIfAbsent(id,new Access(key,desc))!=null)return false;
+                    if(!thisField(ctx,value,id,classes)||!usedTagKeys.add(key)
+                            || writes.putIfAbsent(id,new Access(key,desc))!=null)return false;
                     found=true;break;
                 }
                 if(!found)return false;
