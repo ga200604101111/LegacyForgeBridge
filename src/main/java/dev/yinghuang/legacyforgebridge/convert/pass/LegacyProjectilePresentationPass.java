@@ -120,6 +120,7 @@ public final class LegacyProjectilePresentationPass implements ConversionPass {
         root.addProperty("clientFullbrightProven", false);
         JsonArray candidates=new JsonArray();
         int sourceLauncherProven=0;
+        int sourceFullbrightProven=0;
         for (var candidate : analysis.candidates()) {
             var proof=candidate.geometry();
             // Encode only bounded, source-proven mesh metadata. The executable renderer remains
@@ -146,6 +147,16 @@ public final class LegacyProjectilePresentationPass implements ConversionPass {
             entry.addProperty("runtimeReady", false);
             boolean launcherProven=candidate.launcherProof().isPresent();
             entry.addProperty("sourceLauncherDataflowProven", launcherProven);
+            boolean fullbrightProven=candidate.fullbrightProof().isPresent();
+            entry.addProperty("sourceConstantFullbright1710Proven", fullbrightProven);
+            if (fullbrightProven) {
+                sourceFullbrightProven++;
+                var brightness=candidate.fullbrightProof().orElseThrow();
+                entry.addProperty("legacyBrightness",brightness.brightness());
+                entry.addProperty("legacyPackedLight",brightness.packedLight());
+                entry.addProperty("sourceBrightnessGetter",brightness.brightnessMethod());
+                entry.addProperty("sourcePackedLightGetter",brightness.lightmapMethod());
+            }
             if (launcherProven) {
                 sourceLauncherProven++;
                 var launcher=candidate.launcherProof().orElseThrow();
@@ -172,6 +183,7 @@ public final class LegacyProjectilePresentationPass implements ConversionPass {
         root.add("candidates",candidates);
         root.addProperty("provenRendererCandidates",candidates.size());
         root.addProperty("sourceLauncherProofCandidateCount",sourceLauncherProven);
+        root.addProperty("sourceConstantFullbrightCandidateCount",sourceFullbrightProven);
         root.addProperty("launcherDataflowProven",candidates.size()>0&&sourceLauncherProven==candidates.size());
         JsonArray skipped=new JsonArray();
         for (var candidate : analysis.skipped()) {
