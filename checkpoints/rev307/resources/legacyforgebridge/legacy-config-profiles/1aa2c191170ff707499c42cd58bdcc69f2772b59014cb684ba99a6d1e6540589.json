@@ -1,0 +1,282 @@
+{
+  "schemaVersion": 1,
+  "sourceSha256": "1aa2c191170ff707499c42cd58bdcc69f2772b59014cb684ba99a6d1e6540589",
+  "sourceFileName": "twilightforest-1.7.10-2.3.8-tw.jar",
+  "modId": "TwilightForest",
+  "modName": "The Twilight Forest",
+  "version": "2.3.8",
+  "extraction": "literal Forge Configuration invocation bytecode (nonliteral omitted)",
+  "propertyCount": 30,
+  "properties": [
+    {
+      "file": "TwilightForest.cfg",
+      "category": "biome",
+      "key": "biome.id.Clearing",
+      "type": "I",
+      "default": "-1",
+      "comment": "",
+      "scope": "instance-config"
+    },
+    {
+      "file": "TwilightForest.cfg",
+      "category": "biome",
+      "key": "biome.id.DarkForest",
+      "type": "I",
+      "default": "-1",
+      "comment": "",
+      "scope": "instance-config"
+    },
+    {
+      "file": "TwilightForest.cfg",
+      "category": "biome",
+      "key": "biome.id.DarkForestCenter",
+      "type": "I",
+      "default": "-1",
+      "comment": "",
+      "scope": "instance-config"
+    },
+    {
+      "file": "TwilightForest.cfg",
+      "category": "biome",
+      "key": "biome.id.DeepMushrooms",
+      "type": "I",
+      "default": "-1",
+      "comment": "",
+      "scope": "instance-config"
+    },
+    {
+      "file": "TwilightForest.cfg",
+      "category": "biome",
+      "key": "biome.id.EnchantedForest",
+      "type": "I",
+      "default": "-1",
+      "comment": "",
+      "scope": "instance-config"
+    },
+    {
+      "file": "TwilightForest.cfg",
+      "category": "biome",
+      "key": "biome.id.FireSwamp",
+      "type": "I",
+      "default": "-1",
+      "comment": "",
+      "scope": "instance-config"
+    },
+    {
+      "file": "TwilightForest.cfg",
+      "category": "biome",
+      "key": "biome.id.Glacier",
+      "type": "I",
+      "default": "-1",
+      "comment": "",
+      "scope": "instance-config"
+    },
+    {
+      "file": "TwilightForest.cfg",
+      "category": "biome",
+      "key": "biome.id.Highlands",
+      "type": "I",
+      "default": "-1",
+      "comment": "",
+      "scope": "instance-config"
+    },
+    {
+      "file": "TwilightForest.cfg",
+      "category": "biome",
+      "key": "biome.id.HighlandsCenter",
+      "type": "I",
+      "default": "-1",
+      "comment": "",
+      "scope": "instance-config"
+    },
+    {
+      "file": "TwilightForest.cfg",
+      "category": "biome",
+      "key": "biome.id.Lake",
+      "type": "I",
+      "default": "-1",
+      "comment": "",
+      "scope": "instance-config"
+    },
+    {
+      "file": "TwilightForest.cfg",
+      "category": "biome",
+      "key": "biome.id.LightedForest",
+      "type": "I",
+      "default": "-1",
+      "comment": "",
+      "scope": "instance-config"
+    },
+    {
+      "file": "TwilightForest.cfg",
+      "category": "biome",
+      "key": "biome.id.Mushrooms",
+      "type": "I",
+      "default": "-1",
+      "comment": "",
+      "scope": "instance-config"
+    },
+    {
+      "file": "TwilightForest.cfg",
+      "category": "biome",
+      "key": "biome.id.OakSavanna",
+      "type": "I",
+      "default": "-1",
+      "comment": "",
+      "scope": "instance-config"
+    },
+    {
+      "file": "TwilightForest.cfg",
+      "category": "biome",
+      "key": "biome.id.Snowfield",
+      "type": "I",
+      "default": "-1",
+      "comment": "",
+      "scope": "instance-config"
+    },
+    {
+      "file": "TwilightForest.cfg",
+      "category": "biome",
+      "key": "biome.id.Stream",
+      "type": "I",
+      "default": "-1",
+      "comment": "",
+      "scope": "instance-config"
+    },
+    {
+      "file": "TwilightForest.cfg",
+      "category": "biome",
+      "key": "biome.id.Swamp",
+      "type": "I",
+      "default": "-1",
+      "comment": "",
+      "scope": "instance-config"
+    },
+    {
+      "file": "TwilightForest.cfg",
+      "category": "biome",
+      "key": "biome.id.Thornlands",
+      "type": "I",
+      "default": "-1",
+      "comment": "",
+      "scope": "instance-config"
+    },
+    {
+      "file": "TwilightForest.cfg",
+      "category": "biome",
+      "key": "biome.id.TwilightForest",
+      "type": "I",
+      "default": "-1",
+      "comment": "",
+      "scope": "instance-config"
+    },
+    {
+      "file": "TwilightForest.cfg",
+      "category": "biome",
+      "key": "biome.id.TwilightForestVariant",
+      "type": "I",
+      "default": "-1",
+      "comment": "",
+      "scope": "instance-config"
+    },
+    {
+      "file": "TwilightForest.cfg",
+      "category": "dimension",
+      "key": "dimensionID",
+      "type": "I",
+      "default": "7",
+      "comment": "What ID number to assign to the Twilight Forest dimension.  Change if you are having conflicts with another mod.",
+      "scope": "instance-config"
+    },
+    {
+      "file": "TwilightForest.cfg",
+      "category": "dimension",
+      "key": "dimensionProviderID",
+      "type": "I",
+      "default": "-777",
+      "comment": "Dimension provider ID.  Does not normally need to be changed, but the option is provided to work around a bug in MCPC+",
+      "scope": "instance-config"
+    },
+    {
+      "file": "TwilightForest.cfg",
+      "category": "general",
+      "key": "AdminOnlyPortals",
+      "type": "B",
+      "default": "false",
+      "comment": "Allow portals only for admins (ops).  This severly reduces the range in which the mod usually scans for valid portal conditions, and it scans near ops only.",
+      "scope": "instance-config"
+    },
+    {
+      "file": "TwilightForest.cfg",
+      "category": "general",
+      "key": "AllowPortalsInOtherDimensions",
+      "type": "B",
+      "default": "false",
+      "comment": "Allow portals to the Twilight Forest to be made outside of dimension 0.  May be considered an exploit.",
+      "scope": "instance-config"
+    },
+    {
+      "file": "TwilightForest.cfg",
+      "category": "general",
+      "key": "DisablePortalCreation",
+      "type": "B",
+      "default": "false",
+      "comment": "Disable Twilight Forest portal creation entirely.  Provided for server operators looking to restrict action to the dimension.",
+      "scope": "instance-config"
+    },
+    {
+      "file": "TwilightForest.cfg",
+      "category": "general",
+      "key": "DisableUncrafting",
+      "type": "B",
+      "default": "false",
+      "comment": "Disable the uncrafting function of the uncrafting table.  Provided as an option when interaction with other mods produces exploitable recipes.",
+      "scope": "instance-config"
+    },
+    {
+      "file": "TwilightForest.cfg",
+      "category": "general",
+      "key": "OldMapGen",
+      "type": "B",
+      "default": "false",
+      "comment": "Use old (pre Minecraft 1.7) map gen.  May not be fully supported.",
+      "scope": "instance-config"
+    },
+    {
+      "file": "TwilightForest.cfg",
+      "category": "general",
+      "key": "PortalCreationItem",
+      "type": "S",
+      "default": "diamond",
+      "comment": "Item to create the Twilight Forest Portal.  Defaults to \\'diamond\\'",
+      "scope": "instance-config"
+    },
+    {
+      "file": "TwilightForest.cfg",
+      "category": "general",
+      "key": "SilentCicadas",
+      "type": "B",
+      "default": "false",
+      "comment": "Make cicadas silent  for those having sound library problems, or otherwise finding them annoying",
+      "scope": "instance-config"
+    },
+    {
+      "file": "TwilightForest.cfg",
+      "category": "Performance",
+      "key": "CanopyCoverage",
+      "type": "D",
+      "default": "1.7",
+      "comment": "Amount of canopy coverage, from 0.0 on up.  Lower numbers improve chunk generation speed at the cost of a thinner forest.",
+      "scope": "instance-config"
+    },
+    {
+      "file": "TwilightForest.cfg",
+      "category": "Performance",
+      "key": "TwilightOakChance",
+      "type": "I",
+      "default": "48",
+      "comment": "Chance that a chunk in the Twilight Forest will contain a twilight oak tree.  Higher numbers reduce the number of trees, increasing performance.",
+      "scope": "instance-config"
+    }
+  ]
+}

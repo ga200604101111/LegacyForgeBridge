@@ -1,0 +1,129 @@
+{
+  "schemaVersion": 1,
+  "sourceSha256": "bcceb588950f911398cfc94856a45527b4aa17b6e130927b2e0516fdf059b402",
+  "sourceFileName": "Bamboo-2.6.8.5.jar",
+  "modId": "BambooMod",
+  "modName": "BambooMod",
+  "version": "Minecraft1.7.10 ver2.6.8.5",
+  "extraction": "literal Forge Configuration invocation bytecode (nonliteral omitted)",
+  "propertyCount": 13,
+  "properties": [
+    {
+      "file": "BambooConfig.cfg",
+      "category": "bamboosettings",
+      "key": "AddMagatama",
+      "type": "B",
+      "default": "true",
+      "comment": "Add magatama to DunsionChests",
+      "scope": "instance-config"
+    },
+    {
+      "file": "BambooConfig.cfg",
+      "category": "bamboosettings",
+      "key": "DeludeMaxRightClickReference",
+      "type": "I",
+      "default": "2",
+      "comment": "Delude right click max reference",
+      "scope": "instance-config"
+    },
+    {
+      "file": "BambooConfig.cfg",
+      "category": "bamboosettings",
+      "key": "DeludeMaxTexReference",
+      "type": "I",
+      "default": "2",
+      "comment": "Delude texture max reference",
+      "scope": "instance-config"
+    },
+    {
+      "file": "BambooConfig.cfg",
+      "category": "bamboosettings",
+      "key": "MaxExplosionLv",
+      "type": "I",
+      "default": "3",
+      "comment": "Possible level firecracker explosion 0~3",
+      "scope": "instance-config"
+    },
+    {
+      "file": "BambooConfig.cfg",
+      "category": "bamboosettings",
+      "key": "MultiblockRestriction",
+      "type": "I",
+      "default": "0",
+      "comment": "Multi-block add block restriction 0:None 1:Creative 2:Creative or OP 3:OP 4:ALLUser",
+      "scope": "instance-config"
+    },
+    {
+      "file": "BambooConfig.cfg",
+      "category": "bamboosettings",
+      "key": "ReliefItem",
+      "type": "B",
+      "default": "false",
+      "comment": "Weed to drop a Sakura and Takenoko(Disabled requires a reboot)",
+      "scope": "instance-config"
+    },
+    {
+      "file": "BambooConfig.cfg",
+      "category": "bamboosettings",
+      "key": "TimeAccel",
+      "type": "B",
+      "default": "true",
+      "comment": "Acceleration time by huton",
+      "scope": "instance-config"
+    },
+    {
+      "file": "BambooConfig.cfg",
+      "category": "bamboosettings",
+      "key": "UpdateNotify",
+      "type": "B",
+      "default": "true",
+      "comment": "Update notification",
+      "scope": "instance-config"
+    },
+    {
+      "file": "BambooConfig.cfg",
+      "category": "bamboosettings",
+      "key": "UpdateStopIce",
+      "type": "B",
+      "default": "false",
+      "comment": "Not melt ice with light",
+      "scope": "instance-config"
+    },
+    {
+      "file": "BambooConfig.cfg",
+      "category": "bamboosettings",
+      "key": "UpdateStopSnow",
+      "type": "B",
+      "default": "false",
+      "comment": "Not melt snow with light",
+      "scope": "instance-config"
+    },
+    {
+      "file": "BambooConfig.cfg",
+      "category": "bamboosettings",
+      "key": "UseMagatama",
+      "type": "B",
+      "default": "false",
+      "comment": "!!!This item is to erode the terrain greatly!!!",
+      "scope": "instance-config"
+    },
+    {
+      "file": "BambooConfig.cfg",
+      "category": "bamboosettings",
+      "key": "WindPushPlayer",
+      "type": "B",
+      "default": "true",
+      "comment": "EntityWind knock back for EntityPlayer",
+      "scope": "instance-config"
+    },
+    {
+      "file": "BambooDimConfig.cfg",
+      "category": "general",
+      "key": "dimensionId",
+      "type": "I",
+      "default": "32767",
+      "comment": "",
+      "scope": "world-save"
+    }
+  ]
+}

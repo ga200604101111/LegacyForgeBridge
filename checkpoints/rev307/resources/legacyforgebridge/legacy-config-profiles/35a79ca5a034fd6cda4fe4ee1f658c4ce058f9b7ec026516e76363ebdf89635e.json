@@ -1,0 +1,381 @@
+{
+  "schemaVersion": 1,
+  "sourceSha256": "35a79ca5a034fd6cda4fe4ee1f658c4ce058f9b7ec026516e76363ebdf89635e",
+  "sourceFileName": "iYAMATOs-Mod-1.7.10.jar",
+  "modId": "iymts_mod",
+  "modName": "iYAMATO's mod",
+  "version": "1.7.10-1.6.8",
+  "extraction": "literal Forge Configuration invocation bytecode (nonliteral omitted)",
+  "propertyCount": 41,
+  "properties": [
+    {
+      "file": "iymts_mod.cfg",
+      "category": " Mob",
+      "key": " ApeMan enabled",
+      "type": "B",
+      "default": "true",
+      "comment": "ApeMan",
+      "scope": "instance-config"
+    },
+    {
+      "file": "iymts_mod.cfg",
+      "category": " Mob",
+      "key": " Bandit enabled",
+      "type": "B",
+      "default": "true",
+      "comment": "Bandit",
+      "scope": "instance-config"
+    },
+    {
+      "file": "iymts_mod.cfg",
+      "category": " Mob",
+      "key": " Blue Hand Roper enabled",
+      "type": "B",
+      "default": "true",
+      "comment": "Blue Hand Roper",
+      "scope": "instance-config"
+    },
+    {
+      "file": "iymts_mod.cfg",
+      "category": " Mob",
+      "key": " Cave Stalker enabled",
+      "type": "B",
+      "default": "true",
+      "comment": "Cave Stalker",
+      "scope": "instance-config"
+    },
+    {
+      "file": "iymts_mod.cfg",
+      "category": " Mob",
+      "key": " Dirt Golem enabled",
+      "type": "B",
+      "default": "true",
+      "comment": "DirtGolem",
+      "scope": "instance-config"
+    },
+    {
+      "file": "iymts_mod.cfg",
+      "category": " Mob",
+      "key": " Ender Hunger enabled",
+      "type": "B",
+      "default": "true",
+      "comment": "Ender Hunger",
+      "scope": "instance-config"
+    },
+    {
+      "file": "iymts_mod.cfg",
+      "category": " Mob",
+      "key": " Ghost Armor enabled",
+      "type": "B",
+      "default": "true",
+      "comment": "Ghost Armor",
+      "scope": "instance-config"
+    },
+    {
+      "file": "iymts_mod.cfg",
+      "category": " Mob",
+      "key": " Ghoul enabled",
+      "type": "B",
+      "default": "true",
+      "comment": "Ghoul",
+      "scope": "instance-config"
+    },
+    {
+      "file": "iymts_mod.cfg",
+      "category": " Mob",
+      "key": " Goblin enabled",
+      "type": "B",
+      "default": "true",
+      "comment": "Goblin",
+      "scope": "instance-config"
+    },
+    {
+      "file": "iymts_mod.cfg",
+      "category": " Mob",
+      "key": " Gozu enabled",
+      "type": "B",
+      "default": "true",
+      "comment": "Gozu",
+      "scope": "instance-config"
+    },
+    {
+      "file": "iymts_mod.cfg",
+      "category": " Mob",
+      "key": " HobGoblin enabled",
+      "type": "B",
+      "default": "true",
+      "comment": "HobGoblin",
+      "scope": "instance-config"
+    },
+    {
+      "file": "iymts_mod.cfg",
+      "category": " Mob",
+      "key": " Imitator enabled",
+      "type": "B",
+      "default": "true",
+      "comment": "Imitator",
+      "scope": "instance-config"
+    },
+    {
+      "file": "iymts_mod.cfg",
+      "category": " Mob",
+      "key": " Killer Lizard enabled",
+      "type": "B",
+      "default": "true",
+      "comment": "Killer Lizard",
+      "scope": "instance-config"
+    },
+    {
+      "file": "iymts_mod.cfg",
+      "category": " Mob",
+      "key": " Lava Worm enabled",
+      "type": "B",
+      "default": "true",
+      "comment": "Lava Worm",
+      "scope": "instance-config"
+    },
+    {
+      "file": "iymts_mod.cfg",
+      "category": " Mob",
+      "key": " Lizard Man enabled",
+      "type": "B",
+      "default": "true",
+      "comment": "Lizard Man",
+      "scope": "instance-config"
+    },
+    {
+      "file": "iymts_mod.cfg",
+      "category": " Mob",
+      "key": " Mezu enabled",
+      "type": "B",
+      "default": "true",
+      "comment": "Mezu",
+      "scope": "instance-config"
+    },
+    {
+      "file": "iymts_mod.cfg",
+      "category": " Mob",
+      "key": " Mutant Mushroom enabled",
+      "type": "B",
+      "default": "true",
+      "comment": "Mutant Mushroom",
+      "scope": "instance-config"
+    },
+    {
+      "file": "iymts_mod.cfg",
+      "category": " Mob",
+      "key": " Mutant Tree enabled",
+      "type": "B",
+      "default": "true",
+      "comment": "Mutant Tree",
+      "scope": "instance-config"
+    },
+    {
+      "file": "iymts_mod.cfg",
+      "category": " Mob",
+      "key": " Ogre enabled",
+      "type": "B",
+      "default": "true",
+      "comment": "Ogre",
+      "scope": "instance-config"
+    },
+    {
+      "file": "iymts_mod.cfg",
+      "category": " Mob",
+      "key": " Ork enabled",
+      "type": "B",
+      "default": "true",
+      "comment": "Ork",
+      "scope": "instance-config"
+    },
+    {
+      "file": "iymts_mod.cfg",
+      "category": " Mob",
+      "key": " Pink Hand Roper enabled",
+      "type": "B",
+      "default": "true",
+      "comment": "Pink Hand Roper",
+      "scope": "instance-config"
+    },
+    {
+      "file": "iymts_mod.cfg",
+      "category": " Mob",
+      "key": " Pumpkin Spider enabled",
+      "type": "B",
+      "default": "true",
+      "comment": "Pumpkin Spider",
+      "scope": "instance-config"
+    },
+    {
+      "file": "iymts_mod.cfg",
+      "category": " Mob",
+      "key": " Red Ender Man enabled",
+      "type": "B",
+      "default": "true",
+      "comment": "Red Ender Man",
+      "scope": "instance-config"
+    },
+    {
+      "file": "iymts_mod.cfg",
+      "category": " Mob",
+      "key": " Skeleton Warrior enabled",
+      "type": "B",
+      "default": "true",
+      "comment": "Skeleton Warrior",
+      "scope": "instance-config"
+    },
+    {
+      "file": "iymts_mod.cfg",
+      "category": " Mob",
+      "key": " Soldier enabled",
+      "type": "B",
+      "default": "true",
+      "comment": "Soldier",
+      "scope": "instance-config"
+    },
+    {
+      "file": "iymts_mod.cfg",
+      "category": " Mob",
+      "key": " Stone Worm enabled",
+      "type": "B",
+      "default": "true",
+      "comment": "Stone Worm",
+      "scope": "instance-config"
+    },
+    {
+      "file": "iymts_mod.cfg",
+      "category": " Mob",
+      "key": " Thief enabled",
+      "type": "B",
+      "default": "true",
+      "comment": "Thief",
+      "scope": "instance-config"
+    },
+    {
+      "file": "iymts_mod.cfg",
+      "category": " Mob",
+      "key": " Troll enabled",
+      "type": "B",
+      "default": "true",
+      "comment": "Troll",
+      "scope": "instance-config"
+    },
+    {
+      "file": "iymts_mod.cfg",
+      "category": " Mob",
+      "key": " WhiteHandRoper enabled",
+      "type": "B",
+      "default": "true",
+      "comment": "White Hand Roper",
+      "scope": "instance-config"
+    },
+    {
+      "file": "iymts_mod.cfg",
+      "category": " Mob",
+      "key": " Wood Man enabled",
+      "type": "B",
+      "default": "true",
+      "comment": "Wood Man",
+      "scope": "instance-config"
+    },
+    {
+      "file": "iymts_mod.cfg",
+      "category": " Weapon",
+      "key": " Bow enabled",
+      "type": "B",
+      "default": "true",
+      "comment": "Bow",
+      "scope": "instance-config"
+    },
+    {
+      "file": "iymts_mod.cfg",
+      "category": " Weapon",
+      "key": " Club enabled",
+      "type": "B",
+      "default": "true",
+      "comment": "Club",
+      "scope": "instance-config"
+    },
+    {
+      "file": "iymts_mod.cfg",
+      "category": " Weapon",
+      "key": " Dagger enabled",
+      "type": "B",
+      "default": "true",
+      "comment": "Dagger",
+      "scope": "instance-config"
+    },
+    {
+      "file": "iymts_mod.cfg",
+      "category": " Weapon",
+      "key": " Great Sword enabled",
+      "type": "B",
+      "default": "true",
+      "comment": "Great Sword",
+      "scope": "instance-config"
+    },
+    {
+      "file": "iymts_mod.cfg",
+      "category": " Weapon",
+      "key": " Gun enabled",
+      "type": "B",
+      "default": "true",
+      "comment": "Gun",
+      "scope": "instance-config"
+    },
+    {
+      "file": "iymts_mod.cfg",
+      "category": " Weapon",
+      "key": " Halberd enabled",
+      "type": "B",
+      "default": "true",
+      "comment": "Halberd",
+      "scope": "instance-config"
+    },
+    {
+      "file": "iymts_mod.cfg",
+      "category": " Weapon",
+      "key": " Left Hand Dagger enabled",
+      "type": "B",
+      "default": "true",
+      "comment": "Left Hand Dagger",
+      "scope": "instance-config"
+    },
+    {
+      "file": "iymts_mod.cfg",
+      "category": " Weapon",
+      "key": " Rapier enabled",
+      "type": "B",
+      "default": "true",
+      "comment": "Rapier",
+      "scope": "instance-config"
+    },
+    {
+      "file": "iymts_mod.cfg",
+      "category": " Weapon",
+      "key": " Short Sword enabled",
+      "type": "B",
+      "default": "true",
+      "comment": "Short Sword",
+      "scope": "instance-config"
+    },
+    {
+      "file": "iymts_mod.cfg",
+      "category": " Weapon",
+      "key": " Spear enabled",
+      "type": "B",
+      "default": "true",
+      "comment": "Spear",
+      "scope": "instance-config"
+    },
+    {
+      "file": "iymts_mod.cfg",
+      "category": " Weapon",
+      "key": " Warhammer enabled",
+      "type": "B",
+      "default": "true",
+      "comment": "Warhammer",
+      "scope": "instance-config"
+    }
+  ]
+}
