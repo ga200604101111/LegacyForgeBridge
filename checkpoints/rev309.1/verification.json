@@ -1,0 +1,19 @@
+{
+  "revision": "309.1",
+  "output": "legacyforgebridge-0.2.0-alpha.27-rev309.1-critter-identifier-fix.jar",
+  "mainSha256": "40aace814710d9d5d841c8c58d755f3619567c87c90df35ce1af92cde82c01cf",
+  "bytes": 5224638,
+  "base": "legacyforgebridge-0.2.0-alpha.27-rev309-critter-model-fx-tooltips.jar",
+  "baseSha256": "6d78a7fbdd9efd64b49fc1200b218ad3cb5cb89c3af5f7dd6e6dcc97bcb29f81",
+  "changedEntries": 16,
+  "modelTemplatesFixed": 14,
+  "resourceIdentifiersChecked": 28,
+  "unchangedEntryPayloads": 1994,
+  "zipCrc": true,
+  "converterRevision": "2026-10-09.309.1-critter-texture-identifier-fix",
+  "compiledBuildInfo": "Java 21 --release 21; only BuildInfo.class recompiled",
+  "bytecodeTestAgainstLiveLibraries": false,
+  "actualSourceConversionRun": false,
+  "realMinecraftTest": false,
+  "knownRemainingRisk": "Model bake sourceClass pair must be observed in actual converted-content.json; absent or ambiguous => no models."
+}
