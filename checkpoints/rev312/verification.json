@@ -1,0 +1,101 @@
+{
+  "baseSha256": "a21281ef417669490546e4176e38f8670bdc3dd3e28c973ae828b90ce59c4913",
+  "artifact": "legacyforgebridge-0.2.0-alpha.27-rev312-shared-source-analysis.jar",
+  "sha256": "ad433e14755d73b57da88d8c6f764a210a61cfffbdcecd52893dc1c1629ff99b",
+  "bytes": 5272990,
+  "changedExistingEntries": 138,
+  "newClasses": 10,
+  "unchangedEntryPayloads": 1884,
+  "protectedRuntimeResourceEntries": 634,
+  "zipIntegrity": true,
+  "bundledAsm": false,
+  "version": "0.2.0-alpha.27-corpus4-local.66-rev312-shared-source-registry.1",
+  "conversionSemanticRevisionUnchanged": true,
+  "minecraftRuntimeTested": false,
+  "sourceScope": "one convertAnalyzed invocation; explicit bound worker tasks share that scope",
+  "registryAlgorithmReimplemented": false,
+  "sourceStreamHookSites": 148,
+  "converterClassesPatched": 136,
+  "registryStateQueriesPreserved": [
+    "classifyItem",
+    "hiddenRegistrationKeys"
+  ],
+  "sourceCorpusTests": {
+    "assertions": 8608,
+    "edgeCases": 17,
+    "sources": 3,
+    "registryResultsAndClassificationsEqual": true,
+    "singleFlightWorkers": 8
+  },
+  "analyzerComparison": {
+    "analyzersPerSource": 12,
+    "sources": 3,
+    "warmupRounds": 1,
+    "measuredRounds": 3,
+    "allNormalizedOutputsEqual": true,
+    "registryRequestsPerSuite": 8,
+    "registryComputationsPerSuite": 1
+  },
+  "bytecode": {
+    "classes": 147,
+    "methodsChecked": 2475,
+    "originalMethodsEquivalentAfterRemovingOnlyHooks": 2414
+  },
+  "reproducibleRebuildByteIdentical": true,
+  "fullConversionPipelineExecuted": false,
+  "liveFabricASM9_10_1Tested": false,
+  "testBackend": "genuine ASM embedded in host OpenJDK 21.0.12.1, relocated to public package on test classpath only",
+  "newCodeCompiledAgainstFakeGameAPIs": false,
+  "testDoublesUsed": false,
+  "notImplemented": [
+    "global immutable parsed-class index for every analyzer",
+    "unified mutable-content IR",
+    "full dependency DAG scheduler",
+    "automatic multi-mod concurrent conversion",
+    "generalization of source-specific TESR patches"
+  ],
+  "benchmark": [
+    {
+      "source": "Bamboo-2.6.8.5.jar",
+      "baseMedianMs": 1059.290971,
+      "sharedMedianMs": 396.203438,
+      "elapsedReductionPercent": 62.59729867932575,
+      "speedRatio": 2.673603682863549,
+      "identicalNormalizedOutputs": true,
+      "registryRequests": 8,
+      "registryComputations": 1,
+      "sourceClassByteLoads": 341,
+      "sourceEntryReadHits": 5115,
+      "retainedSourceBytes": 1103559,
+      "outputSha256": "b49a0e407da170a15d26383208068102e7cfcd871a1dc381693e00940ea31b10"
+    },
+    {
+      "source": "iYAMATOs-Mod-1.7.10.jar",
+      "baseMedianMs": 1136.701418,
+      "sharedMedianMs": 364.096715,
+      "elapsedReductionPercent": 67.96901022252442,
+      "speedRatio": 3.121976582513248,
+      "identicalNormalizedOutputs": true,
+      "registryRequests": 8,
+      "registryComputations": 1,
+      "sourceClassByteLoads": 243,
+      "sourceEntryReadHits": 3645,
+      "retainedSourceBytes": 1180567,
+      "outputSha256": "deabbfc9db091add22275b804d8fbae397df2547df56bd6583db9b209199f32d"
+    },
+    {
+      "source": "twilightforest-1.7.10-2.3.8-tw.jar",
+      "baseMedianMs": 4380.169927,
+      "sharedMedianMs": 1083.658222,
+      "elapsedReductionPercent": 75.25990452287765,
+      "speedRatio": 4.042021587688374,
+      "identicalNormalizedOutputs": true,
+      "registryRequests": 8,
+      "registryComputations": 1,
+      "sourceClassByteLoads": 799,
+      "sourceEntryReadHits": 11985,
+      "retainedSourceBytes": 3294446,
+      "outputSha256": "cc52681397c1557d3bad305f54992d59422735ec58f4fc23b354b1d4fbecb099"
+    }
+  ]
+}
