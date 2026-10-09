@@ -1,5 +1,17 @@
 # LegacyForgeBridge rev307 — converted legacy mods' own configuration screens
 
+## Final corrected main: rev307 .2 (2026-10-09)
+
+**Use this version instead of either previous rev307 local JAR.** The final complete JAR is `legacyforgebridge-0.2.0-alpha.27-rev307-legacy-mod-config-menu-v2.jar`, 5,194,510 bytes, SHA-256 `42c12ff87acd5261935d7d079513b777b2fd8ded4907c73e315e27fa374a909f`. Its `fabric.mod.json` version and the compiled `BuildInfo.VERSION` now both equal `0.2.0-alpha.27-corpus4-local.60-rev307-legacy-config-menu.2`.
+
+- Source: the exact user-provided rev306 main (`3144da4956c06765b9798de699bdcb8f62f89ed07d9f219cdc452ff3ddf37df8`). The corrected rev307 intermediate was already layered over that unchanged gameplay base.
+- The editor draws three SHA-bound config profiles from the provided original JARs. Bamboo world-save-only `BambooDimConfig.cfg` / `dimensionId` is excluded from client-local editing. Local settings cover 12 Bamboo, 41 iYAMATO, and 30 Twilight Forest scalar descriptors.
+- Build method: compile the revised `BuildInfo.java` using Java 21, then overlay only `BuildInfo.class` into the already corrected rev307 intermediate JAR; do not package test stubs. See `tools/package_rev307_final.py` for the exact final repack and its required inputs.
+- The final ZIP was checked for integrity, duplicates, metadata/version agreement and byte-identical preservation of the 1,973 non-target rev306 original entries. These are packaging checks, **not** Minecraft/runtime integration validation.
+- No live Minecraft 1.21.11, Cloth Config, Mod Menu, ViaFabricPlus or 1.7.10 server test was performed on this final JAR. The earlier rev307 source tests remain historical evidence, not a runtime pass for rev307 .2.
+- No changes to the original Forge mod JARs, server state, gameplay conversion logic or movement diagnostics. Do not concurrently install two LFB mains.
+
+
 ## Status and authoritative source
 
 Experimental local main-JAR overlay built from the **exact user-supplied rev306** artifact.
