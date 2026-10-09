@@ -1,0 +1,35 @@
+{
+  "revision": 313,
+  "artifact": "legacyforgebridge-0.2.0-alpha.27-rev313-critter-animation-completion.jar",
+  "sha256": "fe5c654109888720bb9fd51325c6f295d62120854e361b45e35a63eda1f851dc",
+  "bytes": 5277146,
+  "baseArtifact": "legacyforgebridge-0.2.0-alpha.27-rev312-shared-source-analysis.jar",
+  "baseSha256": "ad433e14755d73b57da88d8c6f764a210a61cfffbdcecd52893dc1c1629ff99b",
+  "checkpoint": "source_bundle.zip",
+  "checkpointSha256": "5e94cba1513d6726fe79cd027d879dc00bf60540b5721b3303646cecf13f324d",
+  "checkpointBytes": 18277,
+  "checkpointFiles": 14,
+  "replacedExistingZipEntries": 6,
+  "newClassEntries": 3,
+  "preservedZipEntryPayloads": 2026,
+  "sourceGeometry": {
+    "cicadaCuboids": 6,
+    "fireflyBodyCuboids": 3,
+    "fireflyGlowPlanes": 1
+  },
+  "ambientAssertions": 3000205,
+  "asmVerifierClasses": 11,
+  "asmVerifierMethods": 54,
+  "byteIdenticalRebuild": true,
+  "converterCacheSemanticsUnchanged": true,
+  "flatItemIconsPreserved": true,
+  "MinecraftGameValidated": false,
+  "ForgeServerTested": false,
+  "convertedTwilightCandidateInspected": false,
+  "dependencies": "Java 21 JDK ASM offline verifier and temporary Minecraft/Fabric API signature stubs; not shipped",
+  "limitations": [
+    "Client ambient tiny firefly particle, not full legacy tiny entity AI",
+    "No duplicate cicada audio: sound remains server-owned",
+    "Full game renderer/particles unverified"
+  ]
+}
