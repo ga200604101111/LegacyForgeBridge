@@ -1,0 +1,19 @@
+{
+  "build": "rev314-uv-layout.1",
+  "source_archive": {
+    "path": "source_bundle.tar.xz",
+    "sha256": "72c3d25a70037f84eee588bde160307465c9c1d41ca5f0f9bbb99382159cad73",
+    "size": 40332,
+    "entries": 56
+  },
+  "original_installer": {
+    "file": "LFB_rev314_Visual_Layout_Install.zip",
+    "sha256": "3803e4126dc372da46f83dc04affc4ba48c75b7897d3267af4925cf90d556fda",
+    "bytes": 9942923
+  },
+  "base_package_sha256": "d6f0df8e96f3ca43657a4c4509d57769cf837081373c5aa3946e32a051119d16",
+  "original_twilight_sha256": "1aa2c191170ff707499c42cd58bdcc69f2772b59014cb684ba99a6d1e6540589",
+  "runtime_sha256": "4853f94fc421363ea984cf038ccdb1c9e07aa7eb654cdae2156bd99962d30b61",
+  "converter_sha256": "ce362e2b924fa87c54ebb360ad90bd23e1e8bad1ad8ccac82e0f546a3ffceb08",
+  "bootstrap_sha256": "aa2b9eaee232e47eca37e3c45f2aec373b5ba5a6ef2952b32e434e9a48831585"
+}

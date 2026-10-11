@@ -1,0 +1,27 @@
+{
+  "build": "rev314-uv-layout.1",
+  "basePackageSha256": "d6f0df8e96f3ca43657a4c4509d57769cf837081373c5aa3946e32a051119d16",
+  "originalTwilightSha256": "1aa2c191170ff707499c42cd58bdcc69f2772b59014cb684ba99a6d1e6540589",
+  "tests": {
+    "sourceVisualAssertions": 48,
+    "geometryFactoryAssertions": 529,
+    "layoutChecks": 26,
+    "layoutWarmIntegration": true,
+    "syntheticFullConverterRegressionChecks": 59,
+    "originalSwingChecks1x": 44,
+    "originalSwingChecks2x": 44,
+    "asmVerifiedChangedClasses": 50,
+    "asmVerifiedMethods": 675,
+    "independentRebuildByteIdentical": true
+  },
+  "notTested": [
+    "Windows PowerShell installer execution",
+    "actual Minecraft rendering and linkage",
+    "live ViaFabricPlus/Forge server",
+    "full conversion of the four actual original mods"
+  ],
+  "deploymentMode": "existing validated mods copy; extra-cache-mount not implemented",
+  "cache": "lfb/cache",
+  "logs": "lfb/logs",
+  "converterRevision": "2026-10-10.314-source-modelbox-uv"
+}
