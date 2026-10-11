@@ -13,7 +13,7 @@ public final class PatchOpcodeLengths {
         if (!TARGET.equals(node.name)) throw new IllegalStateException("Unexpected class: " + node.name);
         MethodNode method = null;
         for (MethodNode m : node.methods) if ("validateInstructions".equals(m.name) && "([B)V".equals(m.desc)) method=m;
-        if (method == null) throw new IllegalStateException("Missing validateInstructions([B)V"));
+        if (method == null) throw new IllegalStateException("Missing validateInstructions([B)V");
 
         JumpInsnNode zeroCaseBranch = null;
         VarInsnNode opcodeStored = null;
