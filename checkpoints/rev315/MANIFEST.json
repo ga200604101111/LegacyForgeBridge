@@ -1,0 +1,19 @@
+{
+  "build": "rev315-linkage-scanner-opcodes.1",
+  "basePackageSha256": "3803e4126dc372da46f83dc04affc4ba48c75b7897d3267af4925cf90d556fda",
+  "newPackageSha256": "76b3b9abfdadf66e4558093eaf4a630749b8b11b536c07715bf69ce039889e7a",
+  "newPackageBytes": 9949090,
+  "oldConverterSha256": "ce362e2b924fa87c54ebb360ad90bd23e1e8bad1ad8ccac82e0f546a3ffceb08",
+  "newConverterSha256": "ba882b8cfd281990fe97f34273263e03ed5944ee9340b42f37dac3bcc961e6e1",
+  "bootstrapSha256": "aa2b9eaee232e47eca37e3c45f2aec373b5ba5a6ef2952b32e434e9a48831585",
+  "runtimeSha256": "4853f94fc421363ea984cf038ccdb1c9e07aa7eb654cdae2156bd99962d30b61",
+  "patchedClass": "dev/yinghuang/legacyforgebridge/convert/LegacyGeneratedBytecodeLinkageAnalyzer.class",
+  "modifiedPackageEntries": [
+    "lfb_install/Install_LFB.ps1",
+    "lfb_install/LFB_Package/LFB-Converter.jar",
+    "lfb_install/LFB_Package/bundle.properties",
+    "lfb_install/LFB_Package/checksums.json",
+    "lfb_install/PACKAGE_SHA256.txt",
+    "lfb_install/使用說明.txt"
+  ]
+}

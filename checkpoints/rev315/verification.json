@@ -1,0 +1,22 @@
+{
+  "version": "rev315-linkage-scanner-opcodes.1",
+  "jdk": "21.0.12.1",
+  "regressions": {
+    "cast235": {
+      "rev314": "complete=false; invalid opcode 235",
+      "rev315": "complete=true"
+    },
+    "instanceof235": {
+      "rev314": "complete=false; invalid opcode 235",
+      "rev315": "complete=true"
+    },
+    "monitorSwitch": "unchanged pass",
+    "forbiddenForgeReference": "unchanged detection",
+    "corruptedOpcode235": "unchanged strict rejection"
+  },
+  "strictAuditPreserved": true,
+  "independentBuildsByteIdentical": true,
+  "packageChecksumAudit": true,
+  "liveBambooRetest": false,
+  "minecraftRuntimeTest": false
+}
