@@ -1,0 +1,29 @@
+
+{
+    "version":  "rev323-generic-contracts.1",
+    "liveServerPlacementVerified":  false,
+    "sourceTwilightSha256":  "1aa2c191170ff707499c42cd58bdcc69f2772b59014cb684ba99a6d1e6540589",
+    "converterSha256":  "556ce2f47196bf63546637da95b61dfe4e5d1654222fbf1c280c3d0cdfe11c9a",
+    "finishedAt":  "2026-10-12T20:48:00.9276968+08:00",
+    "original1710ProcessUntouched":  22124,
+    "convertedTwilightSha256":  "a97a5d14244ce0ed8dbbe872ac1ffd8554576fc36fc48c3c5bf9af24948a57b4",
+    "rollbackBackup":  "D:\\Program Files\\PrismLauncher\\instances\\Fabulously Optimized 1.21.11 分身2\\minecraft\\lfb\\backups\\bootstrap-20261012-204759-rev323-final",
+    "noExternalResourcePack":  true,
+    "nativeTestsPassed":  true,
+    "nativeTests":  {
+                        "meshes":  152,
+                        "equipment":  28,
+                        "shapes":  480,
+                        "eggs":  53,
+                        "held":  6
+                    },
+    "runtimeSha256":  "3c0a656c128574788a2ba76817dfb4f3a5f48e936661d316219f94f491bd12a9",
+    "rollbackVersion":  "verified rev322-source-visuals.1",
+    "creativeTabVerified":  [
+                                {
+                                    "id":  "twilightforest:twilightforest",
+                                    "icon":  "twilightforest:tile.tffireflyjar"
+                                }
+                            ],
+    "liveTestNotRunReason":  "No complete giant structure near player; client exited normally at 20:42:38"
+}

@@ -1,0 +1,2 @@
+
+"$INST_JAVA" -Xmx2G -jar "$INST_MC_DIR/lfb/LFB-Bootstrap.jar" "$INST_MC_DIR"

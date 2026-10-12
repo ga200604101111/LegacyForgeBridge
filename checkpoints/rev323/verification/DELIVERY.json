@@ -1,0 +1,28 @@
+{
+  "checkpoint": "rev323-generic-contracts.1",
+  "source": "LFB_rev323_Generic_Contracts_Install.zip",
+  "sha256": "1e22cb65d839973f714324b20d988c73ecc86d568aa87b945b546d8c94de4a86",
+  "bytes": 10484220,
+  "entries": 43,
+  "binaryIncludedInGit": false,
+  "gitContainsSourceAndInstallerScripts": true,
+  "validation": {
+    "nativeReadOnly": {
+      "meshes": 152,
+      "shapes": 480,
+      "armor": 28,
+      "eggs": 53,
+      "held": 6
+    },
+    "liveServerGiantPlacementVerified": false,
+    "allEntitiesWorking": false,
+    "cicadaSoundWorking": false
+  },
+  "limitations": [
+    "Git installer scripts require uncommitted JAR payloads",
+    "External dev classpath and baseline required for rebuilding",
+    "Source files transcribed as text; verified archive hashes apply to local ZIP/JAR",
+    "Earlier bugs remain unresolved"
+  ],
+  "baseCommit": "950af2d88178e1804ae7bd44e89b182a7426516b"
+}

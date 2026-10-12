@@ -1,0 +1,26 @@
+
+{
+  "packageVersion": "rev323-generic-contracts.1-installer-repack.1",
+  "files": [
+    {
+      "name": "LegacyForgeBridge-rev321-optimizer-core.jar",
+      "sha256": "3c0a656c128574788a2ba76817dfb4f3a5f48e936661d316219f94f491bd12a9",
+      "bytes": 5583327
+    },
+    {
+      "name": "LFB-Converter.jar",
+      "sha256": "556ce2f47196bf63546637da95b61dfe4e5d1654222fbf1c280c3d0cdfe11c9a",
+      "bytes": 5382914
+    },
+    {
+      "name": "LFB-Bootstrap.jar",
+      "sha256": "14d56189da4b0216e910d6687969f2986e3924d6c1d417a419635a6191bdc54e",
+      "bytes": 191427
+    },
+    {
+      "name": "bundle.properties",
+      "sha256": "2d2f9a133437e0c949ac2b9f9d50d531c1bf3e5669afa6617ef31b298ba1b816",
+      "bytes": 248
+    }
+  ]
+}
